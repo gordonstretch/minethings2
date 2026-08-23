@@ -1,0 +1,2 @@
+<h3>Registration Recieved</h3>
+Thanks for registering.  Before you can log in, you must verify your email.  Check your email for a message from us and follow the link inside to complete your registration.

@@ -1,0 +1,57 @@
+@charset "UTF-8";
+
+.orange {
+	background-image:url(http://www.minethings.com/cake_1_2_dev/app/webroot/img/orange.gif);
+	background-repeat:no-repeat;
+	background-position:0px 4px;
+	padding:5px 16px 5px 25px;
+}
+
+.purple {
+	background-image:url(http://www.minethings.com/cake_1_2_dev/app/webroot/img/purple.gif);
+	background-repeat:no-repeat;
+	background-position:0px 4px;
+	padding:5px 16px 5px 25px;
+}
+
+
+.red {
+	background-image:url(http://www.minethings.com/cake_1_2_dev/app/webroot/img/red.gif);
+	background-repeat:no-repeat;
+	background-position:0px 4px;
+	padding:5px 16px 5px 25px;
+}
+
+.blue {
+	background-image:url(http://www.minethings.com/cake_1_2_dev/app/webroot/img/blue.gif);
+	background-repeat:no-repeat;
+	background-position:0px 4px;
+	padding:5px 16px 5px 25px;
+}
+
+.green {
+	background-image:url(http://www.minethings.com/cake_1_2_dev/app/webroot/img/green.gif);
+	background-repeat:no-repeat;
+	background-position:0px 4px;
+	padding:5px 16px 5px 25px;
+}
+
+.yellow {
+	background-image:url(http://www.minethings.com/cake_1_2_dev/app/webroot/img/yellow.gif);
+	background-repeat:no-repeat;
+	background-position:0px 4px;
+	padding:5px 16px 5px 25px;
+}
+
+
+h2 { 
+	font-family:Arial, Helvetica, verdana, sans-serif;
+	font-size:1.0em;
+	color:#76470c;
+	overflow:hidden;
+	border-bottom: 1px solid #c5a886;
+	background-repeat: no-repeat;
+	margin:0px;
+	width:300px;
+	margin-top:15px;
+}

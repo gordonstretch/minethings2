@@ -1,0 +1,1 @@
+<? if ($credited) echo "*ok*"; ?>

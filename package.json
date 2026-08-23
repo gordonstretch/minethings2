@@ -1,0 +1,27 @@
+{
+  "name": "minethings-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A Node.js and SQLite revival of the MineThings browser game",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/all.test.js",
+    "build:production": "node scripts/build-production.mjs",
+    "test:production": "node scripts/production-smoke.mjs",
+    "audit:assets": "node scripts/audit-legacy-assets.mjs",
+    "audit:rendered": "playwright test test/rendered-audit.spec.mjs --workers=1",
+    "audit:live-updates": "playwright test test/live-update-audit.spec.mjs --workers=1",
+    "audit:item-cards": "playwright test test/item-card-audit.spec.mjs --workers=1"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0"
+  },
+  "dependencies": {
+    "nodemailer": "^9.0.5"
+  }
+}

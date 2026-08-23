@@ -1,0 +1,31 @@
+@charset "UTF-8";
+
+
+.lp_div {
+	padding-top:8px;
+	position:relative;
+	}
+
+.lp_input {
+	width:200px;
+	color:#222222;
+	}
+
+
+.lp_label {
+	position:absolute; 
+	top:8px; 
+	left:0px; 
+	width:200px; 
+	font-family:arial; 
+	font-size:14px;
+	color:#666666;
+	}
+
+.lp_error {
+	margin-left:11px;
+	font-family:arial;
+	font-weight:600;
+	font-size:12px;
+	color:#EEEEEE;
+	}

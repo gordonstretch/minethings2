@@ -1,0 +1,15 @@
+import './catalog.test.js';
+import './email.test.js';
+import './authority.test.js';
+import './game.test.js';
+import './item-values.test.js';
+import './item-icons.test.js';
+import './loadout-regression.test.js';
+import './paypal.test.js';
+import './preview-bindings.test.js';
+import './server.test.js';
+import './specialisation-actions.test.js';
+import './specialisations.test.js';
+import './store.test.js';
+import './vehicle-combat.test.js';
+import './world-events.test.js';

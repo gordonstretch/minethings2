@@ -1,0 +1,1 @@
+<? // this is just here so that we return 200 OK instead of 404 ?>

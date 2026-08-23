@@ -1,0 +1,62 @@
+# Dependencies and generated output
+/node_modules/
+/dist/
+/tmp/
+/test-results/
+/playwright-report/
+/coverage/
+
+# Live game state, database backups, and runtime logs
+/data/*
+!/data/.gitkeep
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-*
+*.tmp
+*.log
+
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Generated browser-audit captures
+/*audit*.png
+
+# Retired portal archive. It contains historical private payment material and
+# is not used, audited, served, or bundled by the Node application.
+/tp/
+
+# Publish only the reviewed legacy artwork, browser assets, and view templates.
+# The preserved server-side archive contains obsolete credentials and is kept
+# outside source releases.
+/td/*
+!/td/public_html/
+/td/public_html/*
+!/td/public_html/.gitignore
+!/td/public_html/app/
+/td/public_html/app/*
+!/td/public_html/app/views/
+!/td/public_html/app/views/**
+!/td/public_html/app/webroot/
+/td/public_html/app/webroot/**
+!/td/public_html/app/webroot/**/
+!/td/public_html/app/webroot/**/*.css
+!/td/public_html/app/webroot/**/*.gif
+!/td/public_html/app/webroot/**/*.ico
+!/td/public_html/app/webroot/**/*.jpeg
+!/td/public_html/app/webroot/**/*.jpg
+!/td/public_html/app/webroot/**/*.js
+!/td/public_html/app/webroot/**/*.json
+!/td/public_html/app/webroot/**/*.png
+!/td/public_html/app/webroot/**/*.svg
+!/td/public_html/app/webroot/**/*.webp
+!/td/public_html/app/webroot/**/*.woff2
+
+# Editor and operating-system files
+/.idea/
+/.vscode/
+*.iml
+.DS_Store
+Thumbs.db

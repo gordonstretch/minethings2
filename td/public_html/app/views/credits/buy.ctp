@@ -1,0 +1,1 @@
+<p>Due to the Minethings code being outdated relative to server OS, some functionality is no longer working.  For this reason, credits are no longer available for purchase.  Sorry for the inconvenience.  </p>
