@@ -48,7 +48,6 @@ test.beforeAll(async () => {
   }
   player.inventory = home;
   store.savePlayer(player);
-  store.database.prepare('DELETE FROM finding_queue WHERE player_id = ?').run(player.id);
   store.database.prepare(`
     INSERT INTO discoveries
       (player_id, position, item_id, mine_id, city_id, found_at, exploded, dwarfed)

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="elephant-herd-title elephant-herd-desc">
+  <title id="elephant-herd-title">Elephant Herd</title>
+  <desc id="elephant-herd-desc">A battered tusked elephant herd charging through rust-colored dust.</desc>
+  <defs>
+    <filter id="elephant-grit" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".1 .4" numOctaves="2" seed="41" result="grit"/>
+      <feDisplacementMap in="SourceGraphic" in2="grit" scale="1.55" xChannelSelector="R" yChannelSelector="B"/>
+    </filter>
+  </defs>
+  <g id="elephant-herd-silhouettes" filter="url(#elephant-grit)">
+    <g id="left-elephant" opacity=".82">
+      <path fill="#12130f" d="M15 72 26 46 47 37 67 44 78 65 72 95 60 110 54 143 40 143 38 111 27 96 13 91Z"/>
+      <path fill="#8f3715" d="M19 55 7 43 10 72 24 78ZM68 52l13-11-2 31-9 9Z"/>
+      <path fill="#eee1c5" d="M31 83 18 108 30 97 37 85ZM61 83l16 25-13-11-9-13Z"/>
+      <path fill="#8f3715" d="m42 80 12 0-3 38-9 13-7-16Z"/>
+      <path fill="#f19a1c" d="m31 65 7-3 2 6-7 3ZM57 64l7 3-3 6-7-3Z"/>
+    </g>
+    <g id="right-elephant" opacity=".82">
+      <path fill="#12130f" d="M163 70 174 44 195 35 216 43 228 65 224 94 211 109 207 143 192 143 190 111 179 96 163 90Z"/>
+      <path fill="#8f3715" d="m170 54-14-12 3 31 15 7ZM215 51l14-12-2 33-10 9Z"/>
+      <path fill="#eee1c5" d="m180 82-14 26 13-11 8-14ZM210 82l17 26-14-11-10-14Z"/>
+      <path fill="#8f3715" d="m191 78 13 1-3 39-9 13-8-16Z"/>
+      <path fill="#f19a1c" d="m180 63 7-3 2 6-7 3ZM207 62l7 3-3 6-7-3Z"/>
+    </g>
+    <g id="lead-elephant">
+      <path fill="#8f3715" d="M69 68 83 35 111 23 140 34 157 67 151 101 135 118 130 151 109 151 105 117 88 103 68 95Z"/>
+      <path fill="#12130f" d="M82 43 63 27 68 71 86 80ZM142 43l20-17-4 46-15 10Z"/>
+      <path fill="#12130f" d="M89 57 111 46 136 55 144 81 135 102 113 109 91 99 82 79Z"/>
+      <path fill="#eee1c5" d="M94 88 71 128 92 111 104 90ZM133 88l26 40-23-17-12-21Z"/>
+      <path fill="#8f3715" d="m105 82 17 0-4 49-12 18-10-23Z"/>
+      <path fill="#12130f" d="m106 126 12 5-8 18h-4Z"/>
+      <path fill="#f19a1c" d="m93 69 9-4 3 8-10 4ZM132 68l9 5-5 8-9-5Z"/>
+      <path fill="#eee1c5" d="m108 73 12 0-3 7-8 0Z"/>
+    </g>
+  </g>
+  <g id="elephant-scars">
+    <path fill="none" stroke="#eee1c5" stroke-width="2" stroke-linecap="square" opacity=".7" d="m85 47 13 8-10 7M125 38l8 13-10 6M95 92l12 6M132 91l-12 8M31 54l10 7M203 52l-9 8"/>
+    <path fill="none" stroke="#12130f" stroke-width="3" stroke-linecap="square" d="m73 70 10 4M145 66l10 4M43 91l4 12M197 91l4 12"/>
+  </g>
+  <g id="elephant-dust" fill="#f19a1c" opacity=".78">
+    <path d="M2 144h69l-18 8H6ZM74 150h91l-15 6H65ZM168 144h70l-11 8h-66Z"/>
+    <path d="m14 119 16 6-11 6-15-5ZM220 116l15 6-9 7-14-6ZM51 132l12 4-9 5-11-4ZM174 131l13 5-9 5-12-4Z"/>
+  </g>
+</svg>

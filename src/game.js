@@ -116,7 +116,20 @@ export function giveFinds(player, catalog, mine, quantity, now = Date.now(), ran
 
 export function createPlayer(name, email, passwordHash, catalog, now = Date.now(), random = Math.random) {
   const findIntervalMs = Number(setting(catalog, 'find_interval_ms'));
-  const cityId = Number(setting(catalog, 'starter_city_id'));
+  const configuredMaps = [...(catalog.maps ?? [])];
+  const firstMap = configuredMaps.find((map) => String(map.slug).toLowerCase() === 'aso'
+    || String(map.name).toLowerCase() === 'aso')
+    ?? configuredMaps.sort((first, second) =>
+      Number(first.sortOrder) - Number(second.sortOrder) || Number(first.id) - Number(second.id))[0];
+  const firstMapCities = firstMap
+    ? (catalog.cities ?? []).filter((city) => Number(city.mapId) === Number(firstMap.id)) : [];
+  const capitalCity = firstMapCities.find((city) =>
+    Number(city.id) === Number(firstMap?.capitalCityId));
+  const gatewayCity = firstMapCities.find((city) => (catalog.routes ?? []).some((route) =>
+    route.interMap && (Number(route.city1Id) === Number(city.id)
+      || Number(route.city2Id) === Number(city.id))));
+  const cityId = Number(capitalCity?.id ?? gatewayCity?.id ?? firstMapCities[0]?.id
+    ?? setting(catalog, 'starter_city_id'));
   const mine = {
     id: 1, mineTypeId: Number(setting(catalog, 'starter_mine_type_id')), cityId,
     active: true, mineThings: true,
@@ -144,9 +157,24 @@ export function hasActiveGadget(player, behaviorKey, now = Date.now()) {
   ));
 }
 
-export function mineBucketsPerHour(catalog, mine, player = null, now = Date.now()) {
-  const activeLimit = Number(setting(catalog, hasActiveGadget(player, 'control', now)
+export function activeMineLimit(player, catalog, now = Date.now()) {
+  const cityMapIds = new Map((catalog.cities ?? []).map((city) => [
+    Number(city.id), Number(city.mapId)
+  ]));
+  const knownCityIds = new Set([
+    ...(player?.knownCityIds ?? []),
+    ...(player?.mines ?? []).map((mine) => mine.cityId),
+    player?.cityId, player?.homeCityId
+  ].map(Number).filter(Number.isSafeInteger));
+  const regionCount = Math.max(1, new Set([...knownCityIds]
+    .map((cityId) => cityMapIds.get(cityId)).filter(Number.isSafeInteger)).size);
+  const perRegion = Number(setting(catalog, hasActiveGadget(player, 'control', now)
     ? 'control_active_mine_limit' : 'active_mine_limit'));
+  return regionCount * perRegion;
+}
+
+export function mineBucketsPerHour(catalog, mine, player = null, now = Date.now()) {
+  const activeLimit = activeMineLimit(player, catalog, now);
   if (mine.priority > activeLimit) {
     return Number(setting(catalog, 'inactive_mine_buckets_per_hour'))
       + (mine.oilExpiresAt > now ? Number(setting(catalog, 'mine_oil_buckets_per_hour')) : 0);
@@ -178,9 +206,9 @@ export function mineIntervalMs(catalog, mine, player = null, now = Date.now()) {
 
 export function claimMine(player, catalog, mineId, now = Date.now(), random = Math.random) {
   const mine = mineInCurrentCity(player, mineId);
-  if (Number.isFinite(player.itemCount) && Number.isFinite(player.itemLimit)
+  if (!mine.cryptoTypeId && Number.isFinite(player.itemCount) && Number.isFinite(player.itemLimit)
     && player.itemCount > player.itemLimit) {
-    throw new Error('Reduce your inventory before collecting more findings.');
+    throw new Error('Reduce your inventory before your mines can add more things.');
   }
   if ((player.batteryExpiresAt ?? 0) <= now) throw new Error('Your bot battery is empty. Visit Mines to recharge it.');
   if (mine.nextFindAt > now) throw new Error('Your miners are still digging.');
@@ -189,7 +217,13 @@ export function claimMine(player, catalog, mineId, now = Date.now(), random = Ma
     Math.floor((now - mine.nextFindAt) / interval) + 1);
   let finds = [];
   let gold = 0;
-  if (mine.mineThings !== false) {
+  let crypto = null;
+  if (mine.cryptoTypeId) {
+    const cryptoTypeId = Number(mine.cryptoTypeId);
+    player.cryptoBalances ??= {};
+    player.cryptoBalances[cryptoTypeId] = Number(player.cryptoBalances[cryptoTypeId] ?? 0) + quantity;
+    crypto = { cryptoTypeId, quantity };
+  } else if (mine.mineThings !== false) {
     finds = giveFinds(player, catalog, mine, quantity, now, random);
   } else {
     const mineType = catalog.mineTypes.find((candidate) => candidate.id === mine.mineTypeId);
@@ -208,15 +242,18 @@ export function claimMine(player, catalog, mineId, now = Date.now(), random = Ma
   const capturedDwarf = random() < combinedCaptureChance
     ? captureDwarf(player, catalog, mine, now, random) : null;
   if (capturedDwarf) finds.push(capturedDwarf);
-  if (Number.isFinite(player.itemCount)) player.itemCount += finds.length;
+  if (Number.isFinite(player.itemCount)) {
+    player.itemCount += finds.filter((finding) => !finding.recycled).length;
+  }
   mine.nextFindAt += quantity * interval;
   if (mine.nextFindAt <= now) mine.nextFindAt = now + interval;
-  return { finds, gold, capturedDwarf, moonPhase: phase.name };
+  return { finds, gold, crypto, capturedDwarf, moonPhase: phase.name };
 }
 
-export function setMineMode(player, mineId, mineThings) {
+export function setMineMode(player, mineId, mode, cryptoTypeId = null) {
   const mine = mineInCurrentCity(player, mineId);
-  mine.mineThings = Boolean(mineThings);
+  mine.mineThings = mode === true || mode === 'things';
+  mine.cryptoTypeId = mode === 'crypto' ? Number(cryptoTypeId) : null;
   return mine;
 }
 
@@ -224,8 +261,7 @@ export function prioritizeMine(player, catalog, mineId, now = Date.now()) {
   const target = mineInCurrentCity(player, mineId, false);
   const ordered = [target, ...player.mines.filter((mine) => mine.id !== mineId)
     .sort((a, b) => (a.priority ?? a.id) - (b.priority ?? b.id) || a.id - b.id)];
-  const activeLimit = Number(setting(catalog, hasActiveGadget(player, 'control', now)
-    ? 'control_active_mine_limit' : 'active_mine_limit'));
+  const activeLimit = activeMineLimit(player, catalog, now);
   ordered.forEach((mine, index) => {
     const wasActive = mine.active;
     mine.priority = index + 1;
@@ -263,8 +299,8 @@ export function buyMine(player, catalog, mineTypeId, now = Date.now(), random = 
   player.credits -= mineType.creditCost;
   const mine = {
     id: player.nextMineId++, mineTypeId, cityId: player.cityId,
-    active: player.mines.filter((candidate) => candidate.active).length < Number(setting(catalog,
-      hasActiveGadget(player, 'control', now) ? 'control_active_mine_limit' : 'active_mine_limit')),
+    active: player.mines.filter((candidate) => candidate.active).length
+      < activeMineLimit(player, catalog, now),
     mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0, rentalUntil: 0,
     nextFindAt: now + Number(setting(catalog, 'find_interval_ms')), equipment: {}, robotItemId: null
   };
@@ -283,8 +319,8 @@ export function rentMine(player, catalog, mineTypeId, now = Date.now(), random =
   player.credits -= mineType.rentCost;
   const mine = {
     id: player.nextMineId++, mineTypeId, cityId: player.cityId,
-    active: player.mines.filter((candidate) => candidate.active).length < Number(setting(catalog,
-      hasActiveGadget(player, 'control', now) ? 'control_active_mine_limit' : 'active_mine_limit')),
+    active: player.mines.filter((candidate) => candidate.active).length
+      < activeMineLimit(player, catalog, now),
     mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0,
     rentalUntil: now + Number(setting(catalog, 'mine_rental_duration_ms')),
     nextFindAt: now + Number(setting(catalog, 'find_interval_ms')), equipment: {}, robotItemId: null

@@ -308,5 +308,6 @@ export function itemGoldValueUnits(item) {
   if (!Number.isFinite(goldValue) || goldValue <= 0) {
     throw new Error(`Invalid gold value for catalog item ${item?.id ?? 'unknown'}.`);
   }
-  return Math.max(1, Math.round(goldValue * 10000));
+  const units = Math.max(1, Math.round(goldValue * 10000));
+  return units > 10000 ? Math.floor(units / 10000) * 10000 : units;
 }

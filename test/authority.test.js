@@ -15,7 +15,6 @@ test('runtime behavior never branches on editable catalog display names', () => 
     'src/dwarves.js',
     'src/specialisations.js',
     'src/vehicle-combat.js',
-    'public/finding-queue.js',
     'public/live-updates.js',
     'public/oil-field.js'
   ];
@@ -74,7 +73,6 @@ test('runtime behavior never branches on editable catalog display names', () => 
   }
   const storeSource = fs.readFileSync(path.join(ROOT, 'src/store.js'), 'utf8');
   const serverSource = fs.readFileSync(path.join(ROOT, 'src/server.js'), 'utf8');
-  const findingQueueSource = fs.readFileSync(path.join(ROOT, 'public/finding-queue.js'), 'utf8');
   const oilClientSource = fs.readFileSync(path.join(ROOT, 'public/oil-field.js'), 'utf8');
   const legacyOilClientSource = fs.readFileSync(
     path.join(ROOT, 'td/public_html/app/webroot/js/machines11.js'), 'utf8'
@@ -195,8 +193,6 @@ test('runtime behavior never branches on editable catalog display names', () => 
     'runtime report behavior assumes the legacy rarity IDs');
   assert.doesNotMatch(storeSource, /vehicleByType\.get\([012]\)/,
     'runtime reports assume legacy route IDs');
-  assert.doesNotMatch(findingQueueSource, /schedule\((?:250|5000)\)|Math\.min\([^,]+,\s*30000\)/,
-    'finding polling intervals are hardcoded in the browser');
   for (const source of [oilClientSource, legacyOilClientSource]) {
     assert.doesNotMatch(source, /Hex\.available\)?\s*={2,3}\s*2\b/,
       'Oil Field browser behavior hardcodes the helicopter tier ID');

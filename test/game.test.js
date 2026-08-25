@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  assignRobot, buyMine, claimMine, createPlayer, detonateExplosive, equipMine,
+  activeMineLimit, assignRobot, buyMine, claimMine, createPlayer, detonateExplosive, equipMine,
   expireRentalMines, mineBucketsPerHour, mineIntervalMs, oilMineBot, prioritizeMine, rentMine,
   sellItem, sellMine, setMineMode,
   unassignRobot, unequipMine
@@ -94,6 +94,15 @@ test('switches a mine from things to legacy-style gold production', () => {
   assert.equal(player.gold, 8);
 });
 
+test('switches any mine to crypto production without using inventory capacity', () => {
+  const player = createPlayer('Crypto Ada', '', 'hash', catalog, 1000, predictableRandom);
+  setMineMode(player, 1, 'crypto', 1);
+  const result = claimMine(player, catalog, 1, 1000 + FIND_INTERVAL_MS, predictableRandom);
+  assert.deepEqual(result.crypto, { cryptoTypeId: 1, quantity: 1 });
+  assert.equal(player.cryptoBalances[1], 1);
+  assert.equal(result.finds.length, 0);
+});
+
 test('sells discoveries and buys affordable mines', () => {
   const player = createPlayer('Ada', '', 'hash', catalog, 1000, predictableRandom);
   const itemId = Number(Object.keys(player.inventory)[0]);
@@ -140,6 +149,36 @@ test('prioritizes the active mine set and oils a bot for five days', () => {
   assert.equal(mineBucketsPerHour(catalog, fourth, player, 5000), before + 10);
   assert.equal(fourth.oilExpiresAt, 5000 + 5 * 24 * 60 * 60 * 1000);
   assert.equal(player.inventoryByCity[player.cityId][oil.id], undefined);
+});
+
+test('allows three active mines per discovered region and four with Remote Control', () => {
+  const homeCities = catalog.cities.map((city) => ({ ...city, mapId: 1 }));
+  const remoteCity = { ...homeCities[0], id: 999, mapId: 2, name: 'Test frontier' };
+  const regionalCatalog = { ...catalog, cities: [...homeCities, remoteCity] };
+  const player = createPlayer(
+    'Regional Miner', '', 'hash', regionalCatalog, 1000, predictableRandom
+  );
+  const mineType = regionalCatalog.mineTypes.find(
+    (entry) => entry.creditCost > 0 && regionalCatalog.byMineType.has(entry.id)
+  );
+  assert.ok(mineType);
+  player.knownCityIds = [player.cityId, remoteCity.id];
+  player.credits = mineType.creditCost * 10;
+
+  for (let index = 0; index < 6; index += 1) {
+    buyMine(player, regionalCatalog, mineType.id, 2000 + index, predictableRandom);
+  }
+  assert.equal(activeMineLimit(player, regionalCatalog, 3000), 6);
+  assert.equal(player.mines.filter((mine) => mine.active).length, 6);
+
+  player.gadgets = [{ behaviorKey: 'control', expiresAt: 10000 }];
+  prioritizeMine(player, regionalCatalog, player.mines.at(-1).id, 3000);
+  assert.equal(activeMineLimit(player, regionalCatalog, 3000), 8);
+  assert.equal(player.mines.filter((mine) => mine.active).length, 7);
+  buyMine(player, regionalCatalog, mineType.id, 3001, predictableRandom);
+  const ninth = buyMine(player, regionalCatalog, mineType.id, 3002, predictableRandom);
+  assert.equal(player.mines.filter((mine) => mine.active).length, 8);
+  assert.equal(ninth.active, false);
 });
 
 test('adds half a bucket per cleared stone to the top home-city mine', () => {

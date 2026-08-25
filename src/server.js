@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import {
-  assignRobot, buyMine, claimMine, createPlayer, expireRentalMines,
+  activeMineLimit, assignRobot, buyMine, createPlayer,
   equipMine, mineBucketsPerHour, mineIntervalMs,
   mineRefundCredits, oilMineBot, prioritizeMine, rentMine, sellMine, setMineMode,
   unassignRobot, unequipMine
@@ -14,9 +14,13 @@ import { loadLegacyCatalog } from './legacy-catalog.js';
 import { machineIconSvg } from './item-icons.js';
 import { SqliteStore, hashPasswordAsync, verifyPasswordAsync } from './store.js';
 import { specialisationMultiplier } from './specialisations.js';
+import { cryptoType, cryptoTypesForMap } from './crypto.js';
 import { armsRarities, compatibleCargoAllowed } from './vehicle-combat.js';
 import { LEGAL_VERSION, LEGAL_VERSIONS, sellerConfiguration } from './legal.js';
 import { EmailClient, emailConfiguration, emailReadiness } from './email.js';
+import {
+  GoogleAuthClient, googleAuthConfiguration, googleAuthReadiness, googlePkceChallenge
+} from './google-auth.js';
 import { PreviewBindingRegistry } from './preview-bindings.js';
 import {
   PayPalClient, paypalConfiguration, paypalOrderSummary, paypalReadiness
@@ -25,6 +29,9 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_ROOT = path.join(ROOT, 'public');
 const LEGACY_ROOT = path.join(ROOT, 'td', 'public_html', 'app', 'webroot');
+const APP_CSS_VERSION = crypto.createHash('sha256')
+  .update(fs.readFileSync(path.join(PUBLIC_ROOT, 'app.css')))
+  .digest('hex').slice(0, 12);
 const MIME_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.js', 'text/javascript; charset=utf-8'], ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'], ['.gif', 'image/gif'], ['.jpg', 'image/jpeg'], ['.jpeg', 'image/jpeg'], ['.ico', 'image/x-icon'],
@@ -53,6 +60,19 @@ function formatDuration(milliseconds) {
   const minutes = Math.ceil(milliseconds / 60000);
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+const WEATHER_PRESENTATION = Object.freeze({
+  clear: ['&#9728;', 'Clear'],
+  cloud: ['&#9729;', 'Cloudy'],
+  rain: ['&#127783;', 'Rain'],
+  snow: ['&#10052;', 'Snow'],
+  storm: ['&#9928;', 'Storm'],
+  hurricane: ['&#127744;', 'Hurricane']
+});
+
+function weatherPresentation(condition) {
+  return WEATHER_PRESENTATION[condition] ?? ['?', String(condition ?? 'Unknown')];
 }
 
 function formatGold(value) {
@@ -142,6 +162,49 @@ function catalogCityForId(catalog, cityId) {
   return city;
 }
 
+function playerDiscoveredMapIds(player, catalog) {
+  const knownCities = new Set((player.knownCityIds ?? []).map(Number));
+  return new Set(catalog.cities.filter((city) => knownCities.has(Number(city.id)))
+    .map((city) => Number(city.mapId)));
+}
+
+function vehicleRouteDestinationLabel(player, catalog, originCityId, destinationCityId) {
+  const origin = catalogCityForId(catalog, originCityId);
+  const destination = catalogCityForId(catalog, destinationCityId);
+  if (Number(origin.mapId) === Number(destination.mapId)) return destination.name;
+  if (!playerDiscoveredMapIds(player, catalog).has(Number(destination.mapId))) {
+    return 'Undiscovered region · GATEWAY';
+  }
+  const destinationMap = catalog.maps.find((map) => Number(map.id) === Number(destination.mapId));
+  if (!destinationMap) throw new Error(`Missing map for city ${destination.id}.`);
+  return `${destinationMap.name} / ${destination.name} · GATEWAY`;
+}
+
+function vehicleJourneyRouteGraph(player, catalog, vehicle) {
+  const discoveredMapIds = playerDiscoveredMapIds(player, catalog);
+  const legs = [];
+  for (const route of catalog.routes) {
+    if (!route.open || Number(route.type) !== Number(vehicle.routeType)
+      || Number(route.city1Id) === Number(route.city2Id)) continue;
+    for (const [originCityId, destinationCityId] of [
+      [route.city1Id, route.city2Id], [route.city2Id, route.city1Id]
+    ]) {
+      const origin = catalogCityForId(catalog, originCityId);
+      if (Number(originCityId) !== Number(vehicle.cityId)
+        && !discoveredMapIds.has(Number(origin.mapId))) continue;
+      const destinationLabel = vehicleRouteDestinationLabel(
+        player, catalog, originCityId, destinationCityId
+      );
+      legs.push({
+        routeId: route.id, originCityId, destinationCityId,
+        label: `${destinationLabel} · ${Number(route.length).toLocaleString('en-GB')} km`
+      });
+    }
+  }
+  return legs.sort((first, second) => Number(first.originCityId) - Number(second.originCityId)
+    || first.label.localeCompare(second.label) || Number(first.routeId) - Number(second.routeId));
+}
+
 function catalogMineTypeForId(catalog, mineTypeId) {
   const mineType = catalog.mineTypes.find((entry) => Number(entry.id) === Number(mineTypeId));
   if (!mineType) throw new Error(`Missing catalog mine type: ${mineTypeId}.`);
@@ -152,12 +215,6 @@ function catalogRarityName(catalog, rarity) {
   const entry = catalog.rarityById.get(Number(rarity));
   if (!entry) throw new Error(`Missing catalog rarity: ${rarity}.`);
   return entry.name;
-}
-
-function vehicleRarities(catalog) {
-  const ids = new Set(catalog.vehicles.map((vehicle) =>
-    catalogItemForId(catalog, vehicle.itemId, `vehicle ${vehicle.id}`).rarity));
-  return catalog.rarities.filter((rarity) => ids.has(rarity.id));
 }
 
 function catalogEquipmentTypeForId(catalog, typeId) {
@@ -191,6 +248,16 @@ function sessionCookie(id, catalog, secure = false) {
 
 function clearSessionCookie(secure = false) {
   return 'mt_session=; HttpOnly; SameSite=Lax; Path=/; '
+    + (secure ? 'Secure; ' : '') + 'Max-Age=0';
+}
+
+function googleSignupCookie(id, secure = false) {
+  return 'mt_google_signup=' + id + '; HttpOnly; SameSite=Lax; Path=/auth/google; '
+    + (secure ? 'Secure; ' : '') + 'Max-Age=600';
+}
+
+function clearGoogleSignupCookie(secure = false) {
+  return 'mt_google_signup=; HttpOnly; SameSite=Lax; Path=/auth/google; '
     + (secure ? 'Secure; ' : '') + 'Max-Age=0';
 }
 
@@ -367,56 +434,141 @@ function meldRevealHtml(melds) {
   </dialog><script src="/node/meld-modal.js" defer></script>`;
 }
 
+export function findingNoticeItems(findings, catalog, metadata = {}) {
+  if (!Array.isArray(findings) || !findings.length) return [];
+  const sourceNames = catalogObjectSetting(catalog, 'finding_source_names');
+  const grouped = new Map();
+  for (const finding of findings) {
+    if (finding.cryptoTypeId) {
+      const currency = cryptoType(finding.cryptoTypeId);
+      if (!currency) throw new Error(`Missing crypto type: ${finding.cryptoTypeId}.`);
+      const quantity = Math.max(1, Math.floor(Number(finding.quantity ?? finding.count ?? 1)));
+      const key = `crypto:${currency.id}:${metadata.source ?? 'mine'}`;
+      const entry = grouped.get(key) ?? {
+        itemId: `crypto-${currency.id}`, name: currency.name, icon: currency.icon,
+        rarity: currency.id, rarityName: 'Crypto coin', quantity: 0,
+        source: metadata.source ?? 'mine', sourceName: metadata.source === 'explosives' ? 'Explosives' : 'Mine',
+        cityId: metadata.cityId ?? null,
+        cityName: metadata.cityId === null
+          ? catalogSettingString(catalog, 'location_labels', 'atSea')
+          : catalogCityForId(catalog, Number(metadata.cityId)).name,
+        foundAt: Number(metadata.foundAt ?? Date.now()), autoRecycled: false,
+        status: 'Added to your crypto things', path: '/crypto'
+      };
+      entry.quantity += quantity;
+      grouped.set(key, entry);
+      continue;
+    }
+    const item = catalogItemForId(catalog, Number(finding.itemId), 'finding notice');
+    const quantity = Math.max(1, Math.floor(Number(
+      finding.quantity ?? finding.count ?? 1
+    )));
+    const cityId = finding.cityId ?? metadata.cityId ?? null;
+    const source = finding.capturedDwarf
+      ? 'dwarf-capture' : String(finding.source ?? metadata.source ?? 'mine');
+    const autoRecycled = Boolean(finding.recycled ?? finding.autoRecycled);
+    const status = String(finding.status ?? metadata.status ?? '').trim();
+    const key = `${item.id}:${cityId ?? ''}:${source}:${autoRecycled ? 1 : 0}:${status}`;
+    const entry = grouped.get(key) ?? {
+      itemId: item.id, name: item.name, icon: item.icon,
+      rarity: item.rarity, rarityName: item.rarityName, quantity: 0,
+      source, sourceName: sourceNames[source], cityId,
+      cityName: cityId === null
+        ? catalogSettingString(catalog, 'location_labels', 'atSea')
+        : catalogCityForId(catalog, Number(cityId)).name,
+      foundAt: Number(finding.foundAt ?? metadata.foundAt ?? Date.now()),
+      autoRecycled, status, path: `/items/${item.id}`
+    };
+    if (typeof entry.sourceName !== 'string') {
+      throw new Error(`Missing finding source name: ${source}.`);
+    }
+    entry.quantity += quantity;
+    entry.foundAt = Math.max(entry.foundAt, Number(finding.foundAt ?? entry.foundAt));
+    grouped.set(key, entry);
+  }
+  return [...grouped.values()].sort((first, second) =>
+    second.rarity - first.rarity || first.name.localeCompare(second.name));
+}
+
+function findingNoticeListHtml(items) {
+  return items.map((item) => {
+    const status = item.status || (item.autoRecycled
+      ? 'Auto-recycled into Ore scraps' : 'Added to your things');
+    const itemKey = [String(item.itemId), Number(item.rarity), item.sourceName,
+      item.cityName, status].join('|');
+    return `<li class="flash-item rarity-${Number(item.rarity)}" data-item-id="${escapeHtml(String(item.itemId))}" data-item-key="${escapeHtml(itemKey)}" data-quantity="${Number(item.quantity)}"><a class="flash-item-link" href="${escapeHtml(item.path)}"><img src="${escapeHtml(item.icon)}" alt=""><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.rarityName)} · ${escapeHtml(item.sourceName)} · ${escapeHtml(item.cityName)} · ${status}</small></span><b aria-label="Quantity ${Number(item.quantity).toLocaleString('en-GB')}">×${Number(item.quantity).toLocaleString('en-GB')}</b></a></li>`;
+  }).join('');
+}
+
 function layout(title, content, player, flash) {
   const isLandingPage = !player && title === 'Home';
   const documentTitle = isLandingPage
     ? 'MineThings 2 · The world digs back'
-    : `${escapeHtml(title)} · MineThings`;
+    : `${escapeHtml(title)} · MineThings 2`;
   const description = isLandingPage
     ? 'MineThings 2 revives the persistent mining, trading and social experiment that began in 2009. Stake your claim and help write its next chapter.'
-    : 'MineThings - collect valuable things in real time and trade with other miners.';
-  const preloader = ['home', 'miners', 'mines', 'map', 'shop', 'forums', 'recruit', 'help']
-    .map((name) => `<img src="/img/${name}_h.gif" alt="">`).join('');
+    : 'MineThings 2 is a persistent world of automatic mines, local markets, dangerous routes and player-made history.';
   const currentPath = player?.currentPath ?? '';
   const isCurrent = (prefixes, exact = false) => prefixes.some((prefix) => exact
     ? currentPath === prefix : currentPath === prefix || currentPath.startsWith(`${prefix}/`));
   const currentAttribute = (prefixes, exact = false) => isCurrent(prefixes, exact)
     ? ' aria-current="page"' : '';
-  const topNavigation = `<nav id="navcontainer" aria-label="Primary"><ul id="nav">
-    <li class="city-name"><span>${player ? escapeHtml(player.cityName) : 'MineThings'}</span></li>
-    <li class="home"><a href="/" aria-label="Home"${currentAttribute(['/'], true)}></a></li>
-    <li class="miners"><a href="/miners" aria-label="Miners"${currentAttribute(['/miners'])}></a></li>
-    <li class="mines"><a id="markettab" href="/exchange" aria-label="Markets"${currentAttribute(['/exchange', '/market/items', '/market/mines', '/market/factories'])}></a></li>
-    <li class="map"><a id="citytab" href="/map" aria-label="Map"${currentAttribute(['/map', '/cities', '/move'])}></a></li>
-    <li class="shop"><a href="/market" aria-label="Shop"${currentAttribute(['/market'], true)}></a></li>
-    <li class="recruit"><a href="/miners" aria-label="Recruit"></a></li>
-    <li class="forums"><a href="/messages" aria-label="Messages"${currentAttribute(['/messages'])}></a></li>
-    <li class="help"><a href="/help" aria-label="Help"${currentAttribute(['/help'])}></a></li>
-  </ul></nav>`;
-  const login = player ? `<div id="login"><div class="logged-in"><strong><a href="/miners/${encodeURIComponent(player.name)}">${escapeHtml(player.name)}</a></strong> | ${formatGold(player.gold)}g | ${player.credits}c | Batteries: ${formatDuration(player.batteryRemaining ?? 0)}</div><form method="post" action="/logout"><button class="image-button" aria-label="Log out"><img src="/img/button_logout.jpg" alt="Log out"></button></form></div>`
-    : '<div id="login"><span class="register">Not a member? Register below.</span></div>';
+  const primaryLinks = [
+    ['home', '/', 'Mines', ['/', '/mines'], false],
+    ['things', '/inventory', 'Things', ['/inventory', '/items', '/dwarves', '/gadgets', '/melds', '/containers'], false],
+    ['markets', '/exchange', 'Markets', ['/exchange', '/market'], false],
+    ['map', '/map', 'World map', ['/map', '/cities'], false],
+    ['fleet', '/vehicles', 'Fleet', ['/vehicles', '/ratings', '/battles', '/ammo-boxes'], false],
+    ['events', '/events', 'World events', ['/events'], false],
+    ['chat', '/chat', 'Chat', ['/chat'], false],
+    ['messages', '/messages', `Messages${player?.unreadMessages ? ` (${player.unreadMessages})` : ''}`, ['/messages'], false]
+  ];
+  const playerNavigation = primaryLinks.map(([className, href, label, prefixes, exact], index) =>
+    `<li class="${className}"><a href="${href}"${currentAttribute(prefixes, exact)}><span aria-hidden="true">${String(index + 1).padStart(2, '0')}</span>${label}</a></li>`
+  ).join('');
+  const guestCurrent = (pageTitle) => title === pageTitle ? ' aria-current="page"' : '';
+  const topNavigation = player
+    ? `<nav id="navcontainer" aria-label="Primary"><ul id="nav">${playerNavigation}</ul></nav>`
+    : `<nav id="navcontainer" class="guest-primary-nav" aria-label="Public"><ul id="nav"><li class="city-name"><span>Archive status</span><strong>World online</strong></li><li><a href="/history"${guestCurrent('History')}><span aria-hidden="true">01</span>History</a></li><li><a href="/legal"${guestCurrent('Legal')}><span aria-hidden="true">02</span>Legal</a></li><li><a href="/#returning-miner"><span aria-hidden="true">03</span>Log in</a></li><li><a href="/#join"><span aria-hidden="true">04</span>Stake a claim</a></li></ul></nav>`;
+  const login = player ? `<div id="login" class="player-status"><a class="player-identity" href="/miners/${encodeURIComponent(player.name)}"><span>Miner</span><strong>${escapeHtml(player.name)}</strong></a><dl class="player-vitals"><div><dt>Gold</dt><dd>${formatGold(player.gold)}g</dd></div><div><dt>Credits</dt><dd>${player.credits}c</dd></div><div><dt>Battery</dt><dd>${formatDuration(player.batteryRemaining ?? 0)}</dd></div></dl><form method="post" action="/logout"><button class="logout-button">Log out <span aria-hidden="true">↗</span></button></form></div>`
+    : '<div id="login" class="guest-actions"><a href="/#returning-miner">Log in</a><a class="button" href="/#join">Stake your claim</a></div>';
   const sideLink = (href, label, prefixes = [href], exact = false) => {
     const active = isCurrent(prefixes, exact);
     return `<li${active ? ' class="current"' : ''}><a href="${href}"${active ? ' aria-current="page"' : ''}>${label}</a></li>`;
   };
-  const sideNavigation = player ? `<nav id="left" aria-label="Player"><ul id="navlist">
-    ${sideLink('/', 'Mines', ['/'], true)}${sideLink('/inventory', 'Things', ['/inventory', '/items'])}
-    ${sideLink('/dwarves', 'Dwarves')}${sideLink('/gadgets', 'Gadgets')}${sideLink('/melds', 'Melds')}${sideLink('/vehicles', 'Vehicles')}${sideLink('/ratings', 'Ratings')}${sideLink('/containers', 'Containers')}
-    ${sideLink('/oil-field', 'Oil Field')}${sideLink('/events', 'World Events')}${sideLink('/factories', 'Factories')}${sideLink('/professions', 'Specialisation')}
-    ${sideLink('/chat', 'Chat')}${sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`)}
-    ${sideLink('/stats', 'Server Stats')}${sideLink('/credits', 'Buy credits')}${player.authority > 0 ? sideLink('/admin', 'Administration') : ''}
-    ${sideLink(`/miners/${encodeURIComponent(player.name)}`, 'Profile', ['/miners'])}${sideLink('/account', 'Account')}
-  </ul></nav>` : '';
-  const flashDialog = `<div id="flash-dialog" class="flash-notice" role="status" aria-live="polite" hidden><span class="flash-notice-mark" aria-hidden="true">✓</span><p id="flash-dialog-message">${flash ? escapeHtml(flash) : ''}</p><button type="button" aria-label="Dismiss notification">×</button></div><script src="/node/flash-modal.js?v=20260823a" defer></script>`;
-  const findingDialog = player ? '<dialog id="finding-dialog" class="finding-dialog" aria-labelledby="finding-dialog-title" aria-describedby="finding-dialog-intro finding-dialog-status" data-poll-min-interval="' + player.findingPollMinIntervalMs + '" data-poll-empty-interval="' + player.findingPollEmptyIntervalMs + '" data-poll-max-interval="' + player.findingPollMaxIntervalMs + '"><div class="finding-dialog-head"><span class="finding-occasion-mark" aria-hidden="true">✦</span><div><p id="finding-dialog-eyebrow" class="eyebrow">Mining report</p><h2 id="finding-dialog-title" tabindex="-1">New things found</h2><p id="finding-dialog-intro">Your latest finds are ready to review.</p></div></div><div id="finding-dialog-cards" class="finding-grid"></div><div class="finding-dialog-foot"><p id="finding-dialog-status" class="muted">Your discoveries are safe until you acknowledge them.</p><button id="finding-dialog-ack" type="button"><span aria-hidden="true">⛏</span> Keep digging</button></div></dialog><script src="/node/finding-queue.js?v=20260823a" defer></script>' : '';
+  const sideGroup = (label, links) => `<section class="side-nav-group"><h2>${label}</h2><ul>${links.join('')}</ul></section>`;
+  const [weatherIcon, weatherLabel] = weatherPresentation(player?.weather?.condition);
+  const sidebarWeather = player?.weather
+    ? `<div class="sidebar-location-value sidebar-weather"><span>Weather</span> <a href="/events" aria-label="Weather: ${escapeHtml(weatherLabel)}"><span class="sidebar-weather-icon" aria-hidden="true">${weatherIcon}</span><span>${escapeHtml(weatherLabel)}</span></a></div>`
+    : '';
+  const sideNavigation = player ? `<aside id="left" aria-label="Player navigation"><button id="player-nav-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="player-nav-panel"><span>Game menu</span><strong>All operations</strong><b aria-hidden="true">+</b></button><div id="player-nav-panel"><div class="sidebar-context"><p class="sidebar-location-heading">You are here:</p><div class="sidebar-location-value"><span>Region</span> <a href="/map?world=${encodeURIComponent(player.mapSlug)}">${escapeHtml(player.mapName)}</a></div><div class="sidebar-location-value"><span>City</span> <a href="/map?world=${encodeURIComponent(player.mapSlug)}#city-${player.cityId}">${escapeHtml(player.cityName)}</a></div>${sidebarWeather}<a class="sidebar-map-link" href="/map">Open world map <span aria-hidden="true">→</span></a></div><nav id="navlist" aria-label="Game sections">
+    ${sideGroup('Extraction', [sideLink('/', 'Mines', ['/'], true), sideLink('/inventory', 'Things', ['/inventory', '/items']), sideLink('/dwarves', 'Dwarves'), sideLink('/gadgets', 'Gadgets'), sideLink('/melds', 'Melds')])}
+    ${sideGroup('Industry', [sideLink('/vehicles', 'Vehicles'), sideLink('/factories', 'Factories'), sideLink('/oil-field', 'Oil Field'), sideLink('/containers', 'Containers'), sideLink('/market', 'Mine shop', ['/market'], true)])}
+    ${sideGroup('World', [sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/mines', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events')])}
+    ${sideGroup('Network', [sideLink('/chat', 'Chat'), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', 'Miners', ['/miners'], true), sideLink('/ratings', 'Ratings')])}
+    ${sideGroup('Miner', [sideLink('/professions', 'Specialisation'), sideLink(`/miners/${encodeURIComponent(player.name)}`, 'Profile', [`/miners/${encodeURIComponent(player.name)}`], true), sideLink('/account', 'Account'), sideLink('/stats', 'Server stats'), sideLink('/credits', 'Buy credits')])}
+    ${player.authority > 0 ? sideGroup('Command', [sideLink('/admin', 'Administration')]) : ''}
+  </nav></div></aside>` : '';
+  const foundItems = Array.isArray(player?.findingNotice?.items)
+    ? player.findingNotice.items : [];
+  const foundQuantity = foundItems.reduce((sum, item) => sum + Number(item.quantity), 0);
+  const noticeMessage = foundItems.length
+    ? `${foundQuantity.toLocaleString('en-GB')} ${foundQuantity === 1 ? 'thing' : 'things'} found and processed.`
+    : flash ?? '';
+  const noticeKey = player?.findingNotice?.noticeKey ?? (flash ? `flash:${flash}` : '');
+  const flashDialog = `<aside id="flash-dialog" class="flash-notice" hidden aria-labelledby="flash-dialog-title" data-notice-key="${escapeHtml(noticeKey)}"><header><span class="flash-notice-mark" aria-hidden="true">${foundItems.length ? '✦' : '✓'}</span><strong id="flash-dialog-title">${foundItems.length ? 'Things found' : 'Update'}</strong><button type="button" aria-label="Dismiss notification">×</button></header><p id="flash-dialog-message" role="status" aria-live="polite">${escapeHtml(noticeMessage)}</p><ul id="flash-dialog-items" class="flash-item-list" aria-label="${foundItems.length ? 'Items found' : 'Notification details'}">${findingNoticeListHtml(foundItems)}</ul></aside><script src="/node/flash-modal.js?v=20260824a" defer></script>`;
   const quietNotice = player?.quietNotice
     ? `<p class="quiet-notice" role="status"><span aria-hidden="true">✓</span> ${escapeHtml(player.quietNotice)}</p>` : '';
   const meldDialog = meldRevealHtml(player?.meldReveal);
   const liveRevision = typeof player?.liveUpdateRevision === 'function'
     ? player.liveUpdateRevision() : Number(player?.liveUpdateRevision ?? 0);
   const liveUpdates = player
-    ? `<script src="/node/live-updates.js?v=20260823b" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${description}"><meta name="theme-color" content="${isLandingPage ? '#0b0d0c' : '#5e5a57'}"><title>${documentTitle}</title><link rel="icon" href="/img/favicon.ico"><link rel="stylesheet" href="/css/styles10.css"><link rel="stylesheet" href="/app.css?v=20260823i"></head><body${isLandingPage ? ' class="landing-body"' : ''}><a class="skip-link" href="#content">Skip to game content</a><div id="preloader">${preloader}</div><div id="wrapper" class="node-wrapper${isLandingPage ? ' landing-shell' : ''}"><header class="game-header"><a id="logo" href="/" aria-label="MineThings home"></a>${login}</header>${topNavigation}<div id="divwrapper" class="node-content-wrap${player ? '' : ' guest-content'}">${sideNavigation}<main id="content" tabindex="-1">${quietNotice}${content}</main></div><footer><p>© 4024 MineThings.com · Node.js + SQLite revival · <a href="/history">History</a> · <a href="/legal">Legal</a></p></footer></div>${flashDialog}${findingDialog}${meldDialog}${liveUpdates}</body></html>`;
+    ? `<script src="/node/live-updates.js?v=20260824a" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
+  const shellClass = isLandingPage ? 'landing-shell' : `game-shell${player ? ' authenticated-shell' : ' public-shell'}`;
+  const bodyClass = isLandingPage ? 'landing-body' : `game-body${player ? ' authenticated-body' : ' public-body'}`;
+  const wordmark = `<a id="logo" class="site-wordmark" href="/" aria-label="MineThings 2 home"><span class="site-mark" aria-hidden="true"></span><span><strong>Mine Things</strong><small>The world digs back</small></span><b aria-hidden="true">2</b></a>`;
+  const footer = `<footer class="site-footer"><div class="footer-brand"><span class="site-mark" aria-hidden="true"></span><div><strong>MineThings 2</strong><span>Persistent since 2009. Reborn in 2026.</span></div></div><p>The patient economic and social experiment, alive again.</p><nav aria-label="Footer"><a href="/history">History</a><a href="/legal">Legal</a><a href="/help">Field guide</a></nav></footer>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${description}"><meta name="theme-color" content="#0b0d0c"><title>${documentTitle}</title><link rel="icon" href="/node/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/app.css?v=${APP_CSS_VERSION}"></head><body class="${bodyClass}"><a class="skip-link" href="#content">Skip to main content</a><div id="wrapper" class="node-wrapper ${shellClass}"><header class="game-header">${wordmark}${login}</header>${topNavigation}<div id="divwrapper" class="node-content-wrap${player ? '' : ' guest-content'}">${sideNavigation}<main id="content" tabindex="-1">${quietNotice}${content}</main></div>${footer}</div>${flashDialog}${meldDialog}${liveUpdates}${player ? '<script src="/node/navigation.js?v=20260823a" defer></script>' : ''}</body></html>`;
 }
 
 function itemCard(item, countOrOptions = null, legacyAction = '') {
@@ -725,124 +877,6 @@ function compareCatalogEntriesByRarity(catalog, itemId = (entry) => entry.itemId
   );
 }
 
-function findingCards(finds, catalog, metadata = {}) {
-  const grouped = new Map();
-  for (const find of finds ?? []) {
-    const item = catalog.byId.get(Number(find.itemId));
-    if (!item) throw new Error(`Missing catalog item: ${find.itemId}.`);
-    const count = Number(find.count ?? 1);
-    const cityId = find.cityId ?? metadata.cityId ?? null;
-    const cityName = cityId === null
-      ? (metadata.cityName ?? catalogSettingString(catalog, 'location_labels', 'atSea'))
-      : catalogCityForId(catalog, cityId).name;
-    const foundAt = find.foundAt ?? metadata.foundAt ?? null;
-    const sourceKey = find.source ?? metadata.source
-      ?? (find.dwarfed ? 'dwarf' : find.exploded ? 'explosives' : 'mine');
-    const source = catalog.settings.finding_source_names?.[sourceKey];
-    if (typeof source !== 'string') throw new Error(`Missing finding source name: ${sourceKey}.`);
-    const moment = metadata.groupByMoment ? foundAt : '';
-    const key = `${item.id}:${cityId ?? ""}:${source}:${moment ?? ""}`;
-    const entry = grouped.get(key) ?? {
-      item, count: 0, recycled: 0, cityName, foundAt, source
-    };
-    entry.count += count;
-    if (find.recycled) entry.recycled += count;
-    grouped.set(key, entry);
-  }
-  return [...grouped.values()]
-    .sort((first, second) => compareItemsByRarity(first.item, second.item)
-      || Number(second.foundAt ?? 0) - Number(first.foundAt ?? 0))
-    .map((entry) => {
-      const description = entry.item.description;
-      const quantity = entry.count > 1 ? `${entry.count} found` : '1 found';
-      const recycling = entry.recycled === entry.count ? ' · auto-recycled'
-        : entry.recycled ? ` · ${entry.recycled} auto-recycled` : '';
-      const timestamp = entry.foundAt === null ? '' : `<time datetime="${new Date(entry.foundAt).toISOString()}">${escapeHtml(new Date(entry.foundAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))}</time>`;
-      const details = `<dl class="discovery-item-card-meta"><div><dt>Source</dt><dd>${escapeHtml(entry.source)}</dd></div><div><dt>City</dt><dd>${escapeHtml(entry.cityName)}</dd></div><div><dt>Result</dt><dd>${quantity}${recycling}</dd></div>${timestamp ? `<div><dt>Found</dt><dd>${timestamp}</dd></div>` : ''}</dl>`;
-      return itemCard(entry.item, {
-        featured: true,
-        className: 'discovery-item-card',
-        meta: `${entry.source} discovery`,
-        description,
-        details
-      });
-    }).join('');
-}
-
-function findingQueueHtml(findings, catalog) {
-  const sourceNames = catalogObjectSetting(catalog, 'finding_source_names');
-  const sourceIcons = {
-    mine: '⛏',
-    'new-mine': '✦',
-    explosives: '✹',
-    dwarf: '◆',
-    fishing: '◉',
-    salvage: '⚓'
-  };
-  return findings.map((finding) => {
-    const item = catalog.byId.get(Number(finding.itemId));
-    if (!item) throw new Error(`Missing catalog item: ${finding.itemId}.`);
-    const source = sourceNames[finding.source];
-    if (typeof source !== 'string') throw new Error(`Missing finding source name: ${finding.source}.`);
-    const sourceIcon = sourceIcons[finding.source];
-    if (typeof sourceIcon !== 'string') throw new Error(`Missing finding source icon: ${finding.source}.`);
-    const mineType = catalogMineTypeForId(catalog, item.mineTypeId);
-    const quantity = Number(finding.quantity);
-    const status = finding.autoRecycled ? 'Automatically recycled into Ore scraps' : 'Stored in your city inventory';
-    const totalValue = item.goldValue * quantity;
-    const foundAt = new Date(finding.foundAt);
-    return `<article class="finding-occasion-card discovery-item-card rarity-${item.rarity}" data-item-id="${item.id}" data-rarity="${item.rarity}" data-finding-source="${escapeHtml(finding.source)}">
-      <div class="finding-occasion-art">
-        <span class="finding-rarity-burst" aria-hidden="true"></span>
-        <img src="${escapeHtml(item.largeImage)}" alt="${escapeHtml(item.name)}">
-        <span class="finding-quantity" aria-label="Quantity ${quantity.toLocaleString('en-GB')}">×${quantity.toLocaleString('en-GB')}</span>
-      </div>
-      <div class="finding-occasion-copy">
-        <div class="finding-badges"><span class="finding-source-badge"><span class="finding-source-icon" aria-hidden="true">${sourceIcon}</span>${escapeHtml(source)}</span><span class="finding-rarity-badge"><span aria-hidden="true">★</span>${escapeHtml(item.rarityName)}</span></div>
-        <p class="finding-kicker">You discovered</p>
-        <h3><a href="/items/${item.id}">${escapeHtml(item.name)}</a></h3>
-        <p class="finding-description">${escapeHtml(item.description)}</p>
-        <dl class="finding-facts">
-          <div><dt><span aria-hidden="true">${sourceIcon}</span> Source</dt><dd>${escapeHtml(source)}</dd></div>
-          <div><dt><span aria-hidden="true">⌖</span> Location</dt><dd>${escapeHtml(finding.cityName)}</dd></div>
-          <div><dt><span aria-hidden="true">◆</span> Rarity</dt><dd>${escapeHtml(item.rarityName)}</dd></div>
-          <div><dt><span aria-hidden="true">▦</span> Category</dt><dd>${escapeHtml(mineType.name)} Mine</dd></div>
-          <div><dt><span aria-hidden="true">×</span> Quantity</dt><dd>${quantity.toLocaleString('en-GB')}</dd></div>
-          <div><dt><span aria-hidden="true">✓</span> Status</dt><dd>${status}</dd></div>
-          <div><dt><span aria-hidden="true">●</span> Fixed value</dt><dd>${formatGold(item.goldValue)}g each · ${formatGold(totalValue)}g total</dd></div>
-          <div><dt><span aria-hidden="true">◷</span> Found</dt><dd><time datetime="${foundAt.toISOString()}">${escapeHtml(foundAt.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }))}</time></dd></div>
-        </dl>
-        <nav class="finding-links" aria-label="Actions for ${escapeHtml(item.name)}">
-          <a class="button" href="/items/${item.id}"><span aria-hidden="true">⌕</span> Full item details</a>
-          <a class="button secondary" href="/inventory"><span aria-hidden="true">▣</span> View inventory</a>
-          <a class="button secondary" href="/market/items/${item.id}"><span aria-hidden="true">⇄</span> Open market</a>
-        </nav>
-      </div>
-    </article>`;
-  }).join('');
-}
-
-export function describeFinds(finds, catalog) {
-  const grouped = new Map();
-  for (const find of finds) {
-    const entry = grouped.get(find.itemId)
-      ?? { itemId: find.itemId, item: catalog.byId.get(find.itemId), count: 0, recycled: 0 };
-    const count = Number(find.count ?? 1);
-    entry.count += count;
-    if (find.recycled) entry.recycled += count;
-    grouped.set(find.itemId, entry);
-  }
-  const labels = [...grouped.values()].sort((first, second) =>
-    compareItemsByRarity(first.item, second.item)).map((entry) => {
-    const quantity = entry.count > 1 ? `${entry.count}× ` : '';
-    const recycled = entry.recycled === entry.count ? ' (auto-recycled)' : '';
-    if (!entry.item) throw new Error(`Missing catalog item: ${entry.itemId}.`);
-    return `${quantity}${entry.item.name}${recycled}`;
-  });
-  if (labels.length < 2) return labels[0] ?? 'nothing';
-  return `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
-}
-
 function equipmentBot(mine, catalog, compact = false) {
   const layers = [`<img src="/img/equipment/src/Bot.png" alt="Miner bot with equipment">`];
   for (const { id: typeId, name: typeName } of catalog.equipmentTypes) {
@@ -865,7 +899,7 @@ function avatarStack(layers, label = 'Profile avatar') {
     .map((layer) => `<img src="/img/avatars/src/${encodeURIComponent(layer.filename)}" alt="" aria-hidden="true">`).join('')}</div>`;
 }
 
-function landingPage(catalog) {
+function landingPage(catalog, googleLoginEnabled = false) {
   const nameMinimum = Number(catalog.settings.miner_name_min_length);
   const nameMaximum = Number(catalog.settings.miner_name_max_length);
   const passwordMinimum = Number(catalog.settings.password_min_length);
@@ -930,11 +964,31 @@ function landingPage(catalog) {
           <label><span>Miner name</span><input name="name" autocomplete="username" required></label>
           <label><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
           <button class="landing-submit">Return to my mine <span aria-hidden="true">→</span></button>
+          ${googleLoginEnabled ? '<div class="landing-auth-divider"><span>or</span></div><a class="landing-google-button" href="/auth/google"><span class="google-mark" aria-hidden="true">G</span>Continue with Google</a>' : ''}
           <p class="landing-login-note">No daily streaks. No energy panic. MineThings was built for patient obsession.</p>
         </form>
       </div>
     </section>
   </div>`;
+}
+
+function googleRegistrationPage(profile, catalog) {
+  const nameMinimum = Number(catalog.settings.miner_name_min_length);
+  const nameMaximum = Number(catalog.settings.miner_name_max_length);
+  const passwordMinimum = Number(catalog.settings.password_min_length);
+  const suggestedName = normalizeMinerName(profile.name).slice(0, nameMaximum);
+  return `<div class="oauth-registration-shell"><form class="landing-auth-card oauth-registration-card" method="post" action="/auth/google/register" aria-labelledby="google-registration-title">
+    <p class="landing-card-label"><span>Google</span> New miner</p>
+    <h1 id="google-registration-title">Choose your miner name</h1>
+    <p>Google verified <strong>${escapeHtml(profile.email)}</strong>. Finish creating your MineThings identity.</p>
+    <label><span>Miner name</span><input name="name" value="${escapeHtml(suggestedName)}" minlength="${nameMinimum}" maxlength="${nameMaximum}" pattern="[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S} ]+" autocomplete="username" required></label>
+    <small>${nameMinimum}–${nameMaximum} visible characters. This is the name other miners will see.</small>
+    <label><span>Backup password</span><input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label>
+    <small>You can normally use Google; this password also keeps local sign-in available.</small>
+    <label class="check-row"><input type="checkbox" name="acceptTerms" value="1" required><span>I accept the <a href="/legal" target="_blank" rel="noopener">Terms and Privacy Notice</a> (version ${LEGAL_VERSION}).</span></label>
+    <button class="landing-submit">Create my miner <span aria-hidden="true">→</span></button>
+    <a class="oauth-cancel-link" href="/">Cancel and return home</a>
+  </form></div>`;
 }
 
 function emailVerificationPage(player, status, developmentUrl, currentTime) {
@@ -967,26 +1021,36 @@ function emailVerifiedPage(minerName) {
 }
 
 function dashboardPage(player, catalog, now) {
+  const maximumActiveMines = activeMineLimit(player, catalog, now);
   const recent = player.discoveries.slice(0, Number(catalog.settings.home_recent_discovery_limit))
     .map((entry) => catalogItemForId(catalog, entry.itemId, 'recent discovery'))
     .sort(compareItemsByRarity).map((item) => itemCard(item)).join('');
   const localMines = player.mines.filter((mine) => mine.cityId === player.cityId);
   const mines = localMines.map((mine) => {
     const type = catalogMineTypeForId(catalog, mine.mineTypeId);
+    const mineCity = catalogCityForId(catalog, mine.cityId);
+    const availableCrypto = cryptoTypesForMap(mineCity.mapId);
+    const selectedCrypto = mine.cryptoTypeId ? cryptoType(mine.cryptoTypeId) : null;
     const remaining = mine.nextFindAt - now;
     const resource = type.hasOre ? 'ore' : 'gold';
     const continuousGold = Boolean(
       catalogSpecialisationForId(catalog, player.profession).bonuses.mineGold
     )
-      && mine.mineThings === false && !type.hasOre;
+      && !mine.cryptoTypeId && mine.mineThings === false && !type.hasOre;
     const mineGoldMultiplier = specialisationMultiplier(player.profession, 'mineGold', catalog.specialisations);
-    const miningStatus = continuousGold
+    const miningStatus = selectedCrypto
+      ? `Mining <strong>${escapeHtml(selectedCrypto.name)} (${escapeHtml(selectedCrypto.symbol)})</strong> · ${formatGold(mineBucketsPerHour(catalog, mine, player, now))} units/hr · next result: <strong>${formatDuration(remaining)}</strong>`
+      : continuousGold
       ? `Mining <strong>gold continuously</strong> · ${formatGold(mineBucketsPerHour(catalog, mine, player, now) * Number(catalog.settings.mine_gold_per_bucket) * mineGoldMultiplier)} gold/hr · ${formatGold((mineGoldMultiplier - 1) * 100)}% specialisation bonus`
       : `Mining <strong>${mine.mineThings === false ? resource : 'things'}</strong> · ${formatGold(mineBucketsPerHour(catalog, mine, player, now))} buckets/hr · next result: <strong>${formatDuration(remaining)}</strong>`;
+    const modeValue = selectedCrypto ? `crypto:${selectedCrypto.id}` : mine.mineThings === false ? 'resource' : 'things';
+    const modeOptions = [['things', 'Things'], ['resource', type.hasOre ? 'Ore' : 'Gold'],
+      ...availableCrypto.map((currency) => [`crypto:${currency.id}`, `${currency.name} (${currency.symbol})`])]
+      .map(([value, label]) => `<option value="${value}"${value === modeValue ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
     const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
     const oilOwned = player.inventoryByCity[mine.cityId]?.[oilItem.id] ?? 0;
     const permanentCount = player.mines.filter((candidate) => !candidate.rentalUntil).length;
-  return `<article class="mine${mine.active ? '' : ' inactive'}">${equipmentBot(mine, catalog, true)}<div><h3><span class="mine-priority">${mine.priority}</span> ${escapeHtml(type.name)} Mine</h3><p>${mine.active ? miningStatus : '<strong>Paused by the active-mine limit.</strong>'}${mine.oilExpiresAt > now ? ` · oiled for ${formatDuration(mine.oilExpiresAt - now)}` : ''}${mine.rentalUntil ? ` · rental expires in ${formatDuration(mine.rentalUntil - now)}` : ''}</p>${mine.active ? `<a href="/mines/${mine.id}/equipment">Equipment &amp; explosives</a>` : ''}</div><div class="mine-actions"><form method="post" action="/mines/${mine.id}/prioritize"><button class="secondary" ${mine.priority === 1 ? 'disabled' : ''}>Make top</button></form>${mine.active ? `<form method="post" action="/mines/${mine.id}/mode"><input type="hidden" name="mineThings" value="${mine.mineThings === false ? '1' : '0'}"><button class="secondary">Mine ${mine.mineThings === false ? 'things' : resource}</button></form><form method="post" action="/mines/${mine.id}/oil"><button class="secondary" ${oilOwned < 1 ? 'disabled' : ''}>Oil bot</button></form>${continuousGold ? '' : `<form method="post" action="/mines/${mine.id}/claim"><button ${remaining > 0 ? 'disabled' : ''}>Collect findings</button></form>`}` : ''}${!mine.rentalUntil && type.refundable ? `<form method="post" action="/mines/${mine.id}/sell"><button class="secondary" ${permanentCount <= Number(catalog.settings.minimum_permanent_mines) ? 'disabled' : ''}>Resell for ${mineRefundCredits(catalog, type)}c</button></form>` : ''}</div></article>`;
+  return `<article class="mine${mine.active ? '' : ' inactive'}">${equipmentBot(mine, catalog, true)}<div><h3><span class="mine-priority">${mine.priority}</span> ${escapeHtml(type.name)} Mine</h3><p>${mine.active ? miningStatus : '<strong>Paused by the active-mine limit.</strong>'}${mine.oilExpiresAt > now ? ` · oiled for ${formatDuration(mine.oilExpiresAt - now)}` : ''}${mine.rentalUntil ? ` · rental expires in ${formatDuration(mine.rentalUntil - now)}` : ''}</p>${mine.active ? `<a href="/mines/${mine.id}/equipment">Equipment &amp; explosives</a>` : ''}</div><div class="mine-actions"><form method="post" action="/mines/${mine.id}/prioritize"><button class="secondary" ${mine.priority === 1 ? 'disabled' : ''}>Make top</button></form>${mine.active ? `<form method="post" action="/mines/${mine.id}/mode"><label>Mine for<select name="mode">${modeOptions}</select></label><button class="secondary">Set mode</button></form><form method="post" action="/mines/${mine.id}/oil"><button class="secondary" ${oilOwned < 1 ? 'disabled' : ''}>Oil bot</button></form>` : ''}${!mine.rentalUntil && type.refundable ? `<form method="post" action="/mines/${mine.id}/sell"><button class="secondary" ${permanentCount <= Number(catalog.settings.minimum_permanent_mines) ? 'disabled' : ''}>Resell for ${mineRefundCredits(catalog, type)}c</button></form>` : ''}</div></article>`;
   }).join('');
   const capacityWarning = player.itemCount > player.itemLimit
     ? `<p class="capacity-warning">You are ${player.itemCount - player.itemLimit} things over your ${player.itemLimit}-thing limit. <a href="/mines/auto-recycle">Open Auto-Recycle</a>.</p>` : '';
@@ -1003,7 +1067,7 @@ function dashboardPage(player, catalog, now) {
     .slice(0, Number(catalog.settings.home_next_stone_limit))
     .map((stone) => `<img src="/img/icons/stone${stone.rarity}.png" alt="${escapeHtml(stone.name)}" title="${escapeHtml(`${stone.name}: ${stone.description}. ${formatGold(catalog.settings.stone_buckets_per_hour)} bph.`)}">`).join('');
   const stones = `<section class="stone-progress"><div><h2>Clear stones</h2><p>${player.stoneCount} cleared · +${formatGold(player.stoneCount * Number(catalog.settings.stone_buckets_per_hour))} buckets/hr on the top mine in your home city.</p></div><div class="stone-icons">${nextStones || '<strong>Every stone cleared.</strong>'}</div><a href="/stones">View all</a></section>`;
-  return `<section class="page-title"><div><p class="eyebrow">Welcome back</p><h1>${escapeHtml(player.name)}’s mines</h1></div><p>Showing mines in ${escapeHtml(player.cityName)}. Each active mine uncovers a thing about every ${formatDuration(Number(catalog.settings.find_interval_ms))}, including while you are away.</p></section>${capacityWarning}${botBuilder}${stones}<section><h2>Mines in ${escapeHtml(player.cityName)}</h2><div class="mine-list">${mines || '<p>No mines are based in this city.</p>'}</div></section><section><h2>Recent discoveries</h2><div class="item-grid">${recent || '<p>Your first discovery is still beneath the soil.</p>'}</div></section>`;
+  return `<section class="page-title"><div><p class="eyebrow">Welcome back</p><h1>${escapeHtml(player.name)}’s mines</h1></div><p>Showing mines in ${escapeHtml(player.cityName)}. Your discovered regions currently support ${maximumActiveMines.toLocaleString('en-GB')} active mines.</p></section>${capacityWarning}${botBuilder}${stones}<section><h2>Mines in ${escapeHtml(player.cityName)}</h2><div class="mine-list">${mines || '<p>No mines are based in this city.</p>'}</div></section><section><h2>Recent discoveries</h2><div class="item-grid">${recent || '<p>Your first discovery is still beneath the soil.</p>'}</div></section>`;
 }
 
 function stonesPage(player, catalog) {
@@ -1155,14 +1219,16 @@ function calculatorPage(categories, catalog) {
 }
 
 function meldRequirements(meld, player, catalog) {
-  const inventory = player.inventoryByCity[player.homeCityId] ?? {};
+  const regionalCapitalCityId = player.currentRegionHomeCityId;
+  const inventory = regionalCapitalCityId === null
+    ? {} : (player.inventoryByCity[regionalCapitalCityId] ?? {});
   const storage = player.meldStash ?? {};
   return [...meld.requirements].sort(compareCatalogEntriesByRarity(catalog)).map((requirement) => {
     const item = catalog.byId.get(requirement.itemId);
     const stored = storage[requirement.itemId] ?? 0;
     const atHome = inventory[requirement.itemId] ?? 0;
     if (!item) throw new Error(`Missing catalog item: ${requirement.itemId}.`);
-    return `<li class="${stored + atHome >= requirement.count ? 'met' : 'missing'}">${itemCard(item, { compact: true, meta: [`${requirement.count} required`, `${stored} in Meld storage`, `${atHome} in home city`] })}</li>`;
+    return `<li class="${stored + atHome >= requirement.count ? 'met' : 'missing'}">${itemCard(item, { compact: true, meta: [`${requirement.count} required`, `${stored} in Meld storage`, `${atHome} in this region's capital`] })}</li>`;
   }).join('');
 }
 
@@ -1193,14 +1259,22 @@ function meldsPage(player, catalog, query = '') {
 function meldDetailPage(player, catalog, meld) {
   const owned = player.meldIds.includes(meld.id);
   const broken = player.brokenMeldIds.includes(meld.id);
+  const regionalCapital = player.currentRegionHomeCityId === null
+    ? null : catalogCityForId(catalog, player.currentRegionHomeCityId);
+  const atRegionalCapital = regionalCapital && player.cityId === regionalCapital.id;
+  const createAction = atRegionalCapital
+    ? `<form class="meld-create-form" method="post" action="/melds/${meld.id}/create"><button>Create from storage and ${escapeHtml(regionalCapital.name)} things</button></form>`
+    : regionalCapital
+      ? `<p class="capacity-warning">Travel to the regional capital, <strong>${escapeHtml(regionalCapital.name)}</strong>, to create this Meld.</p>`
+      : '<p class="capacity-warning">This region does not have an available capital.</p>';
   const previousHomeName = player.previousHomeCityId === null
     ? 'your former home city' : catalogCityForId(catalog, player.previousHomeCityId).name;
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(catalogRarityName(catalog, meld.rarity))} meld</p><h1>${escapeHtml(meld.name)}</h1></div><p>Use Meld buttons in Your Things to move recipe items into capacity-free Meld storage. Home-city things can still be used for manual creation.</p></section>
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(catalogRarityName(catalog, meld.rarity))} meld</p><h1>${escapeHtml(meld.name)}</h1></div><p>Use Meld buttons in a regional capital to move recipe items into capacity-free Meld storage. That shared storage and things in your current region's capital can be used for manual creation.</p></section>
     <section class="meld-recipe"><h2>Recipe</h2><ul>${meldRequirements(meld, player, catalog)}</ul>${broken
       ? `<div class="broken-meld"><p>Moving nullified this meld in ${escapeHtml(previousHomeName)}. Dismantle it to return every recipe thing to that city.</p><form method="post" action="/melds/${meld.id}/deconstruct"><button>Dismantle meld</button></form></div>`
       : owned
       ? '<p class="active-state">You own this meld.</p>'
-      : `<form class="meld-create-form" method="post" action="/melds/${meld.id}/create"><button>Create from storage and home-city things</button></form>`}</section><p><a href="/melds">Back to melds</a></p>`;
+      : createAction}</section><p><a href="/melds">Back to melds</a></p>`;
 }
 
 function professionsPage(player, catalog) {
@@ -1303,36 +1377,53 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs) 
   if (!Number.isFinite(historyHours) || historyHours <= 0) {
     throw new Error('The chat history window is invalid.');
   }
+  const appearanceColor = /^[0-9a-f]{6}$/i.test(String(appearance.color))
+    ? String(appearance.color).toLowerCase() : '55666b';
   const rows = chats.map((chat) => {
-    const sentAt = new Date(chat.createdAt).toLocaleString('en-GB');
+    const sentDate = new Date(Number(chat.createdAt));
+    const sentAt = sentDate.toLocaleString('en-GB');
+    const sentDay = sentDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    const sentTime = sentDate.toLocaleTimeString('en-GB', {
+      hour: '2-digit', minute: '2-digit'
+    });
+    const timestamp = `<time datetime="${sentDate.toISOString()}" title="${escapeHtml(sentAt)}"><span>${escapeHtml(sentDay)}</span><strong>${escapeHtml(sentTime)}</strong></time>`;
     const rowId = `chat-entry-${chat.kind === 'player' ? 'player' : 'world'}-${Number(chat.id)}`;
     if (chat.kind !== 'player') {
-      const rare = chat.kind === 'rare-purple' || chat.kind === 'rare-orange';
       const dwarfCapture = chat.kind === 'dwarf-capture';
-      const badge = chat.kind === 'rare-purple' ? 'Purple find'
-        : chat.kind === 'rare-orange' ? 'Orange find'
-          : dwarfCapture ? 'Dwarf captured' : 'World event';
-      const itemMatch = rare || dwarfCapture
+      const badge = dwarfCapture ? 'Dwarf captured' : 'World event';
+      const itemMatch = dwarfCapture
         ? String(chat.path ?? '').match(/^\/items\/(\d+)$/) : null;
       const item = itemMatch ? catalog.byId.get(Number(itemMatch[1])) : null;
-      const classes = rare ? `chat-row-rare ${chat.kind}`
-        : dwarfCapture ? `chat-row-world chat-row-dwarf rarity-${item?.rarity ?? 0}`
-          : 'chat-row-world';
-      const itemClass = rare ? 'chat-rare-item' : 'chat-dwarf-item';
+      const classes = dwarfCapture ? `chat-row-world chat-row-dwarf rarity-${item?.rarity ?? 0}`
+        : 'chat-row-world';
       const message = item
-        ? `<a class="chat-world-message ${itemClass} rarity-${item.rarity}" href="/items/${item.id}"><img src="${escapeHtml(item.icon)}" alt=""><span>${escapeHtml(chat.body)}</span></a>`
+        ? `<a class="chat-world-message chat-dwarf-item rarity-${item.rarity}" href="/items/${item.id}"><img src="${escapeHtml(item.icon)}" alt=""><span>${escapeHtml(chat.body)}</span></a>`
         : `<span class="chat-world-message">${escapeHtml(chat.body)}</span>`;
-      return `<article id="${rowId}" class="chat-row ${classes}" data-chat-created-at="${Number(chat.createdAt)}"><a class="chat-world-badge" href="${escapeHtml(chat.path)}">${badge}</a>${message}<time>${sentAt}</time>${item ? '' : `<a class="chat-world-link" href="${escapeHtml(chat.path)}">Details</a>`}</article>`;
+      return `<article id="${rowId}" class="chat-row ${classes}" data-chat-created-at="${Number(chat.createdAt)}"><a class="chat-world-badge" href="${escapeHtml(chat.path)}">${badge}</a>${message}${timestamp}${item ? '' : `<a class="chat-world-link" href="${escapeHtml(chat.path)}">Details</a>`}</article>`;
     }
     const color = /^[0-9a-f]{6}$/i.test(String(chat.color))
       ? String(chat.color).toLowerCase() : '55666b';
-    return `<article id="${rowId}" class="chat-row chat-row-player" style="--chat-color:#${color}" data-chat-created-at="${Number(chat.createdAt)}"><a class="chat-speaker" href="/miners/${encodeURIComponent(chat.playerName)}">${escapeHtml(chat.playerName)}</a><span class="chat-message">${escapeHtml(chat.body)}</span><time>${sentAt}</time>${chat.playerId === player.id ? '' : `<form method="post" action="/chat/ignores/${chat.playerId}"><input type="hidden" name="ignored" value="1"><button class="link">Ignore</button></form>`}</article>`;
+    const speaker = escapeHtml(chat.playerName);
+    const rowAction = chat.playerId === player.id
+      ? '<span class="chat-row-owner">You</span>'
+      : `<form method="post" action="/chat/ignores/${chat.playerId}"><input type="hidden" name="ignored" value="1"><button class="link chat-ignore-action" aria-label="Ignore ${speaker} in public chat">Ignore</button></form>`;
+    return `<article id="${rowId}" class="chat-row chat-row-player" style="--chat-color:#${color}" data-chat-created-at="${Number(chat.createdAt)}"><span class="chat-identity"><i aria-hidden="true"></i><a class="chat-speaker" href="/miners/${encodeURIComponent(chat.playerName)}">${speaker}</a></span><span class="chat-message">${escapeHtml(chat.body)}</span>${timestamp}${rowAction}</article>`;
   }).join('');
   const ignoredRows = ignores.map((ignored) => `<li><a href="/miners/${encodeURIComponent(ignored.name)}">${escapeHtml(ignored.name)}</a><form method="post" action="/chat/ignores/${ignored.id}"><input type="hidden" name="ignored" value="0"><button class="link">Unignore</button></form></li>`).join('');
   const colorPicker = appearance.canChooseColor
-    ? `<div class="chat-color-control"><label class="chat-color-picker">Your colour<input type="color" name="color" value="#${appearance.color}" aria-describedby="chat-color-help"></label><small id="chat-color-help">Remembered after sending.</small></div>`
-    : `<div class="chat-color-control"><small>Your colour advances with melds (${appearance.meldCount}/${appearance.customMinimumMelds} for a custom colour).</small></div>`;
-  return `<section class="page-title"><div><p class="eyebrow">Community</p><h1>Public chat</h1></div><p>Showing the latest ${historyHours.toLocaleString('en-GB')} hours. Miner colours follow the original meld tiers; world events, captured Dwarves, and opted-in Purple or Orange discoveries arrive live.</p></section><div id="chat-log" class="chat-list" role="log" aria-label="Public chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<p>No visible chat messages yet.</p>'}</div><form class="chat-compose" method="post" action="/chat"><label>Message<input name="body" maxlength="${Number(catalog.settings.chat_message_max_length)}" required></label>${colorPicker}<button>Send</button></form><details class="chat-ignores"><summary>Ignored miners (${ignores.length})</summary><ul>${ignoredRows || '<li>Nobody ignored.</li>'}</ul></details>`;
+    ? `<div class="chat-color-control" style="--chat-preview:#${appearanceColor}"><span class="chat-control-label">Signal colour</span><label class="chat-color-picker" for="chat-color"><input id="chat-color" type="color" name="color" value="#${appearanceColor}" aria-describedby="chat-color-help"><span>Choose colour</span></label><small id="chat-color-help">Saved when you transmit.</small></div>`
+    : `<div class="chat-color-control" style="--chat-preview:#${appearanceColor}"><span class="chat-control-label">Signal colour</span><p><i aria-hidden="true"></i>Meld colour</p><small>Your signal advances with melds (${appearance.meldCount}/${appearance.customMinimumMelds} for a custom colour).</small></div>`;
+  const composer = player.chatBanned
+    ? `<div class="chat-compose chat-compose-locked" role="note"><div><span class="chat-control-label">Broadcast disabled</span><strong>Your account is not permitted to use public chat.</strong></div></div>`
+    : `<form id="chat-compose-form" class="chat-compose" method="post" action="/chat"><label class="chat-message-control" for="chat-message"><span>Transmit from this region</span><input id="chat-message" name="body" maxlength="${Number(catalog.settings.chat_message_max_length)}" placeholder="What is happening out there?" autocomplete="off" required></label>${colorPicker}<button class="chat-send"><span>Send</span><b aria-hidden="true">&nearr;</b></button></form>`;
+  const transmissionCount = chats.length.toLocaleString('en-GB');
+  const transmissionLabel = chats.length === 1 ? 'transmission' : 'transmissions';
+  return `<article class="chat-page">
+    <header class="chat-page-title"><div><p class="eyebrow">Discovered regions · open record</p><h1>Public chat</h1><p>This frequency combines miner talk and world events from the regions you have discovered.</p></div><span class="chat-title-mark" aria-hidden="true">24H</span></header>
+    <dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Traffic in view</dt><dd>${transmissionCount} ${transmissionLabel}</dd></div></dl>
+    <div class="chat-workspace"><section class="chat-console" aria-labelledby="chat-console-title"><header class="chat-console-header"><div><p>MT2 // Worldwire</p><h2 id="chat-console-title">Open frequency</h2></div><p>Showing the latest ${historyHours.toLocaleString('en-GB')} hours. New traffic arrives live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Public chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty"><span aria-hidden="true">◇</span><h3>The frequency is quiet.</h3><p>Be the first miner to break the silence.</p></div>'}</div>${composer}</section>
+    <aside class="chat-sidecar" aria-label="Public chat controls"><section class="chat-signal-card" style="--chat-preview:#${appearanceColor}"><p class="chat-side-label">Your signal</p><div><i aria-hidden="true"></i><strong>${escapeHtml(player.name)}</strong></div><p>${appearance.canChooseColor ? 'Custom colour unlocked. Choose it when you transmit.' : `Meld tier colour · ${appearance.meldCount}/${appearance.customMinimumMelds} melds`}</p></section><details class="chat-ignores"><summary><span><b>Channel controls</b><small>Ignored miners</small></span><strong>${ignores.length}</strong></summary><ul>${ignoredRows || '<li>Nobody ignored.</li>'}</ul></details><section class="chat-channel-note"><p class="chat-side-label">On this channel</p><p>World events and captured Dwarves from your discovered regions are public record.</p></section></aside></div>
+  </article>`;
 }
 
 function localItemGoldValue(item, catalog, cityId) {
@@ -1342,41 +1433,100 @@ function localItemGoldValue(item, catalog, cityId) {
     && !origins.some((entry) => entry.cityId === cityId);
   const baseUnits = Math.max(1, Math.round(Number(item.goldValue) * 10000));
   const multiplier = Number(catalog.settings.foreign_market_price_multiplier);
-  return (outsideOrigin ? Math.round(baseUnits * multiplier) : baseUnits) / 10000;
+  const calculatedUnits = outsideOrigin ? Math.round(baseUnits * multiplier) : baseUnits;
+  return (calculatedUnits > 10000
+    ? Math.floor(calculatedUnits / 10000) * 10000 : calculatedUnits) / 10000;
 }
 
 function inventoryPage(player, catalog, meldItemNeeds = {}) {
-  const entries = Object.entries(player.inventory).map(([id, count]) => [catalog.byId.get(Number(id)), count])
-    .filter(([item]) => item).sort(([first], [second]) => compareItemsByRarity(first, second));
-  const cards = entries.map(([item, count]) => {
-    const localValue = localItemGoldValue(item, catalog, player.cityId);
-    const meldNeed = meldItemNeeds[item.id] ?? 0;
-    const meldAtHome = player.cityId === player.homeCityId;
-    const meldDisabled = !meldAtHome || meldNeed < 1;
-    const meldTitle = !meldAtHome
-      ? 'Meld storage is only available for things in your home city.'
-      : meldNeed < 1
-        ? `${item.name} is not needed for any remaining meld.`
-        : `Move one ${item.name} to Meld storage.`;
-    const protectedCount = player.protectedInventoryByCity?.[player.cityId]?.[item.id] ?? 0;
-    const recyclableCount = Math.max(0, count - protectedCount);
-    const scrapsEach = Number(catalog.settings.recycling_scraps_by_rarity[item.rarity]);
-    const recycleDisabled = recyclableCount < 1;
-    const recycleTitle = recycleDisabled
-      ? 'Every stored copy was factory-made and can never be recycled.'
-      : protectedCount
-        ? `${protectedCount} factory-made ${protectedCount === 1 ? 'copy is' : 'copies are'} protected.`
-        : '';
+  const mapsById = new Map(catalog.maps.map((map) => [Number(map.id), map]));
+  const locations = Object.entries(player.inventoryByCity ?? {}).map(([cityId, inventory]) => {
+    const city = catalogCityForId(catalog, Number(cityId));
+    const region = mapsById.get(Number(city.mapId));
+    if (!region) throw new Error(`Missing catalog region: ${city.mapId}.`);
+    const entries = Object.entries(inventory).map(([id, count]) => {
+      const item = catalog.byId.get(Number(id));
+      return item && Number(count) > 0
+        ? { item, count: Number(count), type: itemMarketType(item, catalog) } : null;
+    }).filter(Boolean).sort((first, second) =>
+      Number(second.item.rarity) - Number(first.item.rarity)
+      || first.type.label.localeCompare(second.type.label, 'en')
+      || first.item.name.localeCompare(second.item.name, 'en')
+      || first.item.id - second.item.id);
+    return {
+      city, region, entries,
+      quantity: entries.reduce((sum, entry) => sum + entry.count, 0)
+    };
+  }).filter((location) => location.entries.length).sort((first, second) =>
+    Number(second.city.id === player.cityId) - Number(first.city.id === player.cityId)
+    || Number(first.region.sortOrder) - Number(second.region.sortOrder)
+    || first.region.name.localeCompare(second.region.name, 'en')
+    || first.city.name.localeCompare(second.city.name, 'en')
+    || first.city.id - second.city.id);
+
+  const cardsForLocation = ({ city, entries }) => entries.map(({ item, count, type }) => {
+    const localValue = localItemGoldValue(item, catalog, city.id);
+    const protectedCount = player.protectedInventoryByCity?.[city.id]?.[item.id] ?? 0;
+    const current = city.id === player.cityId;
+    let action = '';
+    if (current) {
+      const meldNeed = meldItemNeeds[item.id] ?? 0;
+      const meldAtCapital = player.cityId === player.currentRegionHomeCityId;
+      const meldDisabled = !meldAtCapital || meldNeed < 1;
+      const meldTitle = !meldAtCapital
+        ? 'Meld storage is only available for things in this region\'s capital.'
+        : meldNeed < 1
+          ? `${item.name} is not needed for any remaining meld.`
+          : `Move one ${item.name} to Meld storage.`;
+      const recyclableCount = Math.max(0, count - protectedCount);
+      const scrapsEach = Number(catalog.settings.recycling_scraps_by_rarity[item.rarity]);
+      const recycleDisabled = recyclableCount < 1;
+      const recycleTitle = recycleDisabled
+        ? 'Every stored copy was factory-made and can never be recycled.'
+        : protectedCount
+          ? `${protectedCount} factory-made ${protectedCount === 1 ? 'copy is' : 'copies are'} protected.`
+          : '';
+      action = `<a class="button inventory-market-link" href="/market/items/${item.id}">Open local market</a><form class="inventory-meld-form" method="post" action="/inventory/${item.id}/meld"><button class="secondary" title="${escapeHtml(meldTitle)}"${meldDisabled ? ' disabled' : ''}>Meld</button></form><form class="recycle-form" method="post" action="/inventory/${item.id}/recycle"><input aria-label="Number of ${escapeHtml(item.name)} to recycle" type="number" name="quantity" min="1" max="${Math.max(1, recyclableCount)}" value="1" required${recycleDisabled ? ' disabled' : ''}><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : recycleTitle ? ` title="${escapeHtml(recycleTitle)}"` : ''}>Recycle · ${scrapsEach.toLocaleString('en-GB')} scraps each</button></form><form class="recycle-all-form" method="post" action="/inventory/${item.id}/recycle"><input type="hidden" name="quantity" value="${recyclableCount}"><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : ''}>Recycle all · ${(recyclableCount * scrapsEach).toLocaleString('en-GB')} scraps</button></form>`;
+    }
     return itemCard(item, {
       count,
-      className: 'inventory-item-card',
-      meta: protectedCount ? `${protectedCount} factory-made ${protectedCount === 1 ? 'copy' : 'copies'} protected` : null,
-      action: `<form class="inventory-list-form" method="post" action="/inventory/${item.id}/list"><label>List quantity<input aria-label="Number of ${escapeHtml(item.name)} to list" type="number" name="quantity" min="1" max="${count}" value="1" required></label><button>List at ${formatGold(localValue)}g each</button></form><form class="inventory-list-all-form" method="post" action="/inventory/${item.id}/list"><input type="hidden" name="quantity" value="${count}"><button class="secondary">List all</button></form><form class="inventory-meld-form" method="post" action="/inventory/${item.id}/meld"><button class="secondary" title="${escapeHtml(meldTitle)}"${meldDisabled ? ' disabled' : ''}>Meld</button></form><form class="recycle-form" method="post" action="/inventory/${item.id}/recycle"><input aria-label="Number of ${escapeHtml(item.name)} to recycle" type="number" name="quantity" min="1" max="${Math.max(1, recyclableCount)}" value="1" required${recycleDisabled ? ' disabled' : ''}><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : recycleTitle ? ` title="${escapeHtml(recycleTitle)}"` : ''}>Recycle · ${scrapsEach.toLocaleString('en-GB')} scraps each</button></form><form class="recycle-all-form" method="post" action="/inventory/${item.id}/recycle"><input type="hidden" name="quantity" value="${recyclableCount}"><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : ''}>Recycle all · ${(recyclableCount * scrapsEach).toLocaleString('en-GB')} scraps</button></form>`
+      className: `inventory-item-card${current ? '' : ' inventory-item-remote'}`,
+      showFixedValue: false,
+      meta: [type.label, `${formatGold(localValue)}g fixed value`, ...(protectedCount
+        ? [`${protectedCount} factory-made ${protectedCount === 1 ? 'copy' : 'copies'} protected`]
+        : [])],
+      action
     });
   }).join('');
+
+  const locationsByRegion = new Map();
+  for (const location of locations) {
+    const grouped = locationsByRegion.get(location.region.id) ?? {
+      region: location.region, locations: []
+    };
+    grouped.locations.push(location);
+    locationsByRegion.set(location.region.id, grouped);
+  }
+  const physicalThings = [...locationsByRegion.values()].map(({ region, locations: cities }) => {
+    const regionQuantity = cities.reduce((sum, city) => sum + city.quantity, 0);
+    const citySections = cities.map((location) => {
+      const current = location.city.id === player.cityId;
+      const switchCity = current ? '<strong class="active-state">Selected city</strong>'
+        : `<form method="post" action="/cities/${location.city.id}/select"><button class="secondary">Switch to manage</button></form>`;
+      return `<section class="inventory-city${current ? ' current' : ''}" data-city-id="${location.city.id}"><header><div><p class="eyebrow">City</p><h3>${escapeHtml(location.city.name)}</h3></div><p>${location.quantity.toLocaleString('en-GB')} thing${location.quantity === 1 ? '' : 's'} · ${location.entries.length.toLocaleString('en-GB')} type${location.entries.length === 1 ? '' : 's'}</p>${switchCity}</header><div class="item-grid">${cardsForLocation(location)}</div></section>`;
+    }).join('');
+    return `<section class="inventory-region" data-region-id="${region.id}"><header><div><p class="eyebrow">Region</p><h2>${escapeHtml(region.name)}</h2></div><p>${regionQuantity.toLocaleString('en-GB')} thing${regionQuantity === 1 ? '' : 's'} across ${cities.length.toLocaleString('en-GB')} cit${cities.length === 1 ? 'y' : 'ies'}</p></header>${citySections}</section>`;
+  }).join('');
+  const cryptoCards = Object.entries(player.cryptoBalances ?? {}).filter(([, quantity]) => quantity > 0)
+    .map(([id, quantity]) => {
+      const currency = cryptoType(id);
+      if (!currency) return '';
+      return `<a class="crypto-wallet-coin rarity-${currency.id}" href="/crypto" style="display:inline-grid;grid-template-columns:26px minmax(4.5rem,auto) auto;align-items:center;gap:.45rem;width:auto;max-width:15rem;padding:.38rem .55rem"><img src="${escapeHtml(currency.icon)}" alt="" width="26" height="26" style="display:block;width:26px;min-width:26px;max-width:26px;height:26px;min-height:26px;max-height:26px;margin:0;padding:0;object-fit:contain"><span><strong>${escapeHtml(currency.symbol)}</strong><small>${escapeHtml(currency.name)}</small></span><b>${Number(quantity).toLocaleString('en-GB')}</b></a>`;
+    }).join('');
   const scraps = player.oreScrapsByCity?.[player.cityId] ?? 0;
   const scrapsPerOre = Number(catalog.settings.recycling_scraps_per_ore);
-  return `<section class="page-title"><div><p class="eyebrow">Inventory</p><h1>Your things</h1></div><p>${player.itemCount}/${player.itemLimit} things. Recycle unwanted finds into useful Ore scraps.</p></section><section class="recycling-bank"><h2>Ore recycling</h2><p><strong>${scraps.toLocaleString('en-GB')} Ore scraps</strong> in this city · ${scrapsPerOre.toLocaleString('en-GB')} scraps make 1 Ore.</p><form method="post" action="/inventory/refine-ore"><label>Ore to refine<input type="number" name="quantity" min="1" max="${Math.floor(scraps / scrapsPerOre)}" value="1" required></label><button${scraps < scrapsPerOre ? ' disabled' : ''}>Refine Ore</button></form></section><p>Listed things move straight into the local market, stop counting toward inventory capacity, and return to this city if you cancel the listing.</p>${player.itemCount > player.itemLimit ? '<p><a class="button" href="/mines/auto-recycle">Auto-Recycle</a></p>' : ''}<div class="item-grid">${cards || '<p>You do not own any things yet.</p>'}</div>`;
+  const selectedCity = catalogCityForId(catalog, player.cityId);
+  return `<section class="page-title"><div><p class="eyebrow">Inventory</p><h1>Your things</h1></div><p>${player.itemCount}/${player.itemLimit} physical things. Crypto coins are held globally and do not use capacity.</p></section>${cryptoCards ? `<section><h2>Crypto things</h2><div class="item-grid">${cryptoCards}</div></section>` : ''}<section class="recycling-bank"><h2>Ore recycling · ${escapeHtml(selectedCity.name)}</h2><p><strong>${scraps.toLocaleString('en-GB')} Ore scraps</strong> in the selected city · ${scrapsPerOre.toLocaleString('en-GB')} scraps make 1 Ore.</p><form method="post" action="/inventory/refine-ore"><label>Ore to refine<input type="number" name="quantity" min="1" max="${Math.floor(scraps / scrapsPerOre)}" value="1" required></label><button${scraps < scrapsPerOre ? ' disabled' : ''}>Refine Ore</button></form></section><p>Physical things in your current city come first. The remainder are ordered by region, city, rarity (highest first), then type. Switch to a city to use its local market, Meld storage, or recycling controls. Listed things remain in this city and still use inventory capacity.</p>${player.itemCount > player.itemLimit ? '<p><a class="button" href="/mines/auto-recycle">Auto-Recycle</a></p>' : ''}<div class="inventory-region-list">${physicalThings || '<p>You do not own any physical things yet.</p>'}</div>`;
 }
 
 function dwarvesPage(report, catalog, currentTime) {
@@ -1444,22 +1594,44 @@ function exchangePage(player, catalog, purchaseListings, filters = {}) {
   const selectedSort = ['recommended', 'rarity', 'price-asc', 'price-desc', 'name']
     .includes(filters.sort) ? filters.sort : 'recommended';
   const needle = query.trim().toLocaleLowerCase('en');
-  const typedListings = purchaseListings.map((listing) => {
-    const item = catalog.byId.get(listing.itemId);
-    return item ? { ...listing, item, itemType: itemMarketType(item, catalog) } : null;
+  const listingByItemId = new Map(purchaseListings.map((listing) => [listing.itemId, listing]));
+  const knownItemIds = new Set(purchaseListings.map((listing) => listing.itemId));
+  for (const discovery of player.discoveries ?? []) knownItemIds.add(Number(discovery.itemId));
+  for (const inventory of Object.values(player.inventoryByCity ?? {})) {
+    for (const itemId of Object.keys(inventory ?? {})) knownItemIds.add(Number(itemId));
+  }
+  for (const itemId of Object.keys(player.meldStash ?? {})) knownItemIds.add(Number(itemId));
+  const typedListings = [...knownItemIds].map((itemId) => {
+    const item = catalog.byId.get(itemId);
+    if (!item) return null;
+    const listing = listingByItemId.get(itemId);
+    return {
+      itemId,
+      price: listing?.price ?? Number.POSITIVE_INFINITY,
+      totalQuantity: listing?.totalQuantity ?? 0,
+      sellerName: listing?.sellerName ?? null,
+      hasListing: Boolean(listing),
+      item,
+      itemType: itemMarketType(item, catalog)
+    };
   }).filter(Boolean);
   const types = [...new Map(typedListings.map((listing) =>
     [listing.itemType.key, listing.itemType.label])).entries()]
     .sort((first, second) => first[1].localeCompare(second[1], 'en'));
   const compareName = (first, second) => first.item.name.localeCompare(second.item.name, 'en')
     || first.item.id - second.item.id;
+  const compareAvailability = (first, second) => Number(second.hasListing) - Number(first.hasListing);
   const sorters = {
     recommended: (first, second) => Number(second.item.rarity) - Number(first.item.rarity)
+      || compareAvailability(first, second)
       || Number(first.price > player.gold) - Number(second.price > player.gold) || first.price - second.price
       || second.totalQuantity - first.totalQuantity || compareName(first, second),
-    rarity: (first, second) => compareItemsByRarity(first.item, second.item) || first.price - second.price,
-    'price-asc': (first, second) => first.price - second.price || compareName(first, second),
-    'price-desc': (first, second) => second.price - first.price || compareName(first, second),
+    rarity: (first, second) => compareItemsByRarity(first.item, second.item)
+      || compareAvailability(first, second) || first.price - second.price,
+    'price-asc': (first, second) => compareAvailability(first, second)
+      || first.price - second.price || compareName(first, second),
+    'price-desc': (first, second) => compareAvailability(first, second)
+      || second.price - first.price || compareName(first, second),
     name: compareName
   };
   const listings = typedListings.filter((listing) =>
@@ -1467,49 +1639,118 @@ function exchangePage(player, catalog, purchaseListings, filters = {}) {
       && (!selectedType || listing.itemType.key === selectedType)
   ).sort(sorters[selectedSort]);
   const cards = listings.map((listing) => itemCard(listing.item, {
-    count: listing.totalQuantity, countLabel: 'available', compact: true,
+    count: listing.hasListing ? listing.totalQuantity : null, countLabel: 'available', compact: true,
     showFixedValue: false, className: 'market-item-card',
-    meta: [listing.itemType.label, `${formatGold(listing.price)}g each`, `Seller: ${listing.sellerName}`],
-    action: `<form class="market-buy-form" method="post" action="/market/orders/${listing.orderId}/buy"><label><span>Qty</span><input type="number" name="quantity" min="1" max="${listing.orderQuantity}" value="1" aria-label="${escapeHtml(listing.item.name)} quantity"></label><button${player.gold < listing.price ? ' disabled' : ''}>Buy</button></form><a class="market-order-book" href="/market/items/${listing.item.id}">Order book</a>`
+    meta: listing.hasListing
+      ? [listing.itemType.label, `${formatGold(listing.price)}g each`, `Seller: ${listing.sellerName}`]
+      : [listing.itemType.label, 'No current listing'],
+    action: listing.hasListing
+      ? `<form class="market-buy-form" data-live-authoritative method="post" action="/market/items/${listing.item.id}/buy-now"><input type="hidden" name="price" value="${listing.price}"><label><span>Qty</span><input type="number" name="quantity" min="1" max="${listing.totalQuantity}" value="1" aria-label="${escapeHtml(listing.item.name)} quantity"></label><button${player.gold < listing.price ? ' disabled' : ''}>Buy now</button></form><a class="market-order-book" href="/market/items/${listing.item.id}">Order book</a>`
+      : `<a class="button secondary market-order-book" href="/market/items/${listing.item.id}">Open order book · Place a bid</a>`
   })).join('');
   const typeOptions = types.map(([key, label]) => `<option value="${escapeHtml(key)}"${selectedType === key ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Local exchange</p><h1>Item markets</h1></div><p>Buy local stock in ${escapeHtml(catalogCityForId(catalog, player.cityId).name)}. You have <strong>${formatGold(player.gold)}g</strong>.</p></section>
+  const stockedCount = listings.filter((listing) => listing.hasListing).length;
+  return `<section class="page-title"><div><p class="eyebrow">Local exchange</p><h1>Item markets</h1></div><p>Browse known order books and buy local stock in ${escapeHtml(catalogCityForId(catalog, player.cityId).name)}. You have <strong>${formatGold(player.gold)}g</strong>.</p></section>
     <form class="market-controls" method="get" action="/exchange"><label>Find<input name="q" value="${escapeHtml(query)}" placeholder="Item name"></label><label>Item type<select name="type"><option value="">All types</option>${typeOptions}</select></label><label>Sort<select name="sort"><option value="recommended"${selectedSort === 'recommended' ? ' selected' : ''}>Recommended</option><option value="rarity"${selectedSort === 'rarity' ? ' selected' : ''}>Rarity</option><option value="price-asc"${selectedSort === 'price-asc' ? ' selected' : ''}>Price: low to high</option><option value="price-desc"${selectedSort === 'price-desc' ? ' selected' : ''}>Price: high to low</option><option value="name"${selectedSort === 'name' ? ' selected' : ''}>Name</option></select></label><button>Apply</button>${query || selectedType || selectedSort !== 'recommended' ? '<a class="button secondary" href="/exchange">Reset</a>' : ''}</form>
-    <p class="market-result-count"><strong>${listings.length}</strong> purchasable item type${listings.length === 1 ? '' : 's'}${purchaseListings.length !== listings.length ? ` from ${purchaseListings.length}` : ''}.</p>
-    <div class="item-grid market-item-grid">${cards || '<p>No matching items are available to buy in this city.</p>'}</div>`;
+    <p class="market-result-count"><strong>${listings.length}</strong> known item market${listings.length === 1 ? '' : 's'} · ${stockedCount} with local stock.</p>
+    <div class="item-grid market-item-grid">${cards || '<p>No matching known item markets.</p>'}</div>`;
+}
+
+function cryptoExchangePage(exchange, cityName) {
+  const chart = (currency) => {
+    const { analytics } = currency;
+    const buckets = analytics.buckets;
+    const last = analytics.latestSale;
+    if (!buckets.length) {
+      const previous = last
+        ? ` Last sale: ${formatGold(last.priceUnits / analytics.goldScale)}g on ${new Date(last.createdAt).toLocaleString('en-GB')}.`
+        : ' This currency has not traded yet.';
+      return `<div class="crypto-chart-empty"><strong>No trades in this period.</strong><span>${previous}</span></div>`;
+    }
+    const values = buckets.flatMap((bucket) => [bucket.highUnits, bucket.lowUnits]);
+    const low = Math.min(...values), high = Math.max(...values);
+    const pricePadding = Math.max(100, Math.round(Math.max(high * .025, (high - low) * .15)));
+    const chartLow = Math.max(0, low - pricePadding);
+    const chartHigh = high + pricePadding;
+    const firstSaleAt = currency.sales[0].createdAt;
+    const lastSaleAt = currency.sales.at(-1).createdAt;
+    const saleSpan = lastSaleAt - firstSaleAt;
+    const xAt = (time, index) => currency.sales.length === 1
+      ? 344
+      : 72 + (saleSpan > 0
+        ? (time - firstSaleAt) / saleSpan
+        : index / (currency.sales.length - 1)) * 544;
+    const yAt = (units) => 22 + (1 - (units - chartLow) / (chartHigh - chartLow)) * 154;
+    const points = currency.sales.map((sale, index) => ({
+      sale, x: xAt(sale.createdAt, index), y: yAt(sale.priceUnits)
+    }));
+    const linePath = points.map((point, index) =>
+      `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+    const areaPath = points.length > 1
+      ? `${linePath} L ${points.at(-1).x.toFixed(1)} 176 L ${points[0].x.toFixed(1)} 176 Z`
+      : '';
+    const plottedPoints = points.map(({ sale, x, y }) =>
+      `<circle class="crypto-price-point" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2"><title>${new Date(sale.createdAt).toLocaleString('en-GB')} — ${formatGold(sale.priceUnits / analytics.goldScale)}g; volume ${sale.quantity}</title></circle>`
+    ).join('');
+    const period = analytics.period;
+    const vwapY = yAt(period.vwapUnits);
+    const change = period.changeUnits === null ? '—'
+      : `${period.changeUnits >= 0 ? '+' : ''}${formatGold(period.changeUnits / analytics.goldScale)}g (${period.changePercent >= 0 ? '+' : ''}${period.changePercent.toFixed(1)}%)`;
+    const description = `${period.tradeCount} completed sale${period.tradeCount === 1 ? '' : 's'}, volume ${period.volume}. Open ${formatGold(period.openUnits / analytics.goldScale)} gold, high ${formatGold(period.highUnits / analytics.goldScale)} gold, low ${formatGold(period.lowUnits / analytics.goldScale)} gold, close ${formatGold(period.closeUnits / analytics.goldScale)} gold, VWAP ${formatGold(period.vwapUnits / analytics.goldScale)} gold.`;
+    return `<figure class="crypto-chart-figure"><svg class="crypto-chart" viewBox="0 0 640 224" preserveAspectRatio="none" role="img" aria-labelledby="crypto-chart-${currency.id}-title crypto-chart-${currency.id}-desc"><title id="crypto-chart-${currency.id}-title">${escapeHtml(currency.symbol)} ${escapeHtml(exchange.range)} price line chart</title><desc id="crypto-chart-${currency.id}-desc">${description}</desc><defs><linearGradient id="crypto-area-gradient-${currency.id}" x1="0" y1="0" x2="0" y2="1"><stop class="crypto-price-area-start" offset="0"/><stop class="crypto-price-area-end" offset="1"/></linearGradient></defs><g class="crypto-chart-grid"><line x1="72" y1="22" x2="616" y2="22"/><line x1="72" y1="99" x2="616" y2="99"/><line x1="72" y1="176" x2="616" y2="176"/></g><line class="crypto-price-reference" x1="72" y1="${vwapY.toFixed(1)}" x2="616" y2="${vwapY.toFixed(1)}"/>${areaPath ? `<path class="crypto-price-area" style="fill:url(#crypto-area-gradient-${currency.id})" d="${areaPath}"/>` : ''}<path class="crypto-price-line" d="${linePath}"/>${plottedPoints}<g class="crypto-chart-axis"><text x="62" y="27" text-anchor="end">${formatGold(chartHigh / analytics.goldScale)}g</text><text x="62" y="104" text-anchor="end">${formatGold(((chartHigh + chartLow) / 2) / analytics.goldScale)}g</text><text x="62" y="181" text-anchor="end">${formatGold(chartLow / analytics.goldScale)}g</text><text class="crypto-vwap-label" x="610" y="${Math.max(33, Math.min(168, vwapY - 6)).toFixed(1)}" text-anchor="end">VWAP ${formatGold(period.vwapUnits / analytics.goldScale)}g</text><text x="72" y="215">Earlier sales</text><text x="344" y="215" text-anchor="middle">Executed sale price</text><text x="616" y="215" text-anchor="end">Latest sale</text></g></svg><figcaption class="crypto-chart-stats"><span>Open <strong>${formatGold(period.openUnits / analytics.goldScale)}g</strong></span><span>High <strong>${formatGold(period.highUnits / analytics.goldScale)}g</strong></span><span>Low <strong>${formatGold(period.lowUnits / analytics.goldScale)}g</strong></span><span>Close <strong>${formatGold(period.closeUnits / analytics.goldScale)}g</strong></span><span>Volume <strong>${period.volume.toLocaleString('en-GB')}</strong></span><span>Sales <strong>${period.tradeCount.toLocaleString('en-GB')}</strong></span><span>VWAP <strong>${formatGold(period.vwapUnits / analytics.goldScale)}g</strong></span><span class="crypto-chart-change${period.changeUnits > 0 ? ' up' : period.changeUnits < 0 ? ' down' : ''}">Change <strong>${change}</strong></span></figcaption></figure>`;
+  };
+  const orderRows = (orders) => orders.map((order) => `<tr id="crypto-order-${order.id}"><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === exchange.playerId ? `<form method="post" action="/crypto/orders/${order.id}/cancel"><button class="secondary">Cancel</button></form>` : '<span class="muted">Open</span>'}</td></tr>`).join('');
+  const cards = exchange.currencies.map((currency) => {
+    const { analytics } = currency;
+    const last = analytics.latestSale;
+    const bestBid = analytics.quotes.bestBid;
+    const bestAsk = analytics.quotes.bestAsk;
+    const spread = analytics.quotes.spreadUnits;
+    const sellMaximum = Math.min(currency.quantity, currency.bestBid?.quantity ?? 0);
+    const buyMaximum = currency.bestListing?.quantity ?? 0;
+    const recentSales = currency.sales.slice(-6).reverse().map((sale) => `<tr><td>${new Date(sale.createdAt).toLocaleString('en-GB')}</td><td>${sale.quantity.toLocaleString('en-GB')}</td><td>${formatGold(sale.price)}g</td></tr>`).join('');
+    return `<section class="crypto-market"><header class="crypto-market-header"><div><p class="eyebrow">${escapeHtml(currency.symbol)}</p><h2>${escapeHtml(currency.name)}</h2></div><dl class="crypto-quote-strip"><div><dt>Owned</dt><dd>${currency.quantity.toLocaleString('en-GB')}</dd></div><div><dt>Last sale</dt><dd>${last ? `${formatGold(last.priceUnits / analytics.goldScale)}g` : '—'}</dd></div><div><dt>Bid</dt><dd>${bestBid ? `${formatGold(bestBid.priceUnits / analytics.goldScale)}g` : '—'}</dd></div><div><dt>Ask</dt><dd>${bestAsk ? `${formatGold(bestAsk.priceUnits / analytics.goldScale)}g` : '—'}</dd></div><div><dt>Spread</dt><dd>${spread === null ? '—' : `${formatGold(spread / analytics.goldScale)}g`}</dd></div><div><dt>Minimum list</dt><dd>${formatGold(currency.minimumPrice)}g</dd></div></dl></header>${chart(currency)}<div class="market-dealing-desk"><article class="market-ticket market-ticket-buy"><p class="eyebrow">Immediate</p><h3>Buy now</h3>${currency.bestListing ? `<p><strong>${formatGold(currency.bestListing.price)}g</strong> each · ${buyMaximum.toLocaleString('en-GB')} at best price</p><form data-live-authoritative method="post" action="/crypto/${currency.id}/buy-now"><input type="hidden" name="price" value="${currency.bestListing.price}"><label>Quantity<input type="number" name="quantity" min="1" max="${buyMaximum}" value="1" required></label><button${exchange.gold < currency.bestListing.price ? ' disabled' : ''}>Buy ${escapeHtml(currency.symbol)}</button></form>` : '<p class="market-ticket-empty">No one is listing this coin.</p>'}</article><article class="market-ticket market-ticket-sell"><p class="eyebrow">Immediate</p><h3>Sell now</h3>${currency.bestBid ? `<p><strong>${formatGold(currency.bestBid.price)}g</strong> each · ${currency.bestBid.quantity.toLocaleString('en-GB')} wanted</p><form data-live-authoritative method="post" action="/crypto/${currency.id}/sell-now"><input type="hidden" name="price" value="${currency.bestBid.price}"><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, sellMaximum)}" value="1" required${sellMaximum < 1 ? ' disabled' : ''}></label><button${sellMaximum < 1 ? ' disabled title="You do not own any crypto to sell."' : ''}>Sell ${escapeHtml(currency.symbol)}</button></form>` : '<p class="market-ticket-empty">No open bids.</p>'}</article><form class="market-ticket" method="post" action="/crypto/${currency.id}/bids"><p class="eyebrow">Limit order</p><h3>Place bid</h3><label>Price each (gold)<input type="number" name="price" min="0.01" step="0.01" value="${currency.bidPriceHint}" required></label><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><button>Place bid</button><small>Gold stays available until a miner sells into your bid.</small></form><form class="market-ticket" method="post" action="/crypto/${currency.id}/listings"><p class="eyebrow">Limit order</p><h3>Place listing</h3><label>Price each (gold)<input type="number" name="price" min="${currency.minimumPrice}" step="0.01" value="${currency.listingPriceHint}" required${currency.availableToList < 1 ? ' disabled' : ''}></label><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, currency.availableToList)}" value="1" required${currency.availableToList < 1 ? ' disabled' : ''}></label><button${currency.availableToList < 1 ? ' disabled' : ''}>Place listing</button><small>${currency.availableToList.toLocaleString('en-GB')} unlisted · coins stay in your wallet.</small></form></div><div class="crypto-books"><div><h3>Listings</h3><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Qty</th><th>Each</th><th>Status</th></tr></thead><tbody>${orderRows(currency.listings) || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></div><div><h3>Open bids</h3><div class="table-scroll"><table><thead><tr><th>Bidder</th><th>Qty</th><th>Each</th><th>Status</th></tr></thead><tbody>${orderRows(currency.bids) || '<tr><td colspan="4">No bids.</td></tr>'}</tbody></table></div></div></div><details class="crypto-recent-sales"><summary>Recent executions in this period</summary><div class="table-scroll"><table><thead><tr><th>When</th><th>Volume</th><th>Price</th></tr></thead><tbody>${recentSales || '<tr><td colspan="3">No executions in this period.</td></tr>'}</tbody></table></div></details></section>`;
+  }).join('');
+  const ranges = [['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['year', 'Year']]
+    .map(([value, label]) => `<a class="button${exchange.range === value ? '' : ' secondary'}" href="/crypto?range=${value}">${label}</a>`).join('');
+  const discoveryNote = exchange.hasUndiscoveredCurrencies
+    ? '<p class="muted crypto-discovery-note">Keep exploring. The exchange grows with your journey.</p>' : '';
+  return `<section class="page-title"><div><p class="eyebrow">Global · open 24 hours</p><h1>Crypto Exchange</h1></div><p>Trading from ${escapeHtml(cityName)} with <strong>${formatGold(exchange.gold)}g</strong>.</p></section><div class="button-row" aria-label="Price chart period">${ranges}</div><p>Read the charts, set your price, and trade when the market moves your way.</p><div class="crypto-market-grid">${cards}</div>${discoveryNote}`;
 }
 
 function itemMarketPage(player, item, market, cityName) {
   const owned = player.inventory[item.id] ?? 0;
-  const localPrice = market.fixedPrice;
+  const availableToList = Math.max(0, owned - market.ownListed);
+  const localPrice = market.minimumPrice;
   const priceExplanation = market.premium
-    ? `This is outside the item’s origin cities, so the local price is ${formatGold((market.multiplier - 1) * 100)}% above its ${formatGold(market.basePrice)}g base value.`
-    : market.hasOrigin ? 'This is an origin city, so the base value applies.'
-      : 'This item has no fixed origin, so its base value applies in every city.';
-  const orderRows = (orders, action, label) => orders.map((order) => `<tr><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === player.id
+    ? `Outside its origin, the established ${formatGold(market.basePrice)}g value becomes a ${formatGold(localPrice)}g listing minimum.`
+    : market.hasOrigin ? 'This origin city uses the established value as the listing minimum.'
+      : 'Its established value is the listing minimum in every city.';
+  const orderRows = (orders) => orders.map((order) => `<tr id="market-order-${order.id}"><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === player.id
     ? `<form method="post" action="/market/orders/${order.id}/cancel"><button class="secondary">Cancel</button></form>`
-    : `<form class="inline-order" method="post" action="/market/orders/${order.id}/${action}"><input type="number" name="quantity" min="1" max="${order.quantity}" value="1" aria-label="Quantity"><button>${label}</button></form>`}</td></tr>`).join('');
+    : '<span class="muted">Open</span>'}</td></tr>`).join('');
   const sales = market.sales.map((sale) => `<tr><td>${escapeHtml(sale.buyerName)}</td><td>${escapeHtml(sale.sellerName)}</td><td>${sale.quantity}</td><td>${formatGold(sale.price)}g</td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} market</p><h1>Item market</h1></div><p>You own <strong>${owned}</strong>, have <strong>${formatGold(player.gold)}g</strong>, and the fixed local value is <strong>${formatGold(localPrice)}g</strong>. ${priceExplanation}</p></section>
+  const sellMaximum = Math.min(owned, market.bestBid?.quantity ?? 0);
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} market</p><h1>Item market</h1></div><p><strong>${owned}</strong> in ${escapeHtml(cityName)} · <strong>${formatGold(player.gold)}g</strong> available · minimum listing <strong>${formatGold(localPrice)}g</strong>. ${priceExplanation}</p></section>
     <div class="item-market-subject">${itemCard(item, { count: owned, featured: true, description: item.description })}</div>
-    <section class="trade-forms">
-      <form method="post" action="/market/items/${item.id}/listings"><h2>List items</h2><p>Fixed local price: <strong>${formatGold(localPrice)}g each</strong>. Listed things move into market escrow and no longer count toward your inventory limit.</p><label>Quantity<input type="number" name="quantity" min="1" max="${owned}" value="1" required></label><button ${owned < 1 ? 'disabled' : ''}>Place listing</button></form>
-      <form method="post" action="/market/items/${item.id}/bids"><h2>Place bid</h2><p>Fixed local price: <strong>${formatGold(localPrice)}g each</strong>.</p><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><button>Place bid</button></form>
-    </section>
-    <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.listings, 'buy', 'Buy') || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
-    <section><h2>Bids</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.bids, 'sell', 'Sell') || '<tr><td colspan="4">No bids.</td></tr>'}</tbody></table></div></section>
+    <section class="market-dealing-desk"><article class="market-ticket market-ticket-buy"><p class="eyebrow">Immediate</p><h2>Buy now</h2>${market.bestListing ? `<p><strong>${formatGold(market.bestListing.price)}g</strong> each · ${market.bestListing.quantity} at the best price</p><form data-live-authoritative method="post" action="/market/items/${item.id}/buy-now"><input type="hidden" name="price" value="${market.bestListing.price}"><label>Quantity<input type="number" name="quantity" min="1" max="${market.bestListing.quantity}" value="1" required></label><button${player.gold < market.bestListing.price ? ' disabled' : ''}>Buy now</button></form>` : '<p class="market-ticket-empty">No one is listing this item.</p>'}</article><article class="market-ticket market-ticket-sell"><p class="eyebrow">Immediate</p><h2>Sell now</h2>${market.bestBid ? `<p><strong>${formatGold(market.bestBid.price)}g</strong> each · ${market.bestBid.quantity} wanted</p><form data-live-authoritative method="post" action="/market/items/${item.id}/sell-now"><input type="hidden" name="price" value="${market.bestBid.price}"><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, sellMaximum)}" value="1" required${sellMaximum < 1 ? ' disabled' : ''}></label><button${sellMaximum < 1 ? ` disabled title="You have no ${escapeHtml(item.name)} in ${escapeHtml(cityName)}."` : ''}>Sell now</button></form>` : '<p class="market-ticket-empty">No open bids.</p>'}</article><form class="market-ticket" method="post" action="/market/items/${item.id}/bids"><p class="eyebrow">Limit order</p><h2>Place bid</h2><label>Price each (gold)<input type="number" name="price" min="0.01" step="0.01" value="${market.bidPriceHint}" required></label><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><button>Place bid</button><small>Your gold remains available until somebody sells into the bid.</small></form><form class="market-ticket" method="post" action="/market/items/${item.id}/listings"><p class="eyebrow">Limit order</p><h2>Place listing</h2><label>Price each (gold)<input type="number" name="price" min="${localPrice}" step="0.01" value="${market.listingPriceHint}" required${availableToList < 1 ? ' disabled' : ''}></label><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, availableToList)}" value="1" required${availableToList < 1 ? ' disabled' : ''}></label><button${availableToList < 1 ? ' disabled' : ''}>Place listing</button><small>${availableToList} unlisted in ${escapeHtml(cityName)} · listed things stay in your inventory.</small></form></section>
+    <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th>Status</th></tr></thead><tbody>${orderRows(market.listings) || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
+    <section><h2>Bids</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Quantity</th><th>Each</th><th>Status</th></tr></thead><tbody>${orderRows(market.bids) || '<tr><td colspan="4">No bids.</td></tr>'}</tbody></table></div></section>
     <section><h2>Recent sales</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Seller</th><th>Quantity</th><th>Each</th></tr></thead><tbody>${sales || '<tr><td colspan="4">No sales yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function mineMarketPage(player, market, cityName) {
-  const orderRows = (orders, action, label) => orders.map((order) => `<tr><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === player.id
+  const orderRows = (orders, action, label) => orders.map((order) => {
+    const available = action === 'sell' ? Math.min(market.sellable, order.quantity) : order.quantity;
+    return `<tr><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === player.id
     ? `<form method="post" action="/market/mine-orders/${order.id}/cancel"><button class="secondary">Cancel</button></form>`
-    : `<form class="inline-order" method="post" action="/market/mine-orders/${order.id}/${action}"><input type="number" name="quantity" min="1" max="${order.quantity}" value="1" aria-label="Quantity"><button>${label}</button></form>`}</td></tr>`).join('');
+    : `<form class="inline-order" data-live-authoritative method="post" action="/market/mine-orders/${order.id}/${action}"><input type="number" name="quantity" min="1" max="${Math.max(1, available)}" value="1" aria-label="Quantity"${available < 1 ? ' disabled' : ''}><button${available < 1 ? ' disabled' : ''}>${label}</button></form>`}</td></tr>`;
+  }).join('');
   const sales = market.sales.map((sale) => `<tr><td>${escapeHtml(sale.buyerName)}</td><td>${escapeHtml(sale.sellerName)}</td><td>${sale.quantity}</td><td>${formatGold(sale.price)}g</td></tr>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} mine market</p><h1><img class="table-icon" src="${escapeHtml(market.icon)}" alt=""> ${escapeHtml(market.name)} Mine</h1></div><p>You own <strong>${market.owned}</strong> here, may list <strong>${market.sellable}</strong>, and have <strong>${formatGold(player.gold)}g</strong>.</p></section>
     <p>Buy or sell an entire mine for gold. A miner must always keep at least one permanent mine. Purchased mines retain installed equipment, reset to things mode, and join the buyer's priority queue.</p>
     <section class="trade-forms">
-      <form method="post" action="/market/mines/${market.mineTypeId}/listings"><h2>List mines</h2><label>Price per mine (gold)<input type="number" name="price" min="0.0001" step="0.0001" required></label><label>Quantity<input type="number" name="quantity" min="1" max="${market.sellable}" value="1" required></label><button ${market.sellable < 1 ? 'disabled' : ''}>Place listing</button></form>
+      <form method="post" action="/market/mines/${market.mineTypeId}/listings"><h2>List mines</h2><label>Price per mine (gold)<input type="number" name="price" min="0.0001" step="0.0001" required${market.sellable < 1 ? ' disabled' : ''}></label><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, market.sellable)}" value="1" required${market.sellable < 1 ? ' disabled' : ''}></label><button ${market.sellable < 1 ? 'disabled' : ''}>Place listing</button></form>
       <form method="post" action="/market/mines/${market.mineTypeId}/bids"><h2>Place bid</h2><label>Price per mine (gold)<input type="number" name="price" min="0.0001" step="0.0001" required></label><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><button>Place bid</button></form>
     </section>
     <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.listings, 'buy', 'Buy') || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
@@ -1528,18 +1769,21 @@ function factoryMarketPage(player, market, cityName, catalog) {
     throw new Error('Invalid factory market presentation settings.');
   }
   const title = names[market.marketType];
-  const orderRows = (orders, action, label) => orders.map((order) => `<tr><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === player.id
+  const orderRows = (orders, action, label) => orders.map((order) => {
+    const available = action === 'sell' ? Math.min(market.sellable, order.quantity) : order.quantity;
+    return `<tr><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${formatGold(order.price)}g</td><td>${order.playerId === player.id
     ? `<form method="post" action="/market/factory-orders/${order.id}/cancel"><button class="secondary">Cancel</button></form>`
-    : `<form class="inline-order" method="post" action="/market/factory-orders/${order.id}/${action}"><input type="number" name="quantity" min="1" max="${order.quantity}" value="1" aria-label="Quantity"><button>${label}</button></form>`}</td></tr>`).join('');
+    : `<form class="inline-order" data-live-authoritative method="post" action="/market/factory-orders/${order.id}/${action}"><input type="number" name="quantity" min="1" max="${Math.max(1, available)}" value="1" aria-label="Quantity"${available < 1 ? ' disabled' : ''}><button${available < 1 ? ' disabled' : ''}>${label}</button></form>`}</td></tr>`;
+  }).join('');
   const sales = market.sales.map((sale) => `<tr><td>${escapeHtml(sale.buyerName)}</td><td>${escapeHtml(sale.sellerName)}</td><td>${sale.quantity}</td><td>${formatGold(sale.price)}g</td></tr>`).join('');
   const manufacturer = catalogSpecialisationForBonus(catalog, 'factoryThroughput');
   const instructions = rental
-    ? `Rent a built, idle factory for ${formatDuration(Number(catalog.settings.factory_rental_duration_ms))}. Rentals include no ore or workers, can only repair damaged things, and return automatically to their owner. An unfinished repair is canceled at expiry and its ore and damaged thing are returned to the renter. Any owner may list an idle factory from their home city.`
+    ? `Rent a built, idle factory for ${formatDuration(Number(catalog.settings.factory_rental_duration_ms))}. Rentals include no ore or workers, can only repair damaged things, and return automatically to their owner. An unfinished repair is canceled at expiry and its ore and damaged thing are returned to the renter. Any owner may list an idle factory from its established home city.`
     : `Buy and sell whole built factories. A factory must be idle and under its owner’s control before it can be listed or transferred. Every specialisation can build and operate factories; ${escapeHtml(manufacturer.name)} works ${formatGold(Number(manufacturer.bonuses.factoryThroughput) * 100)}% faster.`;
   return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} factory market</p><h1><img class="table-icon" src="${escapeHtml(icon)}" alt=""> ${escapeHtml(title)}</h1></div><p>You ${rental ? 'currently rent' : 'own'} <strong>${market.owned}</strong> here, may list <strong>${market.sellable}</strong>, and have <strong>${formatGold(player.gold)}g</strong>.</p></section>
     <p>${instructions}</p>
     <section class="trade-forms">
-      <form method="post" action="/market/factories/${market.marketType}/listings"><h2>List ${rental ? 'rentals' : 'factories'}</h2><label>Price per ${noun} (gold)<input type="number" name="price" min="0.0001" step="0.0001" required></label><label>Quantity<input type="number" name="quantity" min="1" max="${market.sellable}" value="1" required></label><button ${market.sellable < 1 ? 'disabled' : ''}>Place listing</button></form>
+      <form method="post" action="/market/factories/${market.marketType}/listings"><h2>List ${rental ? 'rentals' : 'factories'}</h2><label>Price per ${noun} (gold)<input type="number" name="price" min="0.0001" step="0.0001" required${market.sellable < 1 ? ' disabled' : ''}></label><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, market.sellable)}" value="1" required${market.sellable < 1 ? ' disabled' : ''}></label><button ${market.sellable < 1 ? 'disabled' : ''}>Place listing</button></form>
       <form method="post" action="/market/factories/${market.marketType}/bids"><h2>Place bid</h2><label>Price per ${noun} (gold)<input type="number" name="price" min="0.0001" step="0.0001" required></label><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><button>Place bid</button></form>
     </section>
     <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.listings, 'buy', rental ? 'Rent' : 'Buy') || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
@@ -1577,8 +1821,15 @@ function statsPage(stats) {
   return `<section class="page-title"><div><p class="eyebrow">Public data</p><h1>Server Stats</h1></div><p>Live statistics based on miners whose batteries are charged.</p></section><div class="stats-grid">${sections}</div>`;
 }
 
-function adminTabs() {
-  return '<nav class="rating-tabs" aria-label="Administration"><a href="/admin">Dashboard</a><a href="/admin/players">Miners</a><a href="/admin/routes">World routes</a><a href="/admin/world">World events</a><a href="/admin/payments">Payments</a><a href="/admin/announcement">Announcement</a><a href="/admin/audit">Audit log</a></nav>';
+function adminTabs(active = 'dashboard') {
+  const links = [
+    ['dashboard', '/admin', 'Dashboard'], ['players', '/admin/players', 'Miners'],
+    ['routes', '/admin/routes', 'World routes'], ['world', '/admin/world', 'World events'],
+    ['payments', '/admin/payments', 'Payments'], ['announcement', '/admin/announcement', 'Announcement'],
+    ['audit', '/admin/audit', 'Audit log']
+  ];
+  return `<nav class="rating-tabs admin-tabs" aria-label="Administration">${links.map(([key, href, label]) =>
+    `<a href="${href}"${active === key ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
 }
 
 function adminDashboardPage(data) {
@@ -1588,27 +1839,27 @@ function adminDashboardPage(data) {
     ['Item orders', data.item_orders], ['Mine orders', data.mine_orders],
     ['Factory orders', data.factory_orders], ['Recorded item sales', data.item_sales]
   ].map(([label, value]) => `<article><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>`).join('');
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Operations</p><h1>Administration</h1></div><p>The useful legacy controls, rebuilt against the live SQLite game with an audit trail.</p></section><div class="admin-metrics">${cards}</div>`;
+  return `${adminTabs('dashboard')}<section class="page-title"><div><p class="eyebrow">Operations</p><h1>Administration</h1></div><p>The useful legacy controls, rebuilt against the live SQLite game with an audit trail.</p></section><div class="admin-metrics">${cards}</div>`;
 }
 
 function adminPlayersPage(players, query = '') {
   const rows = players.map((subject) => `<tr><td><a href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a>${subject.authority > 0 ? ' <strong>Admin</strong>' : ''}</td><td>${escapeHtml(subject.email || 'Not supplied')}<br><small>${subject.email_verified_at === null ? 'Verification pending' : 'Verified'}</small></td><td>${subject.mine_count}</td><td>${subject.item_count}</td><td>${subject.credits}c / ${formatGold(subject.gold)}g</td><td>${subject.suspended ? 'Suspended' : subject.chatBanned || subject.pmBanned ? 'Restricted' : subject.email_verified_at === null ? 'Email locked' : 'Active'}</td></tr>`).join('');
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Moderation</p><h1>Miners</h1></div></section><form class="market-search" method="get"><label>Search<input name="q" value="${escapeHtml(query)}" placeholder="Name or email"></label><button>Search</button></form><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Email</th><th>Mines</th><th>Things</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No matching miners.</td></tr>'}</tbody></table></div>`;
+  return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Moderation</p><h1>Miners</h1></div></section><form class="market-search" method="get"><label>Search<input name="q" value="${escapeHtml(query)}" placeholder="Name or email"></label><button>Search</button></form><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Email</th><th>Mines</th><th>Things</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No matching miners.</td></tr>'}</tbody></table></div>`;
 }
 
 function adminPlayerPage(subject, catalog) {
   const moderation = (field, active, label) => `<form method="post" action="/admin/players/${subject.id}/moderation"><input type="hidden" name="field" value="${field}"><input type="hidden" name="enabled" value="${active ? 0 : 1}"><button class="${active ? 'secondary' : ''}">${active ? `Lift ${label}` : label}</button></form>`;
   const itemOptions = catalog.items.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Miner administration</p><h1>${escapeHtml(subject.name)}</h1></div><a href="/miners/${encodeURIComponent(subject.name)}">Public profile</a></section><div class="admin-metrics"><article><strong>${subject.credits}</strong><span>Credits</span></article><article><strong>${formatGold(subject.gold)}g</strong><span>Gold</span></article><article><strong>${subject.mine_count}</strong><span>Mines</span></article><article><strong>${subject.item_count}</strong><span>Things</span></article></div><section><h2>Email access</h2><p>${escapeHtml(subject.email || 'No address supplied')} · <strong>${subject.email_verified_at === null ? 'Verification pending — game locked' : `Verified ${new Date(subject.email_verified_at).toLocaleString('en-GB')}`}</strong></p></section><section><h2>Moderation</h2><div class="admin-actions">${moderation('suspended', Boolean(subject.suspended), 'Suspend account')}${moderation('chat', Boolean(subject.chat_banned), 'Ban public chat')}${moderation('pm', Boolean(subject.pm_banned), 'Ban private messages')}</div></section><section><h2>Grants</h2><div class="trade-forms"><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="credits"><label>Credits<input type="number" name="amount" min="1" required></label><button>Grant credits</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="gold"><label>Gold (whole units)<input type="number" name="amount" min="1" required></label><button>Grant gold</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="item"><label>Thing<select name="itemId">${itemOptions}</select></label><label>Quantity<input type="number" name="amount" min="1" required></label><button>Grant thing</button></form></div></section>`;
+  return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Miner administration</p><h1>${escapeHtml(subject.name)}</h1></div><a href="/miners/${encodeURIComponent(subject.name)}">Public profile</a></section><div class="admin-metrics"><article><strong>${subject.credits}</strong><span>Credits</span></article><article><strong>${formatGold(subject.gold)}g</strong><span>Gold</span></article><article><strong>${subject.mine_count}</strong><span>Mines</span></article><article><strong>${subject.item_count}</strong><span>Things</span></article></div><section><h2>Email access</h2><p>${escapeHtml(subject.email || 'No address supplied')} · <strong>${subject.email_verified_at === null ? 'Verification pending — game locked' : `Verified ${new Date(subject.email_verified_at).toLocaleString('en-GB')}`}</strong></p></section><section><h2>Moderation</h2><div class="admin-actions">${moderation('suspended', Boolean(subject.suspended), 'Suspend account')}${moderation('chat', Boolean(subject.chat_banned), 'Ban public chat')}${moderation('pm', Boolean(subject.pm_banned), 'Ban private messages')}</div></section><section><h2>Grants</h2><div class="trade-forms"><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="credits"><label>Credits<input type="number" name="amount" min="1" required></label><button>Grant credits</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="gold"><label>Gold (whole units)<input type="number" name="amount" min="1" required></label><button>Grant gold</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="item"><label>Thing<select name="itemId">${itemOptions}</select></label><label>Quantity<input type="number" name="amount" min="1" required></label><button>Grant thing</button></form></div></section>`;
 }
 
 function adminAnnouncementPage() {
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Global message</p><h1>Send announcement</h1></div><p>Delivered as an Admin message to every miner’s inbox.</p></section><form class="account-grid" method="post" action="/admin/announcement"><label>Subject<input name="subject" maxlength="120" required></label><label>Message<textarea name="body" maxlength="4000" rows="10" required></textarea></label><button>Send to every miner</button></form>`;
+  return `${adminTabs('announcement')}<section class="page-title"><div><p class="eyebrow">Global message</p><h1>Send announcement</h1></div><p>Delivered as an Admin message to every miner’s inbox.</p></section><form class="account-grid" method="post" action="/admin/announcement"><label>Subject<input name="subject" maxlength="120" required></label><label>Message<textarea name="body" maxlength="4000" rows="10" required></textarea></label><button>Send to every miner</button></form>`;
 }
 
 function adminAuditPage(entries) {
   const rows = entries.map((entry) => `<tr><td>${new Date(entry.created_at).toLocaleString('en-GB')}</td><td>${escapeHtml(entry.administrator_name)}</td><td>${escapeHtml(entry.action)}</td><td>${escapeHtml(entry.subject_name ?? 'All miners')}</td><td>${escapeHtml(entry.details)}</td></tr>`).join('');
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Accountability</p><h1>Audit log</h1></div></section><div class="table-scroll"><table><thead><tr><th>When</th><th>Administrator</th><th>Action</th><th>Subject</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No administrative actions yet.</td></tr>'}</tbody></table></div>`;
+  return `${adminTabs('audit')}<section class="page-title"><div><p class="eyebrow">Accountability</p><h1>Audit log</h1></div></section><div class="table-scroll"><table><thead><tr><th>When</th><th>Administrator</th><th>Action</th><th>Subject</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No administrative actions yet.</td></tr>'}</tbody></table></div>`;
 }
 
 function adminRoutesPage(routes, catalog) {
@@ -1617,14 +1868,15 @@ function adminRoutesPage(routes, catalog) {
     const type = routeTypes[route.type]?.label ?? `Type ${route.type}`;
     return `<tr><td><strong>${escapeHtml(route.map1_name)}</strong><br><small>${escapeHtml(route.city1_name)}</small></td><td><strong>${escapeHtml(route.map2_name)}</strong><br><small>${escapeHtml(route.city2_name)}</small></td><td>${escapeHtml(type)}</td><td>${Number(route.length).toLocaleString('en-GB')} km</td><td><strong>${route.open ? 'Open' : 'Closed'}</strong></td><td><form method="post" action="/admin/routes/${route.id}"><input type="hidden" name="open" value="${route.open ? 0 : 1}"><button class="${route.open ? 'secondary' : ''}">${route.open ? 'Close route' : 'Open route'}</button></form></td></tr>`;
   }).join('');
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">World network</p><h1>Inter-map routes</h1></div><p>Closed corridors cannot be selected for travel. Opening one affects new departures immediately; vehicles already underway continue normally.</p></section><div class="table-scroll"><table><thead><tr><th>From</th><th>To</th><th>Mode</th><th>Distance</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `${adminTabs('routes')}<section class="page-title"><div><p class="eyebrow">World network</p><h1>Inter-map routes</h1></div><p>Closed corridors cannot be selected for travel. Opening one affects new departures immediately; vehicles already underway continue normally.</p></section><div class="table-scroll"><table><thead><tr><th>From</th><th>To</th><th>Mode</th><th>Distance</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function adminWorldEventsPage(state, catalog, currentTime) {
   const conditions = [
-    ['clear', 'Clear'], ['cloud', 'Cloud'], ['rain', 'Rain'], ['storm', 'Storm']
+    ['clear', 'Clear'], ['cloud', 'Cloud'], ['rain', 'Rain'], ['snow', 'Snow'],
+    ['storm', 'Storm'], ['hurricane', 'Hurricane']
   ];
-  const weatherForms = state.weather.map((entry) => `<form method="post" action="/admin/world/weather"><input type="hidden" name="mapId" value="${entry.mapId}"><h3>${escapeHtml(entry.mapName)}</h3><label>Condition<select name="condition">${conditions.map(([value, label]) => `<option value="${value}"${entry.condition === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Temperature C<input type="number" name="temperatureC" min="-50" max="60" step="0.1" value="${entry.temperatureC}" required></label><label>Wind km/h<input type="number" name="windKph" min="0" max="300" step="1" value="${entry.windKph}" required></label><label>Rainfall mm<input type="number" name="rainfallMm" min="0" max="500" step="0.1" value="${entry.rainfallMm}" required></label><button>Change current weather</button></form>`).join('');
+  const weatherForms = state.weather.map((entry) => `<form method="post" action="/admin/world/weather"><input type="hidden" name="mapId" value="${entry.mapId}"><h3>${escapeHtml(entry.mapName)}</h3><label>Condition<select name="condition">${conditions.map(([value, label]) => `<option value="${value}"${entry.condition === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Temperature C<input type="number" name="temperatureC" min="-50" max="60" step="0.1" value="${entry.temperatureC}" required></label><label>Wind km/h<input type="number" name="windKph" min="0" max="300" step="1" value="${entry.windKph}" required></label><label>Precipitation mm<input type="number" name="rainfallMm" min="0" max="500" step="0.1" value="${entry.rainfallMm}" required></label><button>Change current weather</button></form>`).join('');
   const mapOptions = state.maps.map((map) =>
     `<option value="${map.id}">${escapeHtml(map.name)}</option>`).join('');
   const routeTypeId = (name) => catalog.settings.map_route_types
@@ -1648,7 +1900,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
     const reward = creature.reward_type === 'ore'
       ? `${Number(creature.ore_drop).toLocaleString('en-GB')} Ore`
       : 'Treasure hold';
-    return `<tr class="rarity-${creature.rarity}"><td><span class="creature-table-icon" aria-hidden="true">${escapeHtml(creature.icon)}</span> <strong>${escapeHtml(creature.name)}</strong><br><small>${escapeHtml(creature.rarity_name)} · ${escapeHtml(reward)}</small></td><td>${escapeHtml(creature.map_name)}</td><td>${escapeHtml(creature.city1_name)} to ${escapeHtml(creature.city2_name)}</td><td>${Math.round(Number(creature.location)).toLocaleString('en-GB')} / ${Number(creature.length).toLocaleString('en-GB')} km</td><td>${Number(creature.speed).toFixed(1)} km/h</td><td>${Math.round(Number(creature.hp))} / ${Math.round(Number(creature.max_hp))}</td><td>${escapeHtml(creature.destination_city_name)} in ${formatDuration(Math.max(0, Number(creature.arrives_at) - currentTime))}</td><td>${Number(creature.pursuer_count)}</td></tr>`;
+    return `<tr class="rarity-${creature.rarity}"><td><span class="creature-table-icon" aria-hidden="true"><img src="${escapeHtml(creature.icon)}" alt=""></span> <strong>${escapeHtml(creature.name)}</strong><br><small>${escapeHtml(creature.rarity_name)} · ${escapeHtml(reward)}</small></td><td>${escapeHtml(creature.map_name)}</td><td>${escapeHtml(creature.city1_name)} to ${escapeHtml(creature.city2_name)}</td><td>${Math.round(Number(creature.location)).toLocaleString('en-GB')} / ${Number(creature.length).toLocaleString('en-GB')} km</td><td>${Number(creature.speed).toFixed(1)} km/h</td><td>${Math.round(Number(creature.hp))} / ${Math.round(Number(creature.max_hp))}</td><td>${escapeHtml(creature.destination_city_name)} in ${formatDuration(Math.max(0, Number(creature.arrives_at) - currentTime))}</td><td>${Number(creature.pursuer_count)}</td></tr>`;
   }).join('');
   const ghostForm = (kind, label, routeType) => `<form method="post" action="/admin/world/ghosts"><input type="hidden" name="kind" value="${kind}"><h3>Raise ${label}</h3><label>Open ${routeType} route<select name="routeId" required>${routeOptions(routeType)}</select></label><label>Vehicle tier<select name="rarity">${tierOptions}</select></label><button>Raise ${label}</button></form>`;
   const ghostRows = state.ghosts.map((ghost) => `<tr><td>${escapeHtml(ghost.name)}</td><td>${ghost.ghost_kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'}</td><td>Tier ${ghost.rarity}</td><td>${escapeHtml(ghost.routeName)}</td><td>${new Date(ghost.risen_at).toLocaleString('en-GB')}</td></tr>`).join('');
@@ -1662,9 +1914,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
       ?? `Type ${transport.routeType}`;
     const order = catalog.settings.travel_order_names[transport.travelOrder]
       ?? transport.travelOrder;
-    const engaged = vehicleRarities(catalog).filter(
-      (rarity) => transport.aggressiveMask & (1 << rarity.id)
-    ).map((rarity) => rarity.name);
+    const engagesSameTier = transport.travelOrder !== 'peaceful';
     const cargoQuantity = transport.cargo.reduce(
       (sum, item) => sum + Number(item.quantity), 0);
     const fittings = namedCounts([
@@ -1684,7 +1934,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
       ? transport.destinationName : `${transport.destinationMapName} / ${transport.destinationName}`;
     const loadoutSummary = `${cargoQuantity} cargo · ${fittings.length} fitting type${fittings.length === 1 ? '' : 's'}${transport.ammunition ? ` · ${transport.ammunition} shots` : ''}`;
     const loadout = `<details><summary>${escapeHtml(loadoutSummary)}</summary>${cargo ? `<strong>Cargo</strong><ul>${cargo}</ul>` : '<p>No cargo.</p>'}${fittings.length ? `<strong>Fittings</strong><ul>${fittings.map((name) => `<li>${name}</li>`).join('')}</ul>` : '<p>No fittings.</p>'}</details>`;
-    return `<tr${transport.ghostId ? ' class="admin-traffic-ghost"' : ''}><td>${owner}<br><small>#${transport.playerId}</small></td><td><img class="table-icon" src="${escapeHtml(transport.icon)}" alt=""> <a href="/items/${transport.itemId}"><strong>${escapeHtml(transport.vehicleName)}</strong></a><br><small>${escapeHtml(transport.itemName)} · Tier ${transport.rarity}${flags.length ? ` · ${escapeHtml(flags.join(' · '))}` : ''}</small>${loadout}</td><td><strong>${escapeHtml(origin ?? 'Unknown')}</strong> → <strong>${escapeHtml(destination ?? 'Unknown')}</strong><br><small>${escapeHtml(type)} · ${Number(transport.length ?? 0).toLocaleString('en-GB')} km · ${Number(transport.speed).toFixed(1)} km/h</small></td><td><div class="admin-traffic-progress"><span style="width:${(transport.progress * 100).toFixed(1)}%"></span></div><strong>${(transport.progress * 100).toFixed(1)}%</strong><br><small>ETA ${new Date(transport.arrivesAt).toLocaleString('en-GB')} · ${formatDuration(Math.max(0, transport.arrivesAt - currentTime))}</small></td><td><strong>${escapeHtml(order)}</strong>${engaged.length ? `<br><small>Engages ${escapeHtml(engaged.join(', '))}${transport.aggressiveVsSentry ? ' + patrols' : ''}</small>` : ''}</td></tr>`;
+    return `<tr${transport.ghostId ? ' class="admin-traffic-ghost"' : ''}><td>${owner}<br><small>#${transport.playerId}</small></td><td><img class="table-icon" src="${escapeHtml(transport.icon)}" alt=""> <a href="/items/${transport.itemId}"><strong>${escapeHtml(transport.vehicleName)}</strong></a><br><small>${escapeHtml(transport.itemName)} · Tier ${transport.rarity}${flags.length ? ` · ${escapeHtml(flags.join(' · '))}` : ''}</small>${loadout}</td><td><strong>${escapeHtml(origin ?? 'Unknown')}</strong> → <strong>${escapeHtml(destination ?? 'Unknown')}</strong><br><small>${escapeHtml(type)} · ${Number(transport.length ?? 0).toLocaleString('en-GB')} km · ${Number(transport.speed).toFixed(1)} km/h</small></td><td><div class="admin-traffic-progress"><span style="width:${(transport.progress * 100).toFixed(1)}%"></span></div><strong>${(transport.progress * 100).toFixed(1)}%</strong><br><small>ETA ${new Date(transport.arrivesAt).toLocaleString('en-GB')} · ${formatDuration(Math.max(0, transport.arrivesAt - currentTime))}</small></td><td><strong>${escapeHtml(order)}</strong>${engagesSameTier ? `<br><small>Engages the same combat tier${transport.aggressiveVsSentry ? ' + patrols' : ''}</small>` : ''}</td></tr>`;
   }).join('');
   const creatureTrafficRows = state.creatures.map((creature) => {
     const routeType = catalog.settings.map_route_types[creature.route_type]?.label
@@ -1692,15 +1942,15 @@ function adminWorldEventsPage(state, catalog, currentTime) {
     const reward = creature.reward_type === 'ore'
       ? `${Number(creature.ore_drop).toLocaleString('en-GB')} Ore drop`
       : 'Treasure bounty';
-    return `<tr class="admin-traffic-creature rarity-${creature.rarity}"><td><strong>World event</strong><br><small>Route actor #${creature.id}</small></td><td><span class="creature-table-icon" aria-hidden="true">${escapeHtml(creature.icon)}</span> <strong>${escapeHtml(creature.name)}</strong><br><small>${escapeHtml(creature.rarity_name)} · ${escapeHtml(reward)} · ${Math.round(Number(creature.hp))}/${Math.round(Number(creature.max_hp))} health</small></td><td><strong>${escapeHtml(creature.city1_name)}</strong> ↔ <strong>${escapeHtml(creature.city2_name)}</strong><br><small>${escapeHtml(routeType)} · ${Number(creature.length).toLocaleString('en-GB')} km · ${Number(creature.speed).toFixed(1)} km/h toward ${escapeHtml(creature.destination_city_name)}</small></td><td><div class="admin-traffic-progress"><span style="width:${(creature.progress * 100).toFixed(1)}%"></span></div><strong>${(creature.progress * 100).toFixed(1)}%</strong><br><small>ETA ${new Date(creature.arrives_at).toLocaleString('en-GB')} · ${formatDuration(Math.max(0, creature.arrives_at - currentTime))}</small></td><td><strong>Advance</strong><br><small>${Number(creature.pursuer_count)} hunter${Number(creature.pursuer_count) === 1 ? '' : 's'} pursuing</small></td></tr>`;
+    return `<tr class="admin-traffic-creature rarity-${creature.rarity}"><td><strong>World event</strong><br><small>Route actor #${creature.id}</small></td><td><span class="creature-table-icon" aria-hidden="true"><img src="${escapeHtml(creature.icon)}" alt=""></span> <strong>${escapeHtml(creature.name)}</strong><br><small>${escapeHtml(creature.rarity_name)} · ${escapeHtml(reward)} · ${Math.round(Number(creature.hp))}/${Math.round(Number(creature.max_hp))} health</small></td><td><strong>${escapeHtml(creature.city1_name)}</strong> ↔ <strong>${escapeHtml(creature.city2_name)}</strong><br><small>${escapeHtml(routeType)} · ${Number(creature.length).toLocaleString('en-GB')} km · ${Number(creature.speed).toFixed(1)} km/h toward ${escapeHtml(creature.destination_city_name)}</small></td><td><div class="admin-traffic-progress"><span style="width:${(creature.progress * 100).toFixed(1)}%"></span></div><strong>${(creature.progress * 100).toFixed(1)}%</strong><br><small>ETA ${new Date(creature.arrives_at).toLocaleString('en-GB')} · ${formatDuration(Math.max(0, creature.arrives_at - currentTime))}</small></td><td><strong>Advance</strong><br><small>${Number(creature.pursuer_count)} hunter${Number(creature.pursuer_count) === 1 ? '' : 's'} pursuing</small></td></tr>`;
   }).join('');
   const activeTransportCount = state.transports.length + state.creatures.length;
   const allTrafficRows = `${trafficRows}${creatureTrafficRows}`;
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Live world control</p><h1>World control</h1></div><a href="/events">Player view</a></section>
+  return `${adminTabs('world')}<section class="page-title"><div><p class="eyebrow">Live world control</p><h1>World control</h1></div><a href="/events">Player view</a></section>
     <section><h2>The restless dead</h2><p>Ghosts normally rise from vehicles destroyed in combat, storms, or creature attacks. Administrative ghosts use the same route movement, combat classes, patrol orders, and spectral bounty.</p><div class="trade-forms">${ghostForm('rider', 'Ghost Rider', 'land')}${ghostForm('ship', 'Ghost Ship', 'sea')}</div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Tier</th><th>Route</th><th>Risen</th></tr></thead><tbody>${ghostRows || '<tr><td colspan="5">No ghosts currently haunt the routes.</td></tr>'}</tbody></table></div></section>
     <section><div class="section-heading"><div><h2>Ghost-hunter test fleet</h2><p>${Number(state.hunterFleets.players)} miners currently hold ${Number(state.hunterFleets.vehicles)} provisioned craft.</p></div></div><p>Give every real account one fully armed land vehicle and ship at each of the six tiers, distributed among random compatible cities. The operation is idempotent.</p><form method="post" action="/admin/world/ghost-fleets"><button>Provision all hunter fleets</button></form></section>
     <section id="traffic"><div class="section-heading"><div><p class="eyebrow">Administrator only</p><h2>Transports in transit</h2><p>${activeTransportCount} active journey${activeTransportCount === 1 ? '' : 's'}, including player, ghost, and creature route actors. This board updates when transport state changes.</p></div></div><div class="table-scroll"><table class="admin-traffic-table"><thead><tr><th>Owner</th><th>Transport and loadout</th><th>Journey</th><th>Progress</th><th>Orders</th></tr></thead><tbody>${allTrafficRows || '<tr><td colspan="5">No transports are currently in transit.</td></tr>'}</tbody></table></div></section>
-    <section><div class="section-heading"><div><h2>Current weather slot</h2><p>${new Date(state.slotAt).toLocaleString('en-GB')} - ${new Date(state.slotAt + state.slotMs).toLocaleString('en-GB')} | ${formatDuration(state.slotAt + state.slotMs - currentTime)} remaining</p></div></div><div class="trade-forms">${weatherForms}</div></section>
+    <section><div class="section-heading"><div><h2>Current weather period</h2><p>${new Date(state.slotAt).toLocaleString('en-GB')} - ${new Date(state.nextWeatherAt).toLocaleString('en-GB')} | ${formatDuration(state.nextWeatherAt - currentTime)} remaining</p></div></div><div class="trade-forms">${weatherForms}</div></section>
     <section><h2>Release a world creature</h2><p>Choose a sea or land species and an explicit Yellow-through-Orange tier. Every creature follows the same open-route movement, combat-class interception, live transit, and killer-only reward process.</p><div class="trade-forms">${creatureForm('Sea creature', 'sea')}${creatureForm('Land creature', 'land')}</div></section>
     <section><h2>Traveling creatures</h2><div class="table-scroll"><table><thead><tr><th>Creature</th><th>Map</th><th>Route</th><th>Position</th><th>Speed</th><th>Health</th><th>Heading for</th><th>Attackers</th></tr></thead><tbody>${creatureRows || '<tr><td colspan="8">No creatures are currently active.</td></tr>'}</tbody></table></div></section>`;
 }
@@ -1769,7 +2019,7 @@ function profilePage(subject, catalog, ownProfile, currentTime, filters = {}, kn
     : '<p class="profile-description muted">This miner has not written a profile yet.</p>';
   const editor = ownProfile
     ? `<div class="profile-tools"><a class="profile-action" href="#profile-description"><img src="/img/icons/icon_profileimage.png" alt=""> Change description</a><a class="profile-action" href="/miners/${encodeURIComponent(subject.name)}/market"><img src="/img/icons/icon_listing.png" alt=""> Listings and bids</a></div><form id="profile-description" class="profile-editor" method="post" action="/profile"><label>Profile description<textarea name="description" maxlength="${Number(catalog.settings.profile_description_max_length)}" rows="6">${escapeHtml(subject.description)}</textarea></label><button>Save profile</button></form>`
-    : `<div class="profile-tools"><a class="profile-action" href="/messages/${encodeURIComponent(subject.name)}"><img src="/img/icons/icon_message.png" alt=""> Send message</a><a class="profile-action" href="#gold-gift"><img src="/img/icons/icon_gold.png" alt=""> Send gold</a><a class="profile-action" href="/miners/${encodeURIComponent(subject.name)}/market"><img src="/img/icons/icon_listing.png" alt=""> Listings and bids</a></div><form id="gold-gift" class="profile-editor" method="post" action="/miners/${encodeURIComponent(subject.name)}/gold-gift"><h2>Send gold</h2><label>Amount<input type="number" name="amount" min="0.0001" step="0.0001" required></label><label>Note<input name="note" maxlength="${Number(catalog.settings.gold_transfer_note_max_length)}"></label><button>Send gift</button></form>`;
+    : `<div class="profile-tools"><a class="profile-action" href="/messages/${encodeURIComponent(subject.name)}"><img src="/img/icons/icon_message.png" alt=""> Send message</a><a class="profile-action" href="/miners/${encodeURIComponent(subject.name)}/market"><img src="/img/icons/icon_listing.png" alt=""> Listings and bids</a></div>`;
   const profession = catalogSpecialisationForId(catalog, subject.profession);
   const mines = subject.showMines === false ? '' : subject.mines.map((mine) => {
     const type = catalogMineTypeForId(catalog, mine.mineTypeId);
@@ -1778,16 +2028,22 @@ function profilePage(subject, catalog, ownProfile, currentTime, filters = {}, kn
   return `<section class="page-title"><div><p class="eyebrow">Miner profile</p><h1>${escapeHtml(subject.name)}</h1></div>${editor}</section>
     <section class="profile-about">${avatarStack(subject.avatarLayers, `${subject.name} avatar`)}<div><h2>About</h2><p><strong>${escapeHtml(subject.professionTitle)} ${escapeHtml(profession.name)}</strong> · ${subject.meldIds.length} melds · <a href="/melds/compare/${encodeURIComponent(subject.name)}">Compare melds</a></p>${description}${ownProfile ? '<p><a class="button secondary" href="/avatar">Edit avatar</a></p>' : ''}</div></section>
     ${subject.showMines === false ? '' : `<section><h2>Mines</h2><ul>${mines || '<li>No mines.</li>'}</ul></section>`}
-    <section><h2>Inventory</h2><p>${filteredCount} matching things · ${globalCount} globally. The “announce Purple and Orange finds” account setting controls chat announcements, not profile inventory.</p>${inventoryFilters}${armory ? `<p class="muted">An active ${escapeHtml(armoryGadget.displayName)} conceals this miner’s weapons and fittings.</p>` : ''}<div class="item-grid">${things || '<p>No matching things.</p>'}</div>${!filters.loadAll && inventory.length > visibleInventory.length ? `<p><a href="?function=${encodeURIComponent(selectedFunction)}&mineType=${selectedMineTypeId ?? ''}&city=${selectedCityId ?? ''}&all=1">Show ${inventory.length - visibleInventory.length} more item types</a></p>` : ''}</section>`;
+    <section><h2>Inventory</h2><p>${filteredCount} matching things · ${globalCount} globally.</p>${inventoryFilters}${armory ? `<p class="muted">An active ${escapeHtml(armoryGadget.displayName)} conceals this miner’s weapons and fittings.</p>` : ''}<div class="item-grid">${things || '<p>No matching things.</p>'}</div>${!filters.loadAll && inventory.length > visibleInventory.length ? `<p><a href="?function=${encodeURIComponent(selectedFunction)}&mineType=${selectedMineTypeId ?? ''}&city=${selectedCityId ?? ''}&all=1">Show ${inventory.length - visibleInventory.length} more item types</a></p>` : ''}</section>`;
 }
 
-function accountPage(player, catalog) {
+function accountPage(player, catalog, googleLogin = null) {
   const passwordMinimum = Number(catalog.settings.password_min_length);
+  const googleCard = googleLogin?.enabled
+    ? `<section class="account-auth-card"><h2>Google login</h2>${googleLogin.identity
+      ? `<p><strong class="verified-state">Linked</strong> ${escapeHtml(googleLogin.identity.email)}</p><p>You can use Google or your miner name and password to sign in.</p>`
+      : '<p>Link a Google account for one-click login. This does not remove your password.</p><a class="button secondary" href="/auth/google">Link Google account</a>'}</section>`
+    : '';
   return `<section class="page-title"><div><p class="eyebrow">Miner settings</p><h1>Account</h1></div><a href="/miners/${encodeURIComponent(player.name)}">View profile</a></section>
     <section class="account-grid">
       <form method="post" action="/account/password"><h2>Change password</h2><label>Old password<input type="password" name="oldPassword" autocomplete="current-password" required></label><label>New password<input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label><label>Confirm new password<input type="password" name="confirmPassword" minlength="${passwordMinimum}" autocomplete="new-password" required></label><button>Change password</button></form>
       <form method="post" action="/account/email"><h2>Verified email</h2><p><strong class="verified-state">Verified</strong> ${escapeHtml(player.email)}</p><p>Changing this address locks the account until the replacement address is verified.</p><label>New email<input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" value="${escapeHtml(player.email)}" autocomplete="email" required></label><label>Current password<input type="password" name="password" autocomplete="current-password" required></label><button>Change and verify email</button></form>
-      <form method="post" action="/account/privacy"><h2>Privacy</h2><label class="checkbox-line"><input type="checkbox" name="publishFindings"${player.publishFindings ? ' checked' : ''}> Announce my Purple and Orange finds in chat</label><label class="checkbox-line"><input type="checkbox" name="showMines"${player.showMines ? ' checked' : ''}> Show mines in profile</label><button>Save privacy settings</button></form>
+      <form method="post" action="/account/privacy"><h2>Privacy</h2><label class="checkbox-line"><input type="checkbox" name="showMines"${player.showMines ? ' checked' : ''}> Show mines in profile</label><button>Save privacy settings</button></form>
+      ${googleCard}
     </section>`;
 }
 
@@ -1823,7 +2079,7 @@ function meldComparisonPage(player, other, catalog) {
 }
 
 const MESSAGE_TYPE_FILTERS = [
-  ['all', 'All'], ['PM', 'PM'], ['Market', 'Market'], ['Vehicle', 'Vehicle'],
+  ['all', 'All'], ['PM', 'PM'], ['Findings', 'Findings'], ['Market', 'Market'], ['Vehicle', 'Vehicle'],
   ['City', 'City'], ['Factory', 'Factory'], ['Transfer', 'Transfer'],
   ['Stone', 'Stone'], ['Machine', 'Machine'], ['Admin', 'Admin']
 ];
@@ -1861,11 +2117,12 @@ function messagesPage(player, messages, catalog, filter = 'all', type = 'all') {
     const retention = message.kept
       ? '<span class="message-kept">Kept</span>'
       : `<span class="message-expiry">Deletes ${new Date(message.createdAt + retentionMs).toLocaleDateString('en-GB')}</span>`;
+    const createdAt = new Date(message.createdAt);
     return `<article class="message-row ${!message.read ? 'unread' : ''}${message.kept ? ' kept' : ''}">
       <input type="checkbox" name="message_${message.id}" value="1" form="message-bulk" aria-label="Select message from ${escapeHtml(other)}">
       <div class="message-summary"><strong>${heading}</strong><span class="message-preview">${escapeHtml(message.body.slice(
         0, Number(catalog.settings.message_preview_length)))}</span></div>
-      <time>${new Date(message.createdAt).toLocaleString('en-GB')}<small>${retention}</small></time>
+      <time datetime="${createdAt.toISOString()}">${createdAt.toLocaleString('en-GB')}<small>${retention}</small></time>
       <form class="message-actions" method="post" action="/messages/actions">
         <input type="hidden" name="message_${message.id}" value="1"><input type="hidden" name="filter" value="${filter}"><input type="hidden" name="type" value="${escapeHtml(type)}">
         <button class="link-button" name="action" value="${nextReadAction}">${nextReadLabel}</button>
@@ -1920,7 +2177,7 @@ function messageBodyHtml(body) {
 function messageItemGroups(message, catalog) {
   const details = message.details && typeof message.details === 'object' ? message.details : {};
   const groups = [];
-  const addGroup = (label, entries) => {
+  const addGroup = (label, entries, kind = '') => {
     if (!Array.isArray(entries)) return;
     const quantities = new Map();
     for (const entry of entries) {
@@ -1928,16 +2185,69 @@ function messageItemGroups(message, catalog) {
         ? (entry.itemId ?? entry.item_id ?? entry.id) : entry);
       const quantity = Number(typeof entry === 'object' && entry !== null
         ? (entry.quantity ?? entry.count ?? 1) : 1);
-      const item = catalog.byId.get(itemId);
-      if (!item || !Number.isFinite(quantity) || quantity <= 0) continue;
-      quantities.set(itemId, (quantities.get(itemId) ?? 0) + Math.floor(quantity));
+      if (!Number.isSafeInteger(itemId) || itemId < 1
+          || !Number.isFinite(quantity) || quantity <= 0) continue;
+      const snapshot = typeof entry === 'object' && entry !== null ? entry : {};
+      const item = catalog.byId.get(itemId) ?? (
+        String(snapshot.name ?? '').trim() ? {
+          id: itemId, name: String(snapshot.name),
+          icon: String(snapshot.icon ?? '').trim() || '/node/favicon.svg',
+          rarity: Number.isFinite(Number(snapshot.rarity)) ? Number(snapshot.rarity) : -1,
+          rarityName: String(snapshot.rarityName ?? 'Archived')
+        } : null
+      );
+      if (!item) continue;
+      const current = quantities.get(itemId) ?? { item, quantity: 0 };
+      current.quantity += Math.floor(quantity);
+      quantities.set(itemId, current);
     }
-    const items = [...quantities].map(([itemId, quantity]) => ({
-      item: catalog.byId.get(itemId), quantity
-    })).sort((first, second) => compareItemsByRarity(first.item, second.item));
-    if (items.length) groups.push({ label, items });
+    const items = [...quantities.values()]
+      .sort((first, second) => compareItemsByRarity(first.item, second.item));
+    if (items.length) groups.push({ label, items, kind });
   };
 
+  if (details.event === 'daily-findings-digest') {
+    const kept = details.keptFindings ?? details.storedFindings ?? details.kept;
+    if (Array.isArray(kept)) {
+      addGroup('Added to your things', kept.filter((entry) =>
+        !String(entry?.status ?? '').trim()), 'kept');
+      const statusGroups = new Map();
+      for (const entry of kept) {
+        const status = String(entry?.status ?? '').trim();
+        if (!status) continue;
+        if (!statusGroups.has(status)) statusGroups.set(status, []);
+        statusGroups.get(status).push(entry);
+      }
+      for (const [status, entries] of statusGroups) addGroup(status, entries, 'kept');
+    }
+    addGroup('Auto-recycled into Ore scraps',
+      details.autoRecycledFindings ?? details.recycledFindings ?? details.autoRecycled,
+      'auto-recycled');
+    const cryptoQuantities = new Map();
+    for (const entry of Array.isArray(details.cryptoFindings) ? details.cryptoFindings : []) {
+      const cryptoTypeId = Number(entry?.cryptoTypeId ?? entry?.crypto_type_id ?? entry?.id);
+      const quantity = Number(entry?.quantity ?? entry?.count ?? 1);
+      if (!Number.isSafeInteger(cryptoTypeId) || cryptoTypeId < 1
+          || !Number.isFinite(quantity) || quantity <= 0) continue;
+      const currency = cryptoType(cryptoTypeId);
+      const name = String(entry?.name ?? currency?.name ?? '').trim();
+      if (!name) continue;
+      const item = {
+        id: `crypto-${cryptoTypeId}`, name,
+        icon: String(entry?.icon ?? currency?.icon ?? '/node/favicon.svg'),
+        rarity: Number(entry?.rarity ?? cryptoTypeId),
+        rarityName: String(entry?.rarityName ?? 'Crypto coin'), path: '/crypto'
+      };
+      const current = cryptoQuantities.get(cryptoTypeId) ?? { item, quantity: 0 };
+      current.quantity += Math.floor(quantity);
+      cryptoQuantities.set(cryptoTypeId, current);
+    }
+    const cryptoItems = [...cryptoQuantities.values()]
+      .sort((first, second) => Number(first.item.rarity) - Number(second.item.rarity));
+    if (cryptoItems.length) groups.push({
+      label: 'Added to your crypto things', items: cryptoItems, kind: 'crypto', noun: 'coin'
+    });
+  }
   if (details.event === 'world-creature-combat') addGroup('Bounty', details.rewards);
   if (details.event === 'ghost-defeated') addGroup('Spectral bounty', details.rewards);
   if (details.event === 'pillage') addGroup('Stolen cargo', details.items);
@@ -2019,8 +2329,63 @@ function messageItemGroupsHtml(message, catalog) {
   if (!groups.length) return '';
   return `<div class="message-item-groups">${groups.map((group, groupIndex) => {
     const total = group.items.reduce((sum, entry) => sum + entry.quantity, 0);
-    return `<section class="message-item-group" aria-labelledby="message-items-${message.id}-${groupIndex}"><header><h2 id="message-items-${message.id}-${groupIndex}">${escapeHtml(group.label)}</h2><span>${total.toLocaleString('en-GB')} thing${total === 1 ? '' : 's'}</span></header><ul>${group.items.map(({ item, quantity }) => `<li class="message-item rarity-${item.rarity}"><a href="/items/${item.id}"><img src="${escapeHtml(item.icon)}" alt=""><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.rarityName)}</small></span><b>${quantity.toLocaleString('en-GB')}×</b></a></li>`).join('')}</ul></section>`;
+    const noun = group.noun ?? 'thing';
+    return `<section class="message-item-group" aria-labelledby="message-items-${message.id}-${groupIndex}"><header><h2 id="message-items-${message.id}-${groupIndex}">${escapeHtml(group.label)}</h2><span>${total.toLocaleString('en-GB')} ${noun}${total === 1 ? '' : 's'}</span></header><ul>${group.items.map(({ item, quantity }) => {
+      const displayQuantity = quantity.toLocaleString('en-GB');
+      const path = item.path ?? `/items/${item.id}`;
+      return `<li class="message-item rarity-${item.rarity}${group.kind === 'crypto' ? ' message-item-crypto' : ''}"><a href="${escapeHtml(path)}"><img src="${escapeHtml(item.icon)}" alt=""><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.rarityName)}</small></span><b aria-label="Quantity ${displayQuantity}">${displayQuantity}×</b></a></li>`;
+    }).join('')}</ul></section>`;
   }).join('')}</div>`;
+}
+
+function messageFindingsLocationsHtml(message) {
+  const details = message.details && typeof message.details === 'object' ? message.details : {};
+  if (details.event !== 'daily-findings-digest' || !Array.isArray(details.locationCounts)) {
+    return '';
+  }
+  const locations = details.locationCounts.map((entry) => {
+    const cityName = String(entry?.cityName ?? '').trim();
+    const total = Math.max(0, Math.floor(Number(entry?.quantity ?? 0)) || 0);
+    const cryptoQuantity = Math.max(0, Math.floor(Number(entry?.cryptoQuantity ?? 0)) || 0);
+    const thingQuantity = Math.max(0, Math.floor(Number(
+      entry?.thingQuantity ?? Math.max(0, total - cryptoQuantity)
+    )) || 0);
+    if (!cityName || (!thingQuantity && !cryptoQuantity)) return '';
+    const quantities = [];
+    if (thingQuantity) {
+      quantities.push(`${thingQuantity.toLocaleString('en-GB')} thing${thingQuantity === 1 ? '' : 's'}`);
+    }
+    if (cryptoQuantity) {
+      quantities.push(`${cryptoQuantity.toLocaleString('en-GB')} crypto coin${cryptoQuantity === 1 ? '' : 's'}`);
+    }
+    return `<li><strong>${escapeHtml(cityName)}</strong><span>${quantities.join(' · ')}</span></li>`;
+  }).filter(Boolean).join('');
+  if (!locations) return '';
+  return `<section class="message-finding-locations" aria-labelledby="message-locations-${message.id}"><h2 id="message-locations-${message.id}">Found locations</h2><ul>${locations}</ul></section>`;
+}
+
+function messageFindingsDigestSummaryHtml(message, catalog) {
+  const details = message.details && typeof message.details === 'object' ? message.details : {};
+  if (details.event !== 'daily-findings-digest') return '';
+  const groups = messageItemGroups(message, catalog);
+  const groupQuantity = (kind) => groups.filter((group) => group.kind === kind)
+    .flatMap((group) => group.items)
+    .reduce((sum, entry) => sum + entry.quantity, 0);
+  const keptFallback = groupQuantity('kept');
+  const recycledFallback = groupQuantity('auto-recycled');
+  const safeCount = (value, fallback) => {
+    const count = Number(value);
+    return Number.isFinite(count) && count >= 0 ? Math.floor(count) : fallback;
+  };
+  const kept = safeCount(details.keptQuantity, keptFallback);
+  const recycled = safeCount(details.autoRecycledQuantity, recycledFallback);
+  const things = safeCount(details.thingQuantity, kept + recycled);
+  const crypto = safeCount(details.cryptoQuantity, groupQuantity('crypto'));
+  const itemIds = new Set(groups.flatMap((group) => group.items.map(({ item }) => item.id)));
+  const distinct = safeCount(details.distinctItemCount,
+    [...itemIds].filter((itemId) => !String(itemId).startsWith('crypto-')).length);
+  const stat = (label, value) => `<div><dt>${label}</dt><dd><strong>${value.toLocaleString('en-GB')}</strong></dd></div>`;
+  return `<dl class="message-detail-meta message-digest-summary" aria-label="Findings summary">${stat('Things found', things)}${stat('Kept', kept)}${stat('Auto-recycled', recycled)}${stat('Crypto found', crypto)}${stat('Distinct things', distinct)}</dl>`;
 }
 
 function messageDetailPage(message, catalog) {
@@ -2051,6 +2416,8 @@ function messageDetailPage(message, catalog) {
     <article class="message-detail">
       <dl class="message-detail-meta"><div><dt>From</dt><dd>${escapeHtml(sender)}</dd></div><div><dt>Sent</dt><dd><time datetime="${new Date(message.createdAt).toISOString()}">${new Date(message.createdAt).toLocaleString('en-GB')}</time></dd></div><div><dt>Retention</dt><dd>${retention}</dd></div></dl>
       <div class="message-detail-body">${messageBodyHtml(conciseMessageBody(message))}</div>
+      ${messageFindingsDigestSummaryHtml(message, catalog)}
+      ${messageFindingsLocationsHtml(message)}
       ${messageItemGroupsHtml(message, catalog)}
       ${actions ? `<nav class="message-detail-actions" aria-label="Message actions">${actions}</nav>` : ''}
       <form class="message-detail-retention" method="post" action="/messages/actions"><input type="hidden" name="message_${message.id}" value="1"><input type="hidden" name="filter" value="all"><input type="hidden" name="type" value="${escapeHtml(type)}"><button name="action" value="${message.kept ? 'unkeep' : 'keep'}">${message.kept ? 'Stop keeping this message' : 'Keep this message'}</button></form>
@@ -2108,7 +2475,9 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null) {
         throw new Error(`Missing destination city for vehicle ${vehicle.id}.`);
       }
       const destinationLabel = vehicle.originCityId === vehicle.destinationCityId
-        ? 'ore-thief mission' : destination.name;
+        ? 'ore-thief mission'
+        : vehicleRouteDestinationLabel(player, catalog,
+          vehicle.originCityId, vehicle.destinationCityId);
       const journey = vehicle.creaturePursuit
         ? [`Pursuing ${vehicle.creaturePursuit.creatureName}`,
           `Intercepts in ${formatDuration(vehicle.creaturePursuit.encounterAt - now)} at ${Math.round(vehicle.creaturePursuit.encounterLocation).toLocaleString('en-GB')} km`]
@@ -2118,12 +2487,9 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null) {
     }
     const city = catalogCityForId(catalog, vehicle.cityId);
     const routes = vehicle.routes.map((route) => {
-      const routeDestination = catalogCityForId(catalog, route.destinationCityId);
-      const destinationMap = catalog.maps?.find((map) => map.id === routeDestination.mapId);
-      const interMap = destinationMap && routeDestination.mapId !== city.mapId;
-      const destinationLabel = interMap
-        ? `${destinationMap.name} / ${routeDestination.name} · INTER-MAP`
-        : routeDestination.name;
+      const destinationLabel = vehicleRouteDestinationLabel(
+        player, catalog, city.id, route.destinationCityId
+      );
       return `<option value="${route.id}">${route.mission ? 'Ore-thief mission' : `${escapeHtml(destinationLabel)} · ${Number(route.length).toLocaleString('en-GB')} km`}${escapeHtml(radarText(route, catalog))}</option>`;
     }).join('');
     const status = vehicle.aircraftDestroyed ? '<strong class="capacity-warning">Shot down by the ore thieves</strong>'
@@ -2150,7 +2516,7 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null) {
       ? `Destroyed · ${thiefBase.ore} ore crates remain for ${escapeHtml(helicopterName)} aircraft.`
       : `${Math.round(thiefBase.distance)} km away · ${thiefBase.buckets.toLocaleString('en-GB')} defensive buckets remain${thiefBase.damaged ? ' · damaged' : ''}.`}</p></section>`
     : `<section class="mission-status"><h2>Ore-thief base</h2><p>Location unknown. Send a ${escapeHtml(searchPlaneName)} on the mission route from the ore city; use a ${escapeHtml(bomberName)} or ${escapeHtml(helicopterName)} after it is found.</p></section>`;
-  return `<section class="page-title"><div><img class="legacy-title-image" src="/img/vehicles.gif" alt=""><h1>Vehicles in ${escapeHtml(currentCity.name)}</h1></div><p>Idle vehicles and stored vehicle things are city-local. Traveling vehicles remain visible while underway.</p></section>
+  return `<section class="page-title"><div><p class="eyebrow">Fleet command</p><h1>Vehicles in ${escapeHtml(currentCity.name)}</h1></div><p>Idle vehicles and stored vehicle things are city-local. Traveling vehicles remain visible while underway.</p></section>
     ${missionStatus}
     <section><h2>Idle vehicles in ${escapeHtml(currentCity.name)}</h2><div class="vehicle-list">${localVehicles || `<p>No idle vehicles in ${escapeHtml(currentCity.name)}.</p>`}</div></section>
     ${travelingVehicles ? `<section><h2>Vehicles underway</h2><div class="vehicle-list">${travelingVehicles}</div></section>` : ''}
@@ -2234,11 +2600,16 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
       throw new Error(`Missing destination city for vehicle ${vehicle.id}.`);
     }
     const destinationLabel = vehicle.originCityId === vehicle.destinationCityId
-      ? 'the ore-thief mission' : destination.name;
+      ? 'the ore-thief mission'
+      : vehicleRouteDestinationLabel(player, catalog,
+        vehicle.originCityId, vehicle.destinationCityId);
     const journeyStatus = vehicle.creaturePursuit
       ? `Pursuing <strong>${escapeHtml(vehicle.creaturePursuit.creatureName)}</strong>. Interception in ${formatDuration(vehicle.creaturePursuit.encounterAt - now)} at ${Math.round(vehicle.creaturePursuit.encounterLocation).toLocaleString('en-GB')} km along the route.`
       : `Traveling to <strong>${escapeHtml(destinationLabel)}</strong>. Arrival in ${formatDuration(vehicle.arrivesAt - now)}.`;
-    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></section>${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
+    const onwardJourney = vehicle.queuedJourneyLegs.length
+      ? `<section class="vehicle-itinerary-status"><h2>Onward itinerary</h2><p>Each leg departs immediately when the previous one arrives.</p><ol>${vehicle.queuedJourneyLegs.map((leg) => `<li>${escapeHtml(vehicleRouteDestinationLabel(player, catalog, leg.originCityId, leg.destinationCityId))} <small>${Number(leg.length).toLocaleString('en-GB')} km</small></li>`).join('')}</ol></section>`
+      : '';
+    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></section>${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
   }
   const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
   const boltItem = catalogItemForSetting(catalog, 'bolt_item_id');
@@ -2434,13 +2805,10 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   ] : [];
   const previewPanel = preview ? `<section class="loadout-preview ${preview.valid ? 'preview-valid' : 'preview-invalid'}" aria-live="polite" data-live-preview-panel><h2>Proposed loadout</h2><p class="preview-verdict">${preview.valid ? 'This exact proposal is ready to commit. The vehicle remains unchanged until then.' : 'This proposal cannot be committed. The vehicle remains unchanged.'}</p>${capacityBudgetHtml(preview.capacityBreakdown, 'Proposed capacity')}<dl>${previewFacts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>${previewChanges.length ? `<ul>${previewChanges.map((change) => `<li>${escapeHtml(change)}</li>`).join('')}</ul>` : '<p>No loadout changes selected.</p>'}${preview.reasons.length ? `<ul class="capacity-warning">${preview.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}</section>` : '';
   const routeOptions = routes.map((route) => {
-    const routeDestination = catalogCityForId(catalog, route.destinationCityId);
-    const destinationMap = catalog.maps?.find((map) => map.id === routeDestination.mapId);
-    const originMapId = catalogCityForId(catalog, vehicle.cityId).mapId;
-    const label = destinationMap && routeDestination.mapId !== originMapId
-      ? `${destinationMap.name} / ${routeDestination.name} · INTER-MAP`
-      : routeDestination.name;
-    return `<option value="${route.id}">${route.mission ? 'Ore-thief mission' : `${escapeHtml(label)} · ${Number(route.length).toLocaleString('en-GB')} km`}${escapeHtml(radarText(route, catalog))}</option>`;
+    const label = vehicleRouteDestinationLabel(
+      player, catalog, vehicle.cityId, route.destinationCityId
+    );
+    return `<option value="${route.id}" data-destination-city-id="${route.destinationCityId}">${route.mission ? 'Ore-thief mission' : `${escapeHtml(label)} · ${Number(route.length).toLocaleString('en-GB')} km`}${escapeHtml(radarText(route, catalog))}</option>`;
   }).join('');
   const travelOrderNames = catalog.settings.travel_order_names;
   if (!travelOrderNames || typeof travelOrderNames !== 'object' || Array.isArray(travelOrderNames)) {
@@ -2449,7 +2817,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const travelOrderOptions = ['peaceful', 'pillage', 'patrol'].map((order) => {
     const label = travelOrderNames[order];
     if (typeof label !== 'string' || !label) throw new Error(`Missing travel-order name: ${order}.`);
-    return `<option value="${order}">${escapeHtml(label)}</option>`;
+    return `<option value="${order}"${vehicle.travelOrder === order ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   }).join('');
   if (vehicle.aircraftDestroyed) {
     return `<section class="page-title"><div><p class="eyebrow">Aircraft lost</p><h1>${escapeHtml(vehicle.name)}</h1></div><a href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p class="capacity-warning">This aircraft was shot down by the ore thieves. Its cargo was lost.</p></section>${loadoutOverview}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No mission history.</td></tr>'}</tbody></table>`;
@@ -2468,6 +2836,24 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     || vehicle.weapons.length > 0 || vehicle.cannons.length > 0 || totalLoadedShots > 0;
   const pageTitle = `<section class="page-title"><div><p class="eyebrow">${escapeHtml(vehicle.type)} in ${escapeHtml(city.name)} ${rankBadge(vehicle.rank, 1, catalog)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a href="${view === 'status' ? '/vehicles' : `/vehicles/${vehicle.id}`}">${view === 'status' ? 'Back to vehicles' : 'Back to vehicle status'}</a></section>`;
   const hero = `<section class="vehicle-hero vehicle-hero-compact">${itemCard(vehicleItem, { compact: true, meta: vehicle.name })}<div><p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p></div></section>`;
+  const journeyRouteData = JSON.stringify(
+    vehicleJourneyRouteGraph(player, catalog, vehicle)
+  ).replace(/</g, '\\u003c');
+  const sendSection = `<section class="vehicle-send-panel"><h2>Send</h2>${routeOptions ? `
+    <form class="vehicle-send" method="post" action="/vehicles/${vehicle.id}/send" data-journey-planner>
+      <div class="vehicle-journey-builder">
+        <label>First leg<select name="routeId" data-journey-first${vehicle.damaged ? ' disabled' : ''}>${routeOptions}</select></label>
+        <ol class="vehicle-journey-legs" data-journey-legs></ol>
+        <div class="button-row"><button class="secondary" type="button" data-add-journey-leg${vehicle.damaged ? ' disabled' : ''}>Add onward leg</button></div>
+        <p class="field-help" data-journey-summary>Additional legs leave immediately after arrival. Cargo stays aboard until the final stop.</p>
+        <script type="application/json" data-journey-routes>${journeyRouteData}</script>
+      </div>
+      ${vehicle.routeType === airRouteType
+        ? '<input type="hidden" name="travelOrder" value="peaceful">'
+        : `<label>Order<select name="travelOrder"${vehicle.damaged ? ' disabled' : ''}>${travelOrderOptions}</select></label>
+          <div class="vehicle-tier-targeting"><p>Combat targets are limited automatically to this vehicle's tier.</p><label><input type="checkbox" name="attackSentry"${vehicle.aggressiveVsSentry ? ' checked' : ''}${vehicle.damaged ? ' disabled' : ''}>Also engage patrols in this tier</label></div>`}
+      <button${vehicle.damaged ? ' disabled' : ''}>Send itinerary</button>
+    </form><script src="/node/vehicle-journey.js?v=20260825b" defer></script>` : '<p>No compatible routes from this city.</p>'}</section>`;
   if (view === 'cargo') {
     return `${pageTitle}${hero}${loadoutOverview}<section><h2>Cargo</h2><p>Choose the complete cargo manifest, preview its capacity and combat effects, then commit that exact proposal. Carried land weapons contribute offense and defense; they are still cargo, not fitted weapons. Cannons and ammunition carried as cargo cannot fire.</p><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/cargo" data-live-preview-form>${previewBindingInput}<div class="table-scroll"><table class="cargo-loadout-table"><thead><tr><th>Thing</th><th>Available here</th><th>Proposed cargo</th></tr></thead><tbody>${cargoRows || '<tr><td colspan="3">No compatible cargo in this city.</td></tr>'}</tbody></table></div><div class="customization-actions"><button name="intent" value="preview">Preview cargo</button>${commitButton}</div></form></div></section>`;
   }
@@ -2475,10 +2861,9 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     return `${pageTitle}${hero}${loadoutOverview}${landFittings}${shipFittings}`;
   }
   return `${pageTitle}
-    <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div><p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p><form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form></div></section>${loadoutOverview}
+    <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div><p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p><form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form></div></section>${sendSection}${loadoutOverview}
     <section class="vehicle-manage-actions"><h2>Manage vehicle</h2><p>${vehicle.type === 'air' ? 'Cargo has its own focused screen.' : 'Cargo and customization are separate so you can focus on one job at a time.'}</p><div class="button-row"><a class="button" href="/vehicles/${vehicle.id}/cargo">Manage cargo</a>${vehicle.type === 'air' ? '' : `<a class="button" href="/vehicles/${vehicle.id}/customize">Customize ${vehicle.type === 'sea' ? 'cannons and ammunition' : 'mods and weapons'}</a>`}</div></section>
     <section><h2>Oil</h2>${oilItem ? itemCard(oilItem, { count: local[oilItem.id] ?? 0, compact: true, meta: [`${vehicle.oiledTrips} boosted trips loaded`, `${vehicle.tripsStolen} stolen trips`], action: `<form method="post" action="/vehicles/${vehicle.id}/oil"><button ${vehicle.routeType === airRouteType || !(local[oilItem.id] ?? 0) ? 'disabled' : ''}>Load one barrel</button></form>${vehicle.tripsStolen ? `<form method="post" action="/vehicles/${vehicle.id}/oil/unload"><button class="secondary">Reclaim a barrel</button></form>` : ''}` }) : ''}</section>
-    <section><h2>Send</h2>${routeOptions ? `<form class="vehicle-send" method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId"${vehicle.damaged ? ' disabled' : ''}>${routeOptions}</select></label>${vehicle.routeType === airRouteType ? '<input type="hidden" name="travelOrder" value="peaceful">' : `<label>Order<select name="travelOrder"${vehicle.damaged ? ' disabled' : ''}>${travelOrderOptions}</select></label><fieldset${vehicle.damaged ? ' disabled' : ''}><legend>Engage vehicles of these rarities</legend>${vehicleRarities(catalog).map((entry) => `<label><input type="checkbox" name="attack_${entry.id}"${vehicle.aggressiveMask & (1 << entry.id) ? ' checked' : ''}>${escapeHtml(entry.name)}</label>`).join('')}<label><input type="checkbox" name="attackSentry"${vehicle.aggressiveVsSentry ? ' checked' : ''}>Also engage patrols</label></fieldset>`}<button${vehicle.damaged ? ' disabled' : ''}>Send</button></form>` : '<p>No compatible routes from this city.</p>'}</section>
     <section><h2>History</h2><table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No journeys yet.</td></tr>'}</tbody></table></section>
     <form method="post" action="/vehicles/${vehicle.id}/store">${hasStoredLoadout ? '<p>Unload cargo and remove every fitting, cannon, and ammunition shot before storing this vehicle as a thing.</p>' : ''}<button class="secondary"${hasStoredLoadout ? ' disabled' : ''}>Store as item</button></form>`;
 }
@@ -2514,7 +2899,37 @@ function battlePage(report) {
       throw new Error('Battle report is missing ship-combat state.');
     }
     const hits = shots.filter((shot) => shot.hit).length;
-    details = `<h2>Cannon and crew battle</h2><p>Your ship fired ${shots.length} cannon shots and landed ${hits}. It finished with ${reportNumber(ship.hull, 'ending hull')} hull, ${reportNumber(ship.speed, 'ending speed')} speed, and ${reportNumber(ship.crew, 'ending crew')} crew; ${casualtiesForSide.length} crew were lost.${result.chainEscape ? ' Chain-shot damage allowed the faster ship to escape.' : ''}</p>`;
+    const start = result.starting?.[side];
+    const startingText = start
+      ? `It started with ${reportNumber(start.hull, 'starting hull')} hull, ${reportNumber(start.speed, 'starting speed')} speed, and ${reportNumber(start.crew, 'starting crew')} crew. ` : '';
+    const ammunitionNames = { 1: 'Cannonball', 2: 'Chain shot', 3: 'Grape shot' };
+    const shotRows = (result.shots ?? []).flatMap((sideShots, shooter) =>
+      sideShots.map((shot) => ({ ...shot, shooter })))
+      .sort((first, second) => first.round - second.round || first.portal - second.portal
+        || first.shooter - second.shooter)
+      .map((shot) => {
+        const target = shot.targetAfter;
+        const targetState = target
+          ? `${reportNumber(target.hull, 'shot hull')} hull / ${reportNumber(target.speed, 'shot speed')} speed / ${reportNumber(target.crew, 'shot crew')} crew`
+          : '—';
+        return `<tr><td>${reportNumber(shot.round, 'shot round')}</td><td>${reportNumber(shot.portal, 'shot portal')}</td><td>${shot.shooter === side ? 'You' : 'Opponent'}</td><td>${escapeHtml(shot.cannonName ?? 'Cannon')}</td><td>${escapeHtml(ammunitionNames[shot.type] ?? `Type ${shot.type}`)}</td><td>${shot.hit ? `${reportNumber(shot.damage, 'shot damage')} ${escapeHtml(shot.damageField ?? '')}` : 'Miss'}</td><td>${escapeHtml(targetState)}</td></tr>`;
+      }).join('');
+    const cannonTable = shotRows
+      ? `<div class="table-scroll"><table><thead><tr><th>Round</th><th>Portal</th><th>Fired by</th><th>Cannon</th><th>Shot</th><th>Result</th><th>Target after shot</th></tr></thead><tbody>${shotRows}</tbody></table></div>`
+      : '<p>No cannon was fired.</p>';
+    const boardingRows = (result.boardingRounds ?? []).map((round) => {
+      const casualty = round.casualtySide
+        ? `${round.casualtySide - 1 === side ? 'Your' : 'Opponent'} crew lost ${escapeHtml(round.weaponName ?? 'an unarmed sailor')}`
+        : round.winner ? `${round.winner - 1 === side ? 'Your' : 'Opponent'} crew forced the victory` : 'No casualty';
+      return `<tr><td>${reportNumber(round.round, 'boarding round')}</td><td>${reportNumber(round.strength?.[side] ?? 0, 'boarding strength')}</td><td>${reportNumber(round.strength?.[(side + 1) % 2] ?? 0, 'opponent boarding strength')}</td><td>${casualty}</td></tr>`;
+    }).join('');
+    const boarding = boardingRows
+      ? `<h3>Boarding</h3><div class="table-scroll"><table><thead><tr><th>Round</th><th>Your strength</th><th>Opponent strength</th><th>Outcome</th></tr></thead><tbody>${boardingRows}</tbody></table></div>`
+      : '<h3>Boarding</h3><p>No boarding action took place.</p>';
+    const repair = result.repairs?.[side];
+    const repairText = repair
+      ? `<p>After combat, repairs restored ${reportNumber(repair.hull, 'hull repair')} hull, ${reportNumber(repair.speed, 'sail repair')} speed, and ${reportNumber(repair.crew, 'crew recovery')} crew. The ship resumed with ${reportNumber(repair.ending.hull, 'repaired hull')} hull, ${reportNumber(repair.ending.speed, 'repaired speed')} speed, and ${reportNumber(repair.ending.crew, 'repaired crew')} crew.</p>` : '';
+    details = `<h2>Cannon and crew battle</h2><p>${startingText}Your ship fired ${shots.length} cannon shots and landed ${hits}. It finished combat with ${reportNumber(ship.hull, 'ending hull')} hull, ${reportNumber(ship.speed, 'ending speed')} speed, and ${reportNumber(ship.crew, 'ending crew')} crew; ${casualtiesForSide.length} crew were lost.${ship.hull === 0 ? ' The ship sank.' : ''}${result.chainEscape ? ' Chain-shot damage allowed the faster ship to escape.' : ''}</p>${cannonTable}${boarding}${repairText}`;
   } else {
     throw new Error(`Unknown battle report type: ${report.details.type}.`);
   }
@@ -2526,22 +2941,57 @@ function battlePage(report) {
     <p class="battle-outcome">${report.tied ? 'You tied.' : report.won ? 'You won.' : 'You lost.'}</p><p>Rating ${Math.round(report.ratingBefore)} → <strong>${Math.round(report.ratingAfter)}</strong></p></section>`;
 }
 
+function combatDivisionLabel(catalog, classValue) {
+  const rarities = catalog.settings.combat_class_by_rarity
+    .map((value, rarity) => ({ value: Number(value), rarity }))
+    .filter((entry) => entry.value === Number(classValue))
+    .map((entry) => catalog.settings.rarity_color_names[entry.rarity]);
+  return rarities.length > 1 ? `${rarities[0]}–${rarities.at(-1)}` : rarities[0];
+}
+
+function combatSeasonDate(timestamp) {
+  return new Date(timestamp).toLocaleDateString('en-GB', {
+    timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric'
+  });
+}
+
 function ratingsPage(report, catalog) {
   const sections = report.ratings.map((group) => `<section><h2>${escapeHtml(
     catalogLabel(catalog, 'vehicle_type', group.routeType))} ranks</h2><ol class="ratings-list">${group.players.map((entry) =>
-    `<li><span>${entry.rank}.</span>${rankBadge(entry.tierRank, entry.vehicleCount, catalog)}<a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a><small>${entry.meldCount} melds · ${Math.round(entry.rating)} rating · ${entry.vehicleCount} vehicles</small></li>`).join('') || '<li>No rated vehicles.</li>'}</ol></section>`).join('');
+    `<li><span>${entry.rank}.</span>${rankBadge(entry.tierRank, entry.vehicleCount, catalog)}<a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a><small>${entry.wins} wins from ${entry.battles} battles · ${Math.round(entry.rating)} rating · ${entry.vehicleCount} participating vehicles · ${entry.meldCount} melds</small></li>`).join('') || '<li>No qualifying combatants yet.</li>'}</ol></section>`).join('');
   const classes = [...new Set(catalog.settings.combat_class_by_rarity.map(Number)
     .filter((value) => value > 0))];
   const tabs = classes.map((combatClassValue) => {
-    const rarities = catalog.settings.combat_class_by_rarity
-      .map((value, rarity) => ({ value: Number(value), rarity }))
-      .filter((entry) => entry.value === combatClassValue)
-      .map((entry) => catalog.settings.rarity_color_names[entry.rarity]);
-    const label = rarities.length > 1 ? `${rarities[0]}–${rarities.at(-1)}` : rarities[0];
-    return `<a href="/ratings?class=${combatClassValue}">${escapeHtml(label)}</a>`;
+    const label = combatDivisionLabel(catalog, combatClassValue);
+    return `<a href="/ratings?class=${combatClassValue}"${report.combatClass === combatClassValue ? ' aria-current="page"' : ''}>${escapeHtml(label)}</a>`;
   }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">PvP ranks</p><h1>Vehicle rankings</h1></div><a href="/vehicles">Back to vehicles</a></section><nav class="rating-tabs">${tabs}</nav>
-    <p>Each vehicle earns its own combat rating. A miner's strongest vehicle determines the badge tier, and the number of vehicles in that color expands the badge.</p><div class="ratings-grid">${sections}</div>`;
+  const seasonEnd = report.season.endsAt - 24 * 60 * 60 * 1000;
+  return `<section class="page-title"><div><p class="eyebrow">PvP ranks · Combat season ${report.season.number}</p><h1>Vehicle rankings</h1></div><div class="page-title-actions"><a class="button" href="/ratings/prizes">View season prizes</a><a href="/vehicles">Back to vehicles</a></div></section><nav class="rating-tabs">${tabs}</nav>
+    <p><strong>${combatSeasonDate(report.season.startsAt)}–${combatSeasonDate(seasonEnd)}.</strong> Only player-versus-player battles in this season count, and a miner needs at least one win to rank. Each vehicle earns its own combat rating; standings use each miner's strongest participating vehicle, then wins, participating vehicles, melds, and newer account age. Ratings reset when the season closes.</p><div class="ratings-grid">${sections}</div>`;
+}
+
+function combatSeasonPrizesPage(report, prizes, catalog) {
+  const currentEnd = report.season.endsAt - 24 * 60 * 60 * 1000;
+  const divisions = prizes.divisions.map((division) => {
+    const routeSections = division.routes.map((route) => `<section class="combat-prize-route"><h3>${escapeHtml(catalogLabel(catalog, 'vehicle_type', route.routeType))}</h3><ol class="combat-prize-list">${route.prizes.map((prize) => {
+      const item = catalogItemForId(catalog, prize.itemId, 'combat season prize');
+      return `<li><strong>#${prize.place}</strong>${itemCard(item, {
+        compact: true,
+        meta: `${item.rarityName} · awarded unfitted`
+      })}</li>`;
+    }).join('')}</ol></section>`).join('');
+    return `<section class="combat-prize-division"><header><p class="eyebrow">Combat division</p><h2>${escapeHtml(combatDivisionLabel(catalog, division.combatClass))}</h2></header><div class="combat-prize-routes">${routeSections}</div></section>`;
+  }).join('');
+  const latestRows = prizes.latestResults.map((result) => `<tr><td>${escapeHtml(
+    combatDivisionLabel(catalog, result.combatClass))}</td><td>${escapeHtml(
+    catalogLabel(catalog, 'vehicle_type', result.routeType))}</td><td>#${result.place}</td><td>${result.playerId
+      ? `<a href="/miners/${encodeURIComponent(result.playerName)}">${escapeHtml(result.playerName)}</a>`
+      : escapeHtml(result.playerName)}</td><td><a href="/items/${result.prizeItemId}">${escapeHtml(result.prizeName)}</a></td></tr>`).join('');
+  const latest = prizes.latestSeason
+    ? `<section><h2>Previous season winners</h2><p>${combatSeasonDate(prizes.latestSeason.startsAt)}–${combatSeasonDate(prizes.latestSeason.endsAt - 24 * 60 * 60 * 1000)}</p><div class="table-scroll"><table><thead><tr><th>Division</th><th>Type</th><th>Place</th><th>Miner</th><th>Prize</th></tr></thead><tbody>${latestRows || '<tr><td colspan="5">No qualifying winners.</td></tr>'}</tbody></table></div></section>`
+    : '';
+  return `<section class="page-title"><div><p class="eyebrow">Three-month combat seasons</p><h1>Season prizes</h1></div><a href="/ratings">Back to ratings</a></section>
+    <section class="combat-prize-intro"><h2>Fight upward</h2><p>The current season runs from <strong>${combatSeasonDate(report.season.startsAt)}</strong> through <strong>${combatSeasonDate(currentEnd)}</strong>. The top five Land and Ship miners in every division receive one unfitted transport in their current city. Yellow winners receive Green–Blue transports; Green–Blue winners receive Red+ transports. In Red+, first place receives the matching Champion and places two through five receive desirable Red+ transports.</p></section>${divisions}${latest}`;
 }
 
 function ammoBoxesPage(player, catalog, vehicleId = null) {
@@ -2563,7 +3013,7 @@ function ammoBoxesPage(player, catalog, vehicleId = null) {
 
 function containersPage(data) {
   const rows = data.containers.map((container) => `<tr><td>${escapeHtml(container.name)}</td><td>+${container.capacity}</td><td>${container.quantity}</td><td>${container.credits} credits</td><td><form method="post" action="/containers/${container.id}/buy"><button ${data.credits < container.credits ? 'disabled' : ''}>Buy</button></form></td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Credits shop</p><h1>Inventory containers</h1></div><p>${data.credits} credits · base inventory limit ${data.itemLimit}</p></section>
+  return `<section class="page-title page-title-long"><div><p class="eyebrow">Credits shop</p><h1>Inventory containers</h1></div><p>${data.credits} credits · base inventory limit ${data.itemLimit}</p></section>
     <p>Each container type permanently adds its capacity once. Extra copies remain owned but do not increase your limit again.</p><table><thead><tr><th>Name</th><th>Capacity</th><th>Owned</th><th>Price</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -2671,47 +3121,6 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
   const bombNames = joinedNames(labels.bombs);
   const packerNames = joinedNames(labels.packers);
   const craneNames = joinedNames(labels.cranes);
-  const directions = catalog.settings.oil_direction_names
-    .map((direction, point) => `<option value="${point}">${direction}</option>`).join('');
-  const unavailableBuildTier = Number(catalog.settings.oil_build_tier_ids.unavailable);
-  const deployHexes = field.hexes.filter((hex) => hex.available !== unavailableBuildTier
-    && (!hex.machine || hex.machine.playerId === player.id))
-    .map((hex) => `<option value="${hex.id}">${hex.x},${hex.y}${hex.machine ? ' · occupied (replace)' : ''}${hex.available === Number(catalog.settings.oil_build_tier_ids.helicopter) ? ' · helicopter row' : ''}</option>`).join('');
-  const machineParts = field.ownedMachines.filter((machine) => !machine.isBomb)
-    .sort(compareItemsByRarity)
-  const bombParts = field.ownedMachines.filter((machine) => machine.isBomb)
-    .sort(compareItemsByRarity)
-  const machineItem = (machine) => {
-    const item = catalog.byId.get(machine.itemId);
-    if (!item) throw new Error(`Missing catalog item: ${machine.itemId}.`);
-    return item;
-  };
-  const inventoryCards = [...machineParts, ...bombParts].sort(compareItemsByRarity)
-    .map((machine) => itemCard(machineItem(machine), { count: machine.quantity, compact: true, meta: machine.type })).join('');
-  const pickerCards = (machines, label) => machines.map((machine) => itemCard(machineItem(machine), {
-    count: machine.quantity, compact: true, className: 'item-card-picker', meta: machine.type,
-    action: `<label><input type="radio" name="machineId" value="${machine.id}" required> ${label}</label>`
-  })).join('');
-  const machinePickerCards = pickerCards(machineParts, 'Select');
-  const bombPickerCards = pickerCards(bombParts, 'Select');
-  const ownHexes = field.hexes.filter((hex) => hex.machine?.playerId === player.id)
-    .sort((first, second) => compareItemsByRarity(first.machine, second.machine))
-    .map((hex) => `<option value="${hex.id}">${hex.x},${hex.y}</option>`).join('');
-  const bombTargets = field.hexes.filter((hex) => hex.machine || Number(hex.oilLiters) > 0)
-    .map((hex) => `<option value="${hex.id}">${hex.x},${hex.y}${hex.machine ? ' · occupied' : ' · oil spill'}</option>`).join('');
-  const machineRows = field.hexes.filter((hex) => hex.machine)
-    .sort((first, second) => compareItemsByRarity(first.machine, second.machine))
-    .map((hex) => {
-      const machine = hex.machine;
-      const canClaim = machine.playerId === player.id && machine.canPack;
-      const needsPacker = machine.playerId === player.id && !canClaim && hex.barrels > 0;
-      const oil = hex.oilLiters === null ? `hidden without a ${labels.searchPlane}`
-        : `${formatGold(hex.oilLiters)}L · ${hex.barrels} barrels · ${formatGold(hex.barrelProgressLiters)}/${formatGold(Number(catalog.settings.oil_units_per_barrel) / Number(catalog.settings.oil_units_per_liter))}L packing`;
-      const deployedCard = itemCard(machineItem(machine), { compact: true, meta: 'Deployed' });
-      const queuedCard = hex.queuedMachine
-        ? itemCard(machineItem(hex.queuedMachine), { compact: true, meta: 'Queued replacement' }) : '';
-      return `<tr><td>${hex.x},${hex.y}</td><td><div class="oil-machine-cards">${deployedCard}${queuedCard}</div></td><td>${escapeHtml(machine.ownerName)}</td><td>${formatGold(machine.power)} kW · ${formatDuration(machine.lifeRemaining)}</td><td>${oil}</td><td>${canClaim ? `<form method="post" action="/oil-field/${hex.id}/claim"><button ${hex.barrels < 1 ? 'disabled' : ''}>Claim barrel</button></form>` : needsPacker ? '<small>Replace with a packing machine to claim.</small>' : ''}</td></tr>`;
-    }).join('');
   const eventRows = field.events.map((event) => `<tr><td>${new Date(event.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(event.type)}</td><td>${event.hexId}</td><td>${event.otherPlayerName ? escapeHtml(event.otherPlayerName) : ''}</td><td>${event.details.litersLost ? `${event.details.litersLost}L burned` : escapeHtml(event.details.name ?? event.details.type ?? '')}</td></tr>`).join('');
   const stats = field.stats ? `<section><h2>${escapeHtml(catalogGadgetForBehavior(catalog, 'ledger').displayName)} field report</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Machines</th><th>Oil</th><th>Pumping</th><th>Packing</th><th>Barrels</th></tr></thead><tbody>${field.stats.map((entry) => `<tr><td><a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a> (${entry.meldCount})</td><td>${entry.machines}</td><td>${entry.oilLiters}L</td><td>${entry.pumpingLitersPerHour}L/h</td><td>${entry.packingLitersPerHour}L/h</td><td>${entry.barrels}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   const serializedState = escapeHtml(JSON.stringify(state));
@@ -2720,7 +3129,6 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
   return `<section class="page-title"><div><p class="eyebrow">Original machine board</p><h1>Oil Field</h1></div><p>Pump, pipe, and pack ${formatGold(litersPerBarrel)} litres into each barrel of ${escapeHtml(labels.oil)}. Fight for the field with the original machines.</p></section>
     <section class="oil-summary"><p>The shared field is in <strong>${escapeHtml(cityName)}</strong>. Drag a machine from the rack onto a hex, rotate it, then deploy, replace, queue, or bomb.</p><strong class="active-state">Field access active</strong></section>
     <p class="oil-aircraft">${escapeHtml(labels.helicopter)}: <strong>${field.hasHelicopter ? 'ready' : 'missing'}</strong> · ${escapeHtml(labels.searchPlane)}: <strong>${field.hasSearchPlane ? 'revealing all oil' : 'other miners’ oil hidden'}</strong> · ${escapeHtml(labels.bomber)}: <strong>${field.hasBomber ? 'ready' : 'missing'}</strong></p>
-    <section><h2>Machine parts in the Oil Field city</h2><p>These are the item records represented by the draggable machine rack below.</p><div class="item-grid oil-machine-inventory">${inventoryCards || '<p>No machine parts are stored in the field city.</p>'}</div></section>
     <section class="oil-original-panel" aria-labelledby="oil-board-heading"><div class="oil-board-heading"><div><h2 id="oil-board-heading">Machine field</h2><p>${field.hexes.length} hexes · radius ${Number(catalog.settings.oil_field_max_radius)} · original vector machines and live effects</p></div><div class="oil-board-controls"><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button></div></div>
       <div class="oil-legend" aria-label="Board legend"><span class="oil-key oil-key-own">Your machine</span><span class="oil-key oil-key-rival">Other machine</span><span class="oil-key oil-key-build">Buildable</span><span class="oil-key oil-key-heli">${escapeHtml(labels.helicopter)} row</span><span class="oil-key oil-key-oil">${escapeHtml(labels.oil)}</span><span class="oil-key oil-key-spill">${escapeHtml(labels.oil)} spill</span><span class="oil-key oil-key-closed">Unavailable</span></div>
       <p id="oil-board-status" class="oil-board-status" role="status">Loading the original Oil Field…</p>
@@ -2729,9 +3137,6 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
     </section>
     ${stats}
     <section class="oil-instructions"><h2>Instructions</h2><ul><li>Drag a machine onto a hex, or click it and then click its destination.</li><li>Use the on-board L and R controls before deploying. Once deployed or queued, it cannot be moved or rotated.</li><li>Blue hexes are buildable. The outer blue row requires a ${escapeHtml(labels.helicopter)} in ${escapeHtml(cityName)}.</li><li>Drop onto your own machine to replace it immediately or queue its successor.</li><li>Drop ${escapeHtml(bombNames)} bombs onto a machine or oil spill; a ${escapeHtml(labels.bomber)} is required.</li><li>Click any hex to open its full summary. Only ${escapeHtml(packerNames)} can release completed barrels. Barrels stolen by ${escapeHtml(craneNames)} remain on their hex when you replace the machine with one of those packing machines.</li></ul></section>
-    <details class="oil-form-controls"><summary>Keyboard and form controls</summary><section><h2>Deploy a machine</h2><form class="oil-card-form" method="post" action="/oil-field/deploy"><fieldset class="item-picker"><legend>Machine item</legend><div class="item-picker-grid">${machinePickerCards || '<p>No deployable machine items.</p>'}</div></fieldset><div class="oil-form-fields"><label>Available hex<select name="hexId" required>${deployHexes}</select></label><label>Direction<select name="point">${directions}</select></label><button ${!machinePickerCards || !deployHexes ? 'disabled' : ''}>Deploy</button></div></form></section>
-    <section class="oil-advanced"><div><h2>Queue a replacement</h2><form class="oil-card-form" method="post" action="/oil-field/queue"><fieldset class="item-picker"><legend>Machine item</legend><div class="item-picker-grid">${machinePickerCards || '<p>No deployable machine items.</p>'}</div></fieldset><div class="oil-form-fields"><label>Your deployed hex<select name="hexId" required>${ownHexes}</select></label><label>Direction<select name="point">${directions}</select></label><button ${!machinePickerCards || !ownHexes ? 'disabled' : ''}>Queue</button></div></form></div><div><h2>Bomb a hex</h2><form class="oil-card-form" method="post" action="/oil-field/bomb"><fieldset class="item-picker"><legend>Bomb item</legend><div class="item-picker-grid">${bombPickerCards || '<p>No bomb items.</p>'}</div></fieldset><div class="oil-form-fields"><label>Target<select name="hexId" required>${bombTargets}</select></label><button ${!field.hasBomber || !bombPickerCards || !bombTargets ? 'disabled' : ''}>Bomb</button></div></form></div></section></details>
-    <section><h2>Deployed machines</h2><div class="table-scroll"><table><thead><tr><th>Hex</th><th>Machine</th><th>Operator</th><th>Power/life</th><th>Oil</th><th></th></tr></thead><tbody>${machineRows || '<tr><td colspan="6">The field is empty.</td></tr>'}</tbody></table></div></section>
     <section><h2>Your field events</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Event</th><th>Hex</th><th>Other miner</th><th>Details</th></tr></thead><tbody>${eventRows || '<tr><td colspan="5">No field events yet.</td></tr>'}</tbody></table></div></section>
     <script src="/js/raphael2.1.2.js" defer></script><script src="/js/machines11.js" defer></script><script src="/node/oil-field.js?v=20260822b" defer></script>`;
 }
@@ -2743,23 +3148,23 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
   const known = new Set(knownCityIds);
   const visibleMapIds = new Set(catalog.cities.filter((city) => known.has(city.id)).map((city) => city.mapId));
   visibleMapIds.add(playerMap.id);
-  for (const route of catalog.routes.filter((entry) => entry.open && entry.interMap)) {
-    const city1 = catalogCityForId(catalog, route.city1Id);
-    const city2 = catalogCityForId(catalog, route.city2Id);
-    if (visibleMapIds.has(city1.mapId)) visibleMapIds.add(city2.mapId);
-    if (visibleMapIds.has(city2.mapId)) visibleMapIds.add(city1.mapId);
-  }
   const requestedMap = catalog.maps.find((map) => map.slug === requestedMapSlug
     && visibleMapIds.has(map.id));
   const currentMap = requestedMap ?? playerMap;
   const mapCities = catalog.cities.filter((city) => city.mapId === currentMap.id);
+  const capitalCityId = Number(currentMap.capitalCityId);
+  const capitalCity = mapCities.find((city) => city.id === capitalCityId);
+  if (!Number.isInteger(capitalCityId) || !capitalCity) {
+    throw new Error(`Missing regional capital for map ${currentMap.id}.`);
+  }
   const mapCityIds = new Set(mapCities.map((city) => city.id));
   const mapRoutes = catalog.routes.filter((route) => route.open
     && mapCityIds.has(route.city1Id) && mapCityIds.has(route.city2Id));
   const mapMineTypes = new Map(mapCities.flatMap((city) =>
     catalog.mineTypesByCity.get(city.id).map((mineType) => [mineType.id, mineType])));
-  const interMapRoutes = catalog.routes.filter((route) => route.open && route.interMap
+  const gatewayRoutes = catalog.routes.filter((route) => route.interMap
     && (mapCityIds.has(route.city1Id) || mapCityIds.has(route.city2Id)));
+  const interMapRoutes = gatewayRoutes.filter((route) => route.open);
   if (!(catalog.mineTypesByCity instanceof Map)) {
     throw new Error('Missing catalog city-mine availability data.');
   }
@@ -2790,18 +3195,30 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
     }
     return [city.id, position];
   }));
-  const terrain = '<image class="map-background" href="/node/map-background.png" x="0" y="0" width="900" height="600" preserveAspectRatio="xMidYMid slice" />';
+  const mapBackgroundFilename = `${currentMap.slug}.png`;
+  const hasDimensionBackground = /^[a-z0-9-]+$/.test(currentMap.slug)
+    && fs.existsSync(path.join(PUBLIC_ROOT, 'img', mapBackgroundFilename));
+  const mapBackgroundPath = hasDimensionBackground
+    ? `/node/maps/${mapBackgroundFilename}` : '/node/map-background.png';
+  const terrain = `<image class="map-background" href="${escapeHtml(mapBackgroundPath)}" x="0" y="0" width="900" height="600" preserveAspectRatio="xMidYMid slice" />`;
   const cityNodes = mapCities.map((city) => {
     const position = positions.get(city.id);
     const cityState = city.id === player.cityId ? 'current' : known.has(city.id) ? 'known' : 'unknown';
+    const isCapital = city.id === capitalCityId;
+    const cityRole = isCapital ? 'regional capital' : 'outpost';
     const availableMines = availableMinesForCity(city.id);
     const trayWidth = Math.max(42, availableMines.length * 34 + 8);
     const iconStart = -((availableMines.length * 34 - 4) / 2);
     const mineIcons = availableMines.map((mineType, index) => `<g class="map-mine-icon" transform="translate(${iconStart + index * 34} 29)"><title>${escapeHtml(`${mineType.name} Mine available in ${city.name}`)}</title><image href="${escapeHtml(mineType.icon)}" width="30" height="30" /></g>`).join('');
     const mineNames = availableMines.map((mineType) => `${mineType.name} Mine`).join(', ');
-    const label = escapeHtml(`${city.name}: ${cityState} city. Mines available: ${mineNames || 'none'}`);
-    const gateway = interMapRoutes.some((route) => route.city1Id === city.id || route.city2Id === city.id);
-    const node = `<g class="map-city map-city-${cityState}${gateway ? ' map-city-gateway' : ''}" data-city-id="${city.id}" transform="translate(${position.x} ${position.y})"><circle class="map-city-halo" r="25" /><circle class="map-city-pin" r="13" /><text class="map-city-name" text-anchor="middle" y="-24">${escapeHtml(city.name)}</text>${gateway ? '<text class="map-gateway-label" text-anchor="middle" y="-42">GATEWAY</text>' : ''}<g class="map-city-mines"><rect x="${-trayWidth / 2}" y="25" width="${trayWidth}" height="38" rx="8" />${mineIcons}</g></g>`;
+    const label = escapeHtml(`${city.name}: ${cityState} ${cityRole}. Mines available: ${mineNames || 'none'}`);
+    const gateway = gatewayRoutes.some((route) =>
+      route.city1Id === city.id || route.city2Id === city.id);
+    const gatewayLabel = gateway
+      ? '<text class="map-gateway-label" text-anchor="middle" y="-42">GATEWAY</text>' : '';
+    const capitalLabel = isCapital
+      ? '<rect class="map-capital-badge" x="-34" y="-72" width="68" height="17" rx="3" /><text class="map-capital-label" text-anchor="middle" y="-60">CAPITAL</text>' : '';
+    const node = `<g class="map-city map-city-${cityState}${gateway ? ' map-city-gateway' : ''}${isCapital ? ' map-city-capital' : ''}" data-city-id="${city.id}" transform="translate(${position.x} ${position.y})"><title>${label}</title><circle class="map-city-halo" r="25" /><circle class="map-city-pin" r="13" /><text class="map-city-name" text-anchor="middle" y="-24">${escapeHtml(city.name)}</text>${gatewayLabel}${capitalLabel}<g class="map-city-mines"><rect x="${-trayWidth / 2}" y="25" width="${trayWidth}" height="38" rx="8" />${mineIcons}</g></g>`;
     return known.has(city.id) && city.id !== player.cityId
       ? `<a class="map-city-link" href="#city-${city.id}" data-city-select="/cities/${city.id}/select" aria-label="${label}. Switch to this city">${node}</a>`
       : `<g role="group" aria-label="${label}">${node}</g>`;
@@ -2825,13 +3242,22 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
       ? surfaceTypes.map((type) => `<span class="route-offer route-offer-${type.name}">${type.label}</span>`).join('')
       : '<span class="route-offer route-offer-none">No open surface routes</span>';
     const mineList = availableMines.map((mineType) => `<li><img src="${escapeHtml(mineType.icon)}" alt=""><span><strong>${escapeHtml(mineType.name)}</strong> Mine</span></li>`).join('');
-    const status = known.has(city.id) ? (city.id === player.cityId
-      ? (city.id === player.homeCityId ? 'Current city · home' : 'Current city')
-      : city.id === player.homeCityId ? 'Discovered · home' : 'Discovered') : 'Undiscovered';
-    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}" data-city-id="${city.id}"><h3>${escapeHtml(city.name)}</h3><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${known.has(city.id) && city.id !== player.cityId ? `<form method="post" action="/cities/${city.id}/select"><button>View this city</button></form>` : ''}${city.id === player.cityId && city.id !== player.homeCityId ? '<a class="button secondary" href="/move">Make this my home</a>' : ''}</article>`;
+    const isCapital = city.id === capitalCityId;
+    const status = `${known.has(city.id)
+      ? city.id === player.cityId ? 'Current city' : 'Discovered'
+      : 'Undiscovered'} · ${isCapital ? 'regional capital' : 'outpost'}`;
+    const capitalBadge = isCapital
+      ? '<span class="city-capital-badge">Regional capital</span>' : '';
+    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"><header class="city-card-heading"><h3>${escapeHtml(city.name)}</h3>${capitalBadge}</header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${known.has(city.id) && city.id !== player.cityId ? `<form method="post" action="/cities/${city.id}/select"><button>View this city</button></form>` : ''}</article>`;
   }).join('');
   const mapTabs = catalog.maps.filter((map) => visibleMapIds.has(map.id))
-    .map((map) => `<a href="/map?world=${encodeURIComponent(map.slug)}" class="${map.id === currentMap.id ? 'active' : ''}">${escapeHtml(map.name)}</a>`).join('');
+    .map((map) => {
+      const viewing = map.id === currentMap.id;
+      const current = map.id === playerMap.id;
+      const classes = [viewing ? 'active' : '', current ? 'current-world' : '']
+        .filter(Boolean).join(' ');
+      return `<a href="/map?world=${encodeURIComponent(map.slug)}" class="${classes}"${viewing ? ' aria-current="page"' : ''}>${escapeHtml(map.name)}</a>`;
+    }).join('');
   const exits = interMapRoutes.map((route) => {
     const fromHere = mapCityIds.has(route.city1Id);
     const local = catalogCityForId(catalog, fromHere ? route.city1Id : route.city2Id);
@@ -2848,70 +3274,37 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
     const departures = eligible.length
       ? `<div class="gateway-departures">${eligible.map((vehicle) => `<form method="post" action="/vehicles/${vehicle.id}/send"><input type="hidden" name="routeId" value="${route.id}"><input type="hidden" name="travelOrder" value="peaceful"><button>Send ${escapeHtml(vehicle.name)}</button></form>`).join('')}</div>`
       : `<small>Bring an idle ${escapeHtml(type.label.toLowerCase())} vehicle to ${escapeHtml(local.name)} to travel.</small>`;
-    return `<li class="route-summary route-${type.name}"><span>${type.label}</span><strong>${escapeHtml(local.name)} → ${escapeHtml(remoteMap.name)} · ${escapeHtml(remote.name)}</strong><small>${Number(route.length).toLocaleString('en-GB')} km · ${remoteCities.length} cities · ${remoteMineTypeIds.size} mine types${remoteDiscovered ? '' : ' · expedition reward available'}</small>${departures}</li>`;
+    const destination = remoteDiscovered
+      ? `${escapeHtml(remoteMap.name)} · ${escapeHtml(remote.name)}` : 'Undiscovered region';
+    const details = remoteDiscovered
+      ? `${remoteCities.length} cities · ${remoteMineTypeIds.size} mine types`
+      : 'Complete this gateway route to reveal the region · expedition reward available';
+    return `<li class="route-summary route-${type.name}"><span>${type.label}</span><strong>${escapeHtml(local.name)} → ${destination}</strong><small>${Number(route.length).toLocaleString('en-GB')} km · ${details}</small>${departures}</li>`;
   }).join('');
   const exitsSection = exits
     ? `<section><h2>Inter-map corridors</h2><ul class="route-list">${exits}</ul></section>` : '';
-  return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} map</p><h1>Cities</h1></div><p>Vehicles reveal cities and maps when they complete a route.</p></section><section class="map-opportunities"><h2>${escapeHtml(currentMap.name)} opportunities</h2><p><strong>${mapCities.length} cities</strong> support <strong>${mapMineTypes.size} mine types</strong>, independent city markets, factories, workers, and local vehicle networks. Establishing production early creates supply where few miners have inventory.</p><p>${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}</p></section>
-    <figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">MineThings cities and gateways</title><desc id="route-map-description">An illustrated island map with clickable city names, available mine types, and gateway cities. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g></svg><figcaption><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="mine-key">Gateway to another map</span></figcaption></figure>
+  return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} region</p><h1>Cities</h1></div><p>Vehicles reveal cities and regions when they complete a route.</p></section><section class="map-opportunities" aria-labelledby="regional-capital-heading"><p class="eyebrow">${escapeHtml(currentMap.name)} opportunities · Shared regional base</p><h2 id="regional-capital-heading">${escapeHtml(capitalCity.name)} · Regional capital</h2><p>Every miner in ${escapeHtml(currentMap.name)} shares ${escapeHtml(capitalCity.name)} as their capital. Bring things here to Meld and trade with other miners gathering in the region’s central market. Other cities remain independent outposts with their own mines, routes, factories, and local markets.</p><p class="map-region-facts"><strong>${mapCities.length} cities</strong> · <strong>${mapMineTypes.size} mine types</strong> · ${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}</p></section>
+    <figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital and gateways</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types, and gateway cities. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="gateway-key">Gateway to another region</span></figcaption></figure>
     <section><h2>Local route network</h2><ul class="route-list">${routeRows || '<li>No routes are currently available.</li>'}</ul></section>${exitsSection}
-    <section><h2>Choose a city</h2><div class="city-grid">${cities}</div></section><script src="/node/map.js?v=20260821a" defer></script>`;
-}
-
-function legacyWorldEventsPage(player, catalog, status, vehicles, currentTime) {
-  const weatherPresentation = {
-    clear: ['☀️', 'Clear'], cloud: ['☁️', 'Cloudy'], rain: ['🌧️', 'Rain'], storm: ['⛈️', 'Storm']
-  };
-  const weather = status.weather.map((entry) => {
-    const [icon, label] = weatherPresentation[entry.condition] ?? ['?', entry.condition];
-    return `<article class="weather-card weather-${entry.condition}"><span class="weather-icon">${icon}</span><div><h3>${escapeHtml(entry.mapName)}</h3><p><strong>${escapeHtml(label)}</strong> · ${entry.temperatureC.toFixed(1)}°C · ${entry.windKph} km/h wind${entry.rainfallMm ? ` · ${entry.rainfallMm} mm rain` : ''}</p><small>Changes in ${formatDuration(entry.endsAt - currentTime)}</small></div></article>`;
-  }).join('');
-  const active = status.creatures.filter((creature) => creature.status === 'active');
-  const creatureCards = active.map((creature) => {
-    const eligible = vehicles.filter((vehicle) => vehicle.status === 'idle'
-      && vehicle.routeType === creature.routeType
-      && [creature.city1Id, creature.city2Id].includes(vehicle.cityId));
-    const remaining = Math.min(creature.location, creature.length - creature.location);
-    const hunt = eligible.length ? `<form method="post" action="/events/creatures/${creature.id}/attack"><label>Attacking vehicle<select name="vehicleId" required>${eligible.map((vehicle) => `<option value="${vehicle.id}">${escapeHtml(vehicle.name)}</option>`).join('')}</select></label><button>Send to intercept</button></form>`
-      : '<p class="muted">Move a compatible idle vehicle to either end of this route to hunt it.</p>';
-    return `<article class="creature-card creature-${creature.type} rarity-${creature.rarity}"><header><span class="creature-icon">${escapeHtml(creature.icon)}</span><div><p class="eyebrow">${escapeHtml(creature.mapName)}</p><h3>${escapeHtml(creature.name)}</h3></div></header><p><strong>${escapeHtml(creature.routeName)}</strong> · ${Math.round(creature.location).toLocaleString('en-GB')} km along the route</p><p>Moving toward <strong>${escapeHtml(creature.destinationCityName)}</strong> · about ${Math.ceil(remaining).toLocaleString('en-GB')} km remain.</p><div class="creature-health"><span style="width:${Math.max(0, creature.hp / creature.maxHp * 100)}%"></span></div><p>${Math.ceil(creature.hp)}/${Math.ceil(creature.maxHp)} health · ${creature.attackCount} attacks</p>${hunt}</article>`;
-  }).join('');
-  const recent = status.creatures.filter((creature) => creature.status !== 'active')
-    .map((creature) => `<tr><td>${new Date(creature.resolvedAt).toLocaleString('en-GB')}</td><td>${escapeHtml(creature.name)}</td><td>${escapeHtml(creature.routeName)}</td><td>${creature.status === 'defeated' ? 'Defeated' : `Reached ${escapeHtml(creature.destinationCityName)}`}</td></tr>`).join('');
-  const attacks = status.attacks.map((attack) => `<tr><td>${new Date(attack.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(attack.name)}</td><td>${attack.damage}</td><td>${attack.counterDamage}</td><td>${attack.defeated ? `Defeated${attack.rewards.length ? ` · ${attack.rewards.map((item) => escapeHtml(item.name)).join(', ')}` : ''}` : 'Wounded'}</td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Living world</p><h1>World Events</h1></div><p>Weather follows Cambridge's season but storms are intentionally much more frequent. Events settle in the background even when nobody is viewing this page.</p></section>
-    <section class="moon-card"><span class="moon-icon">${status.moon.icon}</span><div><p class="eyebrow">Lunar influence</p><h2>${escapeHtml(status.moon.name)}</h2><p>${escapeHtml(status.moon.effect)}</p><small>About ${status.moon.ageDays.toFixed(1)} lunar days old · next phase in ${formatDuration(status.moon.nextPhaseAt - currentTime)}</small></div></section>
-    <section><div class="section-heading"><div><p class="eyebrow">Current conditions</p><h2>Weather</h2></div><a href="${escapeHtml(status.climateSource)}" rel="external noreferrer">Cambridge 1991–2020 baseline</a></div><div class="weather-grid">${weather || '<p>Discover a world to receive its weather.</p>'}</div><p class="muted">Storms can damage or sink ships already at sea and may wake a Kraken.</p></section>
-    <section><p class="eyebrow">Route threats</p><h2>Active creatures</h2><div class="creature-grid">${creatureCards || '<p>No event creatures are currently active on your known routes.</p>'}</div></section>
-    <section><h2>Recent creature outcomes</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Creature</th><th>Route</th><th>Outcome</th></tr></thead><tbody>${recent || '<tr><td colspan="4">No recent outcomes.</td></tr>'}</tbody></table></div></section>
-    <section><h2>Your hunts</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Creature</th><th>Damage dealt</th><th>Damage taken</th><th>Outcome</th></tr></thead><tbody>${attacks || '<tr><td colspan="5">You have not hunted a world creature yet.</td></tr>'}</tbody></table></div></section>`;
+    <section><h2>City operations</h2><div class="city-grid">${cities}</div></section><script src="/node/map.js?v=20260821a" defer></script>`;
 }
 
 function worldEventsPage(player, catalog, status, vehicles, currentTime) {
-  const weatherPresentation = {
-    clear: ['&#9728;', 'Clear'], cloud: ['&#9729;', 'Cloudy'],
-    rain: ['&#127783;', 'Rain'], storm: ['&#9928;', 'Storm']
-  };
   const weather = status.weather.map((entry) => {
-    const [icon, label] = weatherPresentation[entry.condition] ?? ['?', entry.condition];
-    return `<article class="weather-card weather-${entry.condition}"><span class="weather-icon">${icon}</span><div><h3>${escapeHtml(entry.mapName)}</h3><p><strong>${escapeHtml(label)}</strong> | ${entry.temperatureC.toFixed(1)}&deg;C | ${entry.windKph} km/h wind${entry.rainfallMm ? ` | ${entry.rainfallMm} mm rain` : ''}</p><small>Changes in ${formatDuration(entry.endsAt - currentTime)}</small></div></article>`;
+    const [icon, label] = weatherPresentation(entry.condition);
+    return `<article class="weather-card weather-${entry.condition}"><span class="weather-icon">${icon}</span><div><h3>${escapeHtml(entry.mapName)}</h3><p><strong>${escapeHtml(label)}</strong> | ${entry.temperatureC.toFixed(1)}&deg;C | ${entry.windKph} km/h wind${entry.rainfallMm ? ` | ${entry.rainfallMm} mm precipitation` : ''}</p></div></article>`;
   }).join('');
   const active = status.creatures.filter((creature) => creature.status === 'active');
   const creatureCards = active.map((creature) => {
     const attackOptions = creature.attackOptions ?? [];
-    const hunterTiers = creature.hunterRarities.map(
-      (rarity) => catalog.settings.rarity_color_names[rarity]
-    ).join(' / ');
-    const rewardDescription = creature.rewardType === 'ore'
-      ? `Drops up to ${Number(creature.oreDrop).toLocaleString('en-GB')} Ore for the killer's free cargo space.`
-      : 'The killing vehicle fills every remaining cargo slot with treasure.';
-    const pursuitRows = (creature.pursuers ?? []).map((pursuit) =>
-      `<li><strong>${pursuit.own ? 'Your ' : `${escapeHtml(pursuit.playerName)}'s `}${escapeHtml(pursuit.vehicleName)}</strong> will intercept at ${Math.round(pursuit.encounterLocation).toLocaleString('en-GB')} km in ${formatDuration(pursuit.encounterAt - currentTime)}.</li>`
-    ).join('');
+    const healthRatio = Number(creature.maxHp) > 0
+      ? Math.max(0, Math.min(1, Number(creature.hp) / Number(creature.maxHp))) : 0;
+    const condition = healthRatio >= 0.99 ? 'Unhurt' : healthRatio >= 0.4 ? 'Wounded' : 'Critical';
+    const conditionClass = condition.toLowerCase();
     const attack = attackOptions.length
-      ? `<form method="post" action="/events/creatures/${creature.id}/attack"><label>Attacking vehicle<select name="vehicleId" required>${attackOptions.map((option) => `<option value="${option.vehicleId}">${escapeHtml(option.vehicleName)} | ${Number(option.speed).toFixed(1)} km/h | intercept in ${formatDuration(option.encounterAt - currentTime)} | ${option.freeCapacity} bounty slots</option>`).join('')}</select></label><button>Send to intercept</button></form>`
-      : '<p class="muted">No compatible idle vehicle can reach it before it enters the city.</p>';
-    return `<article class="creature-card creature-${creature.type} rarity-${creature.rarity}"><header><span class="creature-icon">${escapeHtml(creature.icon)}</span><div><p class="eyebrow">${escapeHtml(creature.mapName)} · ${escapeHtml(creature.rarityName)}</p><h3>${escapeHtml(creature.name)}</h3></div></header><dl><div><dt>Route</dt><dd>${escapeHtml(creature.routeName)}</dd></div><div><dt>Position</dt><dd>${Math.round(creature.location).toLocaleString('en-GB')} / ${Number(creature.length).toLocaleString('en-GB')} km</dd></div><div><dt>Movement</dt><dd>${Number(creature.speed).toFixed(1)} km/h toward ${escapeHtml(creature.destinationCityName)}</dd></div><div><dt>Arrival</dt><dd>${formatDuration(creature.arrivesAt - currentTime)}</dd></div><div><dt>Combat class</dt><dd>${escapeHtml(hunterTiers)} vehicles</dd></div><div><dt>Drop</dt><dd>${escapeHtml(creature.rewardType === 'ore' ? `${creature.oreDrop} Ore` : 'Treasure')}</dd></div></dl><div class="creature-health"><span style="width:${Math.max(0, creature.hp / creature.maxHp * 100)}%"></span></div><p>${Math.ceil(creature.hp)}/${Math.ceil(creature.maxHp)} health | ${creature.attackCount} completed attack${creature.attackCount === 1 ? '' : 's'}</p>${pursuitRows ? `<h4>Vehicles underway</h4><ul>${pursuitRows}</ul>` : ''}${attack}<p class="muted">${escapeHtml(rewardDescription)}</p></article>`;
+      ? `<form class="threat-action" method="post" action="/events/creatures/${creature.id}/attack"><label>Vehicle<select name="vehicleId" required>${attackOptions.map((option) => `<option value="${option.vehicleId}">${escapeHtml(option.vehicleName)}</option>`).join('')}</select></label><button>Launch hunt</button></form>`
+      : '';
+    return `<article class="threat-card creature-card threat-creature creature-${creature.type} rarity-${creature.rarity}"><div class="threat-mark"><img src="${escapeHtml(creature.icon)}" alt="" aria-hidden="true"></div><div class="threat-card-body"><header><div><p class="eyebrow">${escapeHtml(creature.mapName)} | ${escapeHtml(creature.rarityName)}</p><h3>${escapeHtml(creature.name)}</h3></div><span class="threat-condition threat-condition-${conditionClass}">${condition}</span></header><dl class="threat-facts"><div><dt>Route</dt><dd>${escapeHtml(creature.routeName)}</dd></div><div><dt>Heading</dt><dd>${escapeHtml(creature.destinationCityName)}</dd></div></dl>${attack}</div></article>`;
   }).join('');
   const recent = status.creatures.filter((creature) => creature.status !== 'active')
     .map((creature) => `<tr><td>${new Date(creature.resolvedAt).toLocaleString('en-GB')}</td><td>${escapeHtml(creature.name)}</td><td>${escapeHtml(creature.routeName)}</td><td>${creature.status === 'defeated' ? 'Defeated by a vehicle' : `Entered ${escapeHtml(creature.destinationCityName)}`}</td></tr>`).join('');
@@ -2925,41 +3318,25 @@ function worldEventsPage(player, catalog, status, vehicles, currentTime) {
   }).join('');
   const activeGhosts = (status.ghosts ?? []).filter((ghost) => !ghost.defeatedAt);
   const ghostCards = activeGhosts.map((ghost) => {
-    const progress = ghost.arrivesAt > ghost.departedAt
-      ? Math.max(0, Math.min(100, (currentTime - ghost.departedAt)
-        / (ghost.arrivesAt - ghost.departedAt) * 100)) : 0;
-    const bountyCount = ghost.bounty.reduce(
-      (sum, item) => sum + Number(item.quantity ?? 0), 0);
-    return `<article class="ghost-card ghost-${ghost.kind}"><header><img src="${escapeHtml(ghost.icon)}" alt=""><div><p class="eyebrow">${ghost.kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'} | Tier ${ghost.rarity}</p><h3>${escapeHtml(ghost.name)}</h3></div></header><p><strong>${escapeHtml(ghost.routeName)}</strong></p><div class="ghost-route-progress"><span style="width:${progress.toFixed(1)}%"></span></div><p>Patrolling at ${Number(ghost.speed).toFixed(1)} km/h | ${bountyCount} spectral bounty thing${bountyCount === 1 ? '' : 's'} aboard</p><p class="muted">Send a land vehicle or ship in the same combat class on <strong>Pillage</strong> orders. The ghost patrol will engage it; “attack patrols” lets your hunter strike first.</p></article>`;
+    return `<article class="threat-card ghost-card threat-ghost ghost-${ghost.kind} rarity-${ghost.rarity}"><div class="threat-mark"><img src="${escapeHtml(ghost.icon)}" alt="" aria-hidden="true"></div><div class="threat-card-body"><header><div><p class="eyebrow">${ghost.kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'} | ${escapeHtml(ghost.routeName)}</p><h3>${escapeHtml(ghost.name)}</h3></div><span class="threat-condition threat-condition-restless">Restless</span></header><dl class="threat-facts"><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)}</dd></div><div><dt>Heading</dt><dd>Patrolling</dd></div></dl></div></article>`;
   }).join('');
   const recentGhosts = (status.ghosts ?? []).filter((ghost) => ghost.defeatedAt)
     .map((ghost) => `<tr><td>${new Date(ghost.defeatedAt).toLocaleString('en-GB')}</td><td>${escapeHtml(ghost.name)}</td><td>${escapeHtml(ghost.routeName)}</td><td>${ghost.defeatedByName ? `Banished by ${escapeHtml(ghost.defeatedByName)}` : 'Banished'}${ghost.defeatedBattleId ? ` | <a href="/battles/${ghost.defeatedBattleId}">battle report</a>` : ''}</td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Living world</p><h1>World Events</h1></div><p>Tiered creatures travel as live route actors. A matching land vehicle or ship must physically intercept one before it enters the city.</p></section>
-    <section class="moon-card"><span class="moon-icon">${status.moon.icon}</span><div><p class="eyebrow">Lunar influence</p><h2>${escapeHtml(status.moon.name)}</h2><p>${escapeHtml(status.moon.effect)}</p><small>About ${status.moon.ageDays.toFixed(1)} lunar days old | next phase in ${formatDuration(status.moon.nextPhaseAt - currentTime)}</small></div></section>
-    <section><div class="section-heading"><div><p class="eyebrow">Current conditions</p><h2>Weather</h2></div><a href="${escapeHtml(status.climateSource)}" rel="external noreferrer">Cambridge 1991-2020 baseline</a></div><div class="weather-grid">${weather || '<p>Discover a world to receive its weather.</p>'}</div><p class="muted">Storms can damage or sink ships already at sea and may wake a Kraken.</p></section>
-    <section><p class="eyebrow">Route traffic</p><h2>Traveling creatures</h2><div class="creature-grid">${creatureCards || '<p>No event creatures are currently traveling on your known routes.</p>'}</div></section>
-    <section class="ghost-section"><p class="eyebrow">The restless dead</p><h2>Haunted routes</h2><p>Destroyed vehicles and sunken ships may rise again, stronger and hungry for cargo. They patrol forever until another miner banishes them.</p><div class="ghost-grid">${ghostCards || '<p>No ghosts currently haunt your known routes.</p>'}</div></section>
+  return `<section class="page-title"><div><p class="eyebrow">Living world</p><h1>World Events</h1></div><p>The sky shifts. The routes answer. Watch what moves through the regions you know.</p></section>
+    <section class="moon-card"><span class="moon-icon">${status.moon.icon}</span><div><p class="eyebrow">Lunar influence</p><h2>${escapeHtml(status.moon.name)}</h2><p>The light changes. So does the world.</p><small>About ${status.moon.ageDays.toFixed(1)} lunar days old | next phase in ${formatDuration(status.moon.nextPhaseAt - currentTime)}</small></div></section>
+    <section><div class="section-heading"><div><p class="eyebrow">Current conditions</p><h2>Weather</h2></div></div><div class="weather-grid">${weather || '<p>Discover a region to read its weather.</p>'}</div><p class="muted">Read the sky before you send anything beyond the city.</p></section>
+    <section class="threat-board"><div class="section-heading"><div><p class="eyebrow">Known routes</p><h2>Route threats</h2></div><p>Keep watch beyond the city lights.</p></div><div class="threat-group"><h3>Living threats</h3><div class="threat-grid">${creatureCards || '<p class="threat-empty">For now, the living routes are quiet.</p>'}</div></div><div class="threat-group"><h3>The restless dead</h3><div class="threat-grid">${ghostCards || '<p class="threat-empty">Nothing dead is moving on the routes you know.</p>'}</div></div></section>
     <section><h2>Recently banished</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Ghost</th><th>Route</th><th>Outcome</th></tr></thead><tbody>${recentGhosts || '<tr><td colspan="4">No ghosts have been banished recently.</td></tr>'}</tbody></table></div></section>
     <section><h2>Recent creature outcomes</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Creature</th><th>Route</th><th>Outcome</th></tr></thead><tbody>${recent || '<tr><td colspan="4">No recent outcomes.</td></tr>'}</tbody></table></div></section>
     <section><h2>Your attacks</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Creature</th><th>Damage dealt</th><th>Damage taken</th><th>Outcome</th></tr></thead><tbody>${attacks || '<tr><td colspan="5">You have not attacked a world creature yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
-function movePage(player, catalog, currentTime) {
-  const city = catalogCityForId(catalog, player.cityId);
-  const home = catalogCityForId(catalog, player.homeCityId);
-  const defaultSpecialisation = catalogSpecialisationForId(
-    catalog, catalog.settings.default_specialisation_id
-  );
-  const moveCooldown = Number(catalog.settings.home_move_cooldown_ms);
-  const cooldown = Math.max(0, (player.lastMovedAt ?? 0) + moveCooldown - currentTime);
-  return `<section class="page-title"><div><p class="eyebrow">Relocation</p><h1>Move to ${escapeHtml(city.name)}</h1></div><a href="/map">Back to map</a></section>
-    <section class="move-warning"><p>Would you like to make <strong>${escapeHtml(city.name)}</strong> your new home?</p><p>Moving:</p><ul><li>Changes your home city from ${escapeHtml(home.name)}.</li><li>Nullifies every meld so each can be dismantled back into its original things in your former home city.</li><li>Resets your meld count and specialisation to ${escapeHtml(defaultSpecialisation.name)}.</li><li>Dismantles your avatar into its component things in your former home city.</li><li>Prevents another move for ${formatDuration(moveCooldown)}.</li></ul><p>You cannot move while employed, working, or while a factory you own is busy or rented.</p>${player.brokenMeldIds.length ? '<p class="capacity-warning">Deconstruct all existing broken melds before moving again.</p>' : cooldown ? `<p class="capacity-warning">You can move again in ${formatDuration(cooldown)}.</p>` : `<form method="post" action="/move"><input type="hidden" name="cityId" value="${player.cityId}"><button>Move to ${escapeHtml(city.name)}</button></form>`}</section>`;
-}
-
 function historyPage() {
   return `<article class="editorial-page history-page">
-    <header class="page-title"><div><p class="eyebrow">An independent restoration</p><h1>The story of MineThings</h1></div><p>A strange, patient browser world about digging up our own civilisation—and the long route that brought it back.</p></header>
-    <nav class="article-index" aria-label="History sections"><a href="#beginnings">Beginnings</a><a href="#world">The world</a><a href="#players">Players</a><a href="#economy">Bitcoin</a><a href="#community">Community tools</a><a href="#shutdown">Shutdown</a><a href="#restoration">Restoration</a><a href="#legacy">Legacy</a><a href="#sources">Sources</a></nav>
+    <nav class="editorial-switcher" aria-label="Public records"><a href="/history" aria-current="page">History</a><a href="/legal">Legal</a></nav>
+    <header class="editorial-hero" data-mark="H"><div class="editorial-hero-copy"><p class="eyebrow">MineThings archive · Record 01</p><h1>The story of MineThings</h1><p class="editorial-deck">A strange, patient browser world about digging up our own civilisation—and the long route that brought it back.</p></div><div class="editorial-stamp" aria-hidden="true"><span>World first recorded</span><strong>2009</strong><small>Reopened 2026</small></div></header>
+    <div class="editorial-facts" aria-label="History at a glance"><div><span>Original world</span><strong>2009—2020</strong></div><div><span>Restoration</span><strong>MineThings 2</strong></div><div><span>Evidence</span><strong>Public · code · operator</strong></div></div>
+    <div class="editorial-layout"><nav class="article-index" aria-label="History sections"><strong>On this page</strong><a href="#beginnings">Beginnings</a><a href="#world">The world</a><a href="#players">Players</a><a href="#economy">Bitcoin</a><a href="#community">Community tools</a><a href="#shutdown">Shutdown</a><a href="#restoration">Restoration</a><a href="#legacy">Legacy</a><a href="#sources">Sources</a></nav><div class="editorial-copy history-timeline">
     <section id="beginnings"><p class="source-kind">Public record</p><h2>2009: a world under the ash</h2><p>MineThings appeared in browser-game directories in October 2009. Its premise skipped two thousand years beyond the Yellowstone eruption: humanity had returned to a buried Earth and made an economy from whatever its miners could recover. It was free to play, persistent, deliberately slow and more interested in ownership and trade than in a conventional quest line.</p></section>
     <section id="world"><p class="source-kind">Public record and surviving code</p><h2>A game made from distance</h2><p>Mines kept working while their owners were away. Things existed in particular cities, local markets developed different shortages, and vehicles made geography matter. Land vehicles, ships and aircraft carried cargo; weapons, modifications, piracy, professions, factories, melds and the shared Oil Field gradually turned an idle collection game into an intricate social simulation.</p><p>The surviving PHP, MySQL and Python code corroborates the dense mechanics described by contemporary players: city-scoped possessions, batteries, rarity tiers, player-priced markets, combat and an unusually uncompromising economy.</p></section>
     <section id="players"><p class="source-kind">Contemporary player record</p><h2>2010: fascinating, slow and sometimes awkward</h2><p>An Ars Technica discussion begun on 20 October 2010 preserves something directory listings cannot: disagreement among actual players. They described starter mines, rarity tiers, melding, buying and renting mines, discovering towns, moving goods, and the dangers of pirates and highwaymen. They also argued about the very slow opening pace, paid acceleration and an interface whose controls were not always obvious.</p><p>The thread records separate Aso and Bromo servers with different worlds and economies. Veterans could make Aso easier through cheap equipment and loans; the newer Bromo offered a more even race to discover items. That tension—between patient discovery, social cooperation, economic advantage and deliberate inconvenience—was central to MineThings rather than incidental to it.</p></section>
@@ -2988,6 +3365,7 @@ function historyPage() {
       <li><a href="https://www.reddit.com/r/gamingsuggestions/comments/lbbijg" rel="external noreferrer">2021 similar-games request</a>—later memory of automatic randomized loot and crafting.</li>
       <li><a href="https://www.reddit.com/r/AndroidGaming/comments/10d7hts" rel="external noreferrer">2023 AndroidGaming reminiscence</a>—later classification as a scavenging and item-collection game.</li>
     </ol><p>Public sources were last reviewed on 22 August 2026. Repository evidence means the archived source and SQL material shipped with this restoration. Operator-supplied history is first-hand testimony from gordonstretch and is labelled separately where public records do not corroborate it.</p></section>
+    </div></div>
   </article>`;
 }
 
@@ -2996,16 +3374,20 @@ function legalPage(seller, paymentConfig) {
   const sellerDetails = seller.legalName && seller.legalAddress && seller.legalEmail
     ? `<dl class="legal-identity"><dt>Legal seller</dt><dd>${escapeHtml(seller.legalName)}</dd><dt>Geographic address</dt><dd>${escapeHtml(seller.legalAddress)}</dd><dt>Contact</dt><dd><a href="mailto:${escapeHtml(seller.legalEmail)}">${escapeHtml(seller.legalEmail)}</a></dd></dl>`
     : `<p class="legal-notice"><strong>Real-money checkout is not available.</strong> The operator's legal name, geographic address and contact email have not been configured for publication.</p>`;
-  return `<article class="editorial-page legal-page"><header class="page-title"><div><p class="eyebrow">Version ${LEGAL_VERSION}</p><h1>${escapeHtml(version.title)}</h1></div><p>Effective ${escapeHtml(version.effectiveDate)} · governed by the law of England and Wales</p></header>
-    <p class="legal-summary">These terms allocate risk as far as the law permits. They do not remove consumer rights or liabilities that cannot lawfully be excluded.</p>
-    <section><h2>1. Operator and status</h2><p>MineThings is an unofficial, independently operated restoration presented under the name <strong>${escapeHtml(seller.operatorName)}</strong>. It is not endorsed by or affiliated with the original creator, previous operators, PayPal or any owner of third-party names or artwork. Those rights remain with their respective owners.</p>${sellerDetails}</section>
-    <section><h2>2. Accounts and acceptable use</h2><p>You must provide accurate registration information, protect your password and use only accounts you are authorised to control. Do not exploit vulnerabilities, automate abusive traffic, interfere with other miners, launder value, harass people, or transmit unlawful material. Accounts may be restricted or closed where reasonably necessary for security, abuse prevention or operation of the service.</p></section>
-    <section><h2>3. Experimental service</h2><p>The restoration is provided on an experimental, as-available basis. Game rules, balancing and availability may change. No promise is made that the service will be uninterrupted, error-free, permanently available, or that game data can always be preserved.</p></section>
-    <section><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Contact the seller before initiating a dispute where practical.</p></section>
-    <section><h2>5. Privacy</h2><p>MineThings stores account name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data, game activity, security/session information, and—when payments are used—PayPal order and capture identifiers, amount, currency, status, consent and audit entries. Email is used to verify account ownership and deliver essential security messages. PayPal independently processes payment and payer information under its own privacy terms.</p><p>Data is retained while the account or associated legal/audit need continues, then deleted or anonymised when reasonably possible. You may contact the published seller address to request access, correction or deletion, subject to legal and fraud-prevention retention requirements.</p></section>
-    <section><h2>6. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
-    <section><h2>7. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
-    <p class="muted">Payment mode: ${escapeHtml(paymentConfig.environment)}. This page is operational information, not legal advice to the operator.</p>
+  return `<article class="editorial-page legal-page"><nav class="editorial-switcher" aria-label="Public records"><a href="/history">History</a><a href="/legal" aria-current="page">Legal</a></nav>
+    <header class="editorial-hero" data-mark="§"><div class="editorial-hero-copy"><p class="eyebrow">MineThings archive · Record 02</p><h1>${escapeHtml(version.title)}</h1><p class="editorial-deck">The rules, rights and responsibilities governing this independent restoration.</p></div><div class="editorial-stamp" aria-hidden="true"><span>Current version</span><strong>${LEGAL_VERSION}</strong><small>England and Wales</small></div></header>
+    <div class="editorial-facts" aria-label="Legal document status"><div><span>Effective</span><strong>${escapeHtml(version.effectiveDate)}</strong></div><div><span>Jurisdiction</span><strong>England and Wales</strong></div><div><span>Payment mode</span><strong>${escapeHtml(paymentConfig.environment)}</strong></div></div>
+    <p class="legal-summary" role="note"><strong>Mandatory rights remain.</strong> These terms allocate risk as far as the law permits. They do not remove consumer rights or liabilities that cannot lawfully be excluded.</p>
+    <div class="editorial-layout"><nav class="article-index" aria-label="Legal sections"><strong>On this page</strong><a href="#operator">Operator</a><a href="#accounts">Accounts</a><a href="#service">Service</a><a href="#payments">Payments</a><a href="#privacy">Privacy</a><a href="#liability">Liability</a><a href="#changes">Changes</a></nav><div class="editorial-copy legal-clauses">
+    <section id="operator"><h2>1. Operator and status</h2><p>MineThings is an unofficial, independently operated restoration presented under the name <strong>${escapeHtml(seller.operatorName)}</strong>. It is not endorsed by or affiliated with the original creator, previous operators, PayPal or any owner of third-party names or artwork. Those rights remain with their respective owners.</p>${sellerDetails}</section>
+    <section id="accounts"><h2>2. Accounts and acceptable use</h2><p>You must provide accurate registration information, protect your password and use only accounts you are authorised to control. Do not exploit vulnerabilities, automate abusive traffic, interfere with other miners, launder value, harass people, or transmit unlawful material. Accounts may be restricted or closed where reasonably necessary for security, abuse prevention or operation of the service.</p></section>
+    <section id="service"><h2>3. Experimental service</h2><p>The restoration is provided on an experimental, as-available basis. Game rules, balancing and availability may change. No promise is made that the service will be uninterrupted, error-free, permanently available, or that game data can always be preserved.</p></section>
+    <section id="payments"><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Contact the seller before initiating a dispute where practical.</p></section>
+    <section id="privacy"><h2>5. Privacy</h2><p>MineThings stores account name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data, game activity, security/session information, and—when enabled—a Google account identifier and the email returned during Google sign-in. When payments are used, it also stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries. Email is used to verify account ownership and deliver essential security messages. Google and PayPal independently process sign-in or payment information under their own privacy terms.</p><p>Data is retained while the account or associated legal/audit need continues, then deleted or anonymised when reasonably possible. You may contact the published seller address to request access, correction or deletion, subject to legal and fraud-prevention retention requirements.</p></section>
+    <section id="liability"><h2>6. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
+    <section id="changes"><h2>7. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
+    <p class="editorial-document-note">Payment mode: ${escapeHtml(paymentConfig.environment)}. This page is operational information, not legal advice to the operator.</p>
+    </div></div>
   </article>`;
 }
 
@@ -3045,7 +3427,7 @@ function verifyCapturedOrder(order, purchase) {
 function adminPaymentsPage(bundles, purchases) {
   const bundleRows = bundles.map((bundle) => { const formId = `bundle-${bundle.id}`; return `<tr><td><input form="${formId}" name="name" value="${escapeHtml(bundle.name)}" maxlength="80" required></td><td><input form="${formId}" type="number" name="credits" value="${bundle.credits}" min="1" required></td><td><input form="${formId}" type="number" name="amountMinor" value="${bundle.amountMinor}" min="1" required> pence</td><td><label class="check-row"><input form="${formId}" type="checkbox" name="enabled" value="1"${bundle.enabled ? ' checked' : ''}><span>Enabled</span></label></td><td><form id="${formId}" method="post" action="/admin/credit-bundles/${bundle.id}"><button>Save</button></form></td></tr>`; }).join('');
   const purchaseRows = purchases.map((purchase) => `<tr><td><a href="/admin/players/${purchase.playerId}">${escapeHtml(purchase.playerName)}</a></td><td>MT-${purchase.id}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td>${escapeHtml(purchase.status)}</td><td>${escapeHtml(purchase.providerOrderId || '—')}</td><td>${escapeHtml(purchase.reviewReason || '')}</td></tr>`).join('');
-  return `${adminTabs()}<section class="page-title"><div><p class="eyebrow">Payment operations</p><h1>Credits and PayPal</h1></div><p>Bundle changes affect new orders only. Every purchase keeps its original price and credit snapshot.</p></section><section><h2>Bundles</h2><div class="table-scroll"><table class="bundle-admin-table"><thead><tr><th>Name</th><th>Credits</th><th>Price</th><th>State</th><th></th></tr></thead><tbody>${bundleRows}</tbody></table></div></section><section><h2>Recent purchases</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Receipt</th><th>Bundle</th><th>Amount</th><th>Status</th><th>Order</th><th>Review</th></tr></thead><tbody>${purchaseRows || '<tr><td colspan="7">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
+  return `${adminTabs('payments')}<section class="page-title"><div><p class="eyebrow">Payment operations</p><h1>Credits and PayPal</h1></div><p>Bundle changes affect new orders only. Every purchase keeps its original price and credit snapshot.</p></section><section><h2>Bundles</h2><div class="table-scroll"><table class="bundle-admin-table"><thead><tr><th>Name</th><th>Credits</th><th>Price</th><th>State</th><th></th></tr></thead><tbody>${bundleRows}</tbody></table></div></section><section><h2>Recent purchases</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Receipt</th><th>Bundle</th><th>Amount</th><th>Status</th><th>Order</th><th>Review</th></tr></thead><tbody>${purchaseRows || '<tr><td colspan="7">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function helpPage(catalog) {
@@ -3066,12 +3448,13 @@ function helpPage(catalog) {
     / Number(settings.oil_units_per_liter);
   const shotDown = Number(settings.aircraft_shot_down_chance);
   const shieldedShotDown = Math.max(0, shotDown - Number(settings.aircraft_shield_offset));
-  return `<section class="page-title"><div><img class="legacy-title-image" src="/img/help-page.gif" alt=""><h1>Help</h1></div></section>
+  return `<section class="page-title"><div><p class="eyebrow">Field manual</p><h1>Help</h1></div><p>Everything a miner needs to work the world, trade intelligently, and survive the routes.</p></section>
     <section class="help-copy"><h2>Mine things</h2><p>Your mines work every ${formatDuration(Number(settings.find_interval_ms))} while you are away. Switch a mine between things and its gold or ore resource.</p>
-    <h2>Trade</h2><p>Every thing has a fixed, utility-adjusted base gold value. Local listings and bids use that value automatically, with a ${formatGold((Number(settings.foreign_market_price_multiplier) - 1) * 100)}% premium in cities that do not offer the item’s mine type. Items without a fixed origin use their base value everywhere. Listed things move into city-local market escrow, stop counting toward inventory capacity, and return to that city if canceled.</p>
-    <h2>Factories</h2><p>Every miner can build and operate factories in their home city, with at most ${settings.max_active_factories} owner-operated factories active at once and ${settings.factory_max_workers} workers assigned to each. ${escapeHtml(factorySpecialist.name)}-specialised factories produce ${formatGold(Number(factorySpecialist.bonuses.factoryThroughput) * 100)}% more throughput. Built, idle factories can be bought, sold, or listed for a ${formatDuration(Number(settings.factory_rental_duration_ms))} rental. Anyone may rent one, hire workers for it, and use it only to repair damaged things. At expiry, workers are idled and the factory returns to its owner; unfinished repair ore and the damaged thing return to the renter.</p>
+    <h2>Trade</h2><p>Every thing has an established local minimum listing price, with a ${formatGold((Number(settings.foreign_market_price_multiplier) - 1) * 100)}% premium in cities that do not offer the item’s mine type. Set your own listing price or bid on a valid market tick; bids may sit below the listing minimum. Open orders reserve nothing: listed things stay in that city’s inventory and bid gold remains spendable until a trade executes.</p>
+    <h2>Melds</h2><p>Stage recipe things at any discovered region’s capital. Meld storage is shared across regions and does not use inventory capacity; creation can draw from that storage and the capital you are currently visiting.</p>
+    <h2>Factories</h2><p>Regional capitals do not move existing factories or change their established city rules. Every miner may have at most ${settings.max_active_factories} owner-operated factories active at once and ${settings.factory_max_workers} workers assigned to each. ${escapeHtml(factorySpecialist.name)}-specialised factories produce ${formatGold(Number(factorySpecialist.bonuses.factoryThroughput) * 100)}% more throughput. Built, idle factories can be bought, sold, or listed for a ${formatDuration(Number(settings.factory_rental_duration_ms))} rental. Anyone may rent one, hire workers for it, and use it only to repair damaged things. At expiry, workers are idled and the factory returns to its owner; unfinished repair ore and the damaged thing return to the renter.</p>
     <h2>Travel</h2><p>Activate a vehicle thing, choose a compatible land, sea, or air route, and wait for it to arrive. Arrivals reveal new cities on the map.</p>
-    <h2>Weather, moon, creatures, and ghosts</h2><p>Each world receives a new six-hour weather period based on the time-of-year at Cambridge, with storms made deliberately more frequent. Natural creature activity is rolled globally at a random interval between ${formatDuration(Number(settings.world_creature_roll_min_interval_ms))} and ${formatDuration(Number(settings.world_creature_roll_max_interval_ms))}; storms make a Kraken eligible for those rolls. Kraken, Land Whales, White Whales, Orca Pods, Elephant Herds, and T-Rex appear from Yellow through Orange and travel toward the nearest city as live route traffic. Send a land vehicle or ship in the same combat class from either endpoint; combat starts only when they physically meet. White Whales, Orca Pods, Elephant Herds, and T-Rex drop tier-scaled Ore, while Kraken and Land Whales retain treasure bounty. Destroyed land vehicles and sunken ships may rise as Ghost Riders or Ghost Ships. They patrol the route of their death and attack pillagers in their combat class. The lunar phase changes storms, creature activity, combat, treasure, Dwarf captures, and ghost risings. See <a href="/events">World Events</a> for the live effects.</p>
+    <h2>Weather, moon, creatures, and ghosts</h2><p>The world does not wait for miners. Weather shifts, strange shapes cross familiar routes, and some wrecks refuse to stay dead. Check <a href="/events">World Events</a> before sending a vehicle beyond the city, and only risk what you are prepared to lose.</p>
     <h2>Dwarves</h2><p>After a random delay within ${formatDuration(Number(settings.dwarf_find_max_delay_ms))}, each Dwarf stored in a city finds one thing in its configured rarity range, using only that city's mine types. Every Dwarf has ${dwarfRisk} chance to disappear after each find and may stow away on a compatible land or sea journey. Mining can also uncover a captive Dwarf; it immediately joins that city's inventory and begins finding things in the normal Dwarf cycle.</p>
     <h2>Aircraft and the ore thieves</h2><p>Every specialisation can fly ore-thief missions from the city where ore is mined; ${escapeHtml(pilot.name)} flies ${formatGold(Number(pilot.bonuses.aircraftSpeed) * 100)}% faster. ${escapeHtml(searchPlane)} missions take ${formatDuration(Number(settings.aircraft_search_duration_ms))} before speed bonuses. Once the location is known, ${escapeHtml(bomber)} aircraft can attack it, and ${escapeHtml(helicopter)} aircraft recover ore after its destruction.</p><p>Aircraft approaching the base have a ${formatGold(shotDown * 100)}% chance of being shot down, reduced to ${formatGold(shieldedShotDown * 100)}% by an active ${escapeHtml(shield)}. A lost aircraft also loses its cargo. Every ${settings.aircraft_melds_per_slot} melds permits one aircraft in flight at a time.</p>
     <h2>Oil Field</h2><p>Every miner can operate the field. ${escapeHtml(helicopter)} aircraft deploy machines on the outer field, ${escapeHtml(searchPlane)} aircraft reveal other miners’ oil, and ${escapeHtml(bomber)} aircraft attack occupied hexes with ${escapeHtml(bombNames)} bombs. ${escapeHtml(pilot.name)}-specialised deployments last ${formatGold(Number(pilot.bonuses.oilMachineLife) * 100)}% longer. Pumps, power networks, pipes, and pads turn ${formatGold(litersPerBarrel)} litres into each ${escapeHtml(oil)} barrel.</p></section>`;
@@ -3082,18 +3465,13 @@ export function createApp(options = {}) {
   const store = options.store ?? new SqliteStore(options.databaseFile ?? path.join(ROOT, 'data', 'minethings.sqlite'), {
     legacyJsonFile: options.legacyJsonFile ?? path.join(ROOT, 'data', 'players.json')
   });
-  let initialCatalog = options.catalog;
+  let initialCatalog = store.loadCatalog();
   if (!initialCatalog) {
-    initialCatalog = store.loadCatalog();
-    if (!initialCatalog) {
-      store.seedCatalog(loadLegacyCatalog(options.sqlPath));
-      initialCatalog = store.loadCatalog();
-    }
-  }
-  if (!options.catalog) {
-    store.ensureWorldMaps();
+    store.seedCatalog(options.catalog ?? loadLegacyCatalog(options.sqlPath));
     initialCatalog = store.loadCatalog();
   }
+  store.ensureWorldMaps();
+  initialCatalog = store.loadCatalog();
   if (!initialCatalog) throw new Error('The live database does not contain a game catalog.');
   const production = options.production ?? process.env.NODE_ENV === 'production';
   const secureCookies = options.secureCookies ?? production;
@@ -3107,6 +3485,14 @@ export function createApp(options = {}) {
     throw new Error(`Mandatory email verification is not configured: ${emailStatus.missing.join(', ')}.`);
   }
   const emailClient = options.emailClient ?? (emailStatus.ready ? new EmailClient(emailConfig) : null);
+  const googleConfig = googleAuthConfiguration(options.googleAuth ?? {});
+  const googleStatus = googleAuthReadiness(googleConfig, production);
+  if (googleConfig.enabled && !googleStatus.ready) {
+    throw new Error(`Google login is not configured: ${googleStatus.missing.join(', ')}.`);
+  }
+  const googleClient = options.googleAuthClient
+    ?? (googleStatus.ready ? new GoogleAuthClient(googleConfig) : null);
+  const googleLoginEnabled = Boolean(googleStatus.ready && googleClient);
   const configuredAdministrators = options.adminNames ?? process.env.MINETHINGS_ADMINS ?? '';
   for (const name of String(configuredAdministrators).split(',').map((entry) => entry.trim()).filter(Boolean)) {
     store.database.prepare('UPDATE players SET authority = MAX(authority, 5) WHERE name = ? COLLATE NOCASE')
@@ -3117,6 +3503,14 @@ export function createApp(options = {}) {
   const previewBindings = new PreviewBindingRegistry({ now });
   store.expireMessages(now());
   const sessions = new Map();
+  const googleAuthAttempts = new Map();
+  const pendingGoogleSignups = new Map();
+  const pruneTemporaryAuth = (records, currentTime) => {
+    for (const [key, record] of records) {
+      if (record.expiresAt <= currentTime) records.delete(key);
+    }
+    while (records.size >= 1000) records.delete(records.keys().next().value);
+  };
   const previewKey = (kind, vehicleId) => `${kind}:${vehicleId}`;
   const rememberedPreview = (session, kind, vehicleId) => {
     const key = previewKey(kind, vehicleId);
@@ -3217,6 +3611,7 @@ export function createApp(options = {}) {
     store.settleFactories(now());
     store.settleOilField(now());
     store.settleWorldEvents(now());
+    store.settleMines(now(), random);
     maintenanceWorker = new Worker(new URL('./maintenance-worker.js', import.meta.url), {
       workerData: { databaseFile: store.filename, busyTimeoutMs: 250 },
       execArgv: process.execArgv.filter((argument) => !argument.startsWith('--input-type'))
@@ -3232,7 +3627,11 @@ export function createApp(options = {}) {
       if (message?.type === 'tick-complete' || message?.type === 'tick-error') {
         maintenanceBusy = false;
       }
-      if (message?.type === 'tick-complete') wakeLiveUpdates();
+      // A failed subsystem can still leave committed work from earlier phases,
+      // including an independently delivered findings digest.
+      if (message?.type === 'tick-complete' || message?.type === 'tick-error') {
+        wakeLiveUpdates();
+      }
       if (message?.type === 'tick-error'
         && !['SQLITE_BUSY', 'SQLITE_BUSY_TIMEOUT'].includes(message.error?.code)) {
         console.error(`Background maintenance failed: ${message.error?.message ?? 'unknown error'}`);
@@ -3268,13 +3667,15 @@ export function createApp(options = {}) {
   let liveDatabaseWatcher = null;
   let unsubscribeLiveWake = () => {};
   let liveUpdatesClosed = false;
-  const sendLiveEvent = (client, event, payload) => {
+  const sendLiveEvent = (client, event, payload, eventId = null) => {
     if (client.response.destroyed || client.response.writableEnded) {
       liveClients.delete(client);
       return;
     }
     try {
-      client.response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+      const idLine = Number.isSafeInteger(Number(eventId)) && Number(eventId) >= 0
+        ? `id: ${Number(eventId)}\n` : '';
+      client.response.write(`${idLine}event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
     } catch {
       liveClients.delete(client);
     }
@@ -3282,6 +3683,22 @@ export function createApp(options = {}) {
   const relevantLiveScopes = (client, events) => [...new Set(events
     .map((entry) => entry.scope)
     .filter((scope) => client.all || client.scopes.has(scope)))];
+  const sendFindingEvents = (client, events) => {
+    const findings = events.filter((entry) => entry.eventType === 'items-found'
+      && entry.scope === client.playerScope && entry.payload);
+    if (!findings.length) return;
+    sendLiveEvent(client, 'items-found', {
+      noticeKey: `findings:${findings.map((entry) => entry.id).join(',')}`,
+      revision: findings.at(-1).id,
+      items: findings.map((entry) => entry.payload)
+    }, findings.at(-1).id);
+  };
+  const sendBattleEvents = (client, events) => {
+    for (const event of events.filter((entry) => entry.eventType === 'battle-complete'
+      && entry.scope === client.playerScope && entry.payload)) {
+      sendLiveEvent(client, 'battle-complete', event.payload, event.id);
+    }
+  };
   const scheduleLiveDrain = (delay = liveDebounceMs) => {
     if (liveUpdatesClosed) return;
     if (liveDrainRunning) {
@@ -3306,8 +3723,12 @@ export function createApp(options = {}) {
         if (!events.length) break;
         liveCursor = events.at(-1).id;
         for (const client of liveClients) {
+          sendFindingEvents(client, events);
+          sendBattleEvents(client, events);
           const scopes = relevantLiveScopes(client, events);
-          if (scopes.length) sendLiveEvent(client, 'change', { revision: liveCursor, scopes });
+          if (scopes.length) sendLiveEvent(
+            client, 'change', { revision: liveCursor, scopes }, liveCursor
+          );
         }
       } while (events.length >= 2000);
       if (liveCursor > 10000 && liveCursor - livePrunedAt >= 1000) {
@@ -3368,6 +3789,7 @@ export function createApp(options = {}) {
       .get(session.playerId);
     const client = {
       response,
+      playerScope: `player:${session.playerId}`,
       scopes: new Set([`player:${session.playerId}`,
         ...requestedTopics.map((topic) => `topic:${topic}`)]),
       all: requestedTopics.includes('all') && player?.authority > 0
@@ -3379,16 +3801,30 @@ export function createApp(options = {}) {
       'X-Accel-Buffering': 'no'
     });
     response.write('retry: 2000\n\n');
-    const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
+    const lastEventHeader = Array.isArray(request.headers['last-event-id'])
+      ? request.headers['last-event-id'][0] : request.headers['last-event-id'];
+    const since = Math.max(0, Number(url.searchParams.get('since')) || 0,
+      Number(lastEventHeader) || 0);
     liveClients.add(client);
-    const missed = store.liveUpdatesAfter(since, 10000);
-    const missedScopes = relevantLiveScopes(client, missed);
-    if (missedScopes.length) {
-      sendLiveEvent(client, 'change', {
-        revision: missed.at(-1).id, scopes: missedScopes
-      });
-    } else {
-      sendLiveEvent(client, 'ready', { revision: store.latestLiveUpdateId() });
+    let catchupCursor = since;
+    let lastSentId = since;
+    let missed;
+    do {
+      missed = store.liveUpdatesAfter(catchupCursor, 10000);
+      if (!missed.length) break;
+      catchupCursor = missed.at(-1).id;
+      sendFindingEvents(client, missed);
+      const missedScopes = relevantLiveScopes(client, missed);
+      if (missedScopes.length) {
+        sendLiveEvent(client, 'change', {
+          revision: catchupCursor, scopes: missedScopes
+        }, catchupCursor);
+        lastSentId = catchupCursor;
+      }
+    } while (missed.length >= 10000);
+    if (lastSentId < catchupCursor || catchupCursor === since) {
+      const revision = store.latestLiveUpdateId();
+      sendLiveEvent(client, 'ready', { revision }, revision);
     }
     const remove = () => liveClients.delete(client);
     request.once('close', remove);
@@ -3497,12 +3933,16 @@ export function createApp(options = {}) {
       if (!staticFile(request, response, LEGACY_ROOT, url.pathname.slice('/app'.length))) response.writeHead(404).end('Not found');
       return;
     }
-    if (url.pathname === '/node/finding-queue.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/finding-queue.js', 'no-store')) response.writeHead(404).end('Not found');
-      return;
-    }
     if (url.pathname === '/node/live-updates.js') {
       if (!staticFile(request, response, PUBLIC_ROOT, '/live-updates.js', 'no-store')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/navigation.js') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/navigation.js', 'no-store')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/vehicle-journey.js') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-journey.js', 'no-store')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/flash-modal.js') {
@@ -3525,8 +3965,27 @@ export function createApp(options = {}) {
       if (!staticFile(request, response, PUBLIC_ROOT, '/img/map-background.png')) response.writeHead(404).end('Not found');
       return;
     }
+    if (/^\/node\/maps\/[a-z0-9-]+\.png$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/maps', '/img');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
     if (url.pathname === '/node/landing-rebirth.jpg') {
       if (!staticFile(request, response, PUBLIC_ROOT, '/img/landing-rebirth.jpg')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/favicon.svg') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/favicon.svg')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/crypto\/[a-z]+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/crypto', '/crypto');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/creatures\/[a-z-]+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/creatures', '/img/creatures');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
       return;
     }
     if (/^\/node\/dwarf-images\/dwarf-\d+\.png$/.test(url.pathname)) {
@@ -3559,11 +4018,12 @@ export function createApp(options = {}) {
       return;
     }
     if (url.pathname === '/app.css') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/app.css')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/app.css', 'no-cache')) response.writeHead(404).end('Not found');
       return;
     }
 
-    const sessionId = cookies(request).mt_session;
+    const requestCookies = cookies(request);
+    const sessionId = requestCookies.mt_session;
     const session = sessions.get(sessionId);
     if (request.method === 'GET' && url.pathname === '/api/live-updates') {
       openLiveUpdates(request, response, session, url);
@@ -3571,60 +4031,10 @@ export function createApp(options = {}) {
     }
     const liveFragment = request.method === 'GET'
       && request.headers['x-minethings-live-update'] === '1';
-    const findingPoll = request.method === 'GET' && url.pathname === '/api/findings';
-    const findingAcknowledgement = request.method === 'POST'
-      && url.pathname === '/api/findings/ack';
-    if (findingPoll || findingAcknowledgement) {
-      if (!session) {
-        redirect(response, '/');
-        return;
-      }
-      try {
-        // Finding polls run continuously in every authenticated tab. Validate
-        // only the session subject here; do not hydrate their entire game state
-        // or consume page notices that this JSON response cannot display.
-        if (!store.hasPlayer(session.playerId) || !store.isEmailVerified(session.playerId)) {
-          redirect(response, '/');
-          return;
-        }
-        if (findingPoll) {
-          const delivery = store.leaseFindings(
-            session.playerId, url.searchParams.get('lease') ?? '', now()
-          );
-          if (delivery.state !== 'ready') {
-            responseJson(response, 200, delivery);
-            return;
-          }
-          const findingCatalog = options.catalog ?? store.loadCatalog();
-          if (!findingCatalog) {
-            responseHtml(response, 503, layout('Catalog unavailable',
-              '<section class="error"><h1>Catalog unavailable</h1><p>The live database does not contain a game catalog.</p></section>',
-              null));
-            return;
-          }
-          responseJson(response, 200, {
-            ...delivery, html: findingQueueHtml(delivery.findings, findingCatalog)
-          });
-          return;
-        }
-        const form = await readForm(request);
-        const acknowledged = store.acknowledgeFindings(session.playerId, form.token);
-        responseJson(response, 200, { acknowledged });
-      } catch (error) {
-        const destination = requestDestination(request);
-        if (request.method === 'GET' && destination === url.pathname) {
-          responseRequestError(response, error);
-        } else {
-          session.flash = error.message;
-          redirect(response, destination);
-        }
-      }
-      return;
-    }
 
     // loadCatalog returns the current versioned snapshot. The store reuses it
     // until either this connection or another SQLite connection changes catalog data.
-    const catalog = options.catalog ?? store.loadCatalog();
+    const catalog = store.loadCatalog();
     if (!catalog) {
       responseHtml(response, 503, layout('Catalog unavailable',
         '<section class="error"><h1>Catalog unavailable</h1><p>The live database does not contain a game catalog.</p></section>',
@@ -3637,9 +4047,18 @@ export function createApp(options = {}) {
       const mineId = Number(url.pathname.split('/')[2]);
       try {
         const form = await readForm(request);
-        store.detonateMine(
+        const result = store.detonateMine(
           session.playerId, mineId, Number(form.itemId), Number(form.count), catalog, now(), random
         );
+        const items = findingNoticeItems(result.finds, catalog, {
+          source: 'explosives', cityId: result.cityId, foundAt: result.foundAt
+        });
+        if (items.length) {
+          session.findingNotice = {
+            noticeKey: `findings:${crypto.randomUUID()}`,
+            items
+          };
+        }
         redirect(response, `/mines/${mineId}/equipment?detonated=1`);
       } catch (error) {
         session.flash = error.message;
@@ -3652,9 +4071,11 @@ export function createApp(options = {}) {
     let flash;
     try {
       if (session && !maintenanceRunning) {
+        store.settleMines(now(), random);
         store.runBumUpdate(now(), random);
         store.runDwarfUpdate(now(), random);
         store.settleFactories(now());
+        store.sendDailyFindingDigests(now());
         store.expireMessages(now());
       }
       player = session
@@ -3666,14 +4087,15 @@ export function createApp(options = {}) {
       }
       if (player) {
         player.currentPath = url.pathname;
-        player.cityName = catalogCityForId(catalog, player.cityId).name;
+        const activeCity = catalogCityForId(catalog, player.cityId);
+        const activeMap = catalog.maps.find((map) => map.id === activeCity.mapId);
+        if (!activeMap) throw new Error(`Missing map for city ${activeCity.id}.`);
+        player.cityName = activeCity.name;
+        player.mapId = activeMap.id;
+        player.mapName = activeMap.name;
+        player.mapSlug = activeMap.slug;
+        player.weather = store.currentWeatherForMap(activeMap.id, now());
         player.batteryRemaining = Math.max(0, player.batteryExpiresAt - now());
-        player.findingPollMinIntervalMs =
-          positiveCatalogInteger(catalog, 'finding_poll_min_interval_ms');
-        player.findingPollEmptyIntervalMs =
-          positiveCatalogInteger(catalog, 'finding_poll_empty_interval_ms');
-        player.findingPollMaxIntervalMs =
-          positiveCatalogInteger(catalog, 'finding_poll_max_interval_ms');
         player.liveUpdateRevision = () => store.latestLiveUpdateId();
       }
       flash = liveFragment ? undefined : session?.flash;
@@ -3682,9 +4104,11 @@ export function createApp(options = {}) {
         if (player) {
           player.quietNotice = session.quietNotice;
           player.meldReveal = session.meldReveal;
+          if (player.emailVerified) player.findingNotice = session.findingNotice;
         }
         delete session.quietNotice;
         delete session.meldReveal;
+        if (!player || player.emailVerified) delete session.findingNotice;
       }
     } catch (error) {
       const destination = requestDestination(request);
@@ -3700,13 +4124,23 @@ export function createApp(options = {}) {
     }
     const verificationPaths = new Set([
       '/verify-email', '/verify-email/resend', '/verify-email/email',
-      '/verify-email/confirm', '/logout', '/legal', '/history', '/health'
+      '/verify-email/confirm', '/logout', '/legal', '/history', '/health',
+      '/auth/google', '/auth/google/callback', '/auth/google/register'
     ]);
     if (player && !player.emailVerified && !verificationPaths.has(url.pathname)) {
       redirect(response, '/verify-email');
       return;
     }
     const setFlash = (message) => { if (session) session.flash = message; };
+    const setFindingNotice = (findings, metadata = {}) => {
+      if (!session) return;
+      const items = findingNoticeItems(findings, catalog, metadata);
+      if (!items.length) return;
+      session.findingNotice = {
+        noticeKey: `findings:${crypto.randomUUID()}`,
+        items
+      };
+    };
     const setQuietNotice = (message) => { if (session) session.quietNotice = message; };
     const setMeldReveal = (melds) => {
       if (session && melds.length) session.meldReveal = meldRevealPayload(melds, catalog);
@@ -3729,6 +4163,154 @@ export function createApp(options = {}) {
         responseHtml(response, 200, layout('History', historyPage(), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/legal') {
         responseHtml(response, 200, layout('Legal', legalPage(seller, paymentConfig), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/auth/google') {
+        if (!googleLoginEnabled) throw new Error('Google login is not configured on this server.');
+        const attemptedAt = now();
+        pruneTemporaryAuth(googleAuthAttempts, attemptedAt);
+        const state = crypto.randomBytes(32).toString('base64url');
+        const nonce = crypto.randomBytes(32).toString('base64url');
+        const codeVerifier = crypto.randomBytes(48).toString('base64url');
+        googleAuthAttempts.set(state, {
+          nonce,
+          codeVerifier,
+          sessionId: player ? sessionId : null,
+          playerId: player?.id ?? null,
+          expiresAt: attemptedAt + 10 * 60 * 1000
+        });
+        redirect(response, googleClient.authorizationUrl({
+          state,
+          nonce,
+          codeChallenge: googlePkceChallenge(codeVerifier)
+        }));
+      } else if (request.method === 'GET' && url.pathname === '/auth/google/callback') {
+        if (!googleLoginEnabled) throw new Error('Google login is not configured on this server.');
+        const completedAt = now();
+        pruneTemporaryAuth(googleAuthAttempts, completedAt);
+        const state = String(url.searchParams.get('state') ?? '');
+        const attempt = googleAuthAttempts.get(state);
+        if (attempt) googleAuthAttempts.delete(state);
+        if (!attempt) throw new Error('This Google login attempt expired or was already used.');
+        if (url.searchParams.has('error')) throw new Error('Google sign-in was cancelled.');
+        const code = String(url.searchParams.get('code') ?? '');
+        if (!code || code.length > 4096) throw new Error('Google did not return a valid sign-in code.');
+        let profile;
+        try {
+          profile = await googleClient.exchangeCode(code, {
+            codeVerifier: attempt.codeVerifier,
+            nonce: attempt.nonce
+          });
+        } catch {
+          throw new Error('Google could not verify this sign-in. Start again and choose your account.');
+        }
+        const identity = {
+          provider: 'google', subject: profile.subject, email: profile.email
+        };
+        const identityOwner = store.playerByExternalIdentity('google', profile.subject, completedAt);
+        if (attempt.playerId !== null) {
+          if (attempt.sessionId !== sessionId || session?.playerId !== attempt.playerId) {
+            throw new Error('Your miner session changed while Google was signing in. Start again.');
+          }
+          if (identityOwner && identityOwner.id !== attempt.playerId) {
+            throw new Error('That Google account is already linked to another miner.');
+          }
+          const target = store.playerById(attempt.playerId, completedAt);
+          if (!target || target.suspended) throw new Error('This miner cannot be linked.');
+          store.linkExternalIdentity(target.id, identity, completedAt);
+          session.flash = identityOwner
+            ? 'This Google account is already linked.' : 'Google login linked successfully.';
+          redirect(response, '/account');
+        } else {
+          const emailOwner = identityOwner ?? store.playerByEmail(profile.email, completedAt);
+          if (emailOwner) {
+            if (emailOwner.suspended) throw new Error('This miner account is suspended.');
+            store.linkExternalIdentity(emailOwner.id, identity, completedAt);
+            const id = crypto.randomBytes(32).toString('base64url');
+            sessions.set(id, { playerId: emailOwner.id, flash: 'Signed in with Google.' });
+            redirect(response, '/', [
+              sessionCookie(id, catalog, secureCookies), clearGoogleSignupCookie(secureCookies)
+            ]);
+          } else {
+            pruneTemporaryAuth(pendingGoogleSignups, completedAt);
+            const signupId = crypto.randomBytes(32).toString('base64url');
+            pendingGoogleSignups.set(signupId, {
+              profile,
+              identity,
+              expiresAt: completedAt + 10 * 60 * 1000
+            });
+            redirect(response, '/auth/google/register',
+              googleSignupCookie(signupId, secureCookies));
+          }
+        }
+      } else if (request.method === 'GET' && url.pathname === '/auth/google/register') {
+        if (player) {
+          redirect(response, '/');
+          return;
+        }
+        const signupId = String(requestCookies.mt_google_signup ?? '');
+        const pending = pendingGoogleSignups.get(signupId);
+        if (!pending || pending.expiresAt <= now()) {
+          if (signupId) pendingGoogleSignups.delete(signupId);
+          responseHtml(response, 400, layout('Google signup expired',
+            '<section class="error"><h1>Google signup expired</h1><p>Return home and start Google sign-in again.</p><a href="/">Return home</a></section>', null));
+          return;
+        }
+        responseHtml(response, 200, layout('Choose miner name',
+          googleRegistrationPage(pending.profile, catalog), null, flash));
+      } else if (request.method === 'POST' && url.pathname === '/auth/google/register') {
+        if (player) {
+          redirect(response, '/');
+          return;
+        }
+        const signupId = String(requestCookies.mt_google_signup ?? '');
+        const pending = pendingGoogleSignups.get(signupId);
+        const registeredAt = now();
+        if (!pending || pending.expiresAt <= registeredAt) {
+          if (signupId) pendingGoogleSignups.delete(signupId);
+          throw new Error('Google signup expired. Start Google sign-in again.');
+        }
+        const form = await readForm(request);
+        if (form.acceptTerms !== '1') {
+          throw new Error('You must accept the Terms and Privacy Notice to register.');
+        }
+        const name = normalizeMinerName(form.name);
+        const nameMinimum = Number(catalog.settings.miner_name_min_length);
+        const nameMaximum = Number(catalog.settings.miner_name_max_length);
+        const nameLength = [...name].length;
+        if (!/^[\p{L}\p{M}\p{N}\p{P}\p{S} ]+$/u.test(name)
+          || nameLength < nameMinimum || nameLength > nameMaximum) {
+          throw new Error(`Miner names must be ${nameMinimum}–${nameMaximum} visible Unicode characters. Control, formatting, and unusual whitespace characters are not allowed.`);
+        }
+        const passwordMinimum = Number(catalog.settings.password_min_length);
+        if (String(form.password ?? '').length < passwordMinimum) {
+          throw new Error(`Passwords must contain at least ${passwordMinimum} characters.`);
+        }
+        if (store.findPlayer(name, registeredAt)) throw new Error('That miner name is already taken.');
+        if (store.emailInUse(pending.profile.email)) {
+          throw new Error('That email now belongs to another miner. Return home and sign in again.');
+        }
+        if (store.playerByExternalIdentity('google', pending.profile.subject, registeredAt)) {
+          throw new Error('That Google account is already linked to a miner. Return home and sign in again.');
+        }
+        const saved = store.addPlayerWithExternalIdentity(createPlayer(
+          name, pending.profile.email, await hashPasswordAsync(form.password), catalog,
+          registeredAt, random
+        ), { version: LEGAL_VERSION, acceptedAt: registeredAt }, pending.identity, registeredAt);
+        pendingGoogleSignups.delete(signupId);
+        const id = crypto.randomBytes(32).toString('base64url');
+        const newSession = { playerId: saved.id, flash: 'Miner created and verified with Google.' };
+        const starterItems = findingNoticeItems(saved.discoveries, catalog, {
+          source: 'new-mine', cityId: saved.cityId, foundAt: registeredAt
+        });
+        if (starterItems.length) {
+          newSession.findingNotice = {
+            noticeKey: `findings:starter:${saved.id}`,
+            items: starterItems
+          };
+        }
+        sessions.set(id, newSession);
+        redirect(response, '/', [
+          sessionCookie(id, catalog, secureCookies), clearGoogleSignupCookie(secureCookies)
+        ]);
       } else if (request.method === 'GET' && url.pathname === '/verify-email') {
         const token = String(url.searchParams.get('token') ?? '');
         if (token) {
@@ -3804,25 +4386,32 @@ export function createApp(options = {}) {
         redirect(response, '/verify-email');
       } else if (request.method === 'GET' && url.pathname === '/') {
         if (player) {
+          const transientNotices = {
+            quietNotice: player.quietNotice,
+            meldReveal: player.meldReveal,
+            findingNotice: player.findingNotice
+          };
           let battery = { expiresAt: player.batteryExpiresAt };
           if (!liveFragment) {
-            if (expireRentalMines(player, now())) store.savePlayer(player);
+            store.expirePlayerRentalMines(player.id, now());
             battery = store.rechargeBattery(player.id, now());
             player = store.playerById(player.id, now());
           }
           player.currentPath = url.pathname;
-          player.cityName = catalogCityForId(catalog, player.cityId).name;
+          const activeCity = catalogCityForId(catalog, player.cityId);
+          const activeMap = catalog.maps.find((map) => map.id === activeCity.mapId);
+          if (!activeMap) throw new Error(`Missing map for city ${activeCity.id}.`);
+          player.cityName = activeCity.name;
+          player.mapId = activeMap.id;
+          player.mapName = activeMap.name;
+          player.mapSlug = activeMap.slug;
+          player.weather = store.currentWeatherForMap(activeMap.id, now());
           player.batteryRemaining = Math.max(0, battery.expiresAt - now());
-          player.findingPollMinIntervalMs =
-            positiveCatalogInteger(catalog, 'finding_poll_min_interval_ms');
-          player.findingPollEmptyIntervalMs =
-            positiveCatalogInteger(catalog, 'finding_poll_empty_interval_ms');
-          player.findingPollMaxIntervalMs =
-            positiveCatalogInteger(catalog, 'finding_poll_max_interval_ms');
+          Object.assign(player, transientNotices);
           player.liveUpdateRevision = () => store.latestLiveUpdateId();
         }
         responseHtml(response, 200, layout('Home', player
-          ? dashboardPage(player, catalog, now()) : landingPage(catalog), player, flash));
+          ? dashboardPage(player, catalog, now()) : landingPage(catalog, googleLoginEnabled), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/register') {
         const form = await readForm(request);
         if (form.acceptTerms !== '1') throw new Error('You must accept the Terms and Privacy Notice to register.');
@@ -3847,6 +4436,15 @@ export function createApp(options = {}) {
         ), { version: LEGAL_VERSION, acceptedAt: registeredAt });
         const id = crypto.randomBytes(32).toString('base64url');
         const newSession = { playerId: saved.id, flash: 'Check your email to unlock this miner.' };
+        const starterItems = findingNoticeItems(saved.discoveries, catalog, {
+          source: 'new-mine', cityId: saved.cityId, foundAt: registeredAt
+        });
+        if (starterItems.length) {
+          newSession.findingNotice = {
+            noticeKey: `findings:starter:${saved.id}`,
+            items: starterItems
+          };
+        }
         sessions.set(id, newSession);
         try {
           await sendEmailVerification(saved.id, request, newSession, registeredAt);
@@ -4132,18 +4730,20 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const vehicleId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
-        let aggressiveMask = 0;
-        for (const rarity of vehicleRarities(catalog).map((entry) => entry.id)) {
-          if (form[`attack_${rarity}`] === 'on') aggressiveMask |= 1 << rarity;
-        }
+        const additionalRouteIds = Object.entries(form)
+          .filter(([key]) => /^journeyRoute_\d+$/.test(key))
+          .sort(([first], [second]) => Number(first.slice(13)) - Number(second.slice(13)))
+          .map(([, value]) => Number(value));
         const journey = store.sendVehicle(player.id, vehicleId, Number(form.routeId), now(), {
-          travelOrder: form.travelOrder, aggressiveMask,
-          aggressiveVsSentry: form.attackSentry === 'on'
+          travelOrder: form.travelOrder,
+          aggressiveVsSentry: form.attackSentry === 'on', additionalRouteIds
         });
         store.awardStone(player.id, 'Travelled', now());
         const destinationName = journey.mission ? 'the ore-thief mission'
-          : catalogCityForId(catalog, journey.destinationCityId).name;
-        setFlash(`Vehicle sent to ${destinationName}; travel time ${formatDuration(journey.duration)}.${journey.battleId ? ' An encounter occurred.' : ''}`);
+          : vehicleRouteDestinationLabel(
+            player, catalog, player.cityId, journey.destinationCityId
+          );
+        setFlash(`Vehicle sent to ${destinationName}; travel time ${formatDuration(journey.duration)}.${journey.itineraryLegCount > 1 ? ` ${journey.itineraryLegCount - 1} onward leg${journey.itineraryLegCount === 2 ? '' : 's'} queued.` : ''}${journey.battleId ? ' An encounter occurred.' : ''}`);
         redirect(response, journey.battleId ? `/battles/${journey.battleId}` : `/vehicles/${vehicleId}`);
       } else if (request.method === 'POST' && /^\/vehicles\/\d+\/rename$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -4318,10 +4918,17 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const report = store.battleReport(player.id, Number(url.pathname.split('/')[2]));
         responseHtml(response, 200, layout('Battle report', battlePage(report), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/ratings/prizes') {
+        if (!requirePlayer()) return;
+        responseHtml(response, 200, layout('Season prizes', combatSeasonPrizesPage(
+          store.combatSeasonReport(now()), store.combatSeasonPrizes(), catalog
+        ), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/ratings') {
         if (!requirePlayer()) return;
         responseHtml(response, 200, layout('Ratings',
-          ratingsPage(store.vehicleRatings(url.searchParams.get('class')), catalog), player, flash));
+          ratingsPage(store.combatSeasonReport(
+            now(), url.searchParams.get('class')
+          ), catalog), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/containers') {
         if (!requirePlayer()) return;
         responseHtml(response, 200, layout('Containers', containersPage(store.containersForPlayer(player.id)), player, flash));
@@ -4358,8 +4965,11 @@ export function createApp(options = {}) {
         redirect(response, '/oil-field');
       } else if (request.method === 'POST' && /^\/oil-field\/\d+\/claim$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        store.claimOilBarrel(player.id, Number(url.pathname.split('/')[2]), now());
-        setFlash(`${catalogItemForSetting(catalog, 'oil_item_id').name} barrel moved to your city inventory.`);
+        const form = await readForm(request);
+        const result = store.claimOilBarrel(
+          player.id, Number(url.pathname.split('/')[2]), now(), form.quantity === 'all', true
+        );
+        setFlash(`${result.claimedBarrels} ${catalogItemForSetting(catalog, 'oil_item_id').name} ${result.claimedBarrels === 1 ? 'barrel' : 'barrels'} moved to your city inventory.`);
         redirect(response, '/oil-field');
       } else if (request.method === 'GET' && url.pathname === '/map') {
         if (!requirePlayer()) return;
@@ -4370,18 +4980,11 @@ export function createApp(options = {}) {
         responseHtml(response, 200, layout('Map', mapPage(player, catalog,
           store.knownCityIds(player.id, now()), vehicles,
           url.searchParams.get('world') ?? ''), player, flash));
-      } else if (request.method === 'GET' && url.pathname === '/move') {
-        if (!requirePlayer()) return;
-        if (player.cityId === player.homeCityId) throw new Error('Travel to another discovered city before moving home.');
-        responseHtml(response, 200, layout('Move home', movePage(player, catalog, now()), player, flash));
-      } else if (request.method === 'POST' && url.pathname === '/move') {
-        if (!requirePlayer()) return;
-        const form = await readForm(request);
-        const result = store.moveHomeCity(player.id, Number(form.cityId), now());
-        store.awardStone(player.id, 'Moved', now());
-        const city = catalogCityForId(catalog, result.homeCityId);
-        setFlash(`You now live in ${city.name}. ${result.brokenMeldCount} melds were nullified.`);
-        redirect(response, '/melds');
+      } else if (url.pathname === '/move' && ['GET', 'POST'].includes(request.method)) {
+        if (request.method === 'POST') request.resume();
+        responseHtml(response, 410, layout('Regional capitals',
+          '<section class="page-title"><div><p class="eyebrow">Regional capitals</p><h1>Home moves have ended</h1></div><a href="/map">Open world map</a></section><section class="capital-retired-note"><h2>One shared capital per region</h2><p>Aso’s starting city and each later region’s arrival gateway are now permanent capitals. Your things and existing assets have not been moved. Use the world map to find the capital and surrounding outposts.</p></section>',
+          player, flash));
       } else if (request.method === 'POST' && /^\/cities\/\d+\/select$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const cityId = Number(url.pathname.split('/')[2]);
@@ -4467,6 +5070,39 @@ export function createApp(options = {}) {
             sort: url.searchParams.get('sort') ?? 'recommended'
           }
         ), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/crypto') {
+        if (!requirePlayer()) return;
+        responseHtml(response, 200, layout('Crypto Exchange', cryptoExchangePage(
+          store.cryptoExchange(player.id, url.searchParams.get('range') ?? 'day', now()), catalogCityForId(catalog, player.cityId).name
+        ), player, flash));
+      } else if (request.method === 'POST' && /^\/crypto\/\d+\/(listings|bids)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const form = await readForm(request);
+        const parts = url.pathname.split('/');
+        const order = store.placeCryptoOrder(player.id, Number(parts[2]),
+          parts[3] === 'listings' ? 'sell' : 'buy', form.price, form.quantity, now());
+        setFlash(`${order.side === 'sell' ? 'Listed' : 'Bid for'} ${order.quantity} ${order.currency.symbol} at ${formatGold(order.price)}g each.`);
+        redirect(response, '/crypto');
+      } else if (request.method === 'POST' && /^\/crypto\/\d+\/(buy-now|sell-now)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const form = await readForm(request);
+        const parts = url.pathname.split('/');
+        const trade = parts[3] === 'buy-now'
+          ? store.buyCryptoNow(player.id, Number(parts[2]), form.price, form.quantity, now())
+          : store.sellCryptoNow(player.id, Number(parts[2]), form.price, form.quantity, now());
+        setFlash(`${parts[3] === 'buy-now' ? 'Bought' : 'Sold'} ${trade.quantity} ${trade.currency.symbol} at ${formatGold(trade.price)}g each · ${formatGold(trade.gold)}g total.`);
+        redirect(response, '/crypto');
+      } else if (request.method === 'POST' && /^\/crypto\/orders\/\d+\/cancel$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        store.cancelCryptoOrder(player.id, Number(url.pathname.split('/')[3]));
+        setFlash('Crypto order cancelled.');
+        redirect(response, '/crypto');
+      } else if (request.method === 'POST' && /^\/crypto\/orders\/\d+\/(buy|sell)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const form = await readForm(request);
+        const trade = store.fillCryptoOrder(player.id, Number(url.pathname.split('/')[3]), form.quantity, now());
+        setFlash(`${trade.side === 'sell' ? 'Bought' : 'Sold'} ${trade.quantity} ${trade.currency.symbol} for ${formatGold(trade.gold)}g.`);
+        redirect(response, '/crypto');
       } else if (request.method === 'GET' && url.pathname === '/miners') {
         if (!requirePlayer()) return;
         responseHtml(response, 200, layout('Miners', minersPage(player,
@@ -4480,11 +5116,9 @@ export function createApp(options = {}) {
         responseHtml(response, 200, layout(`${market.ownerName}'s market`, playerMarketPage(market, cityName, catalog), player, flash));
       } else if (request.method === 'POST' && /^\/miners\/[^/]+\/gold-gift$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const name = decodeURIComponent(url.pathname.slice('/miners/'.length, -'/gold-gift'.length));
-        const form = await readForm(request);
-        const transfer = store.transferGold(player.id, name, form.amount, form.note, now());
-        setFlash(`Sent ${formatGold(transfer.amount)}g to ${transfer.recipientName}.`);
-        redirect(response, `/miners/${encodeURIComponent(transfer.recipientName)}`);
+        responseHtml(response, 410, layout('Gold transfers disabled',
+          '<section class="page-title"><div><p class="eyebrow">Retired</p><h1>Gold transfers are disabled</h1></div></section><p>Miners cannot send gold directly to other miners. Player trading remains available through local item and crypto markets.</p>',
+          player, flash));
       } else if (request.method === 'GET' && /^\/miners\/[^/]+$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const name = decodeURIComponent(url.pathname.slice('/miners/'.length));
@@ -4506,12 +5140,16 @@ export function createApp(options = {}) {
         setFlash('Profile updated.');
         redirect(response, `/miners/${encodeURIComponent(player.name)}`);
       } else if (request.method === 'GET' && url.pathname === '/account') {
-        if (requirePlayer()) responseHtml(response, 200, layout('Account', accountPage(player, catalog), player, flash));
+        if (requirePlayer()) responseHtml(response, 200, layout('Account', accountPage(
+          player, catalog, {
+            enabled: googleLoginEnabled,
+            identity: store.externalIdentityForPlayer(player.id, 'google')
+          }
+        ), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/account') {
         if (!requirePlayer()) return;
         const form = await readForm(request);
         store.updatePrivacy(player.id, {
-          publishFindings: form.publishFindings === 'on',
           showMines: form.showMines === 'on'
         });
         setFlash('Privacy settings saved.');
@@ -4520,7 +5158,6 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const form = await readForm(request);
         store.updatePrivacy(player.id, {
-          publishFindings: form.publishFindings === 'on',
           showMines: form.showMines === 'on'
         });
         setFlash('Privacy settings saved.');
@@ -4653,8 +5290,16 @@ export function createApp(options = {}) {
           condition: form.condition, temperatureC: form.temperatureC,
           windKph: form.windKph, rainfallMm: form.rainfallMm
         }, now());
+        const weatherImpacts = [];
+        if (weather.vehiclesDamaged) {
+          weatherImpacts.push(`${weather.vehiclesDamaged} land vehicle${
+            weather.vehiclesDamaged === 1 ? '' : 's'} damaged`);
+        }
+        if (weather.shipsHit) {
+          weatherImpacts.push(`${weather.shipsHit} ship${weather.shipsHit === 1 ? '' : 's'} struck`);
+        }
         setFlash(`${weather.mapName} weather changed to ${weather.condition}.${
-          weather.shipsHit ? ` ${weather.shipsHit} ship${weather.shipsHit === 1 ? '' : 's'} struck.` : ''}`);
+          weatherImpacts.length ? ` ${weatherImpacts.join('; ')}.` : ''}`);
         redirect(response, '/admin/world');
       } else if (request.method === 'GET' && /^\/admin\/players\/\d+$/.test(url.pathname)) {
         if (!requireAdmin()) return;
@@ -4734,7 +5379,7 @@ export function createApp(options = {}) {
         setFlash(`${result.name} ${result.ignored ? 'ignored in public chat' : 'removed from your chat ignore list'}.`);
         redirect(response, requestDestination(request, '/chat'));
       } else if (/^\/banks(?:\/|$)/.test(url.pathname)) {
-        responseHtml(response, 410, layout('Banking removed', '<section class="page-title"><div><p class="eyebrow">Gone</p><h1>Banking has been removed</h1></div></section><p>Old banking accounts and contracts were settled during migration. Send gold gifts from a miner profile.</p>', player, flash));
+        responseHtml(response, 410, layout('Banking removed', '<section class="page-title"><div><p class="eyebrow">Gone</p><h1>Banking has been removed</h1></div></section><p>Old banking accounts and contracts were settled during migration. Direct gold transfers between miners are disabled.</p>', player, flash));
       } else if (request.method === 'POST' && /^\/messages\/[^/]+\/block$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const name = decodeURIComponent(url.pathname.slice('/messages/'.length, -'/block'.length));
@@ -4779,7 +5424,7 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const item = catalog.byId.get(Number(url.pathname.split('/').pop()));
         if (!item) throw new Error('Item not found.');
-        const market = store.marketForItem(item.id, player.cityId);
+        const market = store.marketForItem(item.id, player.cityId, player.id);
         const cityName = catalogCityForId(catalog, player.cityId).name;
         responseHtml(response, 200, layout(`${item.name} market`, itemMarketPage(player, item, market, cityName), player, flash));
       } else if (request.method === 'GET' && /^\/items\/\d+$/.test(url.pathname)) {
@@ -4795,7 +5440,7 @@ export function createApp(options = {}) {
         const damagedItem = item.repairedItemId ? item : catalog.items.find((candidate) => candidate.repairedItemId === item.id);
         const recycleSettings = player && normal ? `<form class="recycle-settings" method="post" action="/items/${normal.id}/recycle-settings"><h2>Auto-recycle findings</h2><p>Factory-made copies remain protected; this setting applies only when you find the item.</p><label class="checkbox-line"><input type="checkbox" name="recycleOnFind"${player.recycleItemIds.includes(normal.id) ? ' checked' : ''}> Automatically recycle this item upon finding</label>${damagedItem ? `<label class="checkbox-line"><input type="checkbox" name="recycleDamagedOnFind"${player.recycleItemIds.includes(damagedItem.id) ? ' checked' : ''}> Automatically recycle its damaged version upon finding</label>` : ''}<button>Save recycling settings</button></form>` : '';
         const description = machineInfo ? machineInfo.text : item.description;
-        const content = `<section class="detail rarity-${item.rarity}${item.damaged ? ' detail-damaged' : ''}" data-item-id="${item.id}"><div class="detail-art"><img class="detail-frame" src="/img/border.png" alt=""><img class="detail-image${item.hasLargeImage ? '' : ' detail-image-fallback'}" src="${item.largeImage}" alt="${escapeHtml(item.name)}" data-large-image="${item.hasLargeImage ? 'original' : 'fallback'}"></div><div class="detail-copy"><p class="eyebrow">${escapeHtml(item.rarityName)}</p><h1>${escapeHtml(item.name)}</h1><p>${escapeHtml(description)}</p>${itemDetailStats(item, catalog, player)}<a href="${player ? '/inventory' : '/'}">Back</a></div></section>${recycleSettings}`;
+        const content = `<section class="detail rarity-${item.rarity}${item.damaged ? ' detail-damaged' : ''}" data-item-id="${item.id}"><div class="detail-art"><img class="detail-frame" src="/img/border.png" alt=""><img class="detail-image${item.hasLargeImage ? '' : ' detail-image-fallback'}" src="${item.largeImage}" alt="${escapeHtml(item.name)}" data-large-image="${item.hasLargeImage ? 'original' : 'fallback'}"></div><div class="detail-copy"><p class="eyebrow">${escapeHtml(item.rarityName)}</p><h1>${escapeHtml(item.name)}</h1><p>${escapeHtml(description)}</p>${itemDetailStats(item, catalog, player)}${player ? `<div class="button-row"><a class="button" href="/market/items/${item.id}">Open local market</a><a class="button secondary" href="/inventory">Back to things</a></div>` : '<a href="/">Back</a>'}</div></section>${recycleSettings}`;
         responseHtml(response, 200, layout(item.name, content, player, flash));
       } else if (request.method === 'POST' && /^\/items\/\d+\/recycle-settings$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -4820,31 +5465,31 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/mines\/\d+\/equipment\/\d+\/equip$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
-        const result = equipMine(player, catalog, Number(parts[2]), Number(parts[4]));
-        store.savePlayer(player);
+        const { result } = store.mutatePlayer(player.id, (current) =>
+          equipMine(current, catalog, Number(parts[2]), Number(parts[4])), null, now());
         const item = catalog.byId.get(Number(parts[4]));
         setFlash(`${item.name} equipped${result.replacedItemId ? '; the previous item returned to local inventory' : ''}.`);
         redirect(response, `/mines/${parts[2]}/equipment`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/equipment\/\d+\/unequip$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
-        const itemId = unequipMine(player, catalog, Number(parts[2]), Number(parts[4]));
-        store.savePlayer(player);
+        const { result: itemId } = store.mutatePlayer(player.id, (current) =>
+          unequipMine(current, catalog, Number(parts[2]), Number(parts[4])), null, now());
         setFlash(`${catalog.byId.get(itemId).name} returned to local inventory.`);
         redirect(response, `/mines/${parts[2]}/equipment`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/robots\/\d+\/assign$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
-        const result = assignRobot(player, catalog, Number(parts[2]), Number(parts[4]));
-        store.savePlayer(player);
+        const { result } = store.mutatePlayer(player.id, (current) =>
+          assignRobot(current, catalog, Number(parts[2]), Number(parts[4])), null, now());
         const robot = catalog.robotByItemId.get(Number(parts[4]));
         setFlash(`MR${robot.model} assigned${result.replacedItemId ? '; the previous robot returned to local inventory' : ''}.`);
         redirect(response, `/mines/${parts[2]}/equipment`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/robots\/unassign$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const mineId = Number(url.pathname.split('/')[2]);
-        const itemId = unassignRobot(player, catalog, mineId);
-        store.savePlayer(player);
+        const { result: itemId } = store.mutatePlayer(player.id, (current) =>
+          unassignRobot(current, catalog, mineId), null, now());
         setFlash(`${catalog.byId.get(itemId).name} returned to local inventory.`);
         redirect(response, `/mines/${mineId}/equipment`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/detonate$/.test(url.pathname)) {
@@ -4855,59 +5500,20 @@ export function createApp(options = {}) {
           player.id, mineId, Number(form.itemId), Number(form.count), catalog, now(), random
         );
         redirect(response, `/mines/${mineId}/equipment?detonated=1`);
-      } else if (request.method === 'POST' && /^\/mines\/\d+\/claim$/.test(url.pathname)) {
-        if (!requirePlayer()) return;
-        const mineId = Number(url.pathname.split('/')[2]);
-        const claimingMine = player.mines.find((candidate) => candidate.id === mineId);
-        const result = claimMine(player, catalog, mineId, now(), random);
-        store.savePlayer(player, { source: 'mine', findings: result.finds, queuedAt: now() });
-        const claimingType = catalog.mineTypes.find((candidate) => candidate.id === claimingMine?.mineTypeId);
-        if (claimingMine?.mineThings === false && claimingType?.hasOre && result.finds.length) {
-          store.awardStone(player.id, 'Extracted', now());
-        }
-        if (result.finds.length && claimingMine?.mineThings !== false) {
-          const equipment = Object.values(claimingMine.equipment ?? {})
-            .map((itemId) => {
-              const entry = catalog.equipmentByItemId.get(Number(itemId));
-              if (!entry) throw new Error(`Missing catalog mining equipment: ${itemId}.`);
-              return entry;
-            });
-          if (equipment.length === catalog.equipmentTypes.length) {
-            store.awardStone(player.id, 'Equipped', now());
-            const rarities = new Set(equipment.map((entry) => entry.rarity));
-            if (rarities.size === 1
-              && equipment[0].rarity >= Number(catalog.settings.achievement_high_rarity_minimum)) {
-              store.awardStone(player.id, 'Decked', now());
-            }
-          }
-          const dwarf = catalog.dwarfByItemId.get(Number(claimingMine.robotItemId));
-          if (dwarf?.rarity === Number(catalog.settings.dwarf_exploitation_rarity)) {
-            store.awardStone(player.id, 'Exploited', now());
-          }
-        }
-        const capturedTier = result.capturedDwarf
-          ? catalog.dwarfByItemId.get(result.capturedDwarf.itemId) : null;
-        if (capturedTier?.rarity === Number(catalog.settings.dwarf_exploitation_rarity)) {
-          store.awardStone(player.id, 'Exploited', now());
-        }
-        const captureNote = result.capturedDwarf
-          ? ` A ${catalog.byId.get(result.capturedDwarf.itemId).name} was caught and will now mine in this city. (${result.moonPhase})`
-          : '';
-        setFlash((result.gold
-          ? `You mined ${formatGold(result.gold)}g!`
-          : `You uncovered ${result.finds.length} ${result.finds.length === 1 ? 'thing' : 'things'}: ${describeFinds(result.finds, catalog)}!`) + captureNote);
-        redirect(response, '/');
       } else if (request.method === 'POST' && /^\/mines\/\d+\/prioritize$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const mine = prioritizeMine(player, catalog, Number(url.pathname.split('/')[2]), now());
-        store.savePlayer(player);
+        const changedAt = now();
+        const { result: mine } = store.mutatePlayer(player.id, (current) =>
+          prioritizeMine(current, catalog, Number(url.pathname.split('/')[2]), changedAt),
+        null, changedAt);
         const type = catalogMineTypeForId(catalog, mine.mineTypeId);
         setFlash(`${type.name} is now top priority.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/mines\/\d+\/oil$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const mine = oilMineBot(player, catalog, Number(url.pathname.split('/')[2]), now());
-        store.savePlayer(player);
+        const changedAt = now();
+        const { result: mine } = store.mutatePlayer(player.id, (current) =>
+          oilMineBot(current, catalog, Number(url.pathname.split('/')[2]), changedAt), null, changedAt);
         setFlash(`Bot oiled for ${formatDuration(Number(catalog.settings.mine_oil_duration_ms))}. It now mines ${formatGold(Number(catalog.settings.mine_oil_buckets_per_hour))} extra buckets per hour.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/bot-parts\/\d+\/buy$/.test(url.pathname)) {
@@ -4919,10 +5525,19 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const mineId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
-        const mine = setMineMode(player, mineId, form.mineThings === '1');
-        store.savePlayer(player);
+        const mode = String(form.mode ?? (form.mineThings === '1' ? 'things' : 'resource'));
+        const cryptoMatch = /^crypto:(\d+)$/.exec(mode);
+        const cryptoId = cryptoMatch ? Number(cryptoMatch[1]) : null;
+        const currentMine = player.mines.find((entry) => entry.id === mineId);
+        const city = currentMine ? catalogCityForId(catalog, currentMine.cityId) : null;
+        if (cryptoId && !cryptoTypesForMap(city?.mapId).some((entry) => entry.id === cryptoId)) {
+          throw new Error('That currency is not available in this region.');
+        }
+        const { result: mine } = store.mutatePlayer(player.id, (current) =>
+          setMineMode(current, mineId, cryptoId ? 'crypto' : mode === 'things' ? 'things' : 'resource', cryptoId), null, now());
         const type = catalogMineTypeForId(catalog, mine.mineTypeId);
-        setFlash(mine.mineThings ? 'This mine will now uncover things.' : `This mine will now extract ${type.hasOre ? 'ore' : 'gold'}.`);
+        const selectedCrypto = mine.cryptoTypeId ? cryptoType(mine.cryptoTypeId) : null;
+        setFlash(selectedCrypto ? `This mine will now produce ${selectedCrypto.name}.` : mine.mineThings ? 'This mine will now uncover things.' : `This mine will now extract ${type.hasOre ? 'ore' : 'gold'}.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/market\/factories\/(sale|rental)\/(listings|bids)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -4980,33 +5595,55 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/market\/mines\/\d+\/buy$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const mineTypeId = Number(url.pathname.split('/')[3]);
-        const mine = buyMine(player, catalog, mineTypeId, now(), random);
-        store.savePlayer(player, {
-          source: 'new-mine',
-          findings: player.discoveries.filter((finding) => finding.mineId === mine.id),
-          queuedAt: now()
-        });
-        store.awardStone(player.id, 'Invested', now());
+        const purchasedAt = now();
+        const { player: updatedPlayer, result: mine } = store.mutatePlayer(
+          player.id,
+          (current) => buyMine(current, catalog, mineTypeId, purchasedAt, random),
+          (createdMine, current) => ({
+            source: 'new-mine',
+            findings: current.discoveries.filter(
+              (finding) => finding.mineId === createdMine.id
+            ),
+            recordedAt: purchasedAt
+          }),
+          purchasedAt
+        );
+        setFindingNotice(
+          updatedPlayer.discoveries.filter((finding) => finding.mineId === mine.id),
+          { source: 'new-mine', cityId: mine.cityId, foundAt: purchasedAt }
+        );
+        store.awardStone(player.id, 'Invested', purchasedAt);
         const type = catalog.mineTypes.find((candidate) => candidate.id === mine.mineTypeId);
         setFlash(`${type.name} Mine purchased with ${catalog.settings.starter_find_count} discoveries.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/market\/mines\/\d+\/rent$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const mineTypeId = Number(url.pathname.split('/')[3]);
-        const mine = rentMine(player, catalog, mineTypeId, now(), random);
-        store.savePlayer(player, {
-          source: 'new-mine',
-          findings: player.discoveries.filter((finding) => finding.mineId === mine.id),
-          queuedAt: now()
-        });
-        store.awardStone(player.id, 'Invested', now());
+        const rentedAt = now();
+        const { player: updatedPlayer, result: mine } = store.mutatePlayer(
+          player.id,
+          (current) => rentMine(current, catalog, mineTypeId, rentedAt, random),
+          (createdMine, current) => ({
+            source: 'new-mine',
+            findings: current.discoveries.filter(
+              (finding) => finding.mineId === createdMine.id
+            ),
+            recordedAt: rentedAt
+          }),
+          rentedAt
+        );
+        setFindingNotice(
+          updatedPlayer.discoveries.filter((finding) => finding.mineId === mine.id),
+          { source: 'new-mine', cityId: mine.cityId, foundAt: rentedAt }
+        );
+        store.awardStone(player.id, 'Invested', rentedAt);
         const type = catalog.mineTypes.find((candidate) => candidate.id === mine.mineTypeId);
         setFlash(`${type.name} Mine rented for ${formatDuration(Number(catalog.settings.mine_rental_duration_ms))} with ${catalog.settings.starter_find_count} discoveries.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/mines\/\d+\/sell$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const refund = sellMine(player, catalog, Number(url.pathname.split('/')[2]));
-        store.savePlayer(player);
+        const { result: refund } = store.mutatePlayer(player.id, (current) =>
+          sellMine(current, catalog, Number(url.pathname.split('/')[2])), null, now());
         setFlash(`Mine resold for ${refund} credits.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/market\/containers\/\d+\/buy$/.test(url.pathname)) {
@@ -5027,13 +5664,29 @@ export function createApp(options = {}) {
         if (!item) throw new Error('Item not found.');
         const form = await readForm(request);
         if (parts[4] === 'listings') {
-          store.placeSellOrder(player.id, item.id, form.quantity, now());
+          store.placeSellOrder(player.id, item.id, form.price, form.quantity, now());
           setFlash('Your listing is now on the local market.');
         } else {
-          store.placeBuyOrder(player.id, item.id, form.quantity, now());
-          setFlash('Your gold is reserved and your bid is now on the local market.');
+          store.placeBuyOrder(player.id, item.id, form.price, form.quantity, now());
+          setFlash('Your bid is now on the local market. Gold is checked when it is filled.');
         }
         redirect(response, `/market/items/${item.id}`);
+      } else if (request.method === 'POST' && /^\/market\/items\/\d+\/(buy-now|sell-now)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const form = await readForm(request);
+        const parts = url.pathname.split('/');
+        const itemId = Number(parts[3]);
+        const item = catalog.byId.get(itemId);
+        if (!item) throw new Error('Item not found.');
+        if (parts[4] === 'buy-now') {
+          const trade = store.buyItemNow(player.id, itemId, form.price, form.quantity, now());
+          setFlash(`Bought ${trade.quantity} ${item.name} at ${formatGold(trade.price)}g each · ${formatGold(trade.gold)}g total.`);
+        } else {
+          const trade = store.sellItemNow(player.id, itemId, form.price, form.quantity, now());
+          store.awardStone(player.id, 'Liquidated', now());
+          setFlash(`Sold ${trade.quantity} ${item.name} at ${formatGold(trade.price)}g each · ${formatGold(trade.gold)}g total.`);
+        }
+        redirect(response, `/market/items/${itemId}`);
       } else if (request.method === 'POST' && /^\/market\/orders\/\d+\/(cancel|buy|sell)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
@@ -5041,7 +5694,7 @@ export function createApp(options = {}) {
         const action = parts[4];
         if (action === 'cancel') {
           store.cancelMarketOrder(player.id, orderId);
-          setFlash('Market order canceled and escrow returned.');
+          setFlash('Market order canceled.');
         } else {
           const form = await readForm(request);
           if (action === 'buy') {
@@ -5060,11 +5713,8 @@ export function createApp(options = {}) {
         const itemId = Number(url.pathname.split('/')[2]);
         const item = catalog.byId.get(itemId);
         if (!item) throw new Error('Item not found.');
-        const form = await readForm(request);
-        const quantity = Number(form.quantity);
-        store.placeSellOrder(player.id, itemId, quantity, now());
-        setFlash(`${quantity} ${quantity === 1 ? 'thing is' : 'things are'} now listed on the local market at ${formatGold(localItemGoldValue(item, catalog, player.cityId))}g each.`);
-        redirect(response, '/inventory');
+        setFlash('Choose your listing price in the local order book.');
+        redirect(response, `/market/items/${itemId}`);
       } else if (request.method === 'POST' && /^\/inventory\/\d+\/meld$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const itemId = Number(url.pathname.split('/')[2]);

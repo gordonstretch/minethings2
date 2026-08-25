@@ -205,14 +205,18 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
     }
     ship.critChance = critChance;
   }
+  const starting = structuredClone(ships);
   const aggressions = [Boolean(aggressive1), Boolean(aggressive2)];
   const shots = [[], []];
+  const portalRounds = [];
   let winner = 0;
   let chainEscape = false;
   const portals = Math.max(ships[0].cannons.length, ships[1].cannons.length);
   outer: for (let round = 1; round <= Number(combatRules.ship_cannon_rounds); round += 1) {
     for (let portal = 1; portal <= portals; portal += 1) {
       const reports = [{ hull: 0, speed: 0, crew: 0 }, { hull: 0, speed: 0, crew: 0 }];
+      const before = ships.map((ship) => ({ hull: ship.hull, speed: ship.speed, crew: ship.crew }));
+      const fired = [null, null];
       for (let side = 0; side < 2; side += 1) {
         const cannon = ships[side].cannons.find((entry) => entry.portal === portal);
         if (!cannon) continue;
@@ -237,9 +241,11 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
         if (random() < ships[side].critChance) damage *= criticalDamageMultiplier;
         const hit = random() < ammo.accuracy;
         if (hit) reports[side][ammo.damageField] = damage;
-        shots[side].push({ round, portal, cannonId: cannon.id, cannonName: cannon.name,
+        const shot = { round, portal, cannonId: cannon.id, cannonName: cannon.name,
           cannonRarity: cannon.rarity, rateOfFire: cannon.rateOfFire, cannonDamage: cannon.damage,
-          type, hit, damage });
+          type, damageField: ammo.damageField, hit, damage };
+        shots[side].push(shot);
+        fired[side] = shot;
       }
       for (let side = 0; side < 2; side += 1) {
         const incoming = reports[(side + 1) % 2];
@@ -247,6 +253,15 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
         ships[side].speed = Math.max(0, ships[side].speed - incoming.speed);
         ships[side].crew = Math.max(0, ships[side].crew - incoming.crew);
       }
+      const after = ships.map((ship) => ({ hull: ship.hull, speed: ship.speed, crew: ship.crew }));
+      for (let side = 0; side < 2; side += 1) {
+        if (!fired[side]) continue;
+        const opponent = (side + 1) % 2;
+        fired[side].targetBefore = before[opponent];
+        fired[side].targetAfter = after[opponent];
+      }
+      if (fired.some(Boolean)) portalRounds.push({ round, portal, before, after,
+        shots: fired.map((shot) => shot ? { ...shot } : null) });
       if (!ships[0].hull || !ships[1].hull) {
         winner = !ships[0].hull && !ships[1].hull ? 0 : !ships[0].hull ? 2 : 1;
         break outer;
@@ -263,7 +278,12 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
       }
     }
   }
+  const cannonPhaseEnding = ships.map((ship) => ({
+    hull: ship.hull, speed: ship.speed, crew: ship.crew
+  }));
+  const cannonPhaseCrew = ships.map((ship) => ship.crew);
   const casualties = [[], []];
+  const boardingRounds = [];
   if (!winner && ships[0].hull && ships[1].hull && !chainEscape) {
     const crews = ships.map((ship) => {
       const weapons = [...ship.crewWeapons].sort((a, b) =>
@@ -275,18 +295,29 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
         (sum, weapon) => sum + (weapon?.strength ?? unarmedCrewStrength), 0));
       if (!strength[0] && !strength[1]) break;
       const boardingRatio = Number(combatRules.ship_boarding_strength_ratio);
-      if (strength[0] >= strength[1] * boardingRatio) { winner = 1; break; }
-      if (strength[1] >= strength[0] * boardingRatio) { winner = 2; break; }
+      if (strength[0] >= strength[1] * boardingRatio) {
+        boardingRounds.push({ round, strength, winner: 1, casualtySide: null });
+        winner = 1; break;
+      }
+      if (strength[1] >= strength[0] * boardingRatio) {
+        boardingRounds.push({ round, strength, winner: 2, casualtySide: null });
+        winner = 2; break;
+      }
       const indices = crews.map((crew) => Math.floor(random() * crew.length));
       const powers = indices.map(
         (index, side) => crews[side][index]?.strength ?? unarmedCrewStrength);
       const loser = powers[0] === powers[1] ? (random() < 0.5 ? 0 : 1) : powers[0] > powers[1] ? 1 : 0;
       const [lost] = crews[loser].splice(indices[loser], 1);
-      casualties[loser].push({ round, weaponId: lost?.id ?? null, weaponName: lost?.name ?? null,
-        rarity: lost?.rarity ?? null });
+      const casualty = { round, weaponId: lost?.id ?? null, weaponName: lost?.name ?? null,
+        rarity: lost?.rarity ?? null };
+      casualties[loser].push(casualty);
+      boardingRounds.push({ round, strength, winner: 0, casualtySide: loser + 1,
+        weaponId: casualty.weaponId, weaponName: casualty.weaponName,
+        rarity: casualty.rarity });
     }
     ships[0].crew = crews[0].length;
     ships[1].crew = crews[1].length;
   }
-  return { winner, ships, shots, casualties, chainEscape };
+  return { winner, ships, starting, shots, portalRounds, cannonPhaseEnding,
+    cannonPhaseCrew, boardingRounds, casualties, chainEscape };
 }

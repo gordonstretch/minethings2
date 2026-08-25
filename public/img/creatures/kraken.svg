@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="kraken-title kraken-desc">
+  <title id="kraken-title">Kraken</title>
+  <desc id="kraken-desc">A scarred black and rust kraken driving jagged tentacles through dark water.</desc>
+  <defs>
+    <filter id="kraken-grit" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".12 .48" numOctaves="2" seed="19" result="grit"/>
+      <feDisplacementMap in="SourceGraphic" in2="grit" scale="1.6" xChannelSelector="R" yChannelSelector="B"/>
+    </filter>
+  </defs>
+  <g id="kraken-silhouette" filter="url(#kraken-grit)">
+    <path fill="#12130f" d="M100 73 82 67 64 73 47 88 28 90 13 81 20 101 38 108 59 104 77 92 92 91Z"/>
+    <path fill="#12130f" d="M94 82 75 92 55 112 35 122 17 119 27 137 48 138 70 126 92 105 108 96Z"/>
+    <path fill="#923815" d="M107 88 95 104 91 123 82 140 66 148 84 151 102 140 111 120 119 101Z"/>
+    <path fill="#12130f" d="M125 88 121 108 126 129 119 148 138 141 143 123 138 102Z"/>
+    <path fill="#923815" d="M144 82 154 99 170 113 176 134 167 148 184 139 188 120 177 100 162 86Z"/>
+    <path fill="#12130f" d="M155 74 178 75 195 67 216 69 229 81 224 61 207 51 187 55 166 62Z"/>
+    <path fill="#12130f" d="M153 88 176 91 195 106 216 109 230 102 222 121 202 128 181 118 160 104Z"/>
+    <path fill="#923815" d="M92 42 107 21 132 13 157 22 172 46 169 72 154 92 126 99 100 89 86 66Z"/>
+    <path fill="#12130f" d="M105 32 126 20 151 28 163 47 157 61 139 52 119 57 97 50Z"/>
+    <path fill="#12130f" d="M97 60 116 51 144 54 162 68 151 88 126 94 104 83Z"/>
+    <path fill="#eee1c5" d="m117 57 22 2-6 13-17-2-7-7Z"/>
+    <path fill="#f19a1c" d="m117 61 11 1-4 6-9-2Z"/>
+    <path fill="#12130f" d="m126 62 5 1-3 6-5-1Z"/>
+    <path fill="#f19a1c" d="m89 47 16 2-10 7ZM151 35l13 13-10 1ZM104 81l19 7-16 2ZM147 78l13-8-5 14Z"/>
+    <path fill="#eee1c5" d="M52 99h8v5h-8ZM40 128h8v5h-8ZM91 125h7v5h-7ZM126 120h7v5h-7ZM173 113h7v5h-7ZM196 109h8v5h-8ZM184 69h8v5h-8Z"/>
+  </g>
+  <g id="kraken-scars">
+    <path fill="none" stroke="#eee1c5" stroke-width="2" stroke-linecap="square" opacity=".72" d="m110 34 14 7-10 6M143 26l-5 14 10 6M94 70l15 3-8 8M145 69l-12 8 15 4M69 86l-16 9 11 3M176 83l15 8-11 4"/>
+    <path fill="none" stroke="#12130f" stroke-width="3" stroke-linecap="square" d="m31 92 15 4M73 118l12-7M132 136l7-12M204 66l13 7"/>
+  </g>
+  <path fill="#f19a1c" d="M8 143h50l-15 5H14ZM188 146h43l-11 5h-38Z" opacity=".75"/>
+</svg>

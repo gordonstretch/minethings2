@@ -31,6 +31,8 @@ test.beforeAll(async () => {
   const player = store.addPlayer(createPlayer(
     'LivePageAudit', '', hashPassword(password), catalog, 1000, () => 0.5
   ));
+  store.database.prepare('UPDATE mines SET next_find_at = 9999999999999 WHERE player_id = ?')
+    .run(player.id);
   playerId = player.id;
   cityId = player.cityId;
   const inventory = store.playerById(player.id, 1000).inventoryByCity[cityId];
@@ -119,6 +121,24 @@ test('patches database changes in place and preserves unfinished forms', async (
   const accountRevision = store.latestLiveUpdateId();
   await page.waitForTimeout(500);
   expect(store.latestLiveUpdateId()).toBe(accountRevision);
+});
+
+test('preserves added journey legs when a live update races the route picker', async ({ page }) => {
+  await login(page);
+  await page.goto(`${base}/vehicles/${loadoutVehicleId}`);
+  const planner = page.locator('[data-journey-planner]');
+  await planner.getByRole('button', { name: 'Add onward leg' }).click();
+  const onward = planner.locator('[data-journey-legs] select');
+  await expect(onward).toHaveCount(1);
+  const selectedRoute = await onward.inputValue();
+  await expect(planner).toHaveAttribute('data-live-dirty', 'true');
+
+  const external = new DatabaseSync(databaseFile);
+  external.prepare('UPDATE players SET credits = credits + 1 WHERE id = ?').run(playerId);
+  external.close();
+
+  await expect(onward).toHaveCount(1);
+  await expect(onward).toHaveValue(selectedRoute);
 });
 
 test('preserves an exact loadout preview across SSE and invalidates it on edit', async ({ page }) => {
@@ -217,6 +237,9 @@ test('follows live chat at the bottom without yanking a reader who scrolled up',
   external.close();
   await page.goto(`${base}/chat`);
   const chatLog = page.locator('#chat-log');
+  await expect(page.locator('.chat-page-title')).toBeVisible();
+  await expect(page.locator('.chat-console')).toBeVisible();
+  await expect(page.locator('#chat-live-status')).toContainText('Live');
   await expect(page.locator('.chat-row-world').filter({ hasText: 'Earlier world event' })).toHaveCount(24);
   const distanceFromBottom = () => chatLog.evaluate((element) =>
     Math.round(element.scrollHeight - element.scrollTop - element.clientHeight));
@@ -251,12 +274,42 @@ test('follows live chat at the bottom without yanking a reader who scrolled up',
   const yellowDwarfItemId = external.prepare(`
     SELECT item_id FROM catalog_dwarf_tiers WHERE rarity = 1
   `).get().item_id;
+  const yellowDwarf = external.prepare(`
+    SELECT catalog_items.name, catalog_items.icon, catalog_items.rarity,
+      catalog_rarities.name AS rarity_name, catalog_cities.name AS city_name
+    FROM catalog_items
+    JOIN catalog_rarities ON catalog_rarities.id = catalog_items.rarity
+    JOIN catalog_cities ON catalog_cities.id = ?
+    WHERE catalog_items.id = ?
+  `).get(cityId, yellowDwarfItemId);
+  const findingEvent = external.prepare(`
+    INSERT INTO live_update_events (scope, changed_at, event_type, payload_json)
+    VALUES (?, 3001, 'items-found', '{}')
+  `).run(`player:${playerId}`);
+  const findingPayload = {
+    eventId: Number(findingEvent.lastInsertRowid), itemId: yellowDwarfItemId,
+    name: yellowDwarf.name, icon: yellowDwarf.icon, rarity: yellowDwarf.rarity,
+    rarityName: yellowDwarf.rarity_name, quantity: 1,
+    source: 'dwarf-capture', sourceName: 'Dwarf capture', cityId,
+    cityName: yellowDwarf.city_name, foundAt: 3001, autoRecycled: false,
+    path: `/items/${yellowDwarfItemId}`
+  };
+  external.prepare('UPDATE live_update_events SET payload_json = ? WHERE id = ?')
+    .run(JSON.stringify(findingPayload), findingPayload.eventId);
   external.prepare(`
-    INSERT INTO finding_queue
-      (player_id, item_id, quantity, source, city_id, found_at, queued_at, auto_recycled)
-    VALUES (?, ?, 1, 'dwarf-capture', ?, 3001, 3001, 0)
-  `).run(playerId, yellowDwarfItemId, cityId);
+    INSERT INTO world_chat_announcements
+      (event_key, announcement_type, body, path, created_at)
+    VALUES ('live-dwarf-capture', 'dwarf-capture', ?, ?, 3001)
+  `).run(`LivePageAudit captured a Yellow Dwarf while mining in ${yellowDwarf.city_name}.`,
+    findingPayload.path);
   external.close();
+  const findingNotice = page.locator('#flash-dialog');
+  await expect(findingNotice).toBeVisible();
+  const foundDwarf = findingNotice.locator(`.flash-item[data-item-id="${yellowDwarfItemId}"]`);
+  await expect(foundDwarf).toContainText('Yellow Dwarf');
+  await expect(foundDwarf).toContainText('Dwarf capture');
+  await expect(foundDwarf.locator('.flash-item-link')).toHaveAttribute('href', findingPayload.path);
+  await expect(foundDwarf.locator('img')).toBeVisible();
   const liveDwarf = page.locator('.chat-row-dwarf');
   await expect(liveDwarf).toContainText('LivePageAudit captured a Yellow Dwarf');
   await expect(liveDwarf.locator('.chat-dwarf-item img')).toBeVisible();

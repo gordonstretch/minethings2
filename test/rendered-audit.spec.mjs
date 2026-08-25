@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createPlayer } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
 import { createApp } from '../src/server.js';
@@ -10,6 +11,7 @@ import { hashPassword, SqliteStore } from '../src/store.js';
 const catalog = loadLegacyCatalog();
 const password = 'rendered audit password';
 let directory;
+let databaseFile;
 let server;
 let base;
 let vehicleId;
@@ -19,6 +21,10 @@ let detailItemId;
 let traderListingItemId;
 let recyclableItemName;
 let bountyMessageId;
+let occasionPlayerId;
+let occasionItem;
+let visualMapId;
+let visualCapitalCityId;
 
 function addVehicle(store, player, vehicleType) {
   player.inventory[vehicleType.itemId] = 1;
@@ -28,7 +34,7 @@ function addVehicle(store, player, vehicleType) {
 
 test.beforeAll(async () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-rendered-'));
-  const databaseFile = path.join(directory, 'audit.sqlite');
+  databaseFile = path.join(directory, 'audit.sqlite');
   const store = new SqliteStore(databaseFile);
   store.seedCatalog(catalog);
   const landVehicle = catalog.vehicles.find((vehicle) => vehicle.routeType === 0
@@ -81,7 +87,8 @@ test.beforeAll(async () => {
   trader.profession = 1;
   traderListingItemId = Number(Object.keys(trader.inventory)[0]);
   store.savePlayer(trader);
-  store.placeSellOrder(trader.id, traderListingItemId, 1, 1400);
+  store.placeSellOrder(trader.id, traderListingItemId,
+    store.marketForItem(traderListingItemId, trader.cityId).listingStartPrice, 1, 1400);
   store.sendMessage(trader.id, 'VisualAudit', 'Rendered inbox audit message', Date.now());
   const bountyPools = [6, 5, 4, 3, 2, 1, 0].map((rarity) =>
     catalog.items.filter((item) => item.canFind && item.repairedItemId === null
@@ -109,9 +116,22 @@ test.beforeAll(async () => {
   const robberVehicle = addVehicle(store, robber, landVehicle);
   const route = store.routesForVehicle(trader.id, traderVehicle, 2000)[0];
   store.sendVehicle(trader.id, traderVehicle, route.id, 2000);
-  battleId = store.sendVehicle(robber.id, robberVehicle, route.id, 2000, {
+  store.sendVehicle(robber.id, robberVehicle, route.id, 2000, {
     aggressiveMask: 1 << catalog.byId.get(landVehicle.itemId).rarity
-  }).battleId;
+  });
+  const plannedBattle = store.database.prepare(`
+    SELECT id, encounter_at FROM vehicle_encounters
+    WHERE status = 'planned'
+      AND ((vehicle1_id = ? AND vehicle2_id = ?)
+        OR (vehicle1_id = ? AND vehicle2_id = ?))
+    ORDER BY encounter_at, id LIMIT 1
+  `).get(traderVehicle, robberVehicle, robberVehicle, traderVehicle);
+  if (!plannedBattle) throw new Error('Rendered audit battle was not scheduled.');
+  store.settleVehicles(plannedBattle.encounter_at);
+  battleId = store.database.prepare(
+    'SELECT battle_id FROM vehicle_encounters WHERE id = ?'
+  ).get(plannedBattle.id)?.battle_id;
+  if (!battleId) throw new Error('Rendered audit battle did not resolve.');
 
   const pilot = store.addPlayer(createPlayer('OilAudit', '', hashPassword(password), catalog, 1000, () => 0.5));
   const pump = catalog.machines.find((machine) => machine.type === 'pump'
@@ -157,28 +177,9 @@ test.beforeAll(async () => {
   const occasion = store.addPlayer(createPlayer(
     'OccasionAudit', '', hashPassword(password), catalog, 1000, () => 0.5
   ));
+  occasionPlayerId = occasion.id;
   store.updateAccount(occasion.id, { email: '', publishFindings: false, showMines: true });
-  const occasionItem = catalog.items.find((item) => item.canFind && item.rarity === 6);
-  store.database.prepare('DELETE FROM finding_queue WHERE player_id = ?').run(occasion.id);
-  const insertOccasionFinding = store.database.prepare(`
-    INSERT INTO finding_queue
-      (player_id, item_id, quantity, source, city_id, found_at, queued_at, auto_recycled)
-    VALUES (?, ?, 1, ?, 1, 1000, -100000, 0)
-  `);
-  for (const source of ['mine', 'new-mine', 'explosives', 'dwarf', 'fishing', 'salvage']) {
-    insertOccasionFinding.run(occasion.id, occasionItem.id, source);
-  }
-
-  const routine = store.addPlayer(createPlayer(
-    'RoutineAudit', '', hashPassword(password), catalog, 1000, () => 0.5
-  ));
-  const routineItem = catalog.items.find((item) => item.canFind && item.rarity === 1);
-  store.database.prepare('DELETE FROM finding_queue WHERE player_id = ?').run(routine.id);
-  store.database.prepare(`
-    INSERT INTO finding_queue
-      (player_id, item_id, quantity, source, city_id, found_at, queued_at, auto_recycled)
-    VALUES (?, ?, 1, 'mine', 1, 1000, -100000, 0)
-  `).run(routine.id, routineItem.id);
+  occasionItem = catalog.items.find((item) => item.canFind && item.rarity === 6);
 
   const recycler = store.addPlayer(createPlayer(
     'RecyclingAudit', '', hashPassword(password), catalog, 1000, () => 0.5
@@ -212,10 +213,11 @@ test.beforeAll(async () => {
   store.addChat(responsive.id, 'The old chat colours are back.', Date.now());
   const responsiveRare = catalog.items.find((item) => item.canFind && item.rarity === 5);
   store.database.prepare(`
-    INSERT INTO finding_queue
-      (player_id, item_id, quantity, source, city_id, found_at, queued_at, auto_recycled)
-    VALUES (?, ?, 1, 'mine', 1, ?, -100000, 0)
-  `).run(responsive.id, responsiveRare.id, Date.now());
+    INSERT INTO world_chat_announcements
+      (event_key, announcement_type, body, path, created_at)
+    VALUES ('rendered-rare-chat', 'rare-purple', ?, ?, ?)
+  `).run(`ResponsiveAudit found a ${responsiveRare.rarityName} ${responsiveRare.name} in Tzolk'in.`,
+    `/items/${responsiveRare.id}`, Date.now());
   const responsiveDwarf = catalog.dwarfByRarity.get(1);
   store.database.prepare(`
     INSERT INTO world_chat_announcements
@@ -230,6 +232,27 @@ test.beforeAll(async () => {
       '/events', ?)
   `).run(Date.now() + 1);
   store.ensureWorldMaps(Date.now());
+  const cryptoCopyState = createPlayer(
+    'CryptoCopyAudit', '', hashPassword(password), store.loadCatalog(), 1000, () => 0.5
+  );
+  cryptoCopyState.gold = 100;
+  const cryptoCopy = store.addPlayer(cryptoCopyState);
+  store.database.prepare(`
+    INSERT INTO player_crypto_balances (player_id, crypto_type_id, quantity)
+    VALUES (?, 1, 4)
+  `).run(responsive.id);
+  const cryptoNow = Date.now();
+  const insertCryptoSale = store.database.prepare(`
+    INSERT INTO crypto_market_sales
+      (buyer_id, seller_id, crypto_type_id, price_units, quantity, created_at)
+    VALUES (?, ?, 1, ?, ?, ?)
+  `);
+  insertCryptoSale.run(cryptoCopy.id, responsive.id, 10 * 10000, 2, cryptoNow - 4000);
+  insertCryptoSale.run(cryptoCopy.id, responsive.id, 12 * 10000, 3, cryptoNow - 3000);
+  insertCryptoSale.run(cryptoCopy.id, responsive.id, 8 * 10000, 1, cryptoNow - 2000);
+  insertCryptoSale.run(cryptoCopy.id, responsive.id, 11 * 10000, 4, cryptoNow - 1000);
+  store.placeCryptoOrder(responsive.id, 1, 'sell', 12, 2, cryptoNow);
+  store.placeCryptoOrder(cryptoCopy.id, 1, 'buy', 9, 3, cryptoNow + 1);
   for (const [type, routeType, rarity] of [
     ['white_whale', catalog.settings.route_type_ids.sea, 6],
     ['t_rex', catalog.settings.route_type_ids.land, 1]
@@ -263,6 +286,23 @@ test.beforeAll(async () => {
     `).get(routeType, grant.city_id, grant.city_id);
     store.adminRaiseGhost(responsive.id, kind, ghostRoute.id, 1, Date.now() + 3);
   }
+  store.database.prepare('UPDATE mines SET next_find_at = 9999999999999').run();
+  visualMapId = store.database.prepare(
+    'SELECT map_id FROM catalog_cities WHERE id = ?'
+  ).get(visual.cityId).map_id;
+  visualCapitalCityId = store.loadCatalog().maps
+    .find((map) => map.id === visualMapId)?.capitalCityId;
+  const visualWeather = store.currentWeatherForMap(visualMapId, Date.now());
+  store.database.prepare(`
+    UPDATE world_weather_slots
+    SET condition = 'snow', temperature_c = -3, wind_kph = 18, rainfall_mm = 3.5
+    WHERE slot_at = ?
+  `).run(visualWeather.startsAt);
+  store.database.prepare(`
+    UPDATE world_weather_slots
+    SET condition = 'hurricane', temperature_c = 25, wind_kph = 170, rainfall_mm = 42
+    WHERE map_id = ? AND slot_at = ?
+  `).run(visualMapId, visualWeather.startsAt);
   store.close();
 
   server = createApp({ databaseFile, legacyJsonFile: null });
@@ -281,18 +321,6 @@ async function login(page, name) {
   await page.locator('form[action="/login"] input[name="password"]').fill(password);
   await page.locator('form[action="/login"] button').click();
   await expect(page).toHaveURL(`${base}/`);
-  const findingDialog = page.locator('#finding-dialog');
-  await expect(findingDialog).toBeVisible();
-  await expect(findingDialog.locator('.discovery-item-card').first()).toBeVisible();
-  const leaseToken = await page.evaluate(() => sessionStorage.getItem('minethings-finding-lease'));
-  expect(leaseToken).toBeTruthy();
-  await page.reload();
-  await expect(findingDialog).toBeVisible();
-  await expect(findingDialog.locator('.discovery-item-card').first()).toBeVisible();
-  expect(await page.evaluate(() => sessionStorage.getItem('minethings-finding-lease')))
-    .toBe(leaseToken);
-  await findingDialog.getByRole('button', { name: 'Keep digging' }).click();
-  await expect(findingDialog).not.toBeVisible();
 }
 
 async function assertHealthyRender(page) {
@@ -318,48 +346,220 @@ async function assertHealthyRender(page) {
   expect(overflow.present, JSON.stringify(overflow)).toBe(false);
 }
 
-test('renders every finding source as the same detailed occasion', async ({ page }) => {
-  await page.goto(base);
-  await page.locator('form[action="/login"] input[name="name"]').fill('OccasionAudit');
-  await page.locator('form[action="/login"] input[name="password"]').fill(password);
-  await page.locator('form[action="/login"] button').click();
-  const dialog = page.locator('#finding-dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: '6 exceptional discoveries!' })).toBeVisible();
-  await expect(dialog).toHaveClass(/finding-dialog-rare/);
-  await expect(dialog.locator('.finding-occasion-card')).toHaveCount(6);
-  await expect(dialog.locator('.finding-occasion-art img')).toHaveCount(6);
-  await expect(dialog.locator('.finding-facts')).toHaveCount(6);
-  await expect(dialog.getByRole('link', { name: 'Full item details' })).toHaveCount(6);
-  await expect(dialog.getByRole('link', { name: 'View inventory' })).toHaveCount(6);
-  await expect(dialog.getByRole('link', { name: 'Open market' })).toHaveCount(6);
-  for (const source of ['mine', 'new-mine', 'explosives', 'dwarf', 'fishing', 'salvage']) {
-    await expect(dialog.locator(`[data-finding-source="${source}"]`)).toHaveCount(1);
+async function headingWrapState(locator) {
+  return locator.evaluate((heading) => {
+    const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+    while (textNode && !textNode.textContent.trim()) textNode = walker.nextNode();
+    if (!textNode) return { words: [], lines: 0, overflow: false };
+    const text = textNode.textContent;
+    const lineTops = (range) => [...range.getClientRects()]
+      .filter((rectangle) => rectangle.width > 0 && rectangle.height > 0)
+      .map((rectangle) => Math.round(rectangle.top * 2) / 2);
+    const wordStates = [...text.matchAll(/\S+/gu)].map((match) => {
+      const range = document.createRange();
+      range.setStart(textNode, match.index);
+      range.setEnd(textNode, match.index + match[0].length);
+      return { word: match[0], lines: new Set(lineTops(range)).size };
+    });
+    const whole = document.createRange();
+    whole.selectNodeContents(heading);
+    const style = getComputedStyle(heading);
+    return {
+      words: wordStates,
+      lines: new Set(lineTops(whole)).size,
+      overflow: heading.scrollWidth > heading.clientWidth + 1,
+      overflowWrap: style.overflowWrap,
+      wordBreak: style.wordBreak
+    };
+  });
+}
+
+test('renders sidebar weather with the same label and value treatment as location', async ({ page }) => {
+  await login(page, 'VisualAudit');
+  for (const [width, screenshot] of [
+    [1440, 'sidebar-weather-audit-desktop.png'],
+    [360, 'sidebar-weather-audit-mobile.png']
+  ]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base}/inventory`);
+    if (width <= 820) await page.locator('#player-nav-toggle').click();
+
+    const context = page.locator('.sidebar-context');
+    const region = context.locator('.sidebar-location-value').filter({ hasText: /^Region/ });
+    const weather = context.locator('.sidebar-weather');
+    await expect(context).toBeVisible();
+    await expect(weather).toBeVisible();
+    await expect(weather.locator(':scope > span')).toHaveText('Weather');
+    await expect(weather.locator(':scope > a')).toHaveAttribute('aria-label', 'Weather: Hurricane');
+    await expect(weather.locator(':scope > a > span').last()).toHaveText('Hurricane');
+    await expect(weather.locator('.sidebar-weather-icon')).toHaveText('🌀');
+    await expect(weather).not.toHaveClass(/weather-hurricane/u);
+
+    const typography = async (row) => row.evaluate((element) => {
+      const label = getComputedStyle(element.querySelector(':scope > span'));
+      const value = getComputedStyle(element.querySelector(':scope > a'));
+      return {
+        label: [label.fontFamily, label.fontSize, label.fontWeight, label.letterSpacing,
+          label.textTransform],
+        value: [value.fontFamily, value.fontSize, value.fontWeight, value.letterSpacing,
+          value.textTransform, value.textDecorationLine, value.textDecorationThickness]
+      };
+    });
+    expect(await typography(weather)).toEqual(await typography(region));
+    expect(await weather.evaluate((element) => getComputedStyle(element).backgroundImage)).toBe('none');
+    await assertHealthyRender(page);
+    await context.screenshot({ path: path.resolve(screenshot) });
   }
-  const broken = await dialog.locator('img').evaluateAll((images) => images
-    .filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src));
-  expect(broken).toEqual([]);
-  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  await page.waitForTimeout(750);
-  await page.screenshot({ path: path.resolve('finding-occasion-audit.png'), fullPage: false });
-  await dialog.getByRole('button', { name: 'Keep digging' }).click();
-  await expect(dialog).not.toBeVisible();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/events`);
+  await expect(page.locator('.weather-card.weather-hurricane').first()).toBeVisible();
+  await expect(page.locator('.weather-card.weather-hurricane').first())
+    .toHaveCSS('color', 'rgb(245, 243, 255)');
+  await expect(page.locator('.weather-card.weather-hurricane').first())
+    .toContainText('42 mm precipitation');
+  await expect(page.locator('.weather-card.weather-hurricane').first())
+    .not.toContainText('Changes in');
+  await page.locator('.weather-card.weather-hurricane').first()
+    .screenshot({ path: path.resolve('weather-hurricane-card-audit.png') });
+  await page.screenshot({ path: path.resolve('weather-hurricane-audit.png'), fullPage: false });
+
+  const weatherDatabase = new DatabaseSync(databaseFile);
+  weatherDatabase.prepare(`
+    UPDATE world_weather_slots
+    SET condition = 'snow', temperature_c = -3, wind_kph = 18, rainfall_mm = 3.5
+    WHERE map_id = ? AND slot_at = (SELECT last_slot_at FROM world_event_clock WHERE id = 1)
+  `).run(visualMapId);
+  weatherDatabase.close();
+  await page.goto(`${base}/inventory`);
+  await expect(page.locator('.sidebar-weather > a')).toHaveAttribute('aria-label', 'Weather: Snow');
+  await expect(page.locator('.sidebar-weather-icon')).toHaveText('❄');
+  await page.goto(`${base}/events`);
+  await expect(page.locator('.weather-card.weather-snow').first()).toBeVisible();
+  await expect(page.locator('.weather-card.weather-snow').first())
+    .toHaveCSS('color', 'rgb(36, 57, 67)');
+  await expect(page.locator('.weather-card.weather-snow').first())
+    .toContainText('3.5 mm precipitation');
+  await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('weather-snow-audit.png'), fullPage: false });
 });
 
-test('keeps routine finding reports compact', async ({ page }) => {
-  await page.goto(base);
-  await page.locator('form[action="/login"] input[name="name"]').fill('RoutineAudit');
-  await page.locator('form[action="/login"] input[name="password"]').fill(password);
-  await page.locator('form[action="/login"] button').click();
-  const dialog = page.locator('#finding-dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveClass(/finding-dialog-routine/);
-  await expect(dialog.getByRole('heading', { name: '1 new thing found' })).toBeVisible();
-  const box = await dialog.boundingBox();
+test('renders one fixed regional capital without a home chooser', async ({ page }) => {
+  await login(page, 'VisualAudit');
+  await page.goto(`${base}/map`);
+  expect(Number.isSafeInteger(visualCapitalCityId)).toBeTruthy();
+  await expect(page.locator(
+    `.route-map .map-city-capital[data-city-id="${visualCapitalCityId}"]`
+  )).toHaveCount(1);
+  const capitalCard = page.locator(
+    `.city-card.capital[data-city-id="${visualCapitalCityId}"]`
+  );
+  await expect(capitalCard).toHaveCount(1);
+  await expect(capitalCard).toContainText('Regional capital');
+  await expect(page.locator('a[href="/move"], form[action="/move"]')).toHaveCount(0);
+  await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('regional-capital-audit-desktop.png'), fullPage: true });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/map`);
+  await expect(page.locator('.route-map .map-city-capital')).toHaveCount(1);
+  await expect(page.locator('.city-card.capital')).toHaveCount(1);
+  await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('regional-capital-audit-mobile.png'), fullPage: true });
+});
+
+test('keeps undiscovered currencies out of the player-facing exchange', async ({ page }) => {
+  await login(page, 'CryptoCopyAudit');
+  for (const [width, screenshot] of [
+    [1440, 'crypto-copy-audit-desktop.png'],
+    [360, 'crypto-copy-audit-mobile.png']
+  ]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base}/crypto`);
+    await expect(page.getByRole('heading', { name: 'Crypto Exchange' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Aso Coin' })).toBeVisible();
+    await expect(page.getByText('Read the charts, set your price, and trade when the market moves your way.'))
+      .toBeVisible();
+    await expect(page.locator('.crypto-discovery-note'))
+      .toHaveText('Keep exploring. The exchange grows with your journey.');
+    await expect(page.locator('.crypto-price-line')).not.toHaveCount(0);
+    await expect(page.locator('.crypto-price-area')).not.toHaveCount(0);
+    await expect(page.locator('.crypto-price-reference')).not.toHaveCount(0);
+    await expect(page.locator('.crypto-candle, .crypto-volume-bar')).toHaveCount(0);
+    await expect(page.locator('.crypto-chart-stats')).toContainText('Volume 10');
+    await expect(page.locator('.crypto-chart-stats')).toContainText('VWAP 10.8g');
+    await expect(page.locator('.crypto-quote-strip')).toContainText('11g');
+    await expect(page.locator('.market-dealing-desk .market-ticket')).toHaveCount(4);
+    await expect(page.locator('body')).not.toContainText(
+      /Bromo Byte|Calbuco Cash|Dempo Digital|Ebeko Ether|Fogo Fund|Gallego Goldchain/u
+    );
+    await assertHealthyRender(page);
+    await page.screenshot({ path: path.resolve(screenshot), fullPage: true });
+  }
+});
+
+test('renders typed live findings as a compact linked top-right list', async ({ page }) => {
+  await login(page, 'OccasionAudit');
+  const sources = ['mine', 'new-mine', 'explosives', 'dwarf', 'fishing', 'salvage'];
+  const external = new DatabaseSync(databaseFile);
+  const insertEvent = external.prepare(`
+    INSERT INTO live_update_events (scope, changed_at, event_type, payload_json)
+    VALUES (?, ?, 'items-found', '{}')
+  `);
+  const updatePayload = external.prepare(
+    'UPDATE live_update_events SET payload_json = ? WHERE id = ?'
+  );
+  external.exec('BEGIN IMMEDIATE');
+  try {
+    for (const [index, source] of sources.entries()) {
+      const result = insertEvent.run(`player:${occasionPlayerId}`, Date.now() + index);
+      const eventId = Number(result.lastInsertRowid);
+      updatePayload.run(JSON.stringify({
+        eventId, itemId: occasionItem.id, name: occasionItem.name, icon: occasionItem.icon,
+        rarity: occasionItem.rarity, rarityName: occasionItem.rarityName, quantity: 1,
+        source, sourceName: catalog.settings.finding_source_names[source],
+        cityId: 1, cityName: "Tzolk'in", foundAt: Date.now() + index,
+        autoRecycled: false, path: `/items/${occasionItem.id}`
+      }), eventId);
+    }
+    external.exec('COMMIT');
+  } catch (error) {
+    external.exec('ROLLBACK');
+    external.close();
+    throw error;
+  }
+  external.close();
+
+  const notice = page.locator('#flash-dialog');
+  await expect(notice).toBeVisible();
+  await expect(notice.locator('#flash-dialog-title')).toHaveText('Things found');
+  await expect(notice.locator('#flash-dialog-message')).toHaveText('Found 6 new things.');
+  const rows = notice.locator('#flash-dialog-items > .flash-item');
+  await expect(rows).toHaveCount(sources.length);
+  const links = rows.locator('.flash-item-link');
+  await expect(links).toHaveCount(sources.length);
+  expect(await links.evaluateAll((entries, href) =>
+    entries.every((entry) => entry.getAttribute('href') === href), `/items/${occasionItem.id}`))
+    .toBe(true);
+  const metadata = await rows.locator('small').allTextContents();
+  for (const source of sources) {
+    expect(metadata.filter((text) => text.split(' · ')
+      .includes(catalog.settings.finding_source_names[source]))).toHaveLength(1);
+  }
+  const broken = await rows.locator('img').evaluateAll((images) => images
+    .filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src));
+  expect(broken).toEqual([]);
+  const box = await notice.boundingBox();
   expect(box).toBeTruthy();
-  expect(box.width).toBeLessThanOrEqual(730);
-  await page.screenshot({ path: path.resolve('finding-routine-audit.png'), fullPage: false });
-  await dialog.getByRole('button', { name: 'Keep digging' }).click();
+  expect(box.width).toBeLessThanOrEqual(500);
+  expect(await notice.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: path.resolve('finding-notice-audit.png'), fullPage: false });
+  await notice.getByRole('button', { name: 'Dismiss notification' }).click();
+  await expect(notice).not.toBeVisible();
+  await page.reload();
+  await expect(page.locator('#flash-dialog')).not.toBeVisible();
+  await expect(page.locator('#finding-dialog')).toHaveCount(0);
 });
 
 test('renders recycling, Ore refining, protected outputs, bots, and the simplified Dwarf page', async ({ page }) => {
@@ -438,7 +638,8 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await assertHealthyRender(page);
   await page.goto(`${base}/miners/RenderTrader`);
   await expect(page.locator('img[src="/img/icons/icon_message.png"]')).toBeVisible();
-  await expect(page.locator('img[src="/img/icons/icon_gold.png"]')).toBeVisible();
+  await expect(page.locator('img[src="/img/icons/icon_gold.png"]')).toHaveCount(0);
+  await expect(page.locator('form#gold-gift')).toHaveCount(0);
   await expect(page.locator('img[src="/img/icons/icon_listing.png"]')).toBeVisible();
   await assertHealthyRender(page);
   await page.getByRole('link', { name: 'Listings and bids' }).click();
@@ -474,14 +675,24 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.screenshot({ path: path.resolve('migration-audit-dwarves.png'), fullPage: true });
 
   await page.goto(`${base}/map`);
+  expect(Number.isSafeInteger(visualCapitalCityId)).toBeTruthy();
   await expect(page.locator('.route-map svg')).toBeVisible();
   await expect(page.locator('.route-map .route, .route-map .inter-map-route')).toHaveCount(0);
   await expect(page.locator('.route-map .map-city')).toHaveCount(catalog.cities.length);
+  await expect(page.locator(
+    `.route-map .map-city-capital[data-city-id="${visualCapitalCityId}"]`
+  )).toHaveCount(1);
   await expect(page.locator('.route-map .map-mine-icon')).toHaveCount(catalog.cityMineTypes.length);
   await expect(page.locator('.city-mines img')).toHaveCount(catalog.cityMineTypes.length);
   await expect(page.locator('.route-map .map-background')).toBeVisible();
   await expect(page.locator('.route-list .route-summary')).toHaveCount(catalog.routes.length);
   await expect(page.locator('.route-map .map-city-current')).toBeVisible();
+  const capitalCard = page.locator(
+    `.city-card.capital[data-city-id="${visualCapitalCityId}"]`
+  );
+  await expect(capitalCard).toHaveCount(1);
+  await expect(capitalCard).toContainText('Regional capital');
+  await expect(page.locator('a[href="/move"], form[action="/move"]')).toHaveCount(0);
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-city-map.png'), fullPage: true });
 
@@ -570,6 +781,14 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
 
   await page.goto(`${base}/ratings?class=4`);
   await expect(page.getByRole('heading', { name: 'Vehicle rankings' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'View season prizes' })).toBeVisible();
+  await assertHealthyRender(page);
+  await page.getByRole('link', { name: 'View season prizes' }).click();
+  await expect(page.getByRole('heading', { name: 'Season prizes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Fight upward' })).toBeVisible();
+  await expect(page.locator(
+    '.combat-prize-list a[href="/items/1402"], .combat-prize-list a[href="/items/1403"]'
+  )).toHaveCount(2);
   await assertHealthyRender(page);
 
   await page.locator('form[action="/logout"] button').click();
@@ -582,8 +801,11 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.locator('form[action="/logout"] button').click();
   await login(page, 'OilAudit');
   await page.goto(`${base}/oil-field`);
-  for (const heading of ['Oil Field', 'Machine field', 'Instructions', 'Deployed machines', 'Your field events']) {
+  for (const heading of ['Oil Field', 'Machine field', 'Instructions', 'Your field events']) {
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+  }
+  for (const removedText of ['Machine parts in the Oil Field city', 'Keyboard and form controls', 'Deployed machines']) {
+    await expect(page.getByText(removedText, { exact: true })).toHaveCount(0);
   }
   await expect(page.locator('.oil-field-board-shell')).toHaveAttribute('data-hex-count', '469');
   await expect(page.locator('#board svg')).toBeVisible();
@@ -652,29 +874,44 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.locator('form[action="/logout"] button').click();
   await login(page, 'RenderCustomer');
   await page.goto(`${base}/miners/OilAudit`);
-  await expect(page.getByRole('heading', { name: 'Send gold' })).toBeVisible();
-  await expect(page.locator('form#gold-gift input[name="amount"]')).toBeVisible();
-  await page.locator('form#gold-gift input[name="amount"]').fill('1');
-  await page.locator('form#gold-gift input[name="note"]').fill('Rendered banking-removal audit');
-  const scrollBeforeGift = await page.evaluate(() => {
-    window.__flashModalDocumentMarker = 'same-document';
-    document.body.style.minHeight = '3000px';
-    window.scrollTo(0, 800);
-    return window.scrollY;
-  });
-  await page.evaluate(() => {
-    const form = document.querySelector('form#gold-gift');
-    form.requestSubmit(form.querySelector('button'));
-  });
-  await expect(page.locator('#flash-dialog')).toBeVisible();
-  await expect(page.locator('#flash-dialog-message')).toHaveText('Sent 1g to OilAudit.');
-  expect(await page.evaluate(() => window.__flashModalDocumentMarker)).toBe('same-document');
-  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeGift);
-  await expect(page).toHaveURL(`${base}/miners/OilAudit`);
-  await page.locator('#flash-dialog button').click();
+  await expect(page.getByRole('link', { name: 'Send message' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Listings and bids' })).toBeVisible();
+  await expect(page.getByText('Send gold', { exact: true })).toHaveCount(0);
+  await expect(page.locator('form#gold-gift')).toHaveCount(0);
   await assertHealthyRender(page);
-  await page.screenshot({ path: path.resolve('migration-audit-gold-gift.png'), fullPage: true });
+  await page.screenshot({ path: path.resolve('migration-audit-player-profile.png'), fullPage: true });
   expect(errors).toEqual([]);
+});
+
+test('keeps page titles readable across shell breakpoints', async ({ page }) => {
+  await login(page, 'VisualAudit');
+  for (const width of [1281, 1181, 1180, 901, 900, 821, 820, 520, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [route, title] of [['/containers', 'Inventory containers'], ['/messages', 'Messages']]) {
+      await page.goto(`${base}${route}`);
+      const heading = page.locator('.page-title h1');
+      await expect(heading).toHaveText(title);
+      const state = await headingWrapState(heading);
+      expect(state.words.every((word) => word.lines === 1), JSON.stringify({ width, route, state })).toBe(true);
+      expect(state.overflow, JSON.stringify({ width, route, state })).toBe(false);
+      expect(state.overflowWrap).toBe('break-word');
+      expect(state.wordBreak).toBe('normal');
+      if (title === 'Messages' || width >= 820) expect(state.lines).toBe(1);
+      else expect(state.lines).toBeLessThanOrEqual(2);
+      const overlap = await page.locator('.page-title').evaluate((titleBlock) => {
+        const first = titleBlock.firstElementChild?.getBoundingClientRect();
+        const second = titleBlock.children[1]?.getBoundingClientRect();
+        if (!first || !second) return false;
+        return first.left < second.right && first.right > second.left
+          && first.top < second.bottom && first.bottom > second.top;
+      });
+      expect(overlap, `${title} overlaps its companion at ${width}px`).toBe(false);
+      await assertHealthyRender(page);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${base}/messages`);
+  await expect(page.locator('.page-title > a.button')).toHaveCSS('background-color', 'rgb(61, 66, 62)');
 });
 
 test('renders the MineThings 2 rebirth landing cleanly at every viewport', async ({ page }) => {
@@ -749,10 +986,31 @@ test('renders the MineThings 2 rebirth landing cleanly at every viewport', async
   await page.locator('.landing-shell footer a[href="/history"]').click();
   await expect(page).toHaveURL(`${base}/history`);
   await expect(page.getByRole('heading', { name: 'The story of MineThings' })).toBeVisible();
+  await expect(page.locator('.editorial-switcher a[aria-current="page"]')).toHaveText('History');
   await page.goto(base);
   await page.locator('.landing-shell footer a[href="/legal"]').click();
   await expect(page).toHaveURL(`${base}/legal`);
   await expect(page.getByRole('heading', { name: /MineThings Terms/ })).toBeVisible();
+  await expect(page.locator('.editorial-switcher a[aria-current="page"]')).toHaveText('Legal');
+  for (const [route, mark] of [['/history', 'H'], ['/legal', '§']]) {
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${base}${route}`);
+      await expect(page.locator('.editorial-hero')).toHaveAttribute('data-mark', mark);
+      await expect(page.locator('.editorial-facts > div')).toHaveCount(3);
+      await expect(page.locator('.article-index')).toBeVisible();
+      const indexTargetHeights = await page.locator('.article-index a').evaluateAll((links) =>
+        links.map((link) => link.getBoundingClientRect().height));
+      expect(indexTargetHeights.every((height) => height >= 44)).toBe(true);
+      await assertHealthyRender(page);
+      if (width === 360) {
+        await page.screenshot({
+          path: path.resolve(route === '/history' ? 'history-audit-mobile.png' : 'legal-audit-mobile.png'),
+          fullPage: true
+        });
+      }
+    }
+  }
   expect(errors).toEqual([]);
   expect(failedResponses).toEqual([]);
 });
@@ -795,7 +1053,7 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, 'ResponsiveAudit');
   await page.goto(`${base}/admin/world`);
-  await expect(page.getByRole('heading', { name: 'Current weather slot' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Current weather period' })).toBeVisible();
   const creatureForms = page.locator('form[action="/admin/world/creatures"]');
   await expect(creatureForms).toHaveCount(2);
   await expect(creatureForms.locator('select[name="type"] option')).toHaveCount(6);
@@ -825,14 +1083,46 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect(page.locator('.creature-card.rarity-1').getByRole('heading', {
     name: 'Yellow T-Rex'
   })).toBeVisible();
-  await expect(page.getByText(/Drops up to .* Ore/).first()).toBeVisible();
+  await expect(page.locator('.creature-card .threat-mark img')).toHaveCount(2);
+  await expect(page.getByText(/Drops up to .* Ore|bounty slots|combat class/i))
+    .toHaveCount(0);
   await expect(page.locator('.ghost-card')).toHaveCount(2);
-  await expect(page.getByRole('heading', { name: 'Haunted routes' })).toBeVisible();
-  await expect(page.getByText(/Pillage/).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'The restless dead' })).toBeVisible();
+  await expect(page.getByText(/Pillage|attack patrols/i)).toHaveCount(0);
+  expect(await page.locator('.threat-card').first().evaluate((card) =>
+    getComputedStyle(card).gridTemplateColumns)).toMatch(/^82px /u);
+  expect(await page.locator('.threat-mark img').evaluateAll((images) => images.every((image) => {
+    const imageBox = image.getBoundingClientRect();
+    const railBox = image.closest('.threat-mark').getBoundingClientRect();
+    return Math.round(imageBox.width) === 64 && Math.round(imageBox.height) === 64
+      && imageBox.left >= railBox.left && imageBox.right <= railBox.right;
+  }))).toBe(true);
+  await expect(page.locator('.ghost-card h3').first()).toHaveCSS('color', 'rgb(246, 241, 232)');
+  await expect(page.locator('.ghost-card .threat-facts dd').first())
+    .toHaveCSS('color', 'rgb(215, 211, 202)');
+  await expect(page.locator('.ghost-card .threat-condition-restless').first())
+    .toHaveCSS('color', 'rgb(248, 239, 255)');
+  await expect(page.locator('link[rel="stylesheet"][href^="/app.css"]'))
+    .toHaveAttribute('href', /\/app\.css\?v=[0-9a-f]{12}/u);
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-ghost-routes.png'), fullPage: true });
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto(`${base}/events`);
+  expect(await page.locator('.threat-card').first().evaluate((card) =>
+    getComputedStyle(card).gridTemplateColumns)).toMatch(/^66px /u);
+  expect(await page.locator('.threat-mark img').evaluateAll((images) => images.every((image) => {
+    const box = image.getBoundingClientRect();
+    return Math.round(box.width) === 52 && Math.round(box.height) === 52;
+  }))).toBe(true);
+  await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('migration-audit-ghost-routes-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/chat`);
   const chatLog = page.locator('#chat-log');
+  await expect(page.locator('.chat-page-title')).toBeVisible();
+  await expect(page.locator('.chat-console')).toBeVisible();
+  await expect(page.locator('.chat-sidecar')).toBeVisible();
+  await expect(page.locator('#chat-live-status')).toContainText('Live');
   await expect(chatLog).toHaveCSS('overflow-y', 'auto');
   expect(await chatLog.locator('.chat-row').evaluateAll((rows) => {
     const first = rows[0].getBoundingClientRect();
@@ -845,11 +1135,8 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect(page.locator('.chat-row-player')).toHaveCount(1);
   expect(await page.locator('.chat-row-world').count()).toBeGreaterThanOrEqual(3);
   await expect(page.getByText(/has risen on the/).first()).toBeVisible();
-  await expect(page.locator('.chat-row-rare.rare-purple')).toHaveCount(1);
-  await expect(page.getByText(/ResponsiveAudit found a Fabled/)).toBeVisible();
-  await expect(page.locator('.chat-row-rare .chat-rare-item')).toHaveAttribute('href', /\/items\/\d+/);
-  await expect(page.locator('.chat-row-rare .chat-rare-item img')).toBeVisible();
-  await expect(page.locator('.chat-row-rare .chat-rare-item')).toHaveCSS('color', 'rgb(239, 197, 244)');
+  await expect(page.locator('.chat-row-rare, .chat-rare-item')).toHaveCount(0);
+  await expect(page.getByText(/ResponsiveAudit found a Fabled/)).toHaveCount(0);
   await expect(page.locator('.chat-row-dwarf')).toHaveCount(1);
   await expect(page.getByText(/ResponsiveAudit captured a Yellow Dwarf/)).toBeVisible();
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
@@ -858,8 +1145,17 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
     .toHaveCSS('color', 'rgb(240, 224, 88)');
   await expect(page.locator('.chat-speaker')).toHaveCSS('color', 'rgb(0, 0, 0)');
+  await expect(page.locator('.chat-message')).toHaveCSS('color', 'rgb(51, 54, 47)');
+  await expect(page.locator('.chat-row time').first()).toHaveAttribute('datetime', /T/);
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-public-chat.png'), fullPage: true });
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto(`${base}/chat`);
+  await expect(page.locator('.chat-send')).toBeVisible();
+  expect((await page.locator('.chat-send').boundingBox()).width).toBeGreaterThan(250);
+  await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('migration-audit-public-chat-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/exchange`);
   await expect(page.locator('.market-controls')).toBeVisible();
   await expect(page.locator('.market-item-card')).not.toHaveCount(0);
@@ -886,10 +1182,20 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   }
   await page.setViewportSize({ width: 360, height: 900 });
   await page.goto(`${base}/inventory`);
+  const playerNavigationToggle = page.locator('#player-nav-toggle');
+  await expect(playerNavigationToggle).toBeVisible();
+  await expect(playerNavigationToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#player-nav-panel')).toBeHidden();
+  await playerNavigationToggle.click();
+  await expect(playerNavigationToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#player-nav-panel')).toBeVisible();
   await expect(page.locator('#navlist a[aria-current="page"]')).toHaveText('Things');
   const navigationHeights = await page.locator('#navlist a').evaluateAll((links) =>
     links.map((link) => link.getBoundingClientRect().height));
   expect(navigationHeights.every((height) => height >= 44)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#player-nav-panel')).toBeHidden();
+  await expect(playerNavigationToggle).toBeFocused();
   const skipLink = page.locator('.skip-link');
   await skipLink.focus();
   await expect(skipLink).toBeVisible();

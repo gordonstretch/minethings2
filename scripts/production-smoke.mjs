@@ -34,7 +34,9 @@ try {
     const health = await fetch(`${base}/health`);
     assert.equal(health.status, 200);
     assert.equal((await health.json()).status, 'ok');
-    assert.equal((await fetch(`${base}/img/home.gif`)).status, 200);
+    assert.equal((await fetch(`${base}/app.css`)).status, 200);
+    assert.equal((await fetch(`${base}/node/navigation.js`)).status, 200);
+    assert.equal((await fetch(`${base}/node/favicon.svg`)).status, 200);
     assert.equal((await fetch(`${base}/app/webroot/index.php`)).status, 404);
     assert.equal((await fetch(`${base}/portal/img/colors.jpg`)).status, 404);
   } finally {

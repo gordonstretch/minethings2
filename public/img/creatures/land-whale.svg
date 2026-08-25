@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="land-whale-title land-whale-desc">
+  <title id="land-whale-title">Land Whale</title>
+  <desc id="land-whale-desc">A vast scarred whale hauling its armored bulk across broken ground.</desc>
+  <defs>
+    <filter id="land-whale-grit" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".1 .42" numOctaves="2" seed="23" result="grit"/>
+      <feDisplacementMap in="SourceGraphic" in2="grit" scale="1.5" xChannelSelector="R" yChannelSelector="B"/>
+    </filter>
+  </defs>
+  <g id="land-whale-silhouette" filter="url(#land-whale-grit)">
+    <path fill="#12130f" d="M23 79 8 65 12 94 4 108 24 104 41 91Z"/>
+    <path fill="#8e3615" d="M19 82 38 55 68 35 107 25 151 29 185 46 213 69 231 73 220 89 192 97 154 103 111 105 72 101 40 92Z"/>
+    <path fill="#12130f" d="M33 61 70 35 110 24 154 29 189 48 206 64 174 59 139 64 101 57 65 67Z"/>
+    <path fill="#eee1c5" d="M188 66 222 73 211 87 185 91 196 81Z"/>
+    <path fill="#12130f" d="m206 74 17 1-11 7-12-1Z"/>
+    <path fill="#f19a1c" d="m201 70 8 2-6 4-7-2Z"/>
+    <path fill="#12130f" d="M57 95 72 98 68 124 53 142 39 141 48 123ZM93 102l18 2-4 28-12 15-17-2 12-21ZM145 101l18-3 10 26-3 21-17 3 1-21ZM181 95l17-5 17 20 3 21-16 4-7-20Z"/>
+    <path fill="#8e3615" d="m45 130 20 1-8 12H39ZM82 134h22l-7 13-19-2ZM153 135h18l-1 10-17 3ZM201 139l16-3 1 15-16 4Z"/>
+    <path fill="#f19a1c" d="m69 68 24-7-12 14ZM112 56l27 7-18 8ZM151 64l25-2-15 10ZM42 82l19-10-7 15Z"/>
+    <path fill="#eee1c5" d="m86 80 35-8 22 7-18 8-27 2ZM161 81l18-9 12 6-14 10Z" opacity=".72"/>
+  </g>
+  <g id="land-whale-scars">
+    <path fill="none" stroke="#eee1c5" stroke-width="2.2" stroke-linecap="square" opacity=".7" d="m53 56 15 8-11 6M91 39l-4 13 14 5M131 35l10 12-8 8M170 47l-8 11 14 6M118 89l17-7 12 5M70 89l12-7"/>
+    <path fill="none" stroke="#12130f" stroke-width="3" stroke-linecap="square" d="m97 74 10 5-8 5M148 73l8 7M180 58l8 6M64 112l-6 15M101 116l-5 13M160 115l5 14M195 109l10 13"/>
+  </g>
+  <g id="land-whale-dust" fill="#f19a1c" opacity=".78">
+    <path d="M8 143h49l-17 7H3ZM66 148h52l-12 5H57ZM131 147h44l-9 6h-46ZM185 146h46l-8 7h-45Z"/>
+    <path d="m25 124 9 3-8 5-12-3ZM222 119l10 4-7 6-11-4Z"/>
+  </g>
+</svg>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="orca-pod-title orca-pod-desc">
+  <title id="orca-pod-title">Orca Pod</title>
+  <desc id="orca-pod-desc">Three scarred orcas hunting in a tight black-water formation.</desc>
+  <defs>
+    <filter id="orca-grit" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".13 .46" numOctaves="2" seed="37" result="grit"/>
+      <feDisplacementMap in="SourceGraphic" in2="grit" scale="1.4" xChannelSelector="R" yChannelSelector="B"/>
+    </filter>
+  </defs>
+  <g id="orca-pod-silhouettes" filter="url(#orca-grit)">
+    <g id="lead-orca">
+      <path fill="#12130f" d="M34 91 15 78 3 81 17 93 5 105 21 106 38 98 56 108 86 111 120 104 145 91 171 84 151 72 119 67 83 69 53 79Z"/>
+      <path fill="#12130f" d="m90 69 10-31 16-19 2 48ZM96 106l19 3-16 27-19 12 8-28Z"/>
+      <path fill="#eee1c5" d="m121 75 28 7-19 10-19-2ZM62 81l27-8-16 16-20 6Z"/>
+      <path fill="#f19a1c" d="m137 79 9 3-7 5-8-3Z"/>
+      <path fill="#8f3715" d="m78 98 33-5-14 11-27 1Z"/>
+    </g>
+    <g id="rear-orca" opacity=".88">
+      <path fill="#12130f" d="M101 49 86 39 76 42 89 51 80 61 93 61 110 67 134 66 157 59 176 51 194 50 179 39 154 35 127 37Z"/>
+      <path fill="#12130f" d="m132 37 7-21 10-10 1 31ZM137 64l14 2-8 18-13 8 3-18Z"/>
+      <path fill="#eee1c5" d="m159 42 17 6-14 7-13-3ZM111 42l17-5-9 11-14 5Z"/>
+      <path fill="#f19a1c" d="m176 46 6 2-5 3-5-2Z"/>
+    </g>
+    <g id="flank-orca" opacity=".84">
+      <path fill="#8f3715" d="M135 119 122 109 112 112 124 121 115 132 128 132 145 138 169 136 191 127 210 119 232 119 216 107 190 104 162 107Z"/>
+      <path fill="#12130f" d="m166 107 8-22 11-11 1 31ZM169 135l15 1-9 18-14 2 3-13Z"/>
+      <path fill="#eee1c5" d="m196 111 17 6-14 7-13-3ZM145 113l17-5-9 12-14 4Z"/>
+      <path fill="#f19a1c" d="m215 115 7 2-6 4-5-2Z"/>
+    </g>
+  </g>
+  <g id="orca-scars">
+    <path fill="none" stroke="#f19a1c" stroke-width="2" stroke-linecap="square" opacity=".8" d="m47 91 14 5-8 6M83 81l13 8-8 8M121 72l-9 11M117 47l10 5M154 116l11 7-8 7M190 111l-8 10"/>
+  </g>
+  <g id="orca-wake">
+    <path fill="#eee1c5" d="M7 130h62l-20 5H2ZM183 143h49l-13 5h-47Z" opacity=".78"/>
+    <path fill="#f19a1c" d="M22 139h86l-24 7H9ZM112 151h103l-20 5h-98Z" opacity=".75"/>
+    <path fill="#12130f" d="M4 151h74l-15 5H1Z"/>
+  </g>
+</svg>

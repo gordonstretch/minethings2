@@ -52,6 +52,21 @@ export function weatherSlotAt(now, slotMs) {
   return Math.floor(Number(now) / Number(slotMs)) * Number(slotMs);
 }
 
+export function weatherChangeInterval(settings, random = Math.random) {
+  const minimum = Number(settings?.weather_change_min_interval_ms);
+  const maximum = Number(settings?.weather_change_max_interval_ms);
+  if (!Number.isSafeInteger(minimum) || minimum < 30 * 60 * 1000
+    || !Number.isSafeInteger(maximum) || maximum < minimum
+    || maximum > 8 * 60 * 60 * 1000) {
+    throw new Error('Invalid weather change interval settings.');
+  }
+  const roll = Number(random());
+  if (!Number.isFinite(roll) || roll < 0 || roll >= 1) {
+    throw new Error('Invalid weather change interval roll.');
+  }
+  return minimum + Math.floor(roll * (maximum - minimum + 1));
+}
+
 export function worldCreatureRollInterval(settings, random = Math.random) {
   const minimum = Number(settings?.world_creature_roll_min_interval_ms);
   const maximum = Number(settings?.world_creature_roll_max_interval_ms);
@@ -65,37 +80,56 @@ export function worldCreatureRollInterval(settings, random = Math.random) {
   return minimum + Math.floor(roll * (maximum - minimum + 1));
 }
 
-export function cambridgeWeatherAt(mapId, slotAt, settings) {
+export function cambridgeWeatherAt(mapId, slotAt, settings,
+  random = seededRandom('cambridge-weather', Number(mapId), Number(slotAt))) {
   const climate = settings.weather_cambridge_monthly;
   const stormChances = settings.weather_storm_chance_by_month;
+  const hurricaneChances = settings.weather_hurricane_chance_by_month;
+  const snowMaxTemperatureC = Number(settings.weather_snow_max_temperature_c);
+  const hurricaneMinTemperatureC = Number(settings.weather_hurricane_min_temperature_c);
   if (!Array.isArray(climate) || climate.length !== 12
-    || !Array.isArray(stormChances) || stormChances.length !== 12) {
+    || !Array.isArray(stormChances) || stormChances.length !== 12
+    || !Array.isArray(hurricaneChances) || hurricaneChances.length !== 12
+    || !Number.isFinite(snowMaxTemperatureC)
+    || !Number.isFinite(hurricaneMinTemperatureC)
+    || snowMaxTemperatureC >= hurricaneMinTemperatureC
+    || hurricaneChances.some((chance, index) =>
+      !Number.isFinite(Number(chance)) || Number(chance) < 0
+      || Number(chance) > Number(stormChances[index]))) {
     throw new Error('Invalid Cambridge weather settings.');
   }
   const date = new Date(Number(slotAt));
   const month = date.getUTCMonth();
   const normal = climate[month];
-  const random = seededRandom('cambridge-weather', Number(mapId), Number(slotAt));
   const stormChance = Number(stormChances[month]);
+  const hurricaneChance = Number(hurricaneChances[month]);
   const daysInMonth = new Date(Date.UTC(date.getUTCFullYear(), month + 1, 0)).getUTCDate();
   const rainChance = Math.min(0.8, Number(normal.rainDays) / daysInMonth * 0.5);
   const roll = random();
-  const condition = roll < stormChance ? 'storm'
-    : roll < stormChance + rainChance ? 'rain'
-      : roll < stormChance + rainChance + 0.45 ? 'cloud' : 'clear';
   const hour = date.getUTCHours() + 3;
   const warmth = (Math.cos((hour - 14) / 24 * Math.PI * 2) + 1) / 2;
-  const temperatureC = Number(normal.minC)
-    + (Number(normal.maxC) - Number(normal.minC)) * warmth + (random() - 0.5) * 3;
-  const windKph = condition === 'storm' ? 45 + random() * 45
-    : condition === 'rain' ? 18 + random() * 25 : 5 + random() * 20;
+  const temperatureC = Math.round((Number(normal.minC)
+    + (Number(normal.maxC) - Number(normal.minC)) * warmth
+    + (random() - 0.5) * 3) * 10) / 10;
+  const condition = roll < stormChance
+    ? roll < hurricaneChance && temperatureC >= hurricaneMinTemperatureC
+      ? 'hurricane' : 'storm'
+    : roll < stormChance + rainChance
+      ? temperatureC <= snowMaxTemperatureC ? 'snow' : 'rain'
+      : roll < stormChance + rainChance + 0.45 ? 'cloud' : 'clear';
+  const windKph = condition === 'hurricane' ? 120 + random() * 100
+    : condition === 'storm' ? 45 + random() * 45
+      : condition === 'rain' ? 18 + random() * 25
+        : condition === 'snow' ? 5 + random() * 25 : 5 + random() * 20;
+  const rainfallMm = condition === 'hurricane' ? 15 + random() * 45
+    : condition === 'storm' ? 3 + random() * 12
+      : condition === 'snow' ? 0.5 + random() * 5.5
+        : condition === 'rain' ? 0.5 + random() * 4 : 0;
   return {
     mapId: Number(mapId), slotAt: Number(slotAt),
     endsAt: Number(slotAt) + Number(settings.weather_slot_ms),
-    condition, temperatureC: Math.round(temperatureC * 10) / 10,
-    windKph: Math.round(windKph), rainfallMm: condition === 'storm'
-      ? Math.round((3 + random() * 12) * 10) / 10
-      : condition === 'rain' ? Math.round((0.5 + random() * 4) * 10) / 10 : 0,
+    condition, temperatureC, windKph: Math.round(windKph),
+    rainfallMm: Math.round(rainfallMm * 10) / 10,
     climate: normal
   };
 }

@@ -3,8 +3,9 @@
 
   const script = document.currentScript
     ?? document.querySelector('script[src^="/node/live-updates.js"]');
-  if (!script || typeof window.EventSource !== 'function'
-    || /^\/oil-field(?:\/|$)/.test(window.location.pathname)) return;
+  if (!script || typeof window.EventSource !== 'function') return;
+
+  const contentMorphEnabled = !/^\/oil-field(?:\/|$)/.test(window.location.pathname);
 
   let revision = Math.max(0, Number(script.dataset.liveRevision) || 0);
   let appliedRevision = revision;
@@ -19,7 +20,19 @@
   let chatFollowingLatest = chatPage;
   let chatProgrammaticScroll = false;
 
-  const setStatus = () => {};
+  const setStatus = (message, state = 'ready') => {
+    if (!chatPage) return;
+    const status = document.querySelector('#chat-live-status');
+    if (!status) return;
+    const labels = {
+      ready: 'Live', updating: 'Syncing', preserved: 'Live',
+      error: 'Offline', connecting: 'Reconnecting'
+    };
+    status.dataset.state = state;
+    status.title = message;
+    const label = status.querySelector('[data-live-label]');
+    if (label) label.textContent = labels[state] ?? 'Live';
+  };
 
   const chatIsNearBottom = (pane) => pane.scrollHeight - pane.scrollTop
     - pane.clientHeight <= chatBottomThreshold;
@@ -49,7 +62,8 @@
   };
 
   const topicsForPath = (pathname) => {
-    const topics = new Set(['catalog']);
+    // Every authenticated page carries current weather in the location panel.
+    const topics = new Set(['catalog', 'world']);
     if (/^\/(?:exchange|market|containers)/.test(pathname)) topics.add('market');
     if (/^\/(?:factories)/.test(pathname)) {
       topics.add('factories');
@@ -72,7 +86,10 @@
   };
 
   const dirtyForm = (element) => element instanceof HTMLFormElement
-    && element.dataset.liveDirty === 'true';
+    && (element.dataset.liveDirty === 'true'
+      || (element.matches('[data-journey-planner]')
+        && Boolean(element.querySelector('[data-journey-legs] li'))))
+    && !element.hasAttribute('data-live-authoritative');
   const protectedPreviewScope = (element) => element?.nodeType === Node.ELEMENT_NODE
     && element.matches('[data-live-preview-scope]')
     && Boolean(element.querySelector('[data-preview-binding][name="previewToken"], '
@@ -132,6 +149,16 @@
       if (!stateful.has(attribute.name) && attribute.name !== 'data-live-dirty'
         && current.getAttribute(attribute.name) !== attribute.value) {
         current.setAttribute(attribute.name, attribute.value);
+      }
+    }
+    const authoritative = current.closest?.('form[data-live-authoritative]');
+    if (authoritative && current instanceof HTMLInputElement) {
+      current.disabled = incoming.disabled;
+      if (current.type === 'number' && current.max) {
+        const maximum = Number(current.max);
+        if (Number.isFinite(maximum) && Number(current.value) > maximum) {
+          current.value = String(maximum);
+        }
       }
     }
     const active = current === document.activeElement;
@@ -268,9 +295,39 @@
     const incomingRevision = Number(payload.revision) || 0;
     revision = Math.max(revision, incomingRevision);
     if (incomingRevision <= appliedRevision) return;
+    if (!contentMorphEnabled) {
+      appliedRevision = Math.max(appliedRevision, incomingRevision);
+      return;
+    }
     latestScopes = payload.scopes ?? [];
     if (updateRunning) updatePending = true;
     else scheduleUpdate();
+  });
+  stream.addEventListener('items-found', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      const hasNoticeKey = payload && !Array.isArray(payload) && typeof payload === 'object'
+        && (payload.noticeKey || payload.notice_key || payload.eventId || payload.event_id);
+      const detail = event.lastEventId && !hasNoticeKey
+        ? (Array.isArray(payload)
+          ? { noticeKey: event.lastEventId, items: payload }
+          : { ...payload, noticeKey: event.lastEventId })
+        : payload;
+      document.dispatchEvent(new CustomEvent('minethings:items-found', { detail }));
+    } catch {
+      // Ignore malformed event data; the normal change event will still refresh the page.
+    }
+  });
+  stream.addEventListener('battle-complete', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      document.dispatchEvent(new CustomEvent('minethings:battle-complete', {
+        detail: event.lastEventId && !payload.noticeKey
+          ? { ...payload, noticeKey: event.lastEventId } : payload
+      }));
+    } catch {
+      // The battle report remains available if a malformed live notice is ignored.
+    }
   });
   stream.addEventListener('error', () => setStatus('Reconnecting live updates…', 'connecting'));
 })();

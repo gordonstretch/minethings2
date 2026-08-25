@@ -45,8 +45,6 @@ test.beforeAll(async () => {
   for (const candidate of catalog.melds.filter((entry) => entry.public && entry.id !== meld.id)) {
     ownMeld.run(savedStorer.id, candidate.id);
   }
-  store.database.prepare('DELETE FROM finding_queue WHERE player_id IN (?, ?)')
-    .run(savedMaker.id, savedStorer.id);
   store.close();
 
   server = createApp({ databaseFile, legacyJsonFile: null });
@@ -70,7 +68,7 @@ async function login(page, name) {
 test('renders Meld creation as an occasion while storage remains quiet', async ({ page }) => {
   await login(page, 'MeldRevealAudit');
   await page.goto(`${base}/melds/${meld.id}`);
-  await page.getByRole('button', { name: 'Create from storage and home-city things' }).click();
+  await page.getByRole('button', { name: /Create from storage and .+ things/ }).click();
   const dialog = page.locator('#meld-dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('heading', { name: 'A new Meld is born!' })).toBeVisible();
@@ -79,6 +77,22 @@ test('renders Meld creation as an occasion while storage remains quiet', async (
   await expect(dialog.locator('.meld-reveal-recipe li')).toHaveCount(meld.requirements.length);
   await expect(dialog.getByRole('link', { name: 'Full Meld details' })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'Meld collection' })).toBeVisible();
+  const visualStyle = await dialog.evaluate((element) => {
+    const styleOf = (selector) => getComputedStyle(element.querySelector(selector));
+    const dialogStyle = getComputedStyle(element);
+    return {
+      dialogRadius: dialogStyle.borderRadius,
+      dialogAccent: dialogStyle.borderLeftWidth,
+      headerAlignment: styleOf('.meld-dialog-head').textAlign,
+      markRadius: styleOf('.meld-occasion-mark').borderRadius,
+      cardRadius: styleOf('.meld-occasion-card').borderRadius,
+      titleTransform: styleOf('.meld-dialog-head h2').textTransform
+    };
+  });
+  expect(visualStyle).toEqual({
+    dialogRadius: '0px', dialogAccent: '6px', headerAlignment: 'left',
+    markRadius: '0px', cardRadius: '0px', titleTransform: 'uppercase'
+  });
   const brokenImages = await dialog.locator('img').evaluateAll((images) => images
     .filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src));
   expect(brokenImages).toEqual([]);

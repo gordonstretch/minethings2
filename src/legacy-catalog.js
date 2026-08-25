@@ -148,7 +148,10 @@ export const LEGACY_SPECIALISATION_TITLES = Object.freeze([
 ]);
 
 export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
+  // Kept for interpreting weather history written before variable periods.
   weather_slot_ms: 6 * 60 * 60 * 1000,
+  weather_change_min_interval_ms: 30 * 60 * 1000,
+  weather_change_max_interval_ms: 8 * 60 * 60 * 1000,
   weather_climate_source_url: 'https://www.metoffice.gov.uk/research/climate/maps-and-data/location-specific-long-term-averages/u1214qgj0',
   weather_cambridge_monthly: [
     { month: 'January', maxC: 7.65, minC: 1.88, rainfallMm: 48.62, rainDays: 10.40 },
@@ -164,12 +167,21 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
     { month: 'November', maxC: 10.72, minC: 4.53, rainfallMm: 52.63, rainDays: 10.43 },
     { month: 'December', maxC: 7.95, minC: 2.18, rainfallMm: 49.20, rainDays: 10.47 }
   ],
-  // Per six-hour period: deliberately far stormier than Cambridge while
+  // Per weather change: deliberately far stormier than Cambridge while
   // retaining its real seasonal temperature and rainfall shape.
   weather_storm_chance_by_month: [0.06, 0.055, 0.05, 0.06, 0.07, 0.085,
     0.085, 0.08, 0.065, 0.07, 0.065, 0.06],
+  // Snow replaces rain at or below this temperature. Hurricanes replace a
+  // small warm subset of storms, preserving the overall severe-weather rate.
+  weather_snow_max_temperature_c: 2,
+  weather_hurricane_min_temperature_c: 18,
+  weather_hurricane_chance_by_month: [0, 0, 0, 0, 0, 0.004,
+    0.01, 0.012, 0.008, 0.002, 0, 0],
   storm_ship_damage_min_ratio: 0.04,
   storm_ship_damage_max_ratio: 0.12,
+  hurricane_ship_damage_min_ratio: 0.15,
+  hurricane_ship_damage_max_ratio: 0.35,
+  hurricane_vehicle_damage_chance: 0.65,
   storm_kraken_wake_chance: 0.35,
   world_creature_land_whale_wake_chance: 0.018,
   world_creature_names: {
@@ -177,8 +189,12 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
     orca_pod: 'Orca Pod', elephant_herd: 'Elephant Herd', t_rex: 'T-Rex'
   },
   world_creature_icons: {
-    kraken: '\u{1F419}', land_whale: '\u{1F40B}', white_whale: '\u{1F433}',
-    orca_pod: '\u{1F42C}', elephant_herd: '\u{1F418}', t_rex: '\u{1F996}'
+    kraken: '/node/creatures/kraken.svg',
+    land_whale: '/node/creatures/land-whale.svg',
+    white_whale: '/node/creatures/white-whale.svg',
+    orca_pod: '/node/creatures/orca-pod.svg',
+    elephant_herd: '/node/creatures/elephant-herd.svg',
+    t_rex: '/node/creatures/t-rex.svg'
   },
   world_creature_route_types: {
     kraken: 'sea', land_whale: 'land', white_whale: 'sea',
@@ -193,7 +209,7 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
     orca_pod: 0.022, elephant_herd: 0.02, t_rex: 0.008
   },
   // Creature activity is checked on its own persisted clock, independently of
-  // the six-hour weather periods. Each completed roll schedules the next one
+  // weather changes. Each completed roll schedules the next one
   // at a uniformly random point inside this range.
   world_creature_roll_min_interval_ms: 60 * 1000,
   world_creature_roll_max_interval_ms: 45 * 60 * 1000,
@@ -216,6 +232,9 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_creature_tier_speed_multipliers: [0, 0.85, 0.95, 1, 1.1, 1.2, 1.35],
   world_creature_tier_damage_multipliers: [0, 0.75, 0.9, 1, 1.25, 1.55, 1.9],
   world_creature_tier_ore_drops: [0, 8, 16, 32, 64, 128, 256],
+  // Spectral attackers keep their durability, but their outgoing force is
+  // deliberately lower than the physical craft from which they rose.
+  ghost_attack_force_ratio: 0.85,
   world_creature_reward_min_rarity: 4,
   world_creature_reward_items: 2,
   world_event_catchup_periods: 120,
@@ -223,6 +242,23 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_event_outcome_retention_days: 7,
   world_event_player_history_limit: 20,
   mining_dwarf_capture_chance: 0.0025
+});
+
+export const LEGACY_COMBAT_SEASON_SETTINGS = Object.freeze({
+  combat_season_months: 3,
+  combat_season_places: 5,
+  combat_season_prizes: {
+    land: {
+      1: [1256, 219, 149, 1257, 151],
+      2: [222, 143, 142, 147, 1255],
+      4: [1403, 222, 139, 143, 142]
+    },
+    sea: {
+      1: [289, 733, 1392, 1391, 1088],
+      2: [300, 296, 297, 293, 734],
+      4: [1402, 300, 735, 296, 297]
+    }
+  }
 });
 
 const LEGACY_SPECIALISATIONS = Object.freeze([
@@ -684,6 +720,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   }));
   const equipmentTypes = EQUIPMENT_TYPE_NAMES.map((name, id) => ({ id, name })).filter((entry) => entry.id > 0);
   const settings = {
+    ...LEGACY_COMBAT_SEASON_SETTINGS,
     find_interval_ms: 6 * 60 * 60 * 1000,
     max_offline_finds: 20,
     buckets_per_thing: 180,
@@ -765,6 +802,14 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     land_meld_armor_bonus: 0.5,
     post_battle_hull_restore_ratio: 0.8,
     post_battle_crew_restore_ratio: 0.8,
+    post_battle_sail_restore_ratio: 0.8,
+    ship_port_hull_repair_interval_ms: 60 * 60 * 1000,
+    vehicle_combat_duration_min_ms: 25 * 60 * 1000,
+    vehicle_combat_duration_max_ms: 30 * 60 * 1000,
+    vehicle_disarmed_combat_duration_min_ms: 3 * 60 * 1000,
+    vehicle_disarmed_combat_duration_max_ms: 7 * 60 * 1000,
+    vehicle_combat_port_safe_zone_max_distance: 5,
+    sinking_news_minimum_rarity: 5,
     fishing_spacing_base_distance: 20,
     fishing_spacing_growth_roll_sides: 5,
     fishing_spacing_growth_roll_hit: 4,
@@ -873,7 +918,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     ship_cannon_rounds: 3,
     ship_critical_damage_multiplier: 2,
     ship_unarmed_crew_strength: 1,
-    ship_cannon_rounds_by_rate: { 1: [2], 2: [1, 3] },
+    ship_cannon_rounds_by_rate: { 1: [2], 2: [1, 3], 3: [1, 2, 3] },
     ship_chain_escape_speed_ratio: 1.15,
     ship_boarding_strength_ratio: 1.5,
     ship_boarding_max_rounds: 10000,
@@ -937,10 +982,6 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     gold_transfer_note_max_length: 200,
     private_message_max_length: 2000,
     vehicle_name_max_length: 20,
-    finding_lease_token_max_length: 100,
-    finding_poll_min_interval_ms: 250,
-    finding_poll_empty_interval_ms: 5000,
-    finding_poll_max_interval_ms: 30000,
     session_max_age_seconds: 7 * 24 * 60 * 60,
     home_recent_discovery_limit: 8,
     home_next_stone_limit: 6,
@@ -1290,6 +1331,12 @@ export function indexCatalog({
   }
   if (!Number.isSafeInteger(Number(settings.weather_slot_ms))
     || Number(settings.weather_slot_ms) < 60 * 60 * 1000
+    || !Number.isSafeInteger(Number(settings.weather_change_min_interval_ms))
+    || Number(settings.weather_change_min_interval_ms) < 30 * 60 * 1000
+    || !Number.isSafeInteger(Number(settings.weather_change_max_interval_ms))
+    || Number(settings.weather_change_max_interval_ms)
+      < Number(settings.weather_change_min_interval_ms)
+    || Number(settings.weather_change_max_interval_ms) > 8 * 60 * 60 * 1000
     || !Number.isSafeInteger(Number(settings.world_creature_roll_min_interval_ms))
     || Number(settings.world_creature_roll_min_interval_ms) < 60 * 1000
     || !Number.isSafeInteger(Number(settings.world_creature_roll_max_interval_ms))
@@ -1307,6 +1354,29 @@ export function indexCatalog({
     || settings.weather_storm_chance_by_month.length !== 12
     || settings.weather_storm_chance_by_month.some((chance) =>
       !Number.isFinite(Number(chance)) || Number(chance) < 0 || Number(chance) > 1)
+    || !Number.isFinite(Number(settings.weather_snow_max_temperature_c))
+    || Number(settings.weather_snow_max_temperature_c) < -50
+    || Number(settings.weather_snow_max_temperature_c) > 60
+    || !Number.isFinite(Number(settings.weather_hurricane_min_temperature_c))
+    || Number(settings.weather_hurricane_min_temperature_c) < -50
+    || Number(settings.weather_hurricane_min_temperature_c) > 60
+    || Number(settings.weather_snow_max_temperature_c)
+      >= Number(settings.weather_hurricane_min_temperature_c)
+    || !Array.isArray(settings.weather_hurricane_chance_by_month)
+    || settings.weather_hurricane_chance_by_month.length !== 12
+    || settings.weather_hurricane_chance_by_month.some((chance, index) =>
+      !Number.isFinite(Number(chance)) || Number(chance) < 0
+      || Number(chance) > Number(settings.weather_storm_chance_by_month[index]))
+    || !Number.isFinite(Number(settings.hurricane_ship_damage_min_ratio))
+    || Number(settings.hurricane_ship_damage_min_ratio) < 0
+    || Number(settings.hurricane_ship_damage_min_ratio) > 1
+    || !Number.isFinite(Number(settings.hurricane_ship_damage_max_ratio))
+    || Number(settings.hurricane_ship_damage_max_ratio)
+      < Number(settings.hurricane_ship_damage_min_ratio)
+    || Number(settings.hurricane_ship_damage_max_ratio) > 1
+    || !Number.isFinite(Number(settings.hurricane_vehicle_damage_chance))
+    || Number(settings.hurricane_vehicle_damage_chance) < 0
+    || Number(settings.hurricane_vehicle_damage_chance) > 1
     || WORLD_CREATURE_TYPES.some((type) =>
       typeof settings.world_creature_names?.[type] !== 'string'
       || !settings.world_creature_names[type].trim()
@@ -1338,6 +1408,9 @@ export function indexCatalog({
     || settings.world_creature_tier_ore_drops.length < 7
     || settings.world_creature_tier_ore_drops.slice(1, 7).some((value) =>
       !Number.isSafeInteger(Number(value)) || Number(value) < 1)
+    || !Number.isFinite(Number(settings.ghost_attack_force_ratio))
+    || Number(settings.ghost_attack_force_ratio) <= 0
+    || Number(settings.ghost_attack_force_ratio) >= 1
     || !Number.isSafeInteger(Number(settings.world_event_catchup_periods))
     || Number(settings.world_event_catchup_periods) < 1
     || !Number.isSafeInteger(Number(settings.world_event_weather_retention_days))

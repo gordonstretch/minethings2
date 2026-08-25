@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MineThings 2">
+  <rect width="64" height="64" rx="8" fill="#0b0d0c"/>
+  <path d="M12 20 32 7l20 13-8 34H20z" fill="#f09a24"/>
+  <path d="M22 24 32 17l10 7-4 20H26z" fill="#0b0d0c"/>
+  <text x="44" y="58" fill="#f4efe4" font-family="Arial, sans-serif" font-size="23" font-weight="900" text-anchor="middle">2</text>
+</svg>

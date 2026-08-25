@@ -215,7 +215,7 @@ test('treats ship cannon quantities as a complete replaceable and removable load
   assert.equal(inventoryQuantity(store, player.id, player.cityId, tackleId), 0);
 });
 
-test('reorders duplicate cannons without tackle and rounds partial ammunition up to one slot',
+test('reorders duplicate cannons without tackle and counts only complete ammunition crates',
   (context) => {
     const store = new SqliteStore(':memory:');
     context.after(() => store.close());
@@ -256,9 +256,9 @@ test('reorders duplicate cannons without tackle and rounds partial ammunition up
       UPDATE player_ship_state SET ${ammunitionRule.storageField} = 1 WHERE vehicle_id = ?
     `).run(vehicleId);
     const details = store.vehicleDetails(player.id, vehicleId, 2000);
-    assert.equal(details.capacityBreakdown.ammunition, 1,
-      'one loose shot must still reserve one ammunition slot');
-    assert.equal(details.capacityBreakdown.ammunitionSlots, 1);
+    assert.equal(details.capacityBreakdown.ammunition, 0,
+      'the original rules count only complete ammunition crates');
+    assert.equal(details.capacityBreakdown.ammunitionSlots, 0);
     assert.equal(details.capacityBreakdown.free,
       details.capacityBreakdown.total - details.capacityBreakdown.fittingSlots
         - details.capacityBreakdown.ammunitionSlots - details.capacityBreakdown.cargoSlots);

@@ -231,13 +231,22 @@
       heading.textContent = 'Actions';
       actions.appendChild(heading);
       if (placedCanPack) {
-        const claim = document.createElement('button');
-        claim.type = 'button';
-        claim.disabled = completedBarrels < 1;
-        claim.textContent = claim.disabled ? 'No completed barrel to claim'
+        const claimOne = document.createElement('button');
+        claimOne.type = 'button';
+        claimOne.disabled = completedBarrels < 1;
+        claimOne.textContent = claimOne.disabled ? 'No completed barrel to claim'
           : `Claim one ${state.labels.oil} barrel`;
-        claim.addEventListener('click', () => submit(`/oil-field/${hex.Hex.id}/claim`, {}));
-        actions.appendChild(claim);
+        claimOne.addEventListener('click', () => submit(`/oil-field/${hex.Hex.id}/claim`, { quantity: 'one' }));
+        actions.appendChild(claimOne);
+        const claimAll = document.createElement('button');
+        claimAll.type = 'button';
+        claimAll.className = 'secondary';
+        claimAll.disabled = completedBarrels < 1;
+        claimAll.textContent = completedBarrels < 1
+          ? 'No completed barrels to claim'
+          : `Claim all ${completedBarrels} ${state.labels.oil} ${completedBarrels === 1 ? 'barrel' : 'barrels'}`;
+        claimAll.addEventListener('click', () => submit(`/oil-field/${hex.Hex.id}/claim`, { quantity: 'all' }));
+        actions.appendChild(claimAll);
       } else {
         const recovery = document.createElement('p');
         recovery.className = 'capacity-warning';

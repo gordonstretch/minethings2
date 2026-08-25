@@ -18,34 +18,51 @@ parentPort.on('message', (message) => {
   if (message?.type !== 'tick') return;
 
   const started = performance.now();
+  const results = {
+    mines: null, dwarf: null, world: null, vehicles: null,
+    factories: null, oil: null, findingDigests: null, messages: null
+  };
+  let failure = null;
   try {
     // Refresh the versioned catalog/settings snapshot before scheduled game work.
     store.loadCatalog();
-    const world = store.settleWorldEvents(message.now);
-    const dwarf = store.runDwarfUpdate(message.now, Math.random);
-    const vehicles = store.settleVehicles(message.now);
-    const factories = store.settleFactories(message.now);
-    const oil = store.settleOilField(message.now);
-    const messages = store.expireMessages(message.now);
+    results.mines = store.settleMines(message.now, Math.random);
+    results.world = store.settleWorldEvents(message.now);
+    results.dwarf = store.runDwarfUpdate(message.now, Math.random);
+    results.vehicles = store.settleVehicles(message.now);
+    results.factories = store.settleFactories(message.now);
+    results.oil = store.settleOilField(message.now);
+  } catch (error) {
+    failure = error;
+  }
+  // Inbox delivery is independent of the simulation systems above. A broken
+  // vehicle or world event must not starve already-recorded daily summaries.
+  try {
+    results.findingDigests = store.sendDailyFindingDigests(message.now);
+  } catch (error) {
+    failure ??= error;
+  }
+  try {
+    results.messages = store.expireMessages(message.now);
+  } catch (error) {
+    failure ??= error;
+  }
+  if (!failure) {
     parentPort.postMessage({
       type: 'tick-complete',
       durationMs: performance.now() - started,
-      dwarf,
-      world,
-      vehicles,
-      factories,
-      oil,
-      messages
+      ...results
     });
-  } catch (error) {
+  } else {
     parentPort.postMessage({
       type: 'tick-error',
       durationMs: performance.now() - started,
       error: {
-        name: error?.name ?? 'Error',
-        message: error?.message ?? String(error),
-        code: error?.code
-      }
+        name: failure?.name ?? 'Error',
+        message: failure?.message ?? String(failure),
+        code: failure?.code
+      },
+      findingDigests: results.findingDigests
     });
   }
 });

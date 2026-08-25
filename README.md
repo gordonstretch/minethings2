@@ -14,6 +14,31 @@ Open <http://127.0.0.1:3000>. To use another address, set `HOST` or `PORT` befor
 
 Set `DATABASE_FILE` to use a database outside the default `data/minethings.sqlite` path.
 
+### Local Google login
+
+Create an OAuth client in Google Auth Platform with application type **Web application** and add
+this exact authorized redirect URI:
+
+```text
+http://127.0.0.1:3000/auth/google/callback
+```
+
+If the consent screen is in testing mode, add the Google accounts that may sign in as test users.
+Then start MineThings from PowerShell with the client credentials in the process environment:
+
+```powershell
+$env:GOOGLE_AUTH_ENABLED = '1'
+$env:GOOGLE_CLIENT_ID = 'your-client-id.apps.googleusercontent.com'
+$env:GOOGLE_CLIENT_SECRET = 'your-client-secret'
+$env:MINETHINGS_PUBLIC_ORIGIN = 'http://127.0.0.1:3000'
+npm start
+```
+
+The configured public origin and Google redirect URI must match exactly. Google login links an
+existing miner when Google returns the same verified email address. A new Google user chooses a
+miner name, accepts the game terms, and creates a backup local password. Credentials stay in the
+environment and must not be committed. Production Google login requires an HTTPS public origin.
+
 ### Mandatory email verification
 
 Every new miner must supply and verify an email address before any game page, API state,
@@ -105,31 +130,31 @@ tests, portal and PHP source, audit captures, and development dependencies. Run 
 - all 43 original equipment definitions, seven bot slots, equipment-adjusted mining rates, and persistent mine loadouts
 - all 28 original miner-robot definitions, persistent robot assignments, and legacy damaged-find probability
 - all six original explosives with city-local consumption, ±25% power variation, instant things/gold/ore output, and original detonation artwork
-- all 191 legacy meld definitions and 620 recipe requirements, with capacity-free Meld storage, automatic recipe completion, atomic home-city creation, and ownership
+- all 191 legacy meld definitions and 620 recipe requirements, with capacity-free global Meld storage, automatic recipe completion, fixed regional-capital creation, and ownership
 - all 13 gadget types and 38 activator items, additive original lifespans, the Hammer equipment-rate bonus, and the Ledger, Calculator, Spreadsheet, and Meldal Detector pages
 - 11 meld-gated, bonus-only specialisations; every miner can use land, sea, air, factories, workers, fishing, and the Oil Field; the original per-specialisation Newb-to-Grandmaster tenure titles advance only while batteries are charged and retain progress when switching
 - six rarity tiers of Dwarf with randomly timed 0–7-minute city-specific findings from their own rarity through two tiers lower, a uniform 5% disappearance rate, the Exploited stone, and weighted class-matched vehicle stowaways that escape, are captured, or drown
-- persistent six-hour seasonal weather modelled on Cambridge 1991–2020 climate normals, with deliberately frequent storms that damage ships at sea; a separate persisted natural-creature clock rolls one eligible world at a random 1–45-minute interval without replaying downtime backlogs; an eight-phase lunar cycle alters storms, Dwarf captures, creature activity, combat, and treasure; audited administration controls can override each map's current weather
-- Kraken and Land Whale route travellers with visible speed, position, destination and persistent health; compatible ships and land vehicles physically pursue them from either endpoint, combat resolves only at interception, and the killing craft fills its remaining cargo capacity with bounty things; administrators can spawn either creature on a compatible open route, and mines can occasionally capture Dwarves directly into the local mining cycle
+- persistent seasonal weather modelled on Cambridge 1991–2020 climate normals, changing at a persisted random interval from 30 minutes to 8 hours; snow closes departures, storms damage ships at sea, and hurricanes can damage travelling land vehicles and ships; a separate persisted natural-creature clock rolls one eligible world at a random 1–45-minute interval without replaying downtime backlogs; an eight-phase lunar cycle alters severe weather, Dwarf captures, creature activity, combat, and treasure; audited administration controls can override each map's current weather
+- six living route threats with physical movement and interception; they can ambush compatible passing traffic or be hunted from an endpoint, while roaming Ghost Riders and Ghost Ships attack peaceful traffic across their combat class with reduced spectral offence; `/events` presents both in one spoiler-free industrial threat board with original grungy SVG art
 - compact acknowledged reports for routine findings and full artwork-and-description occasions for Purple and Orange findings, always ordered from highest to lowest rarity
 - seven-day worker contracts, CPH, oil boosts, seven-worker factory assignments, and exact contract-expiry progress
 - factory construction, persistent ten-job production queues with reserved inputs and automatic advancement, cancel/refund, reordering and demolition flows, timed production, damaged-item repair, robot production, metal melds, aircraft, ammunition, and original action costs
-- live public chat with the original meld-count colours, persistent custom colours from 140 melds, administrator black, per-miner ignores, escaped plain text, deduplicated World notices, and account-controlled Purple/Orange discovery announcements
-- Audited player-to-player gold gifts from miner profiles; retired banking balances and contracts are settled once during migration
+- live public chat with the original meld-count colours, persistent custom colours from 140 melds, administrator black, per-miner ignores, escaped plain text, deduplicated World notices, and Dwarf-capture announcements; Fabled and Legendary finds stay private
+- player-to-player gold transfers are disabled; retired banking balances and contracts are settled once during migration, while historical transfer records remain available for audit
 - the original 46 oil-field machine definitions, universal shared-hex operation, Pilot-extended machine life, original rarity power/lifespans, directional pumping and packing, Helicopter build-radius checks, and 159-litre Oil barrel claims
 - oil-field power routing and replacement queues, search-plane intelligence, bombing, flak and drone defenses, hostile machines, welders, and oil-stealing cranes
-- city-scoped inventories, original per-city mine availability, land/sea/air routes, geographic map, vehicle activation and travel, arrivals, and city discovery
-- seven distinct worlds—Aso, Bromo, Calbuco, Dempo, Ebeko, Fogo, and Gallego—recast as fully playable five-city maps, each with 15 mine types and a local land/sea/air network; their initially closed 12,000 km inter-map corridors are controlled from Administration
+- city-scoped inventories, original per-city mine availability, land/sea/air routes, geographic map, vehicle activation, ordered multi-leg itineraries with immediate onward departures and final-stop cargo delivery, arrivals, and city discovery
+- seven distinct worlds—Aso, Bromo, Calbuco, Dempo, Ebeko, Fogo, and Gallego—recast as fully playable five-city maps, each with one shared gateway capital, 15 mine types, and a local land/sea/air network; their initially closed 12,000 km inter-map corridors are controlled from Administration
 - all original vehicle, land, ship, aircraft, mod, weapon, cannon, ammunition, bomb, box, and rating-tier catalog records
-- vehicle cargo, rarity-class restrictions, mods, weapons, oil, ship cannons, ammunition crates, aggression settings, pursuit, land and ship combat, pillaging, battle histories, and ratings
+- vehicle cargo, rarity-class restrictions, mods, weapons, oil, ship cannons, ammunition crates, peaceful/pillage/patrol orders with automatic same-tier targeting, pursuit, land and ship combat, original port and post-battle repairs, route-safe zones, timed/replanned encounters, journey disarming, protected pillage cargo, immediate sinking with complete location-accurate wrecks, per-shot battle histories, and three-month PvP seasons with tier-stepping transport prizes
 - all eight permanent credit-shop containers, with duplicate ownership and one capacity bonus per container type
 - the original rarity algorithm and 698 discoverable catalog items, including the four new Dwarf tiers
 - inventory, item details, selling, credits, and purchasing mine types
 - public, sourced History and versioned Legal pages; registration consent and PayPal-hosted GBP credit checkout with receipts, webhook recovery, reversals, and administrator auditing
-- utility-adjusted fixed gold values for every item, with a 40% listing-and-bid premium outside cities offering the item's mine type and enforced by city-specific markets; the purchase-only exchange uses compact stock cards, item-type filters, search, and rarity/affordability/price/name sorting; sell listings leave inventory for capacity-free item escrow, with partial fills, cancellation returns, and sale history
+- utility-adjusted minimum listing prices for every item, with a 40% premium outside cities offering the item's mine type and enforced by city-specific markets; miners set listing and bid prices on the original price ladder, known empty order books remain reachable for new bids, and best-price FIFO buy-now/sell-now trades execute against inventory and gold that remain available until execution
 - miner directory, public profiles, unread counts, and private conversations
 - inbox filtering and bulk read, unread, delete, restore, keep, and stop-keeping controls; transactional reports for markets, transfers, stones, factories, vehicles, cities, machines, payments, and administration; background factory and vehicle delivery; unkept messages are permanently purged after 28 days; city-local Ore-scrap recycling, Auto-Recycle recommendations, Ore refining, and premium Factory Worker bots
-- mine priorities, three active mines plus a Remote Control slot, bot oiling, rechargeable meld-scaled batteries, fourteen-day rentals, and refundable mine resale
+- mine priorities, three active mines per discovered region (four per region while Remote Control is active), bot oiling, rechargeable meld-scaled batteries, fourteen-day rentals, and refundable mine resale
 - public server statistics, layered legacy avatar editing and capacity bonuses, meld comparison, and Fisherman bait-to-fish conversion
 - all 1,396 original item rows imported into SQLite plus four new Dwarf tiers (including equipment, explosives, robots, vehicles, and 694 damaged variants), with 698 normal mining items in the standard finding pool
 - the original image-driven header, navigation sprites and hover states, sidebar, footer, rarity art, and legacy asset URLs

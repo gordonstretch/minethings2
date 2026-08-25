@@ -113,9 +113,11 @@ test('lets every specialisation travel, order, fish, work, hire, manufacture, an
       WHERE player_id = ? AND vehicle_id = ? AND event_type = 'fished'
     `).get(saved.id, shipId).count, 1);
     assert.equal(store.database.prepare(`
-      SELECT COALESCE(SUM(quantity), 0) AS quantity FROM finding_queue
-      WHERE player_id = ? AND source = 'fishing'
-    `).get(saved.id).quantity, 1);
+      SELECT payload_json FROM live_update_events
+      WHERE scope = ? AND event_type = 'items-found'
+    `).all(`player:${saved.id}`).map((event) => JSON.parse(event.payload_json))
+      .filter((payload) => payload.source === 'fishing')
+      .reduce((sum, payload) => sum + Number(payload.quantity), 0), 1);
 
     const field = store.oilField(saved.id, 1000);
     const hex = field.hexes.find((entry) => entry.available === 1 && !entry.machine);
