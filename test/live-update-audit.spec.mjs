@@ -224,6 +224,72 @@ test('keeps an edited invalid preview stale through a later live update', async 
   await expect(page.locator('[data-live-preview-panel]')).toContainText('Preview stale');
 });
 
+test('filters chat by multiple rating tiers, regions, and world events', async ({ page }) => {
+  store.database.exec('DELETE FROM world_chat_announcements; DELETE FROM chats;');
+  const vehicle = store.database.prepare(
+    'SELECT item_id FROM player_vehicles WHERE id = ?'
+  ).get(loadoutVehicleId);
+  const owner = store.playerById(playerId, 2000, { settle: false });
+  owner.inventory[vehicle.item_id] = (owner.inventory[vehicle.item_id] ?? 0) + 1;
+  store.savePlayer(owner);
+  const rankOneVehicleId = store.activateVehicle(playerId, vehicle.item_id, 1900);
+  store.database.prepare('UPDATE player_vehicles SET rating = 1600 WHERE id = ?')
+    .run(loadoutVehicleId);
+  store.database.prepare('UPDATE player_vehicles SET rating = 1810 WHERE id = ?')
+    .run(rankOneVehicleId);
+  const insertAnnouncement = store.database.prepare(`
+    INSERT INTO world_chat_announcements (event_key, body, path, created_at)
+    VALUES (?, ?, '/events', ?)
+  `);
+  insertAnnouncement.run(
+    `ship-sunk:${loadoutVehicleId}:filter-rank-6`, 'Rank 6 combat notice.', 1901
+  );
+  insertAnnouncement.run(
+    `ship-sunk:${rankOneVehicleId}:filter-rank-1`, 'Rank 1 combat notice.', 1902
+  );
+  store.addChat(playerId, 'Regional miner chatter.', 1903);
+
+  await login(page);
+  await page.goto(`${base}/chat`);
+  const rankOne = page.locator('[data-chat-rating-tier][value="1"]');
+  const rankSix = page.locator('[data-chat-rating-tier][value="6"]');
+  await expect(page.locator('input[data-chat-rating-tier]')).toHaveCount(6);
+  await expect(rankOne.locator('xpath=..')).toContainText('Yours');
+  await expect(rankSix.locator('xpath=..')).toContainText('Yours');
+
+  await rankOne.check();
+  await expect(page.getByText('Rank 1 combat notice.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Rank 6 combat notice.', { exact: true })).toBeHidden();
+  await rankSix.check();
+  await expect(page.getByText('Rank 1 combat notice.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Rank 6 combat notice.', { exact: true })).toBeVisible();
+
+  await rankOne.uncheck();
+  await rankSix.uncheck();
+  const hideWorldEvents = page.locator('[data-chat-hide-world-events]');
+  await hideWorldEvents.check();
+  await expect(page.getByText('Rank 1 combat notice.', { exact: true })).toBeHidden();
+  await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeVisible();
+  await hideWorldEvents.uncheck();
+
+  const hideRegion = page.locator('[data-chat-hidden-region]').first();
+  await hideRegion.check();
+  await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeHidden();
+  await page.locator('[data-chat-filter-reset]').click();
+  await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeVisible();
+
+  await rankOne.check();
+  const external = new DatabaseSync(databaseFile);
+  external.prepare(`
+    INSERT INTO world_chat_announcements (event_key, body, path, created_at)
+    VALUES (?, 'Later Rank 6 combat notice.', '/events', 1904)
+  `).run(`ship-sunk:${loadoutVehicleId}:filter-live-rank-6`);
+  external.close();
+  await expect(page.getByText('Later Rank 6 combat notice.', { exact: true })).toBeHidden();
+  await expect(rankOne).toBeChecked();
+  await expect(rankSix).not.toBeChecked();
+});
+
 test('follows live chat at the bottom without yanking a reader who scrolled up', async ({ page }) => {
   await login(page);
   let external = new DatabaseSync(databaseFile);

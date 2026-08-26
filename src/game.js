@@ -9,8 +9,9 @@ function setting(catalog, key) {
 
 function chooseRarity(catalog, rarities, random = Math.random, minRarity = null) {
   minRarity ??= Number(setting(catalog, 'standard_find_min_rarity'));
-  const available = [...rarities.keys()].filter((rarity) => rarity >= minRarity);
-  if (!available.length) return null;
+  const configured = [...rarities.keys()].sort((a, b) => a - b);
+  const available = configured.filter((rarity) => rarity >= minRarity);
+  if (!available.length) return configured.at(-1) ?? null;
   const maximumRarity = Math.max(...catalog.rarities.map((rarity) => rarity.id));
   const rollBase = Number(setting(catalog, 'rarity_roll_base'));
   for (let attempts = 0; attempts < Number(setting(catalog, 'rarity_roll_attempts')); attempts += 1) {
@@ -30,7 +31,8 @@ export function findItem(catalog, mineTypeId, random = Math.random) {
   const rarities = catalog.byMineType.get(mineTypeId);
   if (!rarities) throw new Error('This mine has no discoverable items.');
   const rarity = chooseRarity(catalog, rarities, random);
-  const candidates = rarities.get(rarity);
+  const candidates = rarity === null ? null : rarities.get(rarity);
+  if (!candidates?.length) throw new Error('This mine has no discoverable items.');
   return candidates[Math.floor(random() * candidates.length)];
 }
 

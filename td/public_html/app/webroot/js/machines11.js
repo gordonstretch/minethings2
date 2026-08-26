@@ -1,6 +1,67 @@
 
+var oilBoardWidth = 1000;
+var oilBoardHeight = 900;
+var oilBoardCenterX = oilBoardWidth / 2;
+var oilBoardCenterY = 500;
+
+function OilRackLayout(count) {
+	var positions = [];
+	if (!count)
+		return positions;
+
+	// Keep roughly half the parts above the field and balance the rest down
+	// the two side rails. The 46 original machine variants all fit without
+	// covering the playable hexes.
+	var topCount = Math.min(20, Math.max(1, Math.ceil(count / 2)));
+	var topRows = Math.ceil(topCount / 10);
+	var placed = 0;
+	for (var row = 0; row < topRows; row++) {
+		var rowCount = Math.min(10, topCount - placed);
+		var y = topRows === 1 ? 66 : (row === 0 ? 42 : 106);
+		for (var column = 0; column < rowCount; column++) {
+			var x = rowCount === 1 ? oilBoardCenterX : 70 + column * (860 / (rowCount - 1));
+			positions.push({x:x, y:y, zone:'top'});
+		}
+		placed += rowCount;
+	}
+
+	var sideCount = count - topCount;
+	var leftCount = Math.ceil(sideCount / 2);
+	var rightCount = sideCount - leftCount;
+	var addSide = function (amount, x, zone) {
+		for (var index = 0; index < amount; index++) {
+			var y = amount === 1 ? 240 : 170 + index * (660 / (amount - 1));
+			positions.push({x:x, y:y, zone:zone});
+		}
+	};
+	addSide(leftCount, 68, 'left');
+	addSide(rightCount, oilBoardWidth - 68, 'right');
+	return positions;
+}
+
+function DrawOilRackLabel(machine, position) {
+	var width = position.zone === 'top' ? 82 : 108;
+	var label = paper.text(position.x, position.y + 19,
+		machine.MachineType.name.toUpperCase()).attr({
+			fill:'#f1e7d1', 'font-family':'Arial, sans-serif', 'font-size':8, 'font-weight':'bold'
+		});
+	var badge = paper.rect(position.x + width / 2 - 27, position.y - 24,
+		22, 13, 1).attr({fill:'#f09a24', stroke:'#f6bd62', 'stroke-width':0.75});
+	var count = paper.text(position.x + width / 2 - 16, position.y - 17.5,
+		'\u00d7'+machine.count).attr({
+			fill:'#17120b', 'font-family':'Arial, sans-serif', 'font-size':8, 'font-weight':'bold'
+		});
+	var elements = [[label, 'oil-rack-label'],
+		[badge, 'oil-rack-count-badge'], [count, 'oil-rack-count']];
+	for (var index = 0; index < elements.length; index++) {
+		elements[index][0].node.classList.add(elements[index][1]);
+		elements[index][0].node.dataset.rackZone = position.zone;
+		elements[index][0].node.style.pointerEvents = 'none';
+	}
+}
+
 var drawboard = function () {
-	paper = Raphael("board", 800, 900);
+	paper = Raphael("board", oilBoardWidth, oilBoardHeight);
 	barrels = paper.set();
 		
 	var center = Hex2Cart(0,0);
@@ -145,26 +206,27 @@ var drawboard = function () {
 	}
 	
 	
-	// available machines
-	var x = 50;
-	var y = 50;
+	// Available machine parts use the otherwise empty top and side perimeter.
+	var rackLayout = OilRackLayout(ownedMachines.length);
+	var rackCaption = paper.text(oilBoardCenterX, 14,
+		ownedMachines.length ? 'MACHINE RACK  //  DRAG A PART TO ANY VALID HEX' : 'MACHINE RACK  //  NO PARTS AVAILABLE');
+	rackCaption.node.classList.add('oil-rack-caption');
+	rackCaption.node.style.pointerEvents = 'none';
 	var p = null;
 	for (var i = 0; i < ownedMachines.length; i++) {
 		machine = ownedMachines[i];
+		var position = rackLayout[i];
+		var x = position.x;
+		var y = position.y;
+		DrawOilRackLabel(machine, position);
 		
 		var p = CreateMachine(machine.MachineType.name, paper, machine, false, x, y);
-		if (p)
-			p.AddHandle();
+		if (p) {
+			p.AddHandle(machine.Item.icon, hexDiameter);
+			p.rackZone = position.zone;
+		}
 		else
 			console.log('no such machine '+machine.MachineType.name);
-		
-		paper.text(x, y+20, machine.MachineType.name+' x'+machine.count);
-		
-		x += 65; 
-		if (x > 750) {
-			x = 50;
-			y += 50;
-		}		
 	}
 	
 };
@@ -212,20 +274,24 @@ Machine.prototype.CreateSet = function() {
 	this.draw();	
 	this.set = this.paper.setFinish();	
 }
-Machine.prototype.AddHandle = function() {
+Machine.prototype.AddHandle = function(iconHref, iconSize) {
 	this.set.remove();
 	this.set.clear();
 	this.paper.setStart();
 	this.createCircle(); // <- handle
-	this.draw();
+	if (iconHref) {
+		var size = Number(iconSize) || 30;
+		this.rackIcon = this.paper.image(iconHref,
+			this.pos[0] - size / 2, this.pos[1] - size / 2, size, size);
+		this.rackIcon.node.classList.add('oil-rack-machine-icon');
+		this.rackIcon.node.style.pointerEvents = 'none';
+	} else
+		this.draw();
 	this.set = this.paper.setFinish();	
 }
 Machine.prototype.createCircle = function() {
-	var rarity = this.machine.Item.rarity;
-	color = RarityColor(rarity);
-
-	this.circle = paper.circle(this.pos[0], this.pos[1], 13)
-		.attr({fill:color, cursor:'pointer'})
+	this.circle = paper.circle(this.pos[0], this.pos[1], 20)
+		.attr({fill:'#FFF', 'fill-opacity':0.001, stroke:'none', cursor:'pointer'})
 		.click( this.onclick.bind(this) );
 }
 Machine.prototype.getCenter = function() {
@@ -912,8 +978,8 @@ Dialog.prototype.SetMachine = function(machine) {
 	
 	// draw the dlg
 	var x;
-	if (machine.pos[0] < 400)
-		x = 450;
+	if (machine.pos[0] < oilBoardCenterX)
+		x = oilBoardWidth - 350;
 	else
 		x = 50;
 	var y = 10;
@@ -1162,8 +1228,8 @@ function RarityColor(rarity) {
 
 function Hex2Cart(x, y)
 {
-	var cartX = 400 + x * cartVector[0] * hexDiameter;
-	var cartY = 500 - x * cartVector[1] * hexDiameter;
+	var cartX = oilBoardCenterX + x * cartVector[0] * hexDiameter;
+	var cartY = oilBoardCenterY - x * cartVector[1] * hexDiameter;
 	cartY -= y * hexDiameter;
 	
 	return [cartX, cartY];

@@ -293,8 +293,10 @@ export class SqliteStore {
       }
       this.#initialize();
       this.#migrate();
+      this.#migrateMachineItemDescriptions();
       this.#migrateEventThreats();
       this.#migrateShipFiringRounds();
+      this.#migrateVehicleCombatConsistency();
       this.#migrateOpenLimitOrders();
       this.#ensureCryptoMarketLiveUpdates();
       this.#initializeCatalogRevisionTracking();
@@ -4451,6 +4453,44 @@ export class SqliteStore {
     });
   }
 
+  #migrateMachineItemDescriptions(now = Date.now()) {
+    const migrationName = 'machine-item-descriptions-v1';
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        name TEXT PRIMARY KEY,
+        applied_at INTEGER NOT NULL,
+        details_json TEXT NOT NULL DEFAULT '{}'
+      )
+    `);
+    if (this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return;
+    this.#transaction(() => {
+      const result = this.database.prepare(`
+        UPDATE catalog_items
+        SET description = (
+          SELECT catalog_machine_types.description
+          FROM catalog_machines
+          JOIN catalog_machine_types
+            ON catalog_machine_types.id = catalog_machines.machine_type_id
+          WHERE catalog_machines.item_id = catalog_items.id
+        )
+        WHERE TRIM(description) = ''
+          AND EXISTS (
+            SELECT 1 FROM catalog_machines
+            JOIN catalog_machine_types
+              ON catalog_machine_types.id = catalog_machines.machine_type_id
+            WHERE catalog_machines.item_id = catalog_items.id
+              AND TRIM(catalog_machine_types.description) <> ''
+          )
+      `).run();
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({ updatedItems: Number(result.changes) }));
+    });
+  }
+
   #migrateEventThreats(now = Date.now()) {
     const migrationName = 'event-threats-v2';
     this.database.exec(`
@@ -4544,6 +4584,111 @@ export class SqliteStore {
       `).run(migrationName, now, JSON.stringify({
         updated, previousRateThree: previousRateThree ?? null,
         rateThree: rules[3] ?? null
+      }));
+    });
+  }
+
+  #migrateVehicleCombatConsistency(now = Date.now()) {
+    const migrationName = 'vehicle-combat-consistency-v1';
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        name TEXT PRIMARY KEY,
+        applied_at INTEGER NOT NULL,
+        details_json TEXT NOT NULL DEFAULT '{}'
+      )
+    `);
+    if (this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return;
+
+    this.#transaction(() => {
+      const bonusRow = this.database.prepare(
+        "SELECT value_json FROM catalog_settings WHERE key = 'ghost_combat_bonus'"
+      ).get();
+      const ghostCombatBonus = bonusRow ? Number(JSON.parse(bonusRow.value_json)) : 0;
+      const updateGhostHull = this.database.prepare(`
+        UPDATE player_ship_state SET max_hull = ? WHERE vehicle_id = ?
+      `);
+      let ghostMaxHullsUpdated = 0;
+      for (const ghost of this.database.prepare(`
+        SELECT player_ship_state.vehicle_id, player_ship_state.hull,
+          player_ship_state.max_hull, catalog_ships.hull AS catalog_hull
+        FROM ghost_vehicles
+        JOIN player_vehicles ON player_vehicles.id = ghost_vehicles.vehicle_id
+        JOIN catalog_ships ON catalog_ships.vehicle_id = player_vehicles.vehicle_type_id
+        JOIN player_ship_state ON player_ship_state.vehicle_id = player_vehicles.id
+        WHERE ghost_vehicles.ghost_kind = 'ship'
+          AND ghost_vehicles.defeated_at IS NULL
+          AND ghost_vehicles.vehicle_id IS NOT NULL
+      `).all()) {
+        const spectralMaxHull = Math.max(1,
+          Math.round(Number(ghost.catalog_hull) * (1 + ghostCombatBonus)));
+        const repairedMaxHull = Math.max(spectralMaxHull, Number(ghost.hull),
+          Number(ghost.max_hull ?? 0));
+        if (Number(ghost.max_hull) === repairedMaxHull) continue;
+        ghostMaxHullsUpdated += updateGhostHull.run(
+          repairedMaxHull, ghost.vehicle_id
+        ).changes;
+      }
+
+      const chainEscapeEventsUpdated = this.database.prepare(`
+        UPDATE vehicle_events
+        SET event_type = CASE WHEN EXISTS (
+          SELECT 1 FROM vehicle_battle_sides
+          WHERE vehicle_battle_sides.battle_id = vehicle_events.battle_id
+            AND vehicle_battle_sides.vehicle_id = vehicle_events.vehicle_id
+            AND vehicle_battle_sides.won = 1
+        ) THEN 'won' ELSE 'lost' END
+        WHERE vehicle_events.event_type = 'tied'
+          AND vehicle_events.battle_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM vehicle_battles
+            WHERE vehicle_battles.id = vehicle_events.battle_id
+              AND vehicle_battles.is_tie = 0
+              AND vehicle_battles.winner_vehicle_id IS NOT NULL
+              AND json_extract(vehicle_battles.details_json, '$.type') = 'ship'
+              AND json_extract(vehicle_battles.details_json, '$.result.chainEscape') = 1
+          )
+          AND EXISTS (
+            SELECT 1 FROM vehicle_battle_sides
+            WHERE vehicle_battle_sides.battle_id = vehicle_events.battle_id
+              AND vehicle_battle_sides.vehicle_id = vehicle_events.vehicle_id
+          )
+      `).run().changes;
+
+      const chainEscapeLiveUpdatesUpdated = this.database.prepare(`
+        UPDATE live_update_events
+        SET payload_json = json_set(payload_json, '$.outcome', CASE WHEN EXISTS (
+          SELECT 1 FROM vehicle_battle_sides
+          WHERE vehicle_battle_sides.battle_id =
+              CAST(json_extract(live_update_events.payload_json, '$.battleId') AS INTEGER)
+            AND 'player:' || vehicle_battle_sides.player_id = live_update_events.scope
+            AND vehicle_battle_sides.won = 1
+        ) THEN 'won' ELSE 'lost' END)
+        WHERE live_update_events.event_type = 'battle-complete'
+          AND json_valid(live_update_events.payload_json)
+          AND json_extract(live_update_events.payload_json, '$.outcome') = 'tied'
+          AND EXISTS (
+            SELECT 1 FROM vehicle_battles
+            WHERE vehicle_battles.id =
+                CAST(json_extract(live_update_events.payload_json, '$.battleId') AS INTEGER)
+              AND vehicle_battles.is_tie = 0
+              AND vehicle_battles.winner_vehicle_id IS NOT NULL
+              AND json_extract(vehicle_battles.details_json, '$.type') = 'ship'
+              AND json_extract(vehicle_battles.details_json, '$.result.chainEscape') = 1
+          )
+          AND EXISTS (
+            SELECT 1 FROM vehicle_battle_sides
+            WHERE vehicle_battle_sides.battle_id =
+                CAST(json_extract(live_update_events.payload_json, '$.battleId') AS INTEGER)
+              AND 'player:' || vehicle_battle_sides.player_id = live_update_events.scope
+          )
+      `).run().changes;
+
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json) VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        ghostMaxHullsUpdated, chainEscapeEventsUpdated, chainEscapeLiveUpdatesUpdated
       }));
     });
   }
@@ -5856,6 +6001,48 @@ export class SqliteStore {
           );
         }
       }
+      const regionalOilFields = this.database.prepare(`
+        SELECT id, name, sort_order, capital_city_id
+        FROM world_maps
+        ORDER BY sort_order, id
+      `).all();
+      const oilFieldMapIds = new Set(this.database.prepare(`
+        SELECT DISTINCT catalog_cities.map_id
+        FROM oil_hexes
+        JOIN catalog_cities ON catalog_cities.id = oil_hexes.city_id
+      `).all().map((entry) => Number(entry.map_id)));
+      const oilHexStatement = this.database.prepare(`
+        INSERT OR IGNORE INTO oil_hexes
+          (city_id, x, y, available, build_tier)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      const oilFieldMaxRadius = Number(this.#setting('oil_field_max_radius'));
+      const oilBuildTiers = this.#setting('oil_build_tier_ids');
+      const helicopterRingWidth = Number(this.#setting('oil_helicopter_build_ring_width'));
+      // Alternating the stable regional order gives four fields across the seven current
+      // regions (about half), keeps the original Gallego field, and remains deterministic.
+      for (let index = 0; index < regionalOilFields.length; index += 2) {
+        const map = regionalOilFields[index];
+        if (oilFieldMapIds.has(Number(map.id))) continue;
+        if (!Number.isSafeInteger(Number(map.capital_city_id))) {
+          throw new Error(`${map.name} requires a capital before an Oil Field can be created.`);
+        }
+        for (let x = -oilFieldMaxRadius; x <= oilFieldMaxRadius; x += 1) {
+          for (let y = -oilFieldMaxRadius; y <= oilFieldMaxRadius; y += 1) {
+            const distance = Math.max(Math.abs(x + y), Math.abs(x), Math.abs(y));
+            if (distance > oilFieldMaxRadius) continue;
+            const buildTier = distance === 0 ? Number(oilBuildTiers.local)
+              : distance <= helicopterRingWidth
+                ? Number(oilBuildTiers.helicopter) : Number(oilBuildTiers.unavailable);
+            oilHexStatement.run(map.capital_city_id, x, y, buildTier, buildTier);
+          }
+        }
+        oilFieldMapIds.add(Number(map.id));
+      }
+      this.database.prepare(`
+        INSERT OR IGNORE INTO schema_migrations (name, applied_at, details_json)
+        VALUES ('regional-oil-fields-v1', ?, '{"selection":"alternating-regions","preservesExisting":true}')
+      `).run(now);
       this.#adminWorldAuditBootstrap(now);
     });
   }
@@ -5982,7 +6169,7 @@ export class SqliteStore {
         arrives_at: this.#worldCreatureArrivalAt(creature),
         name: this.#worldCreatureName(creature.creature_type, creature.rarity),
         icon: this.#worldCreatureIcon(creature.creature_type),
-        rarity_name: this.#worldCreatureTier(creature.rarity).colorName,
+        rarity_name: this.#worldCreatureTier(creature.rarity).name,
         route_behavior: this.#worldCreatureRouteBehavior(creature.creature_type),
         reward_type: rewardType,
         ore_drop: rewardType === 'ore'
@@ -6135,7 +6322,7 @@ export class SqliteStore {
         `${name} on ${map.name}: ${route.city1_name} â†” ${route.city2_name}`, now);
       return {
         id: creatureId, type: creatureType, name, rarity: tier.id,
-        rarityName: tier.colorName, icon: this.#worldCreatureIcon(creatureType),
+        rarityName: tier.name, icon: this.#worldCreatureIcon(creatureType),
         rewardType: this.#worldCreatureRewardType(creatureType),
         mapId: map.id, mapName: map.name,
         routeId: route.id, routeName: `${route.city1_name} â†” ${route.city2_name}`
@@ -6728,6 +6915,12 @@ export class SqliteStore {
         stoneStatement.run(stone.id, stone.name, stone.behaviorKey,
           stone.description, stone.rank, stone.rarity);
       }
+      const machineTypeDescriptions = new Map(catalog.machineTypes.map((type) => [
+        Number(type.id), type.description
+      ]));
+      const machineItemDescriptions = new Map(catalog.machines.map((machine) => [
+        Number(machine.itemId), machineTypeDescriptions.get(Number(machine.machineTypeId)) ?? ''
+      ]));
       const itemStatement = this.database.prepare(`
         INSERT INTO catalog_items
           (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id, can_find, icon,
@@ -6740,7 +6933,8 @@ export class SqliteStore {
           || typeof item.damaged !== 'boolean' || typeof item.hasLargeImage !== 'boolean') {
           throw new Error(`Catalog item ${item.id} has incomplete artwork metadata.`);
         }
-        itemStatement.run(item.id, item.name, item.rarity, item.description, item.marketableId,
+        const itemDescription = item.description || machineItemDescriptions.get(Number(item.id)) || '';
+        itemStatement.run(item.id, item.name, item.rarity, itemDescription, item.marketableId,
           item.mineTypeId, item.repairedItemId, item.canFind ? 1 : 0, item.icon,
           item.iconSource, item.damaged ? 1 : 0, item.largeImageFilename,
           item.largeImage, item.hasLargeImage ? 1 : 0, itemGoldValueUnits(item));
@@ -8647,6 +8841,51 @@ export class SqliteStore {
     `).all(playerId);
   }
 
+  chatRatingTiers(playerId) {
+    return [...new Set(this.database.prepare(`
+      SELECT player_vehicles.rating, catalog_vehicles.route_type, catalog_items.rarity
+      FROM player_vehicles
+      JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
+      JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
+      WHERE player_vehicles.player_id = ?
+    `).all(playerId).map((entry) => this.#vehicleRank(entry)))]
+      .filter((value) => Number(value) > 0).sort((first, second) => first - second);
+  }
+
+  #chatAnnouncementRatingTier(eventKey) {
+    const key = String(eventKey ?? '');
+    const creature = /^world-creature:(\d+):/u.exec(key);
+    const ghost = /^ghost:(\d+):/u.exec(key);
+    const sunkShip = /^ship-sunk:(\d+):/u.exec(key);
+    let vehicle = sunkShip ? this.#vehicleRecord(Number(sunkShip[1])) : null;
+    if (creature && key.endsWith(':defeated')) {
+      const defeated = this.database.prepare(
+        'SELECT defeated_by_vehicle_id FROM world_creatures WHERE id = ?'
+      ).get(Number(creature[1]));
+      if (defeated?.defeated_by_vehicle_id) {
+        vehicle = this.#vehicleRecord(Number(defeated.defeated_by_vehicle_id));
+      }
+    } else if (ghost) {
+      const record = this.database.prepare(`
+        SELECT vehicle_id, defeated_battle_id, defeated_by_player_id
+        FROM ghost_vehicles WHERE id = ?
+      `).get(Number(ghost[1]));
+      if (record?.vehicle_id) vehicle = this.#vehicleRecord(Number(record.vehicle_id));
+      if (!vehicle && record?.defeated_battle_id && record?.defeated_by_player_id) {
+        vehicle = this.database.prepare(`
+          SELECT vehicle_battles.route_type, catalog_items.rarity,
+            vehicle_battle_sides.rating_after AS rating
+          FROM vehicle_battle_sides
+          JOIN vehicle_battles ON vehicle_battles.id = vehicle_battle_sides.battle_id
+          JOIN catalog_items ON catalog_items.id = vehicle_battle_sides.vehicle_item_id
+          WHERE vehicle_battle_sides.battle_id = ?
+            AND vehicle_battle_sides.player_id = ?
+        `).get(record.defeated_battle_id, record.defeated_by_player_id);
+      }
+    }
+    return vehicle ? this.#vehicleRank(vehicle) : null;
+  }
+
   recentChats(limit = null, viewerId = null, sinceAt = null) {
     const defaultLimit = Number(this.#setting('chat_page_size'));
     const maximumLimit = Number(this.#setting('chat_query_max_limit'));
@@ -8662,7 +8901,8 @@ export class SqliteStore {
       SELECT * FROM (
         SELECT chats.id, 'player' AS kind, chats.player_id,
           players.name AS player_name, chats.body, chats.color,
-          NULL AS path, chats.map_id, world_maps.name AS map_name, chats.created_at
+          NULL AS path, chats.map_id, world_maps.name AS map_name,
+          NULL AS event_key, NULL AS map_ids, chats.created_at
         FROM chats
         JOIN players ON players.id = chats.player_id
         LEFT JOIN world_maps ON world_maps.id = chats.map_id
@@ -8682,7 +8922,11 @@ export class SqliteStore {
         UNION ALL
         SELECT world_chat_announcements.id, announcement_type AS kind,
           NULL AS player_id, 'World' AS player_name, body, NULL AS color, path,
-          NULL AS map_id, NULL AS map_name, created_at
+          NULL AS map_id, NULL AS map_name, event_key,
+          (SELECT GROUP_CONCAT(map_id)
+            FROM world_chat_announcement_regions
+            WHERE announcement_id = world_chat_announcements.id) AS map_ids,
+          created_at
         FROM world_chat_announcements
         WHERE (? IS NULL OR created_at >= ?)
           AND announcement_type NOT IN ('rare-purple', 'rare-orange')
@@ -8716,6 +8960,13 @@ export class SqliteStore {
       id: chat.id, kind: chat.kind, playerId: chat.player_id,
       playerName: chat.player_name, body: chat.body, color: chat.color,
       path: chat.path, mapId: chat.map_id, mapName: chat.map_name,
+      mapIds: chat.kind === 'player'
+        ? (chat.map_id === null ? [] : [Number(chat.map_id)])
+        : String(chat.map_ids ?? '').split(',').filter(Boolean).map(Number)
+          .filter(Number.isSafeInteger).sort((first, second) => first - second),
+      eventKey: chat.event_key,
+      ratingTier: chat.kind === 'world'
+        ? this.#chatAnnouncementRatingTier(chat.event_key) : null,
       createdAt: chat.created_at
     }));
   }
@@ -11325,6 +11576,10 @@ export class SqliteStore {
   }
 
   #oilDistance(first, second = { x: 0, y: 0 }) {
+    const firstCityId = first?.city_id ?? first?.cityId;
+    const secondCityId = second?.city_id ?? second?.cityId;
+    if (firstCityId !== undefined && secondCityId !== undefined
+      && Number(firstCityId) !== Number(secondCityId)) return Infinity;
     const x = first.x - second.x;
     const y = first.y - second.y;
     return Math.max(Math.abs(x + y), Math.abs(x), Math.abs(y));
@@ -11332,7 +11587,7 @@ export class SqliteStore {
 
   #oilMachineState(hexRows, machineRows, now, rules = this.#settings()) {
     const byHexId = new Map(hexRows.map((hex) => [hex.id, hex]));
-    const byCoord = new Map(hexRows.map((hex) => [`${hex.x},${hex.y}`, hex]));
+    const byCoord = new Map(hexRows.map((hex) => [`${hex.city_id}:${hex.x},${hex.y}`, hex]));
     const machineByHex = new Map(machineRows.map((machine) => [machine.hex_id, machine]));
     const animationRates = new Map(machineRows.map((machine) => [machine.hex_id, 0]));
     const animationFlags = new Map(machineRows.map((machine) => [machine.hex_id, 0]));
@@ -11341,7 +11596,9 @@ export class SqliteStore {
       const directionCount = rules.hex_directions.length;
       const direction = rules.hex_directions[((Number(point) % directionCount)
         + directionCount) % directionCount];
-      return byCoord.get(`${hex.x + direction[0] * distance},${hex.y + direction[1] * distance}`);
+      return byCoord.get(
+        `${hex.city_id}:${hex.x + direction[0] * distance},${hex.y + direction[1] * distance}`
+      );
     };
     const wires = new Map(hexRows.map((hex) => [hex.id, []]));
     const reaped = new Set();
@@ -11526,7 +11783,9 @@ export class SqliteStore {
         const directionCount = rules.hex_directions.length;
         const direction = rules.hex_directions[((point % directionCount) + directionCount)
           % directionCount];
-        current = state.byCoord.get(`${current.x + direction[0]},${current.y + direction[1]}`);
+        current = state.byCoord.get(
+          `${current.city_id}:${current.x + direction[0]},${current.y + direction[1]}`
+        );
         if (!current) return null;
       }
       return current;
@@ -11551,7 +11810,8 @@ export class SqliteStore {
           if (!target) break;
           const source = hexRows.filter((candidate) => {
             const owner = state.machineByHex.get(candidate.id)?.player_id;
-            return candidate.id !== target.id && candidate.oil_units > 0 && owner !== machine.player_id;
+            return candidate.city_id === target.city_id && candidate.id !== target.id
+              && candidate.oil_units > 0 && owner !== machine.player_id;
           }).sort((first, second) => {
             const distance = this.#oilDistance(state.byHexId.get(machine.hex_id), first)
               - this.#oilDistance(state.byHexId.get(machine.hex_id), second);
@@ -11681,26 +11941,32 @@ export class SqliteStore {
   }
 
   #oilAvailability(hexRows, machineRows, state, rules = this.#settings()) {
-    const flak = machineRows.filter((machine) => machine.rules.expandsGrid && machine.power > 0);
-    const closest = hexRows.filter((hex) => {
-      if (state.machineByHex.has(hex.id)
-        || hex.oil_units > Number(rules.oil_spill_units)) return false;
-      return !flak.some((machine) => {
-        const base = this.#settingArrayNumber('machine_power', machine.rarity, rules);
-        if (!(base > 0)) throw new Error(`Machine rarity ${machine.rarity} must have positive power.`);
-        return this.#oilDistance(state.byHexId.get(machine.hex_id), hex) <= Math.floor(machine.power / base);
-      });
-    }).reduce((minimum, hex) => Math.min(minimum, this.#oilDistance(hex)), Infinity);
     const localTier = this.#oilBuildTierId('local');
     const helicopterTier = this.#oilBuildTierId('helicopter');
     const unavailableTier = this.#oilBuildTierId('unavailable');
     const helicopterRingWidth = Number(rules.oil_helicopter_build_ring_width);
-    for (const hex of hexRows) {
-      if (!Number.isFinite(closest)) hex.build_tier = localTier;
-      else {
-        const relative = this.#oilDistance(hex) - closest;
-        hex.build_tier = relative <= 0 ? localTier
-          : relative <= helicopterRingWidth ? helicopterTier : unavailableTier;
+    const fieldCityIds = new Set(hexRows.map((hex) => Number(hex.city_id)));
+    for (const cityId of fieldCityIds) {
+      const fieldHexes = hexRows.filter((hex) => Number(hex.city_id) === cityId);
+      const flak = machineRows.filter((machine) => machine.rules.expandsGrid && machine.power > 0
+        && Number(state.byHexId.get(machine.hex_id)?.city_id) === cityId);
+      const closest = fieldHexes.filter((hex) => {
+        if (state.machineByHex.has(hex.id)
+          || hex.oil_units > Number(rules.oil_spill_units)) return false;
+        return !flak.some((machine) => {
+          const base = this.#settingArrayNumber('machine_power', machine.rarity, rules);
+          if (!(base > 0)) throw new Error(`Machine rarity ${machine.rarity} must have positive power.`);
+          return this.#oilDistance(state.byHexId.get(machine.hex_id), hex)
+            <= Math.floor(machine.power / base);
+        });
+      }).reduce((minimum, hex) => Math.min(minimum, this.#oilDistance(hex)), Infinity);
+      for (const hex of fieldHexes) {
+        if (!Number.isFinite(closest)) hex.build_tier = localTier;
+        else {
+          const relative = this.#oilDistance(hex) - closest;
+          hex.build_tier = relative <= 0 ? localTier
+            : relative <= helicopterRingWidth ? helicopterTier : unavailableTier;
+        }
       }
     }
   }
@@ -11738,7 +12004,9 @@ export class SqliteStore {
     `).all()).filter((machine) => bombing ? machine.rules.blocksBombs : machine.rules.blocksDeployment);
     return machines.some((machine) => {
       if (machine.player_id === playerId || (bombing && machine.player_id !== targetOwnerId)) return false;
-      const source = this.database.prepare('SELECT x, y FROM oil_hexes WHERE id = ?').get(machine.hex_id);
+      const source = this.database.prepare(
+        'SELECT city_id, x, y FROM oil_hexes WHERE id = ?'
+      ).get(machine.hex_id);
       const base = this.#settingArrayNumber('machine_power', machine.rarity);
       if (!(base > 0)) throw new Error(`Machine rarity ${machine.rarity} must have positive power.`);
       return this.#oilDistance(source, hex) <= Math.floor(machine.power / base);
@@ -11859,7 +12127,7 @@ export class SqliteStore {
       const range = Math.floor(crane.power / basePower);
       const source = hexRows.filter((hex) => {
         const owner = state.machineByHex.get(hex.id)?.player_id;
-        return hex.barrels > 0 && owner !== crane.player_id
+        return hex.city_id === craneHex.city_id && hex.barrels > 0 && owner !== crane.player_id
           && this.#oilDistance(craneHex, hex) <= range;
       }).sort((first, second) => {
         const distance = this.#oilDistance(craneHex, first) - this.#oilDistance(craneHex, second);
@@ -11946,25 +12214,35 @@ export class SqliteStore {
     const spillIntervalMs = Number(rules.oil_spill_interval_ms);
     const spillChecks = Math.floor((previousSpillProgress + elapsedMs) / spillIntervalMs);
     const unavailableTier = this.#oilBuildTierId('unavailable');
+    const fieldCityIds = [...new Set(hexRows.map((hex) => Number(hex.city_id)))];
     let spillAt = stateRow.last_settled_at + (spillIntervalMs - previousSpillProgress);
     for (let check = 0; check < spillChecks; check += 1, spillAt += spillIntervalMs) {
       const occupied = new Set(machineRows.map((machine) => machine.hex_id));
       const spillUnits = Number(rules.oil_spill_units);
-      const candidates = hexRows.filter((hex) => !occupied.has(hex.id)
-        && hex.build_tier !== unavailableTier && hex.oil_units < spillUnits);
-      if (!candidates.length) break;
-      const random = seededRandom('oilspill', spillAt);
-      const miss = 1 - 1 / Number(rules.oil_spill_chance_denominator);
-      const eventChance = 1 - miss ** candidates.length;
-      const roll = random();
-      if (roll >= eventChance) continue;
-      const candidateIndex = Math.min(candidates.length - 1,
-        Math.floor(Math.log(1 - roll) / Math.log(miss)));
-      const target = candidates[candidateIndex];
-      target.oil_units += Number(rules.oil_spill_minimum_multiplier) * spillUnits
-        + Math.floor(random() * (Number(rules.oil_spill_random_multiplier) * spillUnits + 1));
-      this.#oilAvailability(hexRows, machineRows,
-        this.#oilMachineState(hexRows, machineRows, spillAt, rules), rules);
+      let spilled = false;
+      for (const cityId of fieldCityIds) {
+        const candidates = hexRows.filter((hex) => Number(hex.city_id) === cityId
+          && !occupied.has(hex.id) && hex.build_tier !== unavailableTier
+          && hex.oil_units < spillUnits);
+        if (!candidates.length) continue;
+        const random = fieldCityIds.length === 1
+          ? seededRandom('oilspill', spillAt)
+          : seededRandom('oilspill', cityId, spillAt);
+        const miss = 1 - 1 / Number(rules.oil_spill_chance_denominator);
+        const eventChance = 1 - miss ** candidates.length;
+        const roll = random();
+        if (roll >= eventChance) continue;
+        const candidateIndex = Math.min(candidates.length - 1,
+          Math.floor(Math.log(1 - roll) / Math.log(miss)));
+        const target = candidates[candidateIndex];
+        target.oil_units += Number(rules.oil_spill_minimum_multiplier) * spillUnits
+          + Math.floor(random() * (Number(rules.oil_spill_random_multiplier) * spillUnits + 1));
+        spilled = true;
+      }
+      if (spilled) {
+        this.#oilAvailability(hexRows, machineRows,
+          this.#oilMachineState(hexRows, machineRows, spillAt, rules), rules);
+      }
     }
     const oilSpillProgressMs = (previousSpillProgress + elapsedMs) % spillIntervalMs;
 
@@ -12132,18 +12410,56 @@ export class SqliteStore {
       oilSpillProgressMs: state.oil_spill_progress_ms };
   }
 
+  #oilFieldLocation(playerId) {
+    const player = this.database.prepare(`
+      SELECT players.id, players.profession, catalog_cities.map_id,
+        world_maps.name AS map_name
+      FROM players
+      JOIN catalog_cities ON catalog_cities.id = players.city_id
+      LEFT JOIN world_maps ON world_maps.id = catalog_cities.map_id
+      WHERE players.id = ?
+    `).get(playerId);
+    if (!player) throw new Error('Player not found.');
+    const field = this.database.prepare(`
+      SELECT MIN(oil_hexes.city_id) AS city_id
+      FROM oil_hexes
+      JOIN catalog_cities ON catalog_cities.id = oil_hexes.city_id
+      WHERE catalog_cities.map_id = ?
+    `).get(player.map_id);
+    return {
+      player,
+      mapId: Number(player.map_id),
+      mapName: player.map_name ?? 'this region',
+      fieldCityId: field?.city_id === null || field?.city_id === undefined
+        ? null : Number(field.city_id)
+    };
+  }
+
+  #assertOilFieldAccess(playerId, hex) {
+    const location = this.#oilFieldLocation(playerId);
+    if (location.fieldCityId === null || location.fieldCityId !== Number(hex.city_id)) {
+      throw new Error(`You can only operate the Oil Field in your current region (${location.mapName}).`);
+    }
+    return location;
+  }
+
   oilField(playerId, now = Date.now(), options = {}) {
     const rules = this.#settings();
-    const snapshot = this.#oilFieldReadSnapshot(now, rules, options.settle !== false);
     const oilUnitsPerLiter = Number(rules.oil_units_per_liter);
-    const player = this.database.prepare('SELECT id, profession FROM players WHERE id = ?').get(playerId);
-    if (!player) throw new Error('Player not found.');
-    const fieldCityId = this.database.prepare(
-      'SELECT city_id FROM oil_hexes ORDER BY id LIMIT 1'
-    ).get()?.city_id;
-    if (!fieldCityId) throw new Error('The Oil Field has no configured city.');
-    const rawHexes = snapshot.hexRows;
-    const rawMachines = snapshot.machineRows;
+    const location = this.#oilFieldLocation(playerId);
+    const { player, fieldCityId } = location;
+    if (fieldCityId === null) {
+      return {
+        available: false, cityId: null, mapId: location.mapId, mapName: location.mapName,
+        hexes: [], ownedMachines: [], hasHelicopter: false, hasSearchPlane: false,
+        hasBomber: false, events: [], stats: null, asOf: now,
+        persistedAt: now, needsSettlement: false
+      };
+    }
+    const snapshot = this.#oilFieldReadSnapshot(now, rules, options.settle !== false);
+    const rawHexes = snapshot.hexRows.filter((hex) => Number(hex.city_id) === fieldCityId);
+    const fieldHexIds = new Set(rawHexes.map((hex) => Number(hex.id)));
+    const rawMachines = snapshot.machineRows.filter((machine) => fieldHexIds.has(Number(machine.hex_id)));
     const simulationMachineByHex = new Map(rawMachines.map((machine) => [machine.hex_id, machine]));
     const displayRates = snapshot.rates;
     const machines = this.#machineRuleRows(this.database.prepare(`
@@ -12158,7 +12474,7 @@ export class SqliteStore {
       JOIN catalog_machine_types ON catalog_machine_types.id = catalog_machines.machine_type_id
       JOIN catalog_items ON catalog_items.id = catalog_machines.item_id
       ORDER BY oil_machines.id
-    `).all()).map((machine) => {
+    `).all()).filter((machine) => fieldHexIds.has(Number(machine.hex_id))).map((machine) => {
       const simulated = simulationMachineByHex.get(machine.hex_id) ?? machine;
       return {
         id: machine.id, hexId: machine.hex_id, playerId: machine.player_id,
@@ -12187,7 +12503,7 @@ export class SqliteStore {
       JOIN catalog_machine_types ON catalog_machine_types.id = catalog_machines.machine_type_id
       JOIN catalog_items ON catalog_items.id = catalog_machines.item_id
       ORDER BY oil_machine_queue.queued_at, oil_machine_queue.hex_id
-    `).all()).map((machine) => ({
+    `).all()).filter((machine) => fieldHexIds.has(Number(machine.hex_id))).map((machine) => ({
       hexId: machine.hex_id, playerId: machine.player_id, machineId: machine.machine_id,
       ownerName: machine.owner_name, itemId: machine.item_id,
       machineTypeId: machine.machine_type_id,
@@ -12237,10 +12553,12 @@ export class SqliteStore {
     }));
     const events = this.database.prepare(`
       SELECT oil_events.*, players.name AS other_player_name
-      FROM oil_events LEFT JOIN players ON players.id = oil_events.other_player_id
-      WHERE oil_events.player_id = ?
+      FROM oil_events
+      JOIN oil_hexes ON oil_hexes.id = oil_events.hex_id
+      LEFT JOIN players ON players.id = oil_events.other_player_id
+      WHERE oil_events.player_id = ? AND oil_hexes.city_id = ?
       ORDER BY oil_events.created_at DESC, oil_events.id DESC LIMIT ?
-    `).all(playerId, this.#positiveIntegerSetting('oil_event_history_limit')).map((event) => ({
+    `).all(playerId, fieldCityId, this.#positiveIntegerSetting('oil_event_history_limit')).map((event) => ({
       id: event.id, hexId: event.hex_id, type: event.event_type,
       otherPlayerId: event.other_player_id, otherPlayerName: event.other_player_name,
       details: JSON.parse(event.details_json), createdAt: event.created_at
@@ -12256,9 +12574,12 @@ export class SqliteStore {
       const owners = this.database.prepare(`
         SELECT DISTINCT players.id, players.name,
           (SELECT COUNT(*) FROM player_melds WHERE player_id = players.id) AS meld_count
-        FROM players JOIN oil_machines ON oil_machines.player_id = players.id
+        FROM players
+        JOIN oil_machines ON oil_machines.player_id = players.id
+        JOIN oil_hexes ON oil_hexes.id = oil_machines.hex_id
+        WHERE oil_hexes.city_id = ?
         ORDER BY meld_count DESC, players.name
-      `).all();
+      `).all(fieldCityId);
       stats = owners.map((owner) => {
         const owned = rawMachines.filter((machine) => machine.player_id === owner.id);
         const pumping = owned.reduce((sum, machine) => sum
@@ -12277,7 +12598,8 @@ export class SqliteStore {
       });
     }
     return {
-      cityId: fieldCityId, hexes, ownedMachines,
+      available: true, cityId: fieldCityId,
+      mapId: location.mapId, mapName: location.mapName, hexes, ownedMachines,
       hasHelicopter, hasSearchPlane, hasBomber, events, stats,
       asOf: snapshot.settledAt,
       persistedAt: snapshot.persistedAt ?? snapshot.settledAt,
@@ -12297,6 +12619,7 @@ export class SqliteStore {
       if (!player) throw new Error('Player not found.');
       const hex = this.database.prepare('SELECT * FROM oil_hexes WHERE id = ?').get(hexId);
       if (!hex) throw new Error('Oil-field hex not found.');
+      this.#assertOilFieldAccess(playerId, hex);
       const current = this.database.prepare('SELECT * FROM oil_machines WHERE hex_id = ?').get(hex.id);
       if (current && current.player_id !== playerId) throw new Error('That field is taken.');
       if (hex.build_tier === this.#oilBuildTierId('unavailable')) {
@@ -12369,6 +12692,7 @@ export class SqliteStore {
       if (!hex || !current || current.player_id !== playerId) {
         throw new Error('You can only queue a replacement on your own deployed machine.');
       }
+      this.#assertOilFieldAccess(playerId, hex);
       if (hex.build_tier === this.#oilBuildTierId('unavailable')) {
         throw new Error('That field is outside the available build radius.');
       }
@@ -12424,6 +12748,7 @@ export class SqliteStore {
       if (!player) throw new Error('Player not found.');
       const hex = this.database.prepare('SELECT * FROM oil_hexes WHERE id = ?').get(hexId);
       if (!hex) throw new Error('Oil-field hex not found.');
+      this.#assertOilFieldAccess(playerId, hex);
       const target = this.database.prepare(`
         SELECT oil_machines.*, catalog_items.name, catalog_machines.item_id AS item_id
         FROM oil_machines
@@ -12523,6 +12848,7 @@ export class SqliteStore {
       if (!machine || machine.player_id !== playerId || !machine.rules.canPack) {
         throw new Error('You do not own a packing machine on that hex.');
       }
+      this.#assertOilFieldAccess(playerId, { city_id: machine.city_id });
       if (machine.barrels < 1) throw new Error('That machine has not packed a complete barrel yet.');
       const claimedBarrels = claimAll ? machine.barrels : 1;
       this.database.prepare('UPDATE oil_hexes SET barrels = barrels - ? WHERE id = ?')
@@ -13618,8 +13944,7 @@ export class SqliteStore {
     return this.database.prepare(`
       SELECT id, name FROM catalog_rarities WHERE id > 0 ORDER BY id
     `).all().filter((rarity) => Number(weights[rarity.id]) > 0).map((rarity) => ({
-      ...rarity, weight: Number(weights[rarity.id]),
-      colorName: this.#settingString('rarity_color_names', rarity.id)
+      ...rarity, weight: Number(weights[rarity.id])
     }));
   }
 
@@ -13646,7 +13971,7 @@ export class SqliteStore {
   #worldCreatureName(type, rarity = null) {
     const name = this.#settingString('world_creature_names', type);
     return rarity === null || rarity === undefined
-      ? name : `${this.#worldCreatureTier(rarity).colorName} ${name}`;
+      ? name : `${this.#worldCreatureTier(rarity).name} ${name}`;
   }
 
   #worldCreatureIcon(type) {
@@ -14098,13 +14423,14 @@ export class SqliteStore {
       const massives = Math.ceil(shots / 3);
       const chains = Math.ceil((shots - massives) / 2);
       const grapes = Math.max(0, shots - massives - chains);
+      const ghostHull = Math.max(1, Math.round(Number(source.max_hull)
+        * (1 + Number(this.#setting('ghost_combat_bonus')))));
       this.database.prepare(`
         INSERT INTO player_ship_state
-          (vehicle_id, crew, hull, massives, chain_shots, grape_shots)
-        VALUES (?, ?, ?, ?, ?, ?)
+          (vehicle_id, crew, hull, max_hull, massives, chain_shots, grape_shots)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(ghostVehicleId, Math.max(1, Number(source.max_crew)),
-        Math.max(1, Math.round(Number(source.max_hull)
-          * (1 + Number(this.#setting('ghost_combat_bonus'))))),
+        ghostHull, ghostHull,
         massives, chains, grapes);
     }
     const bounty = this.#ghostBounty(source.rarity, random);
@@ -14824,7 +15150,7 @@ export class SqliteStore {
       id: row.id, type: row.creature_type,
       name: this.#worldCreatureName(row.creature_type, row.rarity),
       icon: this.#worldCreatureIcon(row.creature_type), rarity: row.rarity,
-      rarityName: this.#worldCreatureTier(row.rarity).colorName,
+      rarityName: this.#worldCreatureTier(row.rarity).name,
       rewardType, oreDrop: rewardType === 'ore'
         ? Number(this.#setting('world_creature_tier_ore_drops')[row.rarity]) : 0,
       hunterRarities: this.#worldCreatureRarities()
@@ -14862,7 +15188,7 @@ export class SqliteStore {
     `).all(playerId, Number(this.#setting('world_event_player_history_limit'))).map((row) => ({
       creatureId: row.creature_id,
       name: this.#worldCreatureName(row.creature_type, row.rarity),
-      rarity: row.rarity, rarityName: this.#worldCreatureTier(row.rarity).colorName,
+      rarity: row.rarity, rarityName: this.#worldCreatureTier(row.rarity).name,
       rewardType: this.#worldCreatureRewardType(row.creature_type),
       vehicleId: row.vehicle_id, damage: row.damage, counterDamage: row.counter_damage,
       defeated: Boolean(row.defeated), rewards: parsedArray(row.reward_json), createdAt: row.created_at
@@ -14936,7 +15262,10 @@ export class SqliteStore {
         const whaleForce = liveCreature.max_hp
           * counterRatio * damageMultiplier
           * (0.75 + random() * 0.5);
-        counterDamage = Math.max(0, Math.round(whaleForce - stats.armor - stats.defense));
+        // Armor can turn a creature strike into a glancing hit, but a hostile
+        // encounter must remain a real route hazard just as it does at sea.
+        counterDamage = Math.max(1,
+          Math.round(whaleForce - stats.armor - stats.defense));
         if (counterDamage > 0) {
           this.database.prepare('UPDATE player_vehicles SET damaged = 1 WHERE id = ?').run(vehicle.id);
         }
@@ -15804,11 +16133,64 @@ export class SqliteStore {
     });
   }
 
+  #availableVehicleRoutes(playerId, cityId, routeType, aircraftType = null) {
+    let routes = this.database.prepare(`
+      SELECT catalog_routes.*, city1.map_id AS map1_id, city2.map_id AS map2_id
+      FROM catalog_routes
+      JOIN catalog_cities AS city1 ON city1.id = catalog_routes.city1_id
+      JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
+      WHERE catalog_routes.is_open = 1 AND catalog_routes.type = ?
+        AND (catalog_routes.city1_id = ? OR catalog_routes.city2_id = ?)
+      ORDER BY catalog_routes.id
+    `).all(routeType, cityId, cityId);
+    routes = routes.filter((route) => Number(route.map1_id) === Number(route.map2_id)
+      || Boolean(route.is_inter_map));
+    const airRouteType = this.#routeTypeId('air');
+    if (routeType !== airRouteType) {
+      return routes.filter((route) => route.city1_id !== route.city2_id && Number(route.length) > 0);
+    }
+    const base = this.#currentThiefBase();
+    const discovered = base ? this.#hasThiefBaseDiscovery(playerId, base.id) : false;
+    return routes.filter((route) => {
+      if (route.city1_id !== route.city2_id) return Number(route.length) > 0;
+      if (!base) return false;
+      return aircraftType === this.#aircraftRoleId('search') ? !discovered : discovered;
+    });
+  }
+
+  vehicleActivationAvailability(playerId, itemId) {
+    const player = this.#marketPlayer(playerId);
+    const vehicle = this.database.prepare(`
+      SELECT catalog_vehicles.*, catalog_aircrafts.aircraft_type
+      FROM catalog_vehicles
+      LEFT JOIN catalog_aircrafts ON catalog_aircrafts.vehicle_id = catalog_vehicles.id
+      WHERE catalog_vehicles.item_id = ?
+    `).get(itemId);
+    if (!vehicle) throw new Error('That item is not a vehicle.');
+    const allowed = this.#availableVehicleRoutes(
+      playerId, player.city_id, vehicle.route_type, vehicle.aircraft_type
+    ).length > 0;
+    const cityName = this.database.prepare('SELECT name FROM catalog_cities WHERE id = ?')
+      .get(player.city_id)?.name ?? 'this city';
+    return {
+      allowed,
+      reason: allowed ? null
+        : `This transport has no valid routes from ${cityName}. Move it to a compatible city before activating it.`
+    };
+  }
+
   activateVehicle(playerId, itemId, now = Date.now()) {
     return this.#transaction(() => {
       const player = this.#marketPlayer(playerId);
-      const vehicle = this.database.prepare('SELECT * FROM catalog_vehicles WHERE item_id = ?').get(itemId);
+      const vehicle = this.database.prepare(`
+        SELECT catalog_vehicles.*, catalog_aircrafts.aircraft_type
+        FROM catalog_vehicles
+        LEFT JOIN catalog_aircrafts ON catalog_aircrafts.vehicle_id = catalog_vehicles.id
+        WHERE catalog_vehicles.item_id = ?
+      `).get(itemId);
       if (!vehicle) throw new Error('That item is not a vehicle.');
+      const availability = this.vehicleActivationAvailability(playerId, itemId);
+      if (!availability.allowed) throw new Error(availability.reason);
       this.#changeInventory(playerId, player.city_id, itemId, -1);
       const result = this.database.prepare(`
         INSERT INTO player_vehicles (player_id, vehicle_type_id, item_id, city_id, rating)
@@ -15975,6 +16357,54 @@ export class SqliteStore {
       capacityBreakdown: plan.capacityBreakdown, combatStats: plan.combatStats,
       additions: plan.additions, removals: plan.removals
     };
+  }
+
+  rarestVehicleCargo(playerId, vehicleId) {
+    const rules = this.#settings();
+    const vehicle = this.#vehicleRecord(vehicleId, playerId);
+    if (!vehicle || vehicle.status !== 'idle') throw new Error('That vehicle is not in a city.');
+    if (vehicle.damaged) {
+      throw new Error('This vehicle is damaged; cargo may only be removed until it is repaired.');
+    }
+    const loadout = this.#vehicleLoadout(vehicle);
+    const current = new Map(loadout.cargo.map((entry) => [entry.itemId, entry.quantity]));
+    const inventory = new Map(this.database.prepare(`
+      SELECT item_id, quantity FROM inventory
+      WHERE player_id = ? AND city_id = ? AND quantity > 0
+    `).all(playerId, vehicle.city_id).map((entry) => [entry.item_id, entry.quantity]));
+    const selectItem = this.database.prepare(`
+      SELECT catalog_items.*, catalog_vehicles.id AS vehicle_id,
+        catalog_weapons.id AS weapon_id, catalog_cannonballs.id AS cannonball_id,
+        catalog_bombs.id AS bomb_id, catalog_boxes.id AS box_id
+      FROM catalog_items LEFT JOIN catalog_vehicles ON catalog_vehicles.item_id = catalog_items.id
+      LEFT JOIN catalog_weapons ON catalog_weapons.item_id = catalog_items.id
+      LEFT JOIN catalog_cannonballs ON catalog_cannonballs.item_id = catalog_items.id
+      LEFT JOIN catalog_bombs ON catalog_bombs.item_id = catalog_items.id
+      LEFT JOIN catalog_boxes ON catalog_boxes.item_id = catalog_items.id
+      WHERE catalog_items.id = ?
+    `);
+    const candidates = [...new Set([...inventory.keys(), ...current.keys()])]
+      .map((itemId) => selectItem.get(itemId))
+      .filter((item) => item && compatibleCargoAllowed({
+        routeType: vehicle.route_type, aircraftType: vehicle.aircraft_type,
+        vehicleRarity: vehicle.rarity, itemId: item.id, itemRarity: item.rarity,
+        mineTypeId: item.mine_type_id, isVehicle: Boolean(item.vehicle_id),
+        isAmmoBox: Boolean(item.box_id), isWeapon: Boolean(item.weapon_id),
+        isCannonball: Boolean(item.cannonball_id), isBomb: Boolean(item.bomb_id)
+      }, rules))
+      .sort((first, second) => Number(second.rarity) - Number(first.rarity)
+        || String(first.name).localeCompare(String(second.name))
+        || Number(first.id) - Number(second.id));
+    let remaining = Math.max(0, Number(loadout.capacity));
+    const requested = {};
+    for (const item of candidates) {
+      if (!remaining) break;
+      const available = Number(inventory.get(item.id) ?? 0) + Number(current.get(item.id) ?? 0);
+      const quantity = Math.min(available, remaining);
+      if (quantity > 0) requested[item.id] = quantity;
+      remaining -= quantity;
+    }
+    return requested;
   }
 
   setVehicleCargo(playerId, vehicleId, requested = {}) {
@@ -17061,7 +17491,8 @@ export class SqliteStore {
         [vehicle, result.ships[0], loadout1], [other, result.ships[1], loadout2]
       ].entries()) {
         const starting = result.starting[index];
-        const maxHull = Math.max(1, Number(loadout.ship.max_hull ?? entry.max_hull));
+        const maxHull = Math.max(1, Number(loadout.ship.max_hull ?? entry.max_hull),
+          Number(starting.hull), Number(ship.hull));
         const sunk = ship.hull === 0;
         const repairedHull = sunk ? 0 : Math.min(maxHull,
           ship.hull + Math.ceil((starting.hull - ship.hull)
@@ -17197,8 +17628,7 @@ export class SqliteStore {
         ? 'was-sunk'
         : result.type === 'ship' && result.ships[opponentIndex]?.hull === 0
           ? 'sank'
-          : result.type === 'ship' && result.chainEscape
-            ? 'tied' : !winner ? 'tied' : winner.id === entry.id ? 'won' : 'lost';
+          : !winner ? 'tied' : winner.id === entry.id ? 'won' : 'lost';
       this.database.prepare(`
         INSERT INTO vehicle_events
           (vehicle_id, player_id, event_type, route_id, other_vehicle_id, battle_id, details_json, created_at)
@@ -17214,7 +17644,7 @@ export class SqliteStore {
     for (const [index, entry] of [vehicle, other].entries()) {
       const opponent = index === 0 ? other : vehicle;
       const won = winner?.id === entry.id;
-      const tied = !winner || (result.type === 'ship' && result.chainEscape);
+      const tied = !winner;
       const summary = result.type === 'land2' ? {
         kind: 'land', rounds: result.rounds,
         startingAttack: startingLandStats[index].attack,
@@ -17229,7 +17659,8 @@ export class SqliteStore {
         endingHull: result.ships[index].hull,
         endingSpeed: result.ships[index].speed,
         endingCrew: result.ships[index].crew,
-        crewLost: result.casualties[index].length,
+        crewLost: Math.max(0, Number(result.starting[index].crew)
+          - Number(result.ships[index].crew)),
         opponentSunk: result.ships[(index + 1) % 2].hull === 0,
         chainEscape: result.chainEscape
       };
@@ -17394,20 +17825,9 @@ export class SqliteStore {
       WHERE player_vehicles.id = ? AND player_vehicles.player_id = ?
     `).get(vehicleId, playerId);
     if (!vehicle || vehicle.status !== 'idle' || vehicle.aircraft_destroyed) return [];
-    let routes = this.database.prepare(`
-      SELECT * FROM catalog_routes
-      WHERE is_open = 1 AND type = ?
-        AND (city1_id = ? OR city2_id = ?)
-      ORDER BY id
-    `).all(vehicle.route_type, vehicle.city_id, vehicle.city_id);
-    if (vehicle.route_type === this.#routeTypeId('air')) {
-      const base = this.#currentThiefBase();
-      const discovered = this.#hasThiefBaseDiscovery(playerId, base?.id);
-      routes = routes.filter((route) => route.city1_id !== route.city2_id
-        || (vehicle.aircraft_type === this.#aircraftRoleId('search') ? !discovered : discovered));
-    } else {
-      routes = routes.filter((route) => route.city1_id !== route.city2_id);
-    }
+    let routes = this.#availableVehicleRoutes(
+      playerId, vehicle.city_id, vehicle.route_type, vehicle.aircraft_type
+    );
     routes = routes.map((route) => ({
       id: route.id,
       originCityId: vehicle.city_id,
@@ -17480,12 +17900,24 @@ export class SqliteStore {
     `).get(battleId, playerId);
     if (!side) throw new Error('Battle report not found.');
     const opponent = this.database.prepare(`
-      SELECT vehicle_battle_sides.*, players.name AS player_name, catalog_items.name AS vehicle_name,
+      SELECT vehicle_battle_sides.*, players.name AS player_name,
+        CASE WHEN players.is_npc = 1 THEN COALESCE(
+          NULLIF(player_vehicles.name, ''),
+          CASE WHEN ghost_vehicles.id IS NOT NULL
+            THEN (CASE ghost_vehicles.ghost_kind WHEN 'ship' THEN 'Ghost ' ELSE 'Wraith ' END)
+              || ghost_vehicles.source_vehicle_name
+          END,
+          catalog_items.name
+        ) ELSE catalog_items.name END AS vehicle_name,
         catalog_items.icon, catalog_items.rarity
       FROM vehicle_battle_sides
       JOIN players ON players.id = vehicle_battle_sides.player_id
       LEFT JOIN catalog_items ON catalog_items.id = vehicle_battle_sides.vehicle_item_id
-      WHERE battle_id = ? AND vehicle_id = ?
+      LEFT JOIN player_vehicles ON player_vehicles.id = vehicle_battle_sides.vehicle_id
+      LEFT JOIN ghost_vehicles ON ghost_vehicles.vehicle_id = vehicle_battle_sides.vehicle_id
+        OR (ghost_vehicles.defeated_battle_id = vehicle_battle_sides.battle_id
+          AND ghost_vehicles.source_item_id = vehicle_battle_sides.vehicle_item_id)
+      WHERE vehicle_battle_sides.battle_id = ? AND vehicle_battle_sides.vehicle_id = ?
     `).get(battleId, side.opponent_vehicle_id);
     return {
       id: battleId, routeId: side.route_id, routeType: side.route_type,

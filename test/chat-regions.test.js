@@ -75,6 +75,9 @@ test('chat keeps immutable sender regions and reveals only known-region traffic'
   assert.deepEqual(visibleBeforeDiscovery.map((entry) => entry.body), [
     'Legacy global signal', 'Legacy global event', 'Local regional signal'
   ]);
+  assert.deepEqual(visibleBeforeDiscovery.map((entry) => entry.mapIds), [
+    [], [], [localCity.map_id]
+  ]);
   assert.deepEqual(store.recentChats(2, viewer.id, 0).map((entry) => entry.body), [
     'Legacy global event', 'Local regional signal'
   ], 'hidden recent traffic does not consume the visible result limit');
@@ -92,6 +95,10 @@ test('chat keeps immutable sender regions and reveals only known-region traffic'
   assert.deepEqual(store.recentChats(null, viewer.id, 0).map((entry) => entry.body), [
     'Legacy global signal', 'Legacy global event', 'Local regional signal',
     'Remote regional signal', 'Remote regional event'
+  ]);
+  const visibleAfterDiscovery = store.recentChats(null, viewer.id, 0);
+  assert.deepEqual(visibleAfterDiscovery.slice(-2).map((entry) => entry.mapIds), [
+    [remoteCity.map_id], [remoteCity.map_id]
   ]);
 });
 

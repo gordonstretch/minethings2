@@ -83,6 +83,28 @@ test('records simultaneous cannon damage, running state, and mutual sinking', ()
   assert.deepEqual(result.shots.map((shots) => shots[0].targetAfter.hull), [0, 0]);
 });
 
+test('requires in-battle sail damage before a faster defender can chain-escape', () => {
+  const catalog = loadLegacyCatalog();
+  const ammunition = {
+    ...catalog.settings.ammunition_rules,
+    1: { ...catalog.settings.ammunition_rules[1], accuracy: 0 }
+  };
+  const ship = (speed) => ({
+    speed, hull: 20, crew: 1, massives: 3, chainShots: 0, grapeShots: 0,
+    cannons: [{ id: 1, portal: 1, name: 'Test cannon', rarity: 1,
+      damage: 2, rateOfFire: 3 }],
+    crewWeapons: [], critChance: 0
+  });
+
+  const result = fightShips(ship(8), true, ship(10), false, () => 0,
+    ammunition, catalog.settings);
+
+  assert.equal(result.chainEscape, false);
+  assert.deepEqual(result.shots.map((shots) => shots.length), [3, 3]);
+  assert.ok(result.shots.flat().every((shot) => shot.type === 1 && !shot.hit));
+  assert.deepEqual(result.cannonPhaseEnding.map((entry) => entry.speed), [8, 10]);
+});
+
 test('records chain-shot escape after sail damage and crew losses before boarding', () => {
   const catalog = loadLegacyCatalog();
   const ammunition = {
@@ -104,6 +126,8 @@ test('records chain-shot escape after sail damage and crew losses before boardin
   assert.equal(escape.chainEscape, true);
   assert.equal(escape.winner, 2);
   assert.equal(escape.ships[0].speed, 8);
+  assert.equal(escape.shots[1][0].type, 2);
+  assert.equal(escape.shots[1][0].hit, true);
   assert.equal(escape.shots[1][0].damageField, 'speed');
 
   const grapeAttacker = {

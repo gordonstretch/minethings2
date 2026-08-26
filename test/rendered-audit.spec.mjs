@@ -10,6 +10,7 @@ import { hashPassword, SqliteStore } from '../src/store.js';
 
 const catalog = loadLegacyCatalog();
 const password = 'rendered audit password';
+const oilRackDescription = 'Database item description for the Flower deployment bomb.';
 let directory;
 let databaseFile;
 let server;
@@ -37,6 +38,9 @@ test.beforeAll(async () => {
   databaseFile = path.join(directory, 'audit.sqlite');
   const store = new SqliteStore(databaseFile);
   store.seedCatalog(catalog);
+  const tooltipMachine = catalog.machines.find((machine) => machine.type === 'flower');
+  store.database.prepare('UPDATE catalog_items SET description = ? WHERE id = ?')
+    .run(oilRackDescription, tooltipMachine.itemId);
   const landVehicle = catalog.vehicles.find((vehicle) => vehicle.routeType === 0
     && vehicle.land?.attack > 0 && vehicle.land?.armor > 0 && catalog.byId.get(vehicle.itemId)?.rarity >= 4
     && catalog.routes.some((route) => route.open && route.type === 0
@@ -732,6 +736,8 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.screenshot({ path: path.resolve('migration-audit-kraken-bounty.png'), fullPage: true });
 
   await page.goto(`${base}/vehicles/${vehicleId}`);
+  await expect(page.locator('.vehicle-hero .item-card-featured .item-card-art'))
+    .toHaveCSS('background-image', 'none');
   for (const heading of ['Manage vehicle', 'Oil', 'Send', 'History']) {
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
   }
@@ -743,7 +749,15 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.getByRole('link', { name: 'Manage cargo' }).click();
   await expect(page.getByRole('heading', { name: 'Cargo', exact: true })).toBeVisible();
   await expect(page.getByText(/Choose the complete cargo manifest/)).toBeVisible();
+  await expect(page.getByRole('button', {
+    name: 'Take as much of the rarest things as we can'
+  })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Preview cargo' })).toBeVisible();
+  await page.getByRole('button', {
+    name: 'Take as much of the rarest things as we can'
+  }).click();
+  await expect(page.getByRole('heading', { name: 'Proposed loadout' })).toBeVisible();
+  await expect(page.getByText(/exact proposal is ready to commit/i)).toBeVisible();
   await page.goto(`${base}/vehicles/${vehicleId}/customize`);
   await expect(page.getByRole('heading', { name: 'Mods', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Weapons', exact: true })).toBeVisible();
@@ -807,11 +821,31 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   for (const removedText of ['Machine parts in the Oil Field city', 'Keyboard and form controls', 'Deployed machines']) {
     await expect(page.getByText(removedText, { exact: true })).toHaveCount(0);
   }
-  await expect(page.locator('.oil-field-board-shell')).toHaveAttribute('data-hex-count', '469');
+  const oilBoardShell = page.locator('.oil-field-board-shell');
+  await expect(oilBoardShell).toHaveAttribute('data-hex-count', '469');
+  await expect(oilBoardShell).toHaveCSS('overflow-y', 'hidden');
+  expect(await oilBoardShell.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
   await expect(page.locator('#board svg')).toBeVisible();
+  await expect(page.locator('#board svg')).toHaveAttribute('width', '1000');
+  await expect(page.locator('#board .oil-rack-caption')).toContainText('MACHINE RACK');
+  await expect(page.locator('#board .oil-rack-slot')).toHaveCount(0);
+  await expect(page.locator('#board .oil-rack-label')).toHaveCount(1);
+  const rackIcon = page.locator('#board image.oil-rack-machine-icon');
+  await expect(rackIcon).toHaveCount(1);
+  await expect(rackIcon).toHaveAttribute('href', /\/node\/machine-icons\/flower-\d+\.svg/);
+  await expect(rackIcon).toHaveAttribute('width', '30');
+  await expect(rackIcon).toHaveAttribute('height', '30');
+  expect(await rackIcon.evaluate((icon) => ({
+    width: Number(icon.getAttribute('width')),
+    height: Number(icon.getAttribute('height')),
+    hexDiameter: Number(window.hexDiameter)
+  }))).toEqual({ width: 30, height: 30, hexDiameter: 30 });
+  expect(await page.evaluate(() => [...new Set(window.OilRackLayout(12)
+    .map((position) => position.zone))])).toEqual(['top', 'left', 'right']);
   await expect(page.locator('#board .oil-hex-shape')).toHaveCount(469);
   await expect(page.locator('#board .oil-machine-shape').first()).toBeVisible();
   await expect(page.locator('#board .oil-slick').first()).toBeVisible();
+  await expect(page.locator('#board .oil-slick').first()).toHaveAttribute('stroke', '#ffc34d');
   await expect(page.locator('#board .oil-volume-badge').first()).toBeVisible();
   await expect(page.locator('#board .oil-volume-label').first()).toHaveText(/^\d+(?:\.\d+)?L$/);
   const oilLabelBox = await page.locator('#board .oil-volume-label').first().boundingBox();
@@ -844,6 +878,15 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(hexSummary).toBeHidden();
   await expect(page.locator('#oil-board-status')).toContainText('Hex summary closed');
   await expect(page.getByText('Field access active')).toBeVisible();
+  const volumeLabelsButton = page.locator('#oil-toggle-volume-labels');
+  await expect(volumeLabelsButton).toHaveText('Hide oil volume labels');
+  await volumeLabelsButton.click();
+  await expect(page.locator('#board .oil-volume-badge').first()).toBeHidden();
+  await expect(page.locator('#board .oil-volume-label').first()).toBeHidden();
+  await expect(page.locator('#board .oil-slick').first()).toBeVisible();
+  await expect(page.locator('#oil-board-status')).toContainText('Oil volume labels hidden');
+  await volumeLabelsButton.click();
+  await expect(page.locator('#board .oil-volume-label').first()).toBeVisible();
   await page.locator('#oil-toggle-animation').click();
   await expect(page.locator('#oil-board-status')).toContainText('Animations are paused');
   await expect(page.locator('#board .oil-machine-shape').first()).toBeVisible();
@@ -855,11 +898,19 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.locator('#oil-toggle-queued')).toHaveText('Show deployed');
   await page.locator('#oil-toggle-queued').click();
   await expect(page.locator('#oil-toggle-queued')).toHaveText('Show queued');
-  const rackBomb = page.locator('#board [aria-label="Select flower"]');
+  const rackBomb = page.locator(`#board [aria-label*="${oilRackDescription}"]`);
   await expect(rackBomb).toBeVisible();
+  await expect(rackBomb).toHaveAttribute('data-rack-zone', 'top');
+  await expect(rackBomb).toHaveAttribute('stroke', 'none');
+  await rackBomb.hover();
+  const rackTooltip = page.locator('#oil-machine-tooltip');
+  await expect(rackTooltip).toBeVisible();
+  await expect(rackTooltip).toContainText(oilRackDescription);
+  await expect(rackTooltip).toContainText('P =');
   const bombBox = await rackBomb.boundingBox();
   const centerBox = await centerHex.boundingBox();
   expect(bombBox).toBeTruthy();
+  expect(bombBox.width).toBeGreaterThanOrEqual(36);
   expect(centerBox).toBeTruthy();
   await page.mouse.move(bombBox.x + bombBox.width / 2, bombBox.y + bombBox.height / 2);
   await page.mouse.down();
@@ -1069,8 +1120,8 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   const trafficCount = await trafficRows.count();
   expect(trafficCount).toBeGreaterThanOrEqual(4);
   await expect(page.locator('.admin-traffic-table').getByText('The Restless Dead').first()).toBeVisible();
-  await expect(page.locator('.admin-traffic-table').getByText('Orange White Whale').first()).toBeVisible();
-  await expect(page.locator('.admin-traffic-table').getByText('Yellow T-Rex').first()).toBeVisible();
+  await expect(page.locator('.admin-traffic-table').getByText('Legendary White Whale').first()).toBeVisible();
+  await expect(page.locator('.admin-traffic-table').getByText('Common T-Rex').first()).toBeVisible();
   await expect(page.locator('.admin-traffic-progress')).toHaveCount(trafficCount);
   await expect(page.locator('form[action="/admin/world/weather"]')).not.toHaveCount(0);
   await assertHealthyRender(page);
@@ -1078,10 +1129,10 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await page.goto(`${base}/events`);
   expect(await page.locator('.creature-card').count()).toBeGreaterThanOrEqual(2);
   await expect(page.locator('.creature-card.rarity-6').getByRole('heading', {
-    name: 'Orange White Whale'
+    name: 'Legendary White Whale'
   })).toBeVisible();
   await expect(page.locator('.creature-card.rarity-1').getByRole('heading', {
-    name: 'Yellow T-Rex'
+    name: 'Common T-Rex'
   })).toBeVisible();
   await expect(page.locator('.creature-card .threat-mark img')).toHaveCount(2);
   await expect(page.getByText(/Drops up to .* Ore|bounty slots|combat class/i))

@@ -225,7 +225,7 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
     kraken: 0.16, land_whale: 0.3, white_whale: 0.18,
     orca_pod: 0.14, elephant_herd: 0.25, t_rex: 0.38
   },
-  // Indexes are rarity IDs. Yellow is deliberately the dominant natural form;
+  // Indexes are rarity IDs. Common is deliberately the dominant natural form;
   // every species can still appear at any tier through Orange.
   world_creature_tier_weights: [0, 32, 16, 8, 4, 2, 1],
   world_creature_tier_hp_multipliers: [0, 1, 1.35, 1.8, 2.4, 3.2, 4.25],

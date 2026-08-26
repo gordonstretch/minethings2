@@ -7,7 +7,7 @@ import test from 'node:test';
 import { createPlayer } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
 import { LEGAL_VERSION } from '../src/legal.js';
-import { createApp, findingNoticeItems } from '../src/server.js';
+import { battlePage, createApp, findingNoticeItems } from '../src/server.js';
 import { hashPassword, SqliteStore } from '../src/store.js';
 
 async function verifyDevelopmentEmail(base, cookie) {
@@ -30,6 +30,107 @@ async function verifyDevelopmentEmail(base, cookie) {
   assert.equal(verified.headers.get('location'), '/');
   return tokenMatch[1];
 }
+
+test('renders chain-escape battle reports with accurate counts and clean numbers', () => {
+  const report = {
+    vehicleId: 174,
+    aggressive: false,
+    won: true,
+    tied: false,
+    ratingBefore: 1600,
+    ratingAfter: 1605,
+    opponent: {
+      aggressive: true,
+      player_name: 'The Restless Dead',
+      vehicle_name: 'Champion'
+    },
+    details: {
+      type: 'ship',
+      vehicleIds: [155, 174],
+      result: {
+        winner: 2,
+        chainEscape: true,
+        starting: [
+          { hull: 188, speed: 44.800000000000004, crew: 65 },
+          { hull: 144, speed: 56, crew: 65 }
+        ],
+        ships: [
+          { hull: 188, speed: 44.800000000000004, crew: 65 },
+          { hull: 144, speed: 56, crew: 65 }
+        ],
+        shots: [
+          [{ round: 1, portal: 1, cannonName: 'Hydra', type: 1, hit: false,
+            damage: 4, damageField: 'hull',
+            targetAfter: { hull: 144, speed: 56, crew: 65 } }],
+          [{ round: 1, portal: 1, cannonName: 'Hydra', type: 1, hit: false,
+            damage: 5, damageField: 'hull',
+            targetAfter: { hull: 188, speed: 44.800000000000004, crew: 65 } }]
+        ],
+        casualties: [[], []],
+        boardingRounds: [],
+        repairs: [null, {
+          hull: 0, speed: 0, crew: 0,
+          ending: { hull: 144, speed: 56, crew: 65 }
+        }]
+      }
+    }
+  };
+
+  const html = battlePage(report);
+  assert.match(html, /Your ship fired 1 cannon shot and landed 0 hits\./);
+  assert.match(html, /188 hull \/ 44\.8 speed \/ 65 crew/);
+  assert.match(html, /No crew were lost\./);
+  assert.match(html, /Your faster ship escaped the pursuing enemy before boarding could begin\./);
+  assert.match(html, /You won\./);
+  assert.doesNotMatch(html, /44\.800000000000004|Chain-shot damage|repairs restored 0/);
+});
+
+test('renders chain-shot escape losses and total crew recovery from the viewer perspective', () => {
+  const report = {
+    vehicleId: 10,
+    aggressive: true,
+    won: false,
+    tied: false,
+    ratingBefore: 1600,
+    ratingAfter: 1595,
+    opponent: { aggressive: false, player_name: 'Defender', vehicle_name: 'Clipper' },
+    details: {
+      type: 'ship',
+      vehicleIds: [10, 20],
+      result: {
+        winner: 2,
+        chainEscape: true,
+        starting: [
+          { hull: 100, speed: 56, crew: 65 },
+          { hull: 100, speed: 56, crew: 65 }
+        ],
+        ships: [
+          { hull: 100, speed: 50, crew: 60 },
+          { hull: 100, speed: 56, crew: 65 }
+        ],
+        shots: [[], [
+          { round: 1, portal: 1, cannonName: 'Hydra', type: 2, hit: true,
+            damage: 6, damageField: 'speed',
+            targetAfter: { hull: 100, speed: 50, crew: 65 } }
+        ]],
+        casualties: [[], []],
+        boardingRounds: [],
+        repairs: [{
+          hull: 0, speed: 0.200000000000003, crew: 2,
+          ending: { hull: 100, speed: 50.2, crew: 62 }
+        }, null]
+      }
+    }
+  };
+
+  const html = battlePage(report);
+  assert.match(html, /Your ship fired 0 cannon shots and landed 0 hits\./);
+  assert.match(html, /5 crew members were lost\./);
+  assert.match(html, /An enemy chain shot slowed your ship, letting the faster enemy escape before boarding could begin\./);
+  assert.match(html, /After combat, repairs restored 0\.2 speed; 2 crew members returned to duty\./);
+  assert.match(html, /You lost\./);
+  assert.doesNotMatch(html, /0\.200000000000003/);
+});
 
 test('renders and operates persistent factory production queues', async (context) => {
   const store = new SqliteStore(':memory:');
@@ -167,6 +268,21 @@ test('creates unique world maps and lets an administrator open their long routes
     'every region exposes its fixed capital through the catalog');
   assert.equal(live.cities.length, 35);
   assert.equal(new Set(live.cities.map((city) => city.name)).size, live.cities.length);
+  const regionalFields = store.database.prepare(`
+    SELECT world_maps.name AS map_name, catalog_cities.name AS city_name,
+      COUNT(*) AS hex_count
+    FROM oil_hexes
+    JOIN catalog_cities ON catalog_cities.id = oil_hexes.city_id
+    JOIN world_maps ON world_maps.id = catalog_cities.map_id
+    GROUP BY world_maps.id, oil_hexes.city_id
+    ORDER BY world_maps.sort_order
+  `).all();
+  assert.deepEqual(regionalFields.map((field) => field.map_name),
+    ['Aso', 'Calbuco', 'Ebeko', 'Gallego']);
+  assert.equal(regionalFields.length, Math.round(live.maps.length / 2));
+  assert.equal(regionalFields.every((field) => field.hex_count === 469), true);
+  assert.equal(regionalFields.find((field) => field.map_name === 'Gallego').city_name, 'Burgundy',
+    'the original field city is preserved');
   for (const map of live.maps) {
     const cities = live.cities.filter((city) => city.mapId === map.id);
     assert.equal(cities.some((city) => city.id === map.capitalCityId), true,
@@ -182,6 +298,8 @@ test('creates unique world maps and lets an administrator open their long routes
   }
   store.ensureWorldMaps(1500);
   assert.equal(store.loadCatalog().cities.length, 35, 'the region migration should be idempotent');
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM oil_hexes').get().count,
+    4 * 469, 'regional Oil Field generation should be idempotent');
   const routes = store.adminInterMapRoutes();
   assert.equal(routes.length, 18);
   assert.equal(routes.every((route) => !route.open && route.length === 12000), true);
@@ -575,6 +693,9 @@ test('secures and operates the modern administration console', async (context) =
   for (const color of ['Yellow', 'Green', 'Blue', 'Red', 'Purple', 'Orange']) {
     assert.match(worldHtml, new RegExp(color));
   }
+  assert.match(worldHtml, /Creature rarity/);
+  assert.match(worldHtml, /Common · Tier 1/);
+  assert.match(worldHtml, /Legendary · Tier 6/);
 
   const weather = await fetch(`${base}/admin/world/weather`, {
     method: 'POST', redirect: 'manual', headers: {
@@ -603,9 +724,11 @@ test('secures and operates the modern administration console', async (context) =
   });
   assert.equal(spawned.status, 303);
   assert.equal(spawned.headers.get('location'), '/admin/world');
-  assert.equal(store.adminWorldEventControls(2000).creatures.some((entry) =>
+  const legendaryWhale = store.adminWorldEventControls(2000).creatures.find((entry) =>
     entry.creature_type === 'white_whale' && entry.rarity === 6
-      && entry.route_id === seaRoute.id), true);
+      && entry.route_id === seaRoute.id);
+  assert.equal(legendaryWhale.name, 'Legendary White Whale');
+  assert.equal(legendaryWhale.rarity_name, 'Legendary');
 
   const whale = await fetch(`${base}/admin/world/creatures`, {
     method: 'POST', redirect: 'manual', headers: {
@@ -721,7 +844,8 @@ test('renders moving creatures and sends vehicles to future interception points'
   assert.equal(vehicles.status, 200);
   const vehiclesHtml = await vehicles.text();
   assert.match(vehiclesHtml, new RegExp(`Pursuing ${
-    catalog.settings.rarity_color_names[catalog.byId.get(vehicleType.itemId).rarity]
+    catalog.rarities.find((rarity) =>
+      rarity.id === catalog.byId.get(vehicleType.itemId).rarity).name
   } Land Whale`));
   assert.match(vehiclesHtml, /Intercepts in/);
   const vehicle = await fetch(`${base}/vehicles/${vehicleId}`, { headers: { cookie } });
@@ -892,6 +1016,11 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   player.inventoryByCity = { [player.cityId]: player.inventory };
   const saved = store.addPlayer(player);
   const vehicleId = store.activateVehicle(saved.id, ship.itemId);
+  const bonusMaximumHull = ship.ship.hull + 32;
+  const currentHull = ship.ship.hull + 8;
+  store.database.prepare(`
+    UPDATE player_ship_state SET hull = ?, max_hull = ? WHERE vehicle_id = ?
+  `).run(currentHull, bonusMaximumHull, vehicleId);
   const server = createApp({ store, catalog, now: () => 2000 });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   context.after(async () => {
@@ -905,6 +1034,11 @@ test('renders cannon controls for an idle ship in port', async (context) => {
     body: new URLSearchParams({ name: player.name, password })
   });
   const cookie = login.headers.get('set-cookie').split(';')[0];
+
+  const fleetHtml = await (await fetch(`${base}/vehicles`, { headers: { cookie } })).text();
+  assert.match(fleetHtml, new RegExp(
+    `/vehicles/${vehicleId}/customize#ammunition[^>]*>Load ammunition</a>`
+  ));
 
   const statusResponse = await fetch(`${base}/vehicles/${vehicleId}`, { headers: { cookie } });
   const statusHtml = await statusResponse.text();
@@ -921,6 +1055,8 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   assert.match(statusHtml, /Combat targets are limited automatically to this vehicle's tier/);
   assert.match(statusHtml, /Also engage patrols in this tier/);
   assert.doesNotMatch(statusHtml, /Engage vehicles of these rarities|name="attack_\d+"/);
+  assert.match(statusHtml, new RegExp(`/vehicles/${vehicleId}/customize#ammunition`));
+  assert.match(statusHtml, /Load ammunition or change cannons/);
   assert.match(statusHtml, /\/node\/vehicle-journey\.js/);
   const journeyClient = await (await fetch(`${base}/node/vehicle-journey.js`)).text();
   assert.match(journeyClient, /journeyRoute_/);
@@ -932,9 +1068,14 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   assert.equal(response.status, 200);
   assert.match(html, /<h2>Ship cannons <small>0\/\d+ portals occupied<\/small><\/h2>/);
   assert.match(html, /<h2 id="vehicle-loadout-heading">Current loadout<\/h2>/);
+  assert.match(html, new RegExp(`<dt>Hull<\\/dt><dd>${currentHull}\\/${bonusMaximumHull}<\\/dd>`));
   assert.match(html, /Choose the complete cannon set you want fitted/);
   assert.match(html, /ammunition remains aboard/);
+  assert.match(html, /Commit cannon changes before loading ammunition/);
+  assert.match(html, /id="ammunition"/);
+  assert.match(html, /shared ammunition hold/);
   assert.match(html, /Attach a cannon first/);
+  assert.match(html, /Choose a proposed quantity below, preview the cannon loadout, then commit it/);
   assert.match(html, new RegExp(`action="/vehicles/${vehicleId}/customize"`));
   assert.match(html, /Preview cannon loadout/);
   const preview = await fetch(`${base}/vehicles/${vehicleId}/customize`, {
@@ -957,13 +1098,14 @@ test('renders cannon controls for an idle ship in port', async (context) => {
     })
   });
   assert.equal(attach.status, 303);
-  assert.equal(attach.headers.get('location'), `/vehicles/${vehicleId}`);
+  assert.equal(attach.headers.get('location'), `/vehicles/${vehicleId}/customize#ammunition`);
   const armedHtml = await (await fetch(`${base}/vehicles/${vehicleId}/customize`, {
     headers: { cookie }
   })).text();
   assert.match(armedHtml, new RegExp(`action="/vehicles/${vehicleId}/ammo"`));
   assert.match(armedHtml, /Fitted in portal 1/);
   assert.match(armedHtml, /1\/\d+ portals occupied/);
+  assert.match(armedHtml, /<dt>Cannons used<\/dt><dd>1<\/dd>/);
   assert.match(armedHtml, /name="quantity" min="1" max="3" value="1"/);
   assert.match(armedHtml, /Load 12 Cannonballs/);
   const load = await fetch(`${base}/vehicles/${vehicleId}/ammo`, {
@@ -972,10 +1114,17 @@ test('renders cannon controls for an idle ship in port', async (context) => {
     }, body: new URLSearchParams({ type: String(ammunition.type), quantity: '2' })
   });
   assert.equal(load.status, 303);
-  assert.equal(load.headers.get('location'), `/vehicles/${vehicleId}/customize`);
+  assert.equal(load.headers.get('location'), `/vehicles/${vehicleId}/customize#ammunition`);
   const rule = catalog.settings.ammunition_rules[ammunition.type];
   assert.equal(store.vehicleDetails(saved.id, vehicleId, 2000).ship[rule.storageField],
     Number(catalog.settings.shots_per_crate) * 2);
+  const loadedHtml = await (await fetch(`${base}/vehicles/${vehicleId}/customize`, {
+    headers: { cookie }
+  })).text();
+  assert.match(loadedHtml, /<dt>Cannons used<\/dt><dd>1<\/dd>/);
+  assert.match(loadedHtml, /<dt>Ammunition used<\/dt><dd>2<\/dd>/);
+  assert.doesNotMatch(loadedHtml,
+    /<dt>(?:Weapons|Cannons|Ammunition|Cargo) used<\/dt><dd>−/);
 });
 
 test('offers all Unranked things as cargo in Red-and-above vehicles', async (context) => {
@@ -1016,6 +1165,21 @@ test('offers all Unranked things as cargo in Red-and-above vehicles', async (con
   for (const item of [catalog.byId.get(storedVehicle.itemId), catalog.byId.get(ammoBox.itemId), ordinary]) {
     assert.match(html, new RegExp(`name="cargo_${item.id}"`));
   }
+  assert.match(html, /name="intent" value="rarest"/);
+  assert.match(html, /Take as much of the rarest things as we can/);
+  const rarestPreview = await fetch(`${base}/vehicles/${vehicleId}/cargo`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    }, body: new URLSearchParams({ intent: 'rarest' })
+  });
+  assert.equal(rarestPreview.status, 200);
+  const rarestPreviewHtml = await rarestPreview.text();
+  assert.match(rarestPreviewHtml, /exact proposal is ready to commit/i);
+  for (const item of [catalog.byId.get(storedVehicle.itemId), catalog.byId.get(ammoBox.itemId), ordinary]) {
+    assert.match(rarestPreviewHtml,
+      new RegExp(`name="cargo_${item.id}"[^>]*value="1"`));
+  }
+  assert.equal(store.vehicleDetails(saved.id, vehicleId, 2000).cargoSize, 0);
   const cargoFields = {
     [`cargo_${storedVehicle.itemId}`]: '1', [`cargo_${ammoBox.itemId}`]: '1',
     [`cargo_${ordinary.id}`]: '1'
@@ -2535,6 +2699,32 @@ test('supports registration and authenticated play pages', async (context) => {
   for (const packer of catalog.machines.filter((machine) => machine.rules.canPack)) {
     assert.match(oilFieldHtml, new RegExp(catalog.byId.get(packer.itemId).name));
   }
+  const playerRegionDatabase = new DatabaseSync(databaseFile);
+  let originalPlayerCityId;
+  try {
+    originalPlayerCityId = playerRegionDatabase.prepare(
+      "SELECT city_id FROM players WHERE name = 'Ada'"
+    ).get().city_id;
+    playerRegionDatabase.prepare(`
+      UPDATE players SET city_id = (SELECT id FROM catalog_cities WHERE name = 'Ashfall')
+      WHERE name = 'Ada'
+    `).run();
+  } finally {
+    playerRegionDatabase.close();
+  }
+  const unavailableOilFieldHtml = await (await fetch(
+    `${base}/oil-field`, { headers: { cookie } }
+  )).text();
+  assert.match(unavailableOilFieldHtml, /No Oil Field in Bromo/);
+  assert.doesNotMatch(unavailableOilFieldHtml, /class="oil-field-board-shell"/);
+  const restorePlayerRegionDatabase = new DatabaseSync(databaseFile);
+  try {
+    restorePlayerRegionDatabase.prepare(
+      "UPDATE players SET city_id = ? WHERE name = 'Ada'"
+    ).run(originalPlayerCityId);
+  } finally {
+    restorePlayerRegionDatabase.close();
+  }
   const oilFieldClient = await fetch(`${base}/node/oil-field.js`);
   assert.match(await oilFieldClient.text(), /the barrels will remain here and can then be claimed/);
   const vacuum = catalog.machines.find((machine) => machine.type === 'vacuum');
@@ -2593,7 +2783,17 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(chatHtml, /class="chat-console" aria-labelledby="chat-console-title"/);
   assert.match(chatHtml, /id="chat-compose-form" class="chat-compose"/);
   assert.match(chatHtml, /id="chat-log" class="chat-list" role="log"/);
+  assert.match(chatHtml, /id="chat-filters" class="chat-filter-card" data-chat-filters/);
+  assert.equal(chatHtml.match(/<input[^>]+data-chat-rating-tier/g)?.length, 6);
+  assert.match(chatHtml, /Rating tiers/);
+  assert.match(chatHtml, /No selection shows every tier/);
+  assert.match(chatHtml, /data-chat-hide-world-events/);
+  assert.match(chatHtml, /Hide world events/);
+  assert.match(chatHtml, /data-chat-hidden-region/);
+  assert.match(chatHtml, /Hide regions/);
+  assert.match(chatHtml, /src="\/node\/chat-filters\.js/);
   assert.match(chatHtml, /class="chat-row chat-row-player" style="--chat-color:#abcdef"/);
+  assert.match(chatHtml, /data-chat-row data-chat-kind="player" data-chat-map-ids="\d+"/);
   assert.match(chatHtml, /class="chat-speaker"/);
   assert.match(chatHtml, /class="chat-message"/);
   assert.match(chatHtml, /<time datetime="1970-01-01T00:00:01\.000Z"/);
@@ -2611,6 +2811,12 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(chatHtml, /Ada captured a Yellow Dwarf while mining/);
   assert.doesNotMatch(chatHtml, /This announcement is more than a day old/);
   assert.doesNotMatch(chatHtml, /chat-color-abcdef/);
+  const chatFiltersClient = await fetch(`${base}/node/chat-filters.js`);
+  assert.equal(chatFiltersClient.status, 200);
+  const chatFiltersSource = await chatFiltersClient.text();
+  assert.match(chatFiltersSource, /ratingTiers\.size > 0/);
+  assert.match(chatFiltersSource, /data-chat-hide-world-events/);
+  assert.match(chatFiltersSource, /data-chat-hidden-region/);
 
   const moderationDatabase = new DatabaseSync(databaseFile);
   moderationDatabase.prepare("UPDATE players SET chat_banned = 1 WHERE name = 'Ada'").run();

@@ -311,10 +311,14 @@
     }
     return nearestDistance <= 18 ? nearest : null;
   };
+  const setRackMachineClass = (machine, className, active) => {
+    machine.set.forEach((element) => element.node.classList.toggle(className, active));
+  };
+  let hideRackTooltip = () => {};
 
   const originalAddHandle = window.Machine.prototype.AddHandle;
-  window.Machine.prototype.AddHandle = function () {
-    originalAddHandle.call(this);
+  window.Machine.prototype.AddHandle = function (...args) {
+    originalAddHandle.apply(this, args);
     const machine = this;
     let origin = machine.startingPos.slice();
     machine.set.attr({ cursor: 'grab' });
@@ -330,11 +334,14 @@
       origin = machine.startingPos.slice();
       window.dialog.SetMachine(machine);
       machine.set.attr({ cursor: 'grabbing' });
+      hideRackTooltip(machine);
+      setRackMachineClass(machine, 'is-dragging', true);
       status(`Dragging ${machine.machine.MachineType.name}. Drop it on a hex.`);
     }, function () {
       const destination = dragCandidate;
       restoreCandidate();
       machine.set.attr({ cursor: 'grab' });
+      setRackMachineClass(machine, 'is-dragging', false);
       machine.draggedUntil = Date.now() + 250;
       if (!destination) {
         window.dialog.Dismiss();
@@ -415,13 +422,14 @@
     const oilLabel = `${liters < 10 ? liters.toFixed(2) : liters < 100 ? liters.toFixed(1) : Math.round(liters)}L`;
     const badgeWidth = Math.max(29, oilLabel.length * 5.2 + 5);
     const halo = window.paper.circle(center[0], center[1], 12.6)
-      .attr({ fill: 'none', stroke: '#0b0a08', 'stroke-width': 2.2, 'stroke-opacity': 0.94 });
+      .attr({ fill: '#f0a52b', 'fill-opacity': 0.12, stroke: '#ffc34d',
+        'stroke-width': 2.4, 'stroke-opacity': 0.98 });
     const slick = window.paper.ellipse(center[0], center[1] + 6.5, radius, Math.max(2.8, radius * 0.44))
-      .attr({ fill: '#11100d', stroke: '#050504', 'stroke-width': 0.8, 'fill-opacity': 0.88 });
+      .attr({ fill: '#080906', stroke: '#ffc34d', 'stroke-width': 1.8, 'fill-opacity': 0.94 });
     const badge = window.paper.rect(center[0] - badgeWidth / 2, center[1] + 4, badgeWidth, 12, 2.5)
-      .attr({ fill: '#090806', stroke: '#e3c468', 'stroke-width': 1, 'fill-opacity': 0.98 });
+      .attr({ fill: '#eea12b', stroke: '#ffe2a0', 'stroke-width': 1, 'fill-opacity': 0.98 });
     const label = window.paper.text(center[0], center[1] + 10, oilLabel)
-      .attr({ fill: '#fff1b5', 'font-size': 8.5, 'font-family': 'Arial, sans-serif', 'font-weight': 'bold' });
+      .attr({ fill: '#17120b', 'font-size': 8.5, 'font-family': 'Arial, sans-serif', 'font-weight': 'bold' });
     halo.node.classList.add('oil-volume-halo');
     slick.node.classList.add('oil-slick');
     badge.node.classList.add('oil-volume-badge');
@@ -432,8 +440,8 @@
       overlay.node.style.pointerEvents = 'none';
       oilOverlays.push(overlay);
     }
-    hexPath.data('oilStroke', '#29271f');
-    hexPath.attr({ stroke: '#29271f' });
+    hexPath.data('oilStroke', '#e8aa3a');
+    hexPath.attr({ stroke: '#e8aa3a' });
   }
   bringOilOverlaysToFront();
 
@@ -470,12 +478,90 @@
     decorateDeployedMachines();
     bringOilOverlaysToFront();
   };
+  const boardElement = document.getElementById('board');
+  const rackTooltip = document.createElement('aside');
+  rackTooltip.id = 'oil-machine-tooltip';
+  rackTooltip.className = 'oil-machine-tooltip';
+  rackTooltip.setAttribute('role', 'tooltip');
+  rackTooltip.hidden = true;
+  rackTooltip.innerHTML = '<p class="eyebrow">Machine briefing</p><strong></strong><p></p><small></small><small>Drag to a highlighted hex, or press Enter to select.</small>';
+  boardElement?.appendChild(rackTooltip);
+  const rackTooltipName = rackTooltip.querySelector('strong');
+  const rackTooltipDescription = rackTooltip.querySelector('p:not(.eyebrow)');
+  const rackTooltipMeta = rackTooltip.querySelector('small');
+  let activeRackMachine = null;
+  let focusedRackMachine = null;
+  hideRackTooltip = (machine = activeRackMachine) => {
+    if (machine) setRackMachineClass(machine, 'is-previewing', false);
+    if (!machine || activeRackMachine === machine) {
+      activeRackMachine = null;
+      rackTooltip.hidden = true;
+    }
+  };
+  const showRackTooltip = (machine) => {
+    if (activeRackMachine && activeRackMachine !== machine) {
+      setRackMachineClass(activeRackMachine, 'is-previewing', false);
+    }
+    activeRackMachine = machine;
+    setRackMachineClass(machine, 'is-previewing', true);
+    const item = machine.machine.Item;
+    const machineType = machine.machine.MachineType;
+    const description = String(item.description || '').trim()
+      || 'No item description has been recorded in the catalog.';
+    const rarity = requiredLookup(rarityNames, Number(item.rarity), 'rarity name');
+    const power = Number(machineType.power).toLocaleString('en-GB', { maximumFractionDigits: 2 });
+    const lifeDays = Number(machineType.lifeDays).toLocaleString('en-GB', { maximumFractionDigits: 2 });
+    const quantity = Number(machine.machine.count);
+    rackTooltipName.textContent = item.name;
+    rackTooltipDescription.textContent = description;
+    rackTooltipMeta.textContent = `${rarity} \u00b7 P = ${power} \u00b7 ${lifeDays} day service life \u00b7 ${quantity} ready`;
+    rackTooltip.dataset.machineType = machineType.name;
+    const [x, y] = machine.startingPos;
+    const tooltipWidth = 300;
+    const boardWidth = boardElement?.clientWidth || 1000;
+    let left;
+    let top;
+    if (machine.rackZone === 'left') {
+      left = 112;
+      top = Math.max(24, Math.min(748, y - 58));
+    } else if (machine.rackZone === 'right') {
+      left = boardWidth - tooltipWidth - 112;
+      top = Math.max(24, Math.min(748, y - 58));
+    } else {
+      left = Math.max(12, Math.min(boardWidth - tooltipWidth - 12, x - tooltipWidth / 2));
+      top = Math.min(748, y + 30);
+    }
+    rackTooltip.style.left = `${left}px`;
+    rackTooltip.style.top = `${top}px`;
+    rackTooltip.hidden = false;
+  };
   for (const machine of rackMachines) {
-    machine.set.forEach((element) => element.node.classList.add('oil-rack-machine'));
+    machine.set.forEach((element) => {
+      element.node.classList.add('oil-rack-machine');
+      element.node.dataset.rackZone = machine.rackZone ?? 'top';
+    });
     if (machine.circle) {
       machine.circle.node.setAttribute('tabindex', '0');
       machine.circle.node.setAttribute('role', 'button');
-      machine.circle.node.setAttribute('aria-label', `Select ${machine.machine.MachineType.name}`);
+      const description = String(machine.machine.Item.description || '').trim()
+        || 'No item description has been recorded in the catalog.';
+      machine.circle.node.setAttribute('aria-label', `Select ${machine.machine.Item.name}. ${description}`);
+      machine.circle.node.setAttribute('aria-describedby', rackTooltip.id);
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = `${machine.machine.Item.name}. ${description}`;
+      machine.circle.node.prepend(title);
+      machine.circle.node.addEventListener('mouseenter', () => showRackTooltip(machine));
+      machine.circle.node.addEventListener('mouseleave', () => {
+        if (focusedRackMachine !== machine) hideRackTooltip(machine);
+      });
+      machine.circle.node.addEventListener('focus', () => {
+        focusedRackMachine = machine;
+        showRackTooltip(machine);
+      });
+      machine.circle.node.addEventListener('blur', () => {
+        focusedRackMachine = null;
+        hideRackTooltip(machine);
+      });
       machine.circle.node.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
@@ -484,12 +570,12 @@
     }
   }
   if (window.barrels) window.barrels.forEach((barrel) => { barrel.node.style.pointerEvents = 'none'; });
-  const boardElement = document.getElementById('board');
   if (!window.animate) boardElement?.classList.add('oil-animations-paused');
 
   const queuedButton = document.getElementById('oil-toggle-queued');
   const animationButton = document.getElementById('oil-toggle-animation');
   const colorButton = document.getElementById('oil-toggle-colors');
+  const volumeLabelsButton = document.getElementById('oil-toggle-volume-labels');
   queuedButton?.addEventListener('click', () => {
     window.ToggleQueued();
     queuedButton.textContent = window.showQueued ? 'Show deployed' : 'Show queued';
@@ -507,6 +593,26 @@
     colorButton.textContent = window.teamFill ? 'Rarity colours' : 'Ownership colours';
     status(window.teamFill ? 'Hexes are coloured by ownership and availability.' : 'Occupied hexes are coloured by machine rarity.');
   });
+  let volumeLabelsHidden = false;
+  try {
+    volumeLabelsHidden = localStorage.getItem('oil-field-volume-labels') === 'hidden';
+  } catch {}
+  const renderVolumeLabelPreference = () => {
+    boardElement?.classList.toggle('oil-volume-labels-hidden', volumeLabelsHidden);
+    if (!volumeLabelsButton) return;
+    volumeLabelsButton.textContent = volumeLabelsHidden
+      ? 'Show oil volume labels' : 'Hide oil volume labels';
+    volumeLabelsButton.setAttribute('aria-pressed', volumeLabelsHidden ? 'true' : 'false');
+  };
+  volumeLabelsButton?.addEventListener('click', () => {
+    volumeLabelsHidden = !volumeLabelsHidden;
+    renderVolumeLabelPreference();
+    try {
+      localStorage.setItem('oil-field-volume-labels', volumeLabelsHidden ? 'hidden' : 'shown');
+    } catch {}
+    status(volumeLabelsHidden ? 'Oil volume labels hidden.' : 'Oil volume labels shown.');
+  });
+  renderVolumeLabelPreference();
   if (animationButton) animationButton.textContent = window.animate ? 'Pause animation' : 'Play animation';
   status(`Oil Field ready: ${window.boardHexes.length} hexes, ${visibleOilHexes} containing visible oil, ${window.boardMachines.length} deployed machines, ${rackMachines.length} machine parts in the rack.`);
   };

@@ -269,7 +269,9 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
       if (aggressions[0] !== aggressions[1]) {
         const aggressor = aggressions[0] ? 0 : 1;
         const defender = (aggressor + 1) % 2;
-        if (ships[aggressor].speed * Number(combatRules.ship_chain_escape_speed_ratio)
+        const aggressorSailsDamaged = ships[aggressor].speed < starting[aggressor].speed;
+        if (aggressorSailsDamaged
+          && ships[aggressor].speed * Number(combatRules.ship_chain_escape_speed_ratio)
           < ships[defender].speed) {
           winner = defender + 1;
           chainEscape = true;

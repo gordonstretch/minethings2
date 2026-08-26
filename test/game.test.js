@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   activeMineLimit, assignRobot, buyMine, claimMine, createPlayer, detonateExplosive, equipMine,
-  expireRentalMines, mineBucketsPerHour, mineIntervalMs, oilMineBot, prioritizeMine, rentMine,
+  expireRentalMines, findItem, mineBucketsPerHour, mineIntervalMs, oilMineBot, prioritizeMine, rentMine,
   sellItem, sellMine, setMineMode,
   unassignRobot, unequipMine
 } from '../src/game.js';
@@ -17,6 +17,17 @@ test('fails when authoritative catalog settings are missing instead of using cod
   delete incomplete.settings.starter_credits;
   assert.throws(() => createPlayer('No Defaults', '', 'hash', incomplete, 1000, predictableRandom),
     /Missing catalog setting: starter_credits/);
+});
+
+test('finds the highest configured rarity when a mine has nothing at the standard minimum', () => {
+  const ore = { id: 999, rarity: 0 };
+  const oreOnlyCatalog = {
+    ...catalog,
+    byMineType: new Map([[999, new Map([[0, [ore]]])]]),
+    settings: { ...catalog.settings, standard_find_min_rarity: 1 }
+  };
+
+  assert.equal(findItem(oreOnlyCatalog, 999, predictableRandom), ore);
 });
 
 test('creates a miner with a starter mine and five finds', () => {

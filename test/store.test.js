@@ -1918,6 +1918,132 @@ test('repairs the missing rate-three ship firing schedule exactly once', (contex
   assert.deepEqual(reopened[3], [2]);
 });
 
+test('repairs ghost maximum hulls and historical chain-escape events exactly once', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-combat-consistency-'));
+  const databaseFile = path.join(directory, 'combat.sqlite');
+  let store = new SqliteStore(databaseFile);
+  store.seedCatalog(catalog);
+  context.after(() => {
+    store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const administrator = store.addPlayer(createPlayer(
+    'Combat Migration Admin', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  const opponent = store.addPlayer(createPlayer(
+    'Combat Migration Opponent', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  const route = catalog.routes.find((entry) => entry.open && entry.type === 1
+    && entry.length > 0 && entry.city1Id !== entry.city2Id);
+  assert.ok(route);
+  const ghost = store.adminRaiseGhost(administrator.id, 'ship', route.id, 2, 2000);
+  const ghostState = store.database.prepare(`
+    SELECT player_ship_state.*, catalog_ships.hull AS catalog_hull
+    FROM player_ship_state
+    JOIN player_vehicles ON player_vehicles.id = player_ship_state.vehicle_id
+    JOIN catalog_ships ON catalog_ships.vehicle_id = player_vehicles.vehicle_type_id
+    WHERE player_ship_state.vehicle_id = ?
+  `).get(ghost.vehicleId);
+  const ghostCombatBonus = JSON.parse(store.database.prepare(`
+    SELECT value_json FROM catalog_settings WHERE key = 'ghost_combat_bonus'
+  `).get().value_json);
+  const spectralMaxHull = Math.round(ghostState.catalog_hull * (1 + ghostCombatBonus));
+  assert.equal(ghostState.hull, spectralMaxHull);
+  assert.equal(ghostState.max_hull, spectralMaxHull);
+  assert.ok(spectralMaxHull > ghostState.catalog_hull);
+  const damagedHull = spectralMaxHull - 7;
+  store.database.prepare(`
+    UPDATE player_ship_state SET hull = ?, max_hull = ? WHERE vehicle_id = ?
+  `).run(damagedHull, ghostState.catalog_hull, ghost.vehicleId);
+
+  const battleId = Number(store.database.prepare(`
+    INSERT INTO vehicle_battles
+      (route_id, route_type, combat_class, winner_vehicle_id, is_tie, details_json, created_at)
+    VALUES (?, 1, 2, 9002, 0, ?, 3000)
+  `).run(route.id, JSON.stringify({ type: 'ship', result: { chainEscape: true } }))
+    .lastInsertRowid);
+  const insertSide = store.database.prepare(`
+    INSERT INTO vehicle_battle_sides
+      (battle_id, vehicle_id, vehicle_item_id, player_id, opponent_vehicle_id,
+       aggressive, won, rating_before, rating_after)
+    VALUES (?, ?, NULL, ?, ?, ?, ?, 1600, ?)
+  `);
+  insertSide.run(battleId, 9001, administrator.id, 9002, 1, 0, 1595);
+  insertSide.run(battleId, 9002, opponent.id, 9001, 0, 1, 1605);
+  const insertEvent = store.database.prepare(`
+    INSERT INTO vehicle_events
+      (vehicle_id, player_id, event_type, route_id, battle_id, created_at)
+    VALUES (?, ?, 'tied', ?, ?, 3000)
+  `);
+  insertEvent.run(9001, administrator.id, route.id, battleId);
+  insertEvent.run(9002, opponent.id, route.id, battleId);
+  const insertLiveUpdate = store.database.prepare(`
+    INSERT INTO live_update_events (scope, changed_at, event_type, payload_json)
+    VALUES (?, 3000, 'battle-complete', ?)
+  `);
+  insertLiveUpdate.run(`player:${administrator.id}`,
+    JSON.stringify({ battleId, outcome: 'tied' }));
+  insertLiveUpdate.run(`player:${opponent.id}`,
+    JSON.stringify({ battleId, outcome: 'tied' }));
+  store.database.prepare(
+    "DELETE FROM schema_migrations WHERE name = 'vehicle-combat-consistency-v1'"
+  ).run();
+  store.close();
+
+  store = new SqliteStore(databaseFile);
+  const repairedState = store.database.prepare(`
+    SELECT hull, max_hull FROM player_ship_state WHERE vehicle_id = ?
+  `).get(ghost.vehicleId);
+  assert.equal(repairedState.hull, damagedHull, 'migration must preserve current damage');
+  assert.equal(repairedState.max_hull, spectralMaxHull);
+  assert.deepEqual(store.database.prepare(`
+    SELECT vehicle_id, event_type FROM vehicle_events WHERE battle_id = ? ORDER BY vehicle_id
+  `).all(battleId).map((event) => [event.vehicle_id, event.event_type]), [
+    [9001, 'lost'],
+    [9002, 'won']
+  ]);
+  const migration = store.database.prepare(`
+    SELECT details_json FROM schema_migrations WHERE name = 'vehicle-combat-consistency-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(migration.details_json), {
+    ghostMaxHullsUpdated: 1,
+    chainEscapeEventsUpdated: 2,
+    chainEscapeLiveUpdatesUpdated: 2
+  });
+  assert.deepEqual(store.database.prepare(`
+    SELECT scope, json_extract(payload_json, '$.outcome') AS outcome
+    FROM live_update_events WHERE event_type = 'battle-complete' ORDER BY scope
+  `).all().map((event) => [event.scope, event.outcome]), [
+    [`player:${administrator.id}`, 'lost'],
+    [`player:${opponent.id}`, 'won']
+  ]);
+  assert.equal(store.database.prepare('PRAGMA foreign_key_check').get(), undefined);
+
+  store.database.prepare(`
+    UPDATE player_ship_state SET max_hull = ? WHERE vehicle_id = ?
+  `).run(ghostState.catalog_hull, ghost.vehicleId);
+  store.database.prepare(
+    "UPDATE vehicle_events SET event_type = 'tied' WHERE battle_id = ?"
+  ).run(battleId);
+  store.database.prepare(`
+    UPDATE live_update_events SET payload_json = json_set(payload_json, '$.outcome', 'tied')
+    WHERE event_type = 'battle-complete'
+  `).run();
+  store.close();
+  store = new SqliteStore(databaseFile);
+  assert.equal(store.database.prepare(`
+    SELECT max_hull FROM player_ship_state WHERE vehicle_id = ?
+  `).get(ghost.vehicleId).max_hull, ghostState.catalog_hull);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM vehicle_events WHERE battle_id = ? AND event_type = 'tied'
+  `).get(battleId).count, 2);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM live_update_events
+    WHERE event_type = 'battle-complete'
+      AND json_extract(payload_json, '$.outcome') = 'tied'
+  `).get().count, 2);
+});
+
 test('converts existing escrowed item and crypto orders to open orders exactly once', (context) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-open-orders-'));
   const databaseFile = path.join(directory, 'market.sqlite');
@@ -3301,6 +3427,14 @@ test('supports public chat while disabling player-to-player gold gifts', (contex
   store.seedCatalog(catalog);
   const sender = store.addPlayer(createPlayer('Gift Sender', '', 'hash', catalog, 1000, () => 0.5));
   const recipient = store.addPlayer(createPlayer('Gift Recipient', '', 'hash', catalog, 1000, () => 0.5));
+  const ratedVehicle = catalog.vehicles.find((vehicle) => vehicle.routeType === 0
+    && catalog.byId.get(vehicle.itemId).rarity >= 4);
+  sender.inventory[ratedVehicle.itemId] = 1;
+  store.savePlayer(sender);
+  const ratedVehicleId = store.activateVehicle(sender.id, ratedVehicle.itemId);
+  store.database.prepare('UPDATE player_vehicles SET rating = 1810 WHERE id = ?')
+    .run(ratedVehicleId);
+  assert.deepEqual(store.chatRatingTiers(sender.id), [1]);
   store.database.prepare('UPDATE players SET gold_units = 1000000 WHERE id = ?').run(sender.id);
 
   assert.throws(() => store.transferGold(sender.id, recipient.name, 5, 'Thanks', 3000),
@@ -3408,6 +3542,8 @@ test('publishes deduplicated creature sightings and escapes to public chat', (co
   assert.match(sighting.body, /Land Whale sighted/);
   assert.match(sighting.body, new RegExp(route.city1_name));
   assert.equal(sighting.path, '/events');
+  assert.deepEqual(sighting.mapIds, [route.map_id]);
+  assert.equal(sighting.ratingTier, null, 'an unopposed creature sighting has no rating tier');
   const revision = store.latestLiveUpdateId();
   const creature = store.database.prepare(
     'SELECT location, destination_city_id, speed FROM world_creatures WHERE id = ?'
@@ -3750,6 +3886,48 @@ test('deploys original oil-field machines and packs claimable Oil barrels', (con
   assert.equal(allClaimed.claimedBarrels, 3);
   assert.equal(store.database.prepare('SELECT barrels FROM oil_hexes WHERE id = ?').get(padHex.id).barrels, 0);
   assert.equal(store.playerById(pilot.id).inventoryByCity[2][oilItem.id], 4);
+});
+
+test('refuses to activate a transport when its city has no valid route', (context) => {
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  const player = store.addPlayer(createPlayer('Stranded Driver', '', 'hash', catalog, 1000, () => 0.5));
+  const route = store.database.prepare(`
+    SELECT catalog_routes.*
+    FROM catalog_routes
+    JOIN catalog_cities AS city1 ON city1.id = catalog_routes.city1_id
+    JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
+    WHERE catalog_routes.is_open = 1
+      AND catalog_routes.city1_id <> catalog_routes.city2_id
+      AND catalog_routes.length > 0
+      AND (catalog_routes.city1_id = ? OR catalog_routes.city2_id = ?)
+      AND (city1.map_id = city2.map_id OR catalog_routes.is_inter_map = 1)
+    ORDER BY catalog_routes.id
+    LIMIT 1
+  `).get(player.cityId, player.cityId);
+  assert.ok(route);
+  const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType === route.type
+    && catalog.byId.has(vehicle.itemId));
+  assert.ok(vehicleType);
+  player.inventory[vehicleType.itemId] = 1;
+  store.savePlayer(player);
+
+  store.database.prepare(`
+    UPDATE catalog_routes SET is_open = 0
+    WHERE type = ? AND (city1_id = ? OR city2_id = ?)
+  `).run(route.type, player.cityId, player.cityId);
+  const unavailable = store.vehicleActivationAvailability(player.id, vehicleType.itemId);
+  assert.equal(unavailable.allowed, false);
+  assert.match(unavailable.reason, /no valid routes/i);
+  assert.throws(() => store.activateVehicle(player.id, vehicleType.itemId), /no valid routes/i);
+  assert.equal(store.playerById(player.id).inventory[vehicleType.itemId], 1);
+  assert.equal(store.vehiclesForPlayer(player.id).length, 0);
+
+  store.database.prepare('UPDATE catalog_routes SET is_open = 1 WHERE id = ?').run(route.id);
+  assert.equal(store.vehicleActivationAvailability(player.id, vehicleType.itemId).allowed, true);
+  assert.ok(store.activateVehicle(player.id, vehicleType.itemId));
+  assert.equal(store.playerById(player.id).inventory[vehicleType.itemId] ?? 0, 0);
 });
 
 test('activates vehicles, completes original routes, and discovers cities', (context) => {
@@ -4647,7 +4825,8 @@ test('moves creatures and resolves vehicle attacks only at a physical intercepti
     && /Whale Hunter's/.test(chat.body));
   assert.ok(victory);
   assert.match(victory.body, new RegExp(`defeated the ${
-    catalog.settings.rarity_color_names[catalog.byId.get(vehicleType.itemId).rarity]
+    catalog.rarities.find((rarity) =>
+      rarity.id === catalog.byId.get(vehicleType.itemId).rarity).name
   } Land Whale`));
 });
 
@@ -4705,17 +4884,24 @@ test('living route creatures ambush compatible peaceful traffic without a hunt a
     SELECT * FROM world_creature_attacks WHERE creature_id = ? AND vehicle_id = ?
   `).get(creatureId, vehicleId);
   assert.equal(attack.defeated, 1);
+  assert.equal(attack.counter_damage, 1,
+    'armor may reduce a hostile creature strike to a glancing hit, but not erase it');
+  assert.equal(store.database.prepare(
+    'SELECT damaged FROM player_vehicles WHERE id = ?'
+  ).get(vehicleId).damaged, 1, 'the glancing hit persists as vehicle damage');
   const report = store.recentMessages(saved.id, 'all', 'Vehicle')
     .find((message) => message.details.creatureId === creatureId);
   assert.equal(report.details.initiator, 'creature');
+  assert.equal(report.details.counterDamage, 1);
   assert.match(report.body, /ambushed your/i);
+  assert.match(report.body, /took 1 damage/i);
   assert.equal(store.database.prepare(`
     SELECT COUNT(*) AS count FROM world_creature_pursuits
     WHERE creature_id = ? AND vehicle_id = ?
   `).get(creatureId, vehicleId).count, 1, 'settlement must not plan a duplicate ambush');
 });
 
-test('spawns every world-creature species in every Yellow-through-Orange tier', (context) => {
+test('spawns every world-creature species in every Common-through-Legendary rarity', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
   store.seedCatalog(catalog);
@@ -4739,7 +4925,7 @@ test('spawns every world-creature species in every Yellow-through-Orange tier', 
   assert.ok(tiers.slice(1).every((tier) =>
     catalog.settings.world_creature_tier_weights[1]
       > catalog.settings.world_creature_tier_weights[tier.id]),
-  'Yellow has the greatest natural spawn weight');
+  'Common has the greatest natural spawn weight');
 
   let spawnedAt = 2000;
   for (const [type, behavior] of creatureTypes) {
@@ -4768,7 +4954,8 @@ test('spawns every world-creature species in every Yellow-through-Orange tier', 
       assert.ok(row.spawn_location > 0 && row.spawn_location < route.length);
       assert.ok(row.arrives_at > row.awakened_at);
       assert.equal(spawned.name,
-        `${catalog.settings.rarity_color_names[tier.id]} ${catalog.settings.world_creature_names[type]}`);
+        `${tier.name} ${catalog.settings.world_creature_names[type]}`);
+      assert.equal(spawned.rarityName, tier.name);
       assert.equal(spawned.rewardType,
         catalog.settings.world_creature_reward_types[type]);
       const announcement = store.database.prepare(`
@@ -4995,9 +5182,18 @@ test('ghost patrols ambush peaceful traffic across their combat class at reduced
     SELECT COUNT(*) AS count FROM vehicle_battle_sides
     WHERE battle_id = ? AND player_id = (SELECT id FROM players WHERE is_npc = 1)
   `).get(journey.battleId).count, 1);
+  const ratingSides = store.database.prepare(`
+    SELECT player_id, rating_before, rating_after FROM vehicle_battle_sides
+    WHERE battle_id = ? ORDER BY player_id
+  `).all(journey.battleId);
+  assert.equal(ratingSides.length, 2);
+  assert.ok(ratingSides.every((side) => side.rating_after !== side.rating_before),
+    'both the player and NPC remain part of the shared combat rating exchange');
   const battleDetails = JSON.parse(store.database.prepare(
     'SELECT details_json FROM vehicle_battles WHERE id = ?'
   ).get(journey.battleId).details_json);
+  assert.match(store.battleReport(hunter.id, journey.battleId).opponent.vehicle_name,
+    /^Wraith /);
   assert.equal(battleDetails.ghostAttackForceRatio,
     catalog.settings.ghost_attack_force_ratio);
   const ghostSide = battleDetails.vehicleIds.indexOf(ghost.vehicleId);
@@ -5988,6 +6184,44 @@ test('keeps Oil Field actions city-local while allowing another city to be selec
   { machines: 1, oil: 100, pumping: 0, packing: 20, barrels: 0 });
 });
 
+test('keeps each regional Oil Field independent and blocks remote operation', (context) => {
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  store.ensureWorldMaps(1000);
+  const live = store.loadCatalog();
+  const pump = oilMachine('pump', 1);
+  const pumpItem = live.byId.get(pump.itemId);
+  const addRegionalPilot = (name, mapName) => {
+    const map = live.maps.find((candidate) => candidate.name === mapName);
+    const player = createPlayer(name, '', 'hash', live, 1000, () => 0.5);
+    player.cityId = map.capitalCityId;
+    player.homeCityId = map.capitalCityId;
+    player.inventoryByCity[map.capitalCityId] = { [pumpItem.id]: 1 };
+    player.inventory = player.inventoryByCity[map.capitalCityId];
+    return store.addPlayer(player);
+  };
+  const asoPilot = addRegionalPilot('Aso Oil Pilot', 'Aso');
+  const calbucoPilot = addRegionalPilot('Calbuco Oil Pilot', 'Calbuco');
+  const bromoPilot = addRegionalPilot('Bromo Oil Pilot', 'Bromo');
+  const asoCenter = fieldHex(store.oilField(asoPilot.id, 1000), 0, 0);
+  const calbucoCenter = fieldHex(store.oilField(calbucoPilot.id, 1000), 0, 0);
+
+  assert.notEqual(asoCenter.id, calbucoCenter.id);
+  store.deployOilMachine(asoPilot.id, asoCenter.id, pump.id, 0, 1000);
+  store.deployOilMachine(calbucoPilot.id, calbucoCenter.id, pump.id, 0, 1000);
+  assert.equal(fieldHex(store.oilField(asoPilot.id, 1000), 0, 0).machine.ownerName,
+    'Aso Oil Pilot');
+  assert.equal(fieldHex(store.oilField(calbucoPilot.id, 1000), 0, 0).machine.ownerName,
+    'Calbuco Oil Pilot');
+  assert.throws(() => store.deployOilMachine(asoPilot.id, calbucoCenter.id, pump.id, 0, 1000),
+    /current region/);
+  assert.deepEqual({
+    available: store.oilField(bromoPilot.id, 1000).available,
+    hexes: store.oilField(bromoPilot.id, 1000).hexes.length
+  }, { available: false, hexes: 0 });
+});
+
 test('repairs missing legacy ship state before loading ammunition', (context) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-ship-state-'));
   const databaseFile = path.join(directory, 'game.sqlite');
@@ -6186,6 +6420,63 @@ test('ship encounters consume loaded ammunition and produce battle reports', (co
   assert.ok(remaining.some((shots) => shots < 12));
 });
 
+test('counts cannon crew losses in live ship-battle summaries', (context) => {
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  store.database.prepare(
+    "UPDATE catalog_settings SET value_json = '0' WHERE key = 'ghost_rise_chance'"
+  ).run();
+  const ammunitionRules = structuredClone(catalog.settings.ammunition_rules);
+  ammunitionRules[3].accuracy = 1;
+  store.database.prepare(
+    "UPDATE catalog_settings SET value_json = ? WHERE key = 'ammunition_rules'"
+  ).run(JSON.stringify(ammunitionRules));
+  const shipType = catalog.vehicles.find((vehicle) =>
+    catalog.byId.get(vehicle.itemId)?.name === 'Outrigger');
+  const cannon = catalog.cannons.find((entry) =>
+    catalog.byId.get(entry.itemId)?.rarity === 1 && entry.damage >= 1);
+  const grapeShot = catalog.cannonballByType.get(3);
+  assert.ok(shipType && cannon && grapeShot);
+  const defender = store.addPlayer(createPlayer(
+    'Grape Target', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  const attacker = store.addPlayer(createPlayer(
+    'Grape Gunner', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  defender.inventory[shipType.itemId] = 1;
+  attacker.inventory[shipType.itemId] = 1;
+  attacker.inventory[cannon.itemId] = 1;
+  attacker.inventory[grapeShot.itemId] = 1;
+  store.savePlayer(defender);
+  store.savePlayer(attacker);
+  const defenderShip = store.activateVehicle(defender.id, shipType.itemId, 1000);
+  const attackerShip = store.activateVehicle(attacker.id, shipType.itemId, 1000);
+  store.attachShipCannon(attacker.id, attackerShip, cannon.id);
+  store.loadShipAmmo(attacker.id, attackerShip, 3);
+  const route = store.routesForVehicle(defender.id, defenderShip, 2000)[0];
+  store.sendVehicle(defender.id, defenderShip, route.id, 2000);
+  store.sendVehicle(attacker.id, attackerShip, route.id, 2000, {
+    aggressiveMask: 1 << catalog.byId.get(shipType.itemId).rarity
+  });
+  store.database.prepare(
+    'UPDATE player_ship_state SET crew = 1 WHERE vehicle_id = ?'
+  ).run(defenderShip);
+  const updateCursor = store.latestLiveUpdateId();
+  const encounter = resolveNextVehicleEncounter(store);
+  const report = store.battleReport(defender.id, encounter.battle_id);
+  const defenderSide = report.details.vehicleIds.indexOf(defenderShip);
+  assert.equal(report.details.result.starting[defenderSide].crew, 1);
+  assert.equal(report.details.result.ships[defenderSide].crew, 0);
+  assert.equal(report.details.result.casualties[defenderSide].length, 0,
+    'cannon casualties are separate from boarding casualty records');
+  const battleUpdate = store.liveUpdatesAfter(updateCursor).find((event) =>
+    event.scope === `player:${defender.id}` && event.eventType === 'battle-complete'
+      && event.payload.battleId === encounter.battle_id);
+  assert.ok(battleUpdate);
+  assert.equal(battleUpdate.payload.summary.crewLost, 1);
+});
+
 test('cannon fire can mutually sink ships and immediately salvage every fitted cannon', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
@@ -6285,7 +6576,7 @@ test('repairs one hull per port hour without restoring full hull on departure', 
   assert.equal(departed.docked_at, null);
 });
 
-test('persists repaired sail damage, delays arrival, and records chain escape as a tie', (context) => {
+test('persists repaired sail damage, delays arrival, and records chain escape as a defensive win', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
   store.seedCatalog(catalog);
@@ -6322,9 +6613,28 @@ test('persists repaired sail damage, delays arrival, and records chain escape as
     aggressiveMask: 1 << catalog.byId.get(shipType.itemId).rarity
   });
   store.sendVehicle(defender.id, defenderShip, route.id, 2000);
+  const defenderHull = store.database.prepare(
+    'SELECT hull FROM player_ship_state WHERE vehicle_id = ?'
+  ).get(defenderShip).hull;
+  store.database.prepare(
+    'UPDATE player_ship_state SET max_hull = ? WHERE vehicle_id = ?'
+  ).run(defenderHull - 5, defenderShip);
+  const updateCursor = store.latestLiveUpdateId();
   const encounter = resolveNextVehicleEncounter(store);
   const report = store.battleReport(pirate.id, encounter.battle_id);
   assert.equal(report.details.result.chainEscape, true);
+  assert.equal(report.tied, false);
+  assert.equal(report.won, false);
+  assert.ok(report.ratingAfter < report.ratingBefore);
+  const defenderReport = store.battleReport(defender.id, encounter.battle_id);
+  assert.equal(defenderReport.tied, false);
+  assert.equal(defenderReport.won, true);
+  assert.ok(defenderReport.ratingAfter > defenderReport.ratingBefore);
+  const defenderSide = report.details.vehicleIds.indexOf(defenderShip);
+  assert.ok(report.details.result.repairs.every((repair) => repair.hull >= 0));
+  assert.ok(store.database.prepare(
+    'SELECT max_hull FROM player_ship_state WHERE vehicle_id = ?'
+  ).get(defenderShip).max_hull >= report.details.result.starting[defenderSide].hull);
   const pirateSide = report.details.vehicleIds.indexOf(pirateShip);
   const persisted = store.database.prepare(
     'SELECT speed, arrives_at FROM player_vehicles WHERE id = ?'
@@ -6334,10 +6644,19 @@ test('persists repaired sail damage, delays arrival, and records chain escape as
   assert.ok(persisted.arrives_at > original.arrivesAt, 'combat and slower sails delay arrival');
   assert.equal(store.database.prepare(`
     SELECT event_type FROM vehicle_events WHERE vehicle_id = ? AND battle_id = ?
-  `).get(pirateShip, encounter.battle_id).event_type, 'tied');
+  `).get(pirateShip, encounter.battle_id).event_type, 'lost');
   assert.equal(store.database.prepare(`
     SELECT event_type FROM vehicle_events WHERE vehicle_id = ? AND battle_id = ?
-  `).get(defenderShip, encounter.battle_id).event_type, 'tied');
+  `).get(defenderShip, encounter.battle_id).event_type, 'won');
+  const battleUpdates = store.liveUpdatesAfter(updateCursor).filter((event) =>
+    event.eventType === 'battle-complete' && event.payload.battleId === encounter.battle_id);
+  const updatesByScope = new Map(battleUpdates.map((event) => [event.scope, event.payload]));
+  assert.equal(updatesByScope.get(`player:${pirate.id}`).outcome, 'lost');
+  assert.equal(updatesByScope.get(`player:${defender.id}`).outcome, 'won');
+  for (const payload of updatesByScope.values()) {
+    assert.equal(payload.summary.chainEscape, true);
+    assert.equal(payload.reportPath, `/battles/${encounter.battle_id}`);
+  }
 });
 
 test('sinks ship cargo into the route and lets a Fisherman salvage it with bait', (context) => {
@@ -6478,6 +6797,38 @@ test('rejecting incompatible cargo rolls back the existing vehicle loadout', (co
   assert.equal(details.cargo[0].quantity, 1);
   assert.equal(restored.inventory[cargo.id], 1);
   assert.equal(restored.inventory[incompatible.id], 1);
+});
+
+test('builds a full cargo proposal from the rarest compatible things first', (context) => {
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType === 0
+    && catalog.byId.get(vehicle.itemId).rarity >= 4 && vehicle.capacity >= 10);
+  const ordinaryAtRarity = (rarity) => catalog.items.find((item) => item.rarity === rarity
+    && item.id !== vehicleType.itemId && !catalog.vehicleByItemId.has(item.id)
+    && !catalog.boxes.some((box) => box.itemId === item.id));
+  const legendary = ordinaryAtRarity(6);
+  const fabled = ordinaryAtRarity(5);
+  const rare = ordinaryAtRarity(4);
+  const incompatible = ordinaryAtRarity(3);
+  assert.ok(vehicleType && legendary && fabled && rare && incompatible);
+  const player = createPlayer('Rarest Cargo', '', 'hash', catalog, 1000, () => 0.5);
+  player.inventory = {
+    [vehicleType.itemId]: 1, [legendary.id]: 2, [fabled.id]: 20,
+    [rare.id]: 20, [incompatible.id]: 20
+  };
+  player.inventoryByCity = { [player.cityId]: player.inventory };
+  const saved = store.addPlayer(player);
+  const vehicleId = store.activateVehicle(saved.id, vehicleType.itemId);
+
+  const proposal = store.rarestVehicleCargo(saved.id, vehicleId);
+
+  assert.deepEqual(proposal, { [legendary.id]: 2, [fabled.id]: 8 });
+  const preview = store.previewVehicleCargo(saved.id, vehicleId, proposal);
+  assert.equal(preview.valid, true);
+  assert.equal(preview.cargoSize, 10);
+  assert.equal(preview.capacityBreakdown.free, 0);
 });
 
 test('persists account privacy, recycle-on-find, and PM-block controls', (context) => {

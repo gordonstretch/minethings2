@@ -1372,7 +1372,8 @@ function factoriesPage(player, catalog, factoryState, employees, availableWorker
     <p><a href="/market/factories/rental">Rent Factory</a> · <a href="/market/factories/sale">Buy/Sell Factory</a></p>`;
 }
 
-function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs) {
+function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
+  playerRatingTiers = []) {
   const historyHours = Number(historyWindowMs) / (60 * 60 * 1000);
   if (!Number.isFinite(historyHours) || historyHours <= 0) {
     throw new Error('The chat history window is invalid.');
@@ -1388,6 +1389,9 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs) 
     });
     const timestamp = `<time datetime="${sentDate.toISOString()}" title="${escapeHtml(sentAt)}"><span>${escapeHtml(sentDay)}</span><strong>${escapeHtml(sentTime)}</strong></time>`;
     const rowId = `chat-entry-${chat.kind === 'player' ? 'player' : 'world'}-${Number(chat.id)}`;
+    const mapIds = [...new Set((chat.mapIds ?? (chat.mapId === null ? [] : [chat.mapId]))
+      .map(Number).filter(Number.isSafeInteger))].sort((first, second) => first - second);
+    const rowMetadata = ` data-chat-row data-chat-kind="${escapeHtml(chat.kind)}" data-chat-map-ids="${mapIds.join(',')}"${Number(chat.ratingTier) > 0 ? ` data-chat-rating-tier="${Number(chat.ratingTier)}"` : ''}`;
     if (chat.kind !== 'player') {
       const dwarfCapture = chat.kind === 'dwarf-capture';
       const badge = dwarfCapture ? 'Dwarf captured' : 'World event';
@@ -1399,7 +1403,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs) 
       const message = item
         ? `<a class="chat-world-message chat-dwarf-item rarity-${item.rarity}" href="/items/${item.id}"><img src="${escapeHtml(item.icon)}" alt=""><span>${escapeHtml(chat.body)}</span></a>`
         : `<span class="chat-world-message">${escapeHtml(chat.body)}</span>`;
-      return `<article id="${rowId}" class="chat-row ${classes}" data-chat-created-at="${Number(chat.createdAt)}"><a class="chat-world-badge" href="${escapeHtml(chat.path)}">${badge}</a>${message}${timestamp}${item ? '' : `<a class="chat-world-link" href="${escapeHtml(chat.path)}">Details</a>`}</article>`;
+      return `<article id="${rowId}" class="chat-row ${classes}" data-chat-created-at="${Number(chat.createdAt)}"${rowMetadata}><a class="chat-world-badge" href="${escapeHtml(chat.path)}">${badge}</a>${message}${timestamp}${item ? '' : `<a class="chat-world-link" href="${escapeHtml(chat.path)}">Details</a>`}</article>`;
     }
     const color = /^[0-9a-f]{6}$/i.test(String(chat.color))
       ? String(chat.color).toLowerCase() : '55666b';
@@ -1407,7 +1411,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs) 
     const rowAction = chat.playerId === player.id
       ? '<span class="chat-row-owner">You</span>'
       : `<form method="post" action="/chat/ignores/${chat.playerId}"><input type="hidden" name="ignored" value="1"><button class="link chat-ignore-action" aria-label="Ignore ${speaker} in public chat">Ignore</button></form>`;
-    return `<article id="${rowId}" class="chat-row chat-row-player" style="--chat-color:#${color}" data-chat-created-at="${Number(chat.createdAt)}"><span class="chat-identity"><i aria-hidden="true"></i><a class="chat-speaker" href="/miners/${encodeURIComponent(chat.playerName)}">${speaker}</a></span><span class="chat-message">${escapeHtml(chat.body)}</span>${timestamp}${rowAction}</article>`;
+    return `<article id="${rowId}" class="chat-row chat-row-player" style="--chat-color:#${color}" data-chat-created-at="${Number(chat.createdAt)}"${rowMetadata}><span class="chat-identity"><i aria-hidden="true"></i><a class="chat-speaker" href="/miners/${encodeURIComponent(chat.playerName)}">${speaker}</a></span><span class="chat-message">${escapeHtml(chat.body)}</span>${timestamp}${rowAction}</article>`;
   }).join('');
   const ignoredRows = ignores.map((ignored) => `<li><a href="/miners/${encodeURIComponent(ignored.name)}">${escapeHtml(ignored.name)}</a><form method="post" action="/chat/ignores/${ignored.id}"><input type="hidden" name="ignored" value="0"><button class="link">Unignore</button></form></li>`).join('');
   const colorPicker = appearance.canChooseColor
@@ -1416,14 +1420,25 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs) 
   const composer = player.chatBanned
     ? `<div class="chat-compose chat-compose-locked" role="note"><div><span class="chat-control-label">Broadcast disabled</span><strong>Your account is not permitted to use public chat.</strong></div></div>`
     : `<form id="chat-compose-form" class="chat-compose" method="post" action="/chat"><label class="chat-message-control" for="chat-message"><span>Transmit from this region</span><input id="chat-message" name="body" maxlength="${Number(catalog.settings.chat_message_max_length)}" placeholder="What is happening out there?" autocomplete="off" required></label>${colorPicker}<button class="chat-send"><span>Send</span><b aria-hidden="true">&nearr;</b></button></form>`;
+  const discoveredMapIds = playerDiscoveredMapIds(player, catalog);
+  const regions = catalog.maps.filter((map) => discoveredMapIds.has(Number(map.id)))
+    .sort((first, second) => Number(first.sortOrder) - Number(second.sortOrder)
+      || first.name.localeCompare(second.name, 'en'));
+  const regionFilters = regions.map((map) => `<label><input type="checkbox" value="${Number(map.id)}" data-chat-hidden-region> <span>${escapeHtml(map.name)}</span></label>`).join('');
+  const fleetTiers = [...new Set(playerRatingTiers.map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0))].sort((first, second) => first - second);
+  const ownedTiers = new Set(fleetTiers);
+  const ratingTierFilters = Array.from({ length: 6 }, (_, index) => index + 1)
+    .map((tier) => `<label><input type="checkbox" value="${tier}" data-chat-rating-tier> <span>Rank ${tier}${ownedTiers.has(tier) ? ' <small>Yours</small>' : ''}</span></label>`).join('');
+  const filterPanel = `<section id="chat-filters" class="chat-filter-card" data-chat-filters data-chat-player-id="${Number(player.id)}"><p class="chat-side-label">Filter traffic</p><fieldset><legend>Rating tiers</legend><p>Select any combination. No selection shows every tier.</p><div class="chat-tier-filters">${ratingTierFilters}</div></fieldset><label class="chat-filter-toggle"><input type="checkbox" data-chat-hide-world-events><span><strong>Hide world events</strong><small>Keep miner chat and Dwarf captures.</small></span></label><fieldset><legend>Hide regions</legend><div class="chat-region-filters">${regionFilters || '<span>No discovered regions.</span>'}</div></fieldset><footer><span data-chat-filter-summary>Showing all traffic.</span><button class="link" type="button" data-chat-filter-reset>Reset</button></footer></section>`;
   const transmissionCount = chats.length.toLocaleString('en-GB');
   const transmissionLabel = chats.length === 1 ? 'transmission' : 'transmissions';
   return `<article class="chat-page">
     <header class="chat-page-title"><div><p class="eyebrow">Discovered regions · open record</p><h1>Public chat</h1><p>This frequency combines miner talk and world events from the regions you have discovered.</p></div><span class="chat-title-mark" aria-hidden="true">24H</span></header>
-    <dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Traffic in view</dt><dd>${transmissionCount} ${transmissionLabel}</dd></div></dl>
-    <div class="chat-workspace"><section class="chat-console" aria-labelledby="chat-console-title"><header class="chat-console-header"><div><p>MT2 // Worldwire</p><h2 id="chat-console-title">Open frequency</h2></div><p>Showing the latest ${historyHours.toLocaleString('en-GB')} hours. New traffic arrives live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Public chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty"><span aria-hidden="true">◇</span><h3>The frequency is quiet.</h3><p>Be the first miner to break the silence.</p></div>'}</div>${composer}</section>
-    <aside class="chat-sidecar" aria-label="Public chat controls"><section class="chat-signal-card" style="--chat-preview:#${appearanceColor}"><p class="chat-side-label">Your signal</p><div><i aria-hidden="true"></i><strong>${escapeHtml(player.name)}</strong></div><p>${appearance.canChooseColor ? 'Custom colour unlocked. Choose it when you transmit.' : `Meld tier colour · ${appearance.meldCount}/${appearance.customMinimumMelds} melds`}</p></section><details class="chat-ignores"><summary><span><b>Channel controls</b><small>Ignored miners</small></span><strong>${ignores.length}</strong></summary><ul>${ignoredRows || '<li>Nobody ignored.</li>'}</ul></details><section class="chat-channel-note"><p class="chat-side-label">On this channel</p><p>World events and captured Dwarves from your discovered regions are public record.</p></section></aside></div>
-  </article>`;
+    <dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Traffic in view</dt><dd id="chat-traffic-count">${transmissionCount} ${transmissionLabel}</dd></div></dl>
+    <div class="chat-workspace"><section class="chat-console" aria-labelledby="chat-console-title"><header class="chat-console-header"><div><p>MT2 // Worldwire</p><h2 id="chat-console-title">Open frequency</h2></div><p>Showing the latest ${historyHours.toLocaleString('en-GB')} hours. New traffic arrives live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Public chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty" data-chat-unfiltered-empty><span aria-hidden="true">◇</span><h3>The frequency is quiet.</h3><p>Be the first miner to break the silence.</p></div>'}<div id="chat-filter-empty" class="chat-empty chat-filter-empty" hidden><span aria-hidden="true">◇</span><h3>No matching traffic.</h3><p>Change or reset your chat filters.</p></div></div>${composer}</section>
+    <aside class="chat-sidecar" aria-label="Public chat controls">${filterPanel}<section class="chat-signal-card" style="--chat-preview:#${appearanceColor}"><p class="chat-side-label">Your signal</p><div><i aria-hidden="true"></i><strong>${escapeHtml(player.name)}</strong></div><p>${appearance.canChooseColor ? 'Custom colour unlocked. Choose it when you transmit.' : `Meld tier colour · ${appearance.meldCount}/${appearance.customMinimumMelds} melds`}</p></section><details class="chat-ignores"><summary><span><b>Channel controls</b><small>Ignored miners</small></span><strong>${ignores.length}</strong></summary><ul>${ignoredRows || '<li>Nobody ignored.</li>'}</ul></details><section class="chat-channel-note"><p class="chat-side-label">On this channel</p><p>World events and captured Dwarves from your discovered regions are public record.</p></section></aside></div>
+  </article><script src="/node/chat-filters.js?v=20260826a" defer></script>`;
 }
 
 function localItemGoldValue(item, catalog, cityId) {
@@ -1885,13 +1900,15 @@ function adminWorldEventsPage(state, catalog, currentTime) {
     .map((route) => `<option value="${route.id}">${escapeHtml(route.map1_name)}: ${escapeHtml(route.city1_name)} to ${escapeHtml(route.map2_name)}: ${escapeHtml(route.city2_name)} (${Number(route.length).toLocaleString('en-GB')} km)</option>`).join('');
   const creatureTiers = catalog.rarities.filter((rarity) =>
     Number(catalog.settings.world_creature_tier_weights[rarity.id]) > 0);
-  const tierOptions = creatureTiers.map((rarity) =>
+  const creatureTierOptions = creatureTiers.map((rarity) =>
+    `<option value="${rarity.id}">${escapeHtml(rarity.name)} · Tier ${rarity.id}</option>`).join('');
+  const vehicleTierOptions = creatureTiers.map((rarity) =>
     `<option value="${rarity.id}">${escapeHtml(catalog.settings.rarity_color_names[rarity.id])} · Tier ${rarity.id}</option>`).join('');
   const creatureOptions = (routeType) => Object.entries(
     catalog.settings.world_creature_route_types
   ).filter(([, behavior]) => behavior === routeType).map(([type]) =>
     `<option value="${escapeHtml(type)}">${escapeHtml(catalog.settings.world_creature_names[type])}</option>`).join('');
-  const creatureForm = (label, routeType) => `<form method="post" action="/admin/world/creatures"><h3>Release ${label}</h3><label>Species<select name="type" required>${creatureOptions(routeType)}</select></label><label>Creature tier<select name="rarity" required>${tierOptions}</select></label><label>World map<select name="mapId">${mapOptions}</select></label><label>Open ${routeType} route<select name="routeId" required>${routeOptions(routeType)}</select></label><button>Release creature</button></form>`;
+  const creatureForm = (label, routeType) => `<form method="post" action="/admin/world/creatures"><h3>Release ${label}</h3><label>Species<select name="type" required>${creatureOptions(routeType)}</select></label><label>Creature rarity<select name="rarity" required>${creatureTierOptions}</select></label><label>World map<select name="mapId">${mapOptions}</select></label><label>Open ${routeType} route<select name="routeId" required>${routeOptions(routeType)}</select></label><button>Release creature</button></form>`;
   const creatureRows = state.creatures.map((creature) => {
     const distance = creature.destination_city_id
       ? (Number(creature.destination_city_id) === Number(creature.city1_id)
@@ -1902,7 +1919,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
       : 'Treasure hold';
     return `<tr class="rarity-${creature.rarity}"><td><span class="creature-table-icon" aria-hidden="true"><img src="${escapeHtml(creature.icon)}" alt=""></span> <strong>${escapeHtml(creature.name)}</strong><br><small>${escapeHtml(creature.rarity_name)} · ${escapeHtml(reward)}</small></td><td>${escapeHtml(creature.map_name)}</td><td>${escapeHtml(creature.city1_name)} to ${escapeHtml(creature.city2_name)}</td><td>${Math.round(Number(creature.location)).toLocaleString('en-GB')} / ${Number(creature.length).toLocaleString('en-GB')} km</td><td>${Number(creature.speed).toFixed(1)} km/h</td><td>${Math.round(Number(creature.hp))} / ${Math.round(Number(creature.max_hp))}</td><td>${escapeHtml(creature.destination_city_name)} in ${formatDuration(Math.max(0, Number(creature.arrives_at) - currentTime))}</td><td>${Number(creature.pursuer_count)}</td></tr>`;
   }).join('');
-  const ghostForm = (kind, label, routeType) => `<form method="post" action="/admin/world/ghosts"><input type="hidden" name="kind" value="${kind}"><h3>Raise ${label}</h3><label>Open ${routeType} route<select name="routeId" required>${routeOptions(routeType)}</select></label><label>Vehicle tier<select name="rarity">${tierOptions}</select></label><button>Raise ${label}</button></form>`;
+  const ghostForm = (kind, label, routeType) => `<form method="post" action="/admin/world/ghosts"><input type="hidden" name="kind" value="${kind}"><h3>Raise ${label}</h3><label>Open ${routeType} route<select name="routeId" required>${routeOptions(routeType)}</select></label><label>Vehicle tier<select name="rarity">${vehicleTierOptions}</select></label><button>Raise ${label}</button></form>`;
   const ghostRows = state.ghosts.map((ghost) => `<tr><td>${escapeHtml(ghost.name)}</td><td>${ghost.ghost_kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'}</td><td>Tier ${ghost.rarity}</td><td>${escapeHtml(ghost.routeName)}</td><td>${new Date(ghost.risen_at).toLocaleString('en-GB')}</td></tr>`).join('');
   const namedCounts = (names) => {
     const counts = new Map();
@@ -1951,7 +1968,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
     <section><div class="section-heading"><div><h2>Ghost-hunter test fleet</h2><p>${Number(state.hunterFleets.players)} miners currently hold ${Number(state.hunterFleets.vehicles)} provisioned craft.</p></div></div><p>Give every real account one fully armed land vehicle and ship at each of the six tiers, distributed among random compatible cities. The operation is idempotent.</p><form method="post" action="/admin/world/ghost-fleets"><button>Provision all hunter fleets</button></form></section>
     <section id="traffic"><div class="section-heading"><div><p class="eyebrow">Administrator only</p><h2>Transports in transit</h2><p>${activeTransportCount} active journey${activeTransportCount === 1 ? '' : 's'}, including player, ghost, and creature route actors. This board updates when transport state changes.</p></div></div><div class="table-scroll"><table class="admin-traffic-table"><thead><tr><th>Owner</th><th>Transport and loadout</th><th>Journey</th><th>Progress</th><th>Orders</th></tr></thead><tbody>${allTrafficRows || '<tr><td colspan="5">No transports are currently in transit.</td></tr>'}</tbody></table></div></section>
     <section><div class="section-heading"><div><h2>Current weather period</h2><p>${new Date(state.slotAt).toLocaleString('en-GB')} - ${new Date(state.nextWeatherAt).toLocaleString('en-GB')} | ${formatDuration(state.nextWeatherAt - currentTime)} remaining</p></div></div><div class="trade-forms">${weatherForms}</div></section>
-    <section><h2>Release a world creature</h2><p>Choose a sea or land species and an explicit Yellow-through-Orange tier. Every creature follows the same open-route movement, combat-class interception, live transit, and killer-only reward process.</p><div class="trade-forms">${creatureForm('Sea creature', 'sea')}${creatureForm('Land creature', 'land')}</div></section>
+    <section><h2>Release a world creature</h2><p>Choose a sea or land species and an explicit Common-through-Legendary rarity. Every creature follows the same open-route movement, combat-class interception, live transit, and killer-only reward process.</p><div class="trade-forms">${creatureForm('Sea creature', 'sea')}${creatureForm('Land creature', 'land')}</div></section>
     <section><h2>Traveling creatures</h2><div class="table-scroll"><table><thead><tr><th>Creature</th><th>Map</th><th>Route</th><th>Position</th><th>Speed</th><th>Health</th><th>Heading for</th><th>Attackers</th></tr></thead><tbody>${creatureRows || '<tr><td colspan="8">No creatures are currently active.</td></tr>'}</tbody></table></div></section>`;
 }
 
@@ -2454,7 +2471,8 @@ function radarText(route, catalog) {
     route.radar.map((entry) => `${entry.label} ${entry.count}`).join(', ')}`;
 }
 
-function vehiclesPage(player, catalog, vehicles, now, thiefBase = null) {
+function vehiclesPage(player, catalog, vehicles, now, thiefBase = null,
+  activationAvailability = new Map()) {
   const searchPlaneName = catalogItemForSetting(catalog, 'search_plane_item_id').name;
   const bomberName = catalogItemForSetting(catalog, 'bomber_item_id').name;
   const helicopterName = catalogItemForSetting(catalog, 'helicopter_item_id').name;
@@ -2462,8 +2480,16 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null) {
     .map(([itemId, count]) => [catalog.byId.get(Number(itemId)), count])
     .filter(([item, count]) => item && count > 0 && catalog.vehicleByItemId.has(item.id))
     .sort(([first], [second]) => compareItemsByRarity(first, second));
-  const activate = availableItems.map(([item, count]) => itemCard(item, count,
-    `<form method="post" action="/vehicles/activate/${item.id}"><button>Activate</button></form>`)).join('');
+  const activate = availableItems.map(([item, count]) => {
+    const availability = activationAvailability.get(item.id);
+    const unavailable = availability && !availability.allowed;
+    const reason = unavailable ? escapeHtml(availability.reason) : '';
+    return itemCard(item, count,
+      `<form method="post" action="/vehicles/activate/${item.id}">
+        <button${unavailable ? ` disabled title="${reason}"` : ''}>Activate</button>
+        ${unavailable ? `<small>${reason}</small>` : ''}
+      </form>`);
+  }).join('');
   const currentCity = catalogCityForId(catalog, player.cityId);
   const vehicleCard = (vehicle) => {
     const vehicleItem = catalog.byId.get(vehicle.itemId);
@@ -2495,7 +2521,7 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null) {
     const status = vehicle.aircraftDestroyed ? '<strong class="capacity-warning">Shot down by the ore thieves</strong>'
       : `${escapeHtml(city.name)} · speed ${vehicle.speed} · ${vehicle.cargoSize}/${vehicle.capacity} capacity · rating ${Math.round(vehicle.rating)}`;
     return itemCard(vehicleItem, { meta: vehicle.name, details: `<p class="item-card-status">${status}</p>`,
-      action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${routes ? `<form method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId">${routes}</select></label><button>Send</button></form>` : '<span>No compatible route here.</span>'}` });
+      action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${vehicle.type === 'sea' ? `<a class="button secondary" href="/vehicles/${vehicle.id}/customize#ammunition">Load ammunition</a>` : ''}${routes ? `<form method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId">${routes}</select></label><button>Send</button></form>` : '<span>No compatible route here.</span>'}` });
   };
   const localVehicles = vehicles.filter((vehicle) => vehicle.status !== 'traveling'
     && vehicle.cityId === player.cityId).sort(compareItemsByRarity).map(vehicleCard).join('');
@@ -2542,16 +2568,15 @@ function capacityBudgetHtml(breakdown, heading = 'Capacity budget') {
   const total = Number(breakdown.total ?? base + mods);
   const free = Number(breakdown.free ?? total - weapons - cannons - ammunition - cargo);
   const signed = (value) => value > 0 ? `+${value}` : String(value);
-  const debit = (value) => value ? `−${value}` : '0';
   return `<section class="capacity-budget${free < 0 ? ' capacity-over' : ''}" aria-label="${escapeHtml(heading)}">
     <header><h3>${escapeHtml(heading)}</h3><strong>${free} free</strong></header>
     <dl>
       <div><dt>Base</dt><dd>${base}</dd></div>
       <div><dt>Mods</dt><dd>${signed(mods)}</dd></div>
-      <div><dt>Weapons</dt><dd>${debit(weapons)}</dd></div>
-      <div><dt>Cannons</dt><dd>${debit(cannons)}</dd></div>
-      <div><dt>Ammunition</dt><dd>${debit(ammunition)}</dd></div>
-      <div><dt>Cargo</dt><dd>${debit(cargo)}</dd></div>
+      <div><dt>Weapons used</dt><dd>${weapons}</dd></div>
+      <div><dt>Cannons used</dt><dd>${cannons}</dd></div>
+      <div><dt>Ammunition used</dt><dd>${ammunition}</dd></div>
+      <div><dt>Cargo used</dt><dd>${cargo}</dd></div>
       <div class="capacity-total"><dt>Total / free</dt><dd>${total} / ${free}</dd></div>
     </dl>
   </section>`;
@@ -2776,7 +2801,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     ...(vehicle.type === 'sea' ? [
       ['Cannon portals', `${vehicle.cannons.length}/${cannonPortals} occupied · ${cannonPortalsRemaining} free`],
       ['Ammunition', ammoOverview || 'No ammunition hold'],
-      ['Hull', `${vehicle.ship?.hull ?? 0}/${vehicle.shipDefinition?.hull ?? 0}`],
+      ['Hull', `${vehicle.ship?.hull ?? 0}/${vehicle.ship?.max_hull ?? vehicle.shipDefinition?.hull ?? 0}`],
       ['Crew', `${vehicle.ship?.crew ?? 0}/${vehicle.shipDefinition?.crew ?? 0}`],
       ['Block and Tackle here', String(blockAndTacklesAvailable)]
     ] : [])
@@ -2831,7 +2856,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const fullAmmoCrates = (totalLoadedShots - totalLooseShots) / shotsPerCrate;
   const unloadWarning = totalLooseShots
     ? `<label class="danger-confirm"><input type="checkbox" name="confirmLoss" value="yes" required> Discard ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} that cannot make a complete crate.</label>` : '';
-  const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete cannon set you want fitted. Existing cannons can be kept, returned or replaced in one preview. Any removal consumes one ${escapeHtml(blockAndTackleItem.name)}; ammunition remains aboard.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview cannon loadout</button>${commitButton}</div></form></div><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p><a href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here. Ammunition cards show accuracy and the part of an enemy ship they damage.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></section>` : '';
+  const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete cannon set you want fitted. Existing cannons can be kept, returned or replaced in one preview. Any removal consumes one ${escapeHtml(blockAndTackleItem.name)}; ammunition remains aboard. Commit cannon changes before loading ammunition.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached. Choose a proposed quantity below, preview the cannon loadout, then commit it to unlock ammunition loading. The commit button appears after a valid preview.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview cannon loadout</button>${commitButton}</div></form></div><div id="ammunition"><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p>Cannons draw from this ship's shared ammunition hold; shots do not need to be assigned to individual cannon portals. <a href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></div></section>` : '';
   const hasStoredLoadout = vehicle.cargoSize > 0 || vehicle.mods.length > 0
     || vehicle.weapons.length > 0 || vehicle.cannons.length > 0 || totalLoadedShots > 0;
   const pageTitle = `<section class="page-title"><div><p class="eyebrow">${escapeHtml(vehicle.type)} in ${escapeHtml(city.name)} ${rankBadge(vehicle.rank, 1, catalog)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a href="${view === 'status' ? '/vehicles' : `/vehicles/${vehicle.id}`}">${view === 'status' ? 'Back to vehicles' : 'Back to vehicle status'}</a></section>`;
@@ -2855,25 +2880,32 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
       <button${vehicle.damaged ? ' disabled' : ''}>Send itinerary</button>
     </form><script src="/node/vehicle-journey.js?v=20260825b" defer></script>` : '<p>No compatible routes from this city.</p>'}</section>`;
   if (view === 'cargo') {
-    return `${pageTitle}${hero}${loadoutOverview}<section><h2>Cargo</h2><p>Choose the complete cargo manifest, preview its capacity and combat effects, then commit that exact proposal. Carried land weapons contribute offense and defense; they are still cargo, not fitted weapons. Cannons and ammunition carried as cargo cannot fire.</p><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/cargo" data-live-preview-form>${previewBindingInput}<div class="table-scroll"><table class="cargo-loadout-table"><thead><tr><th>Thing</th><th>Available here</th><th>Proposed cargo</th></tr></thead><tbody>${cargoRows || '<tr><td colspan="3">No compatible cargo in this city.</td></tr>'}</tbody></table></div><div class="customization-actions"><button name="intent" value="preview">Preview cargo</button>${commitButton}</div></form></div></section>`;
+    const rarestDisabled = vehicle.damaged || !cargoRows || vehicle.capacity < 1;
+    return `${pageTitle}${hero}${loadoutOverview}<section><h2>Cargo</h2><p>Choose the complete cargo manifest, preview its capacity and combat effects, then commit that exact proposal. Carried land weapons contribute offense and defense; they are still cargo, not fitted weapons. Cannons and ammunition carried as cargo cannot fire.</p><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/cargo" data-live-preview-form>${previewBindingInput}<div class="table-scroll"><table class="cargo-loadout-table"><thead><tr><th>Thing</th><th>Available here</th><th>Proposed cargo</th></tr></thead><tbody>${cargoRows || '<tr><td colspan="3">No compatible cargo in this city.</td></tr>'}</tbody></table></div><div class="customization-actions"><button class="secondary" name="intent" value="rarest"${rarestDisabled ? ' disabled' : ''}>Take as much of the rarest things as we can</button><button name="intent" value="preview">Preview cargo</button>${commitButton}</div></form></div></section>`;
   }
   if (view === 'customize') {
     return `${pageTitle}${hero}${loadoutOverview}${landFittings}${shipFittings}`;
   }
   return `${pageTitle}
     <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div><p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p><form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form></div></section>${sendSection}${loadoutOverview}
-    <section class="vehicle-manage-actions"><h2>Manage vehicle</h2><p>${vehicle.type === 'air' ? 'Cargo has its own focused screen.' : 'Cargo and customization are separate so you can focus on one job at a time.'}</p><div class="button-row"><a class="button" href="/vehicles/${vehicle.id}/cargo">Manage cargo</a>${vehicle.type === 'air' ? '' : `<a class="button" href="/vehicles/${vehicle.id}/customize">Customize ${vehicle.type === 'sea' ? 'cannons and ammunition' : 'mods and weapons'}</a>`}</div></section>
+    <section class="vehicle-manage-actions"><h2>Manage vehicle</h2><p>${vehicle.type === 'air' ? 'Cargo has its own focused screen.' : 'Cargo and customization are separate so you can focus on one job at a time.'}</p><div class="button-row"><a class="button" href="/vehicles/${vehicle.id}/cargo">Manage cargo</a>${vehicle.type === 'air' ? '' : `<a class="button" href="/vehicles/${vehicle.id}/customize${vehicle.type === 'sea' ? '#ammunition' : ''}">${vehicle.type === 'sea' ? 'Load ammunition or change cannons' : 'Customize mods and weapons'}</a>`}</div></section>
     <section><h2>Oil</h2>${oilItem ? itemCard(oilItem, { count: local[oilItem.id] ?? 0, compact: true, meta: [`${vehicle.oiledTrips} boosted trips loaded`, `${vehicle.tripsStolen} stolen trips`], action: `<form method="post" action="/vehicles/${vehicle.id}/oil"><button ${vehicle.routeType === airRouteType || !(local[oilItem.id] ?? 0) ? 'disabled' : ''}>Load one barrel</button></form>${vehicle.tripsStolen ? `<form method="post" action="/vehicles/${vehicle.id}/oil/unload"><button class="secondary">Reclaim a barrel</button></form>` : ''}` }) : ''}</section>
     <section><h2>History</h2><table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No journeys yet.</td></tr>'}</tbody></table></section>
     <form method="post" action="/vehicles/${vehicle.id}/store">${hasStoredLoadout ? '<p>Unload cargo and remove every fitting, cannon, and ammunition shot before storing this vehicle as a thing.</p>' : ''}<button class="secondary"${hasStoredLoadout ? ' disabled' : ''}>Store as item</button></form>`;
 }
 
-function battlePage(report) {
-  const reportNumber = (value, label) => {
+export function battlePage(report) {
+  const reportValue = (value, label) => {
     const number = Number(value);
     if (!Number.isFinite(number)) throw new Error(`Battle report is missing ${label}.`);
     return number;
   };
+  const reportNumber = (value, label) => reportValue(value, label).toLocaleString('en-GB', {
+    maximumFractionDigits: 3
+  });
+  const naturalList = (entries) => entries.length < 2 ? entries[0] ?? ''
+    : entries.length === 2 ? `${entries[0]} and ${entries[1]}`
+      : `${entries.slice(0, -1).join(', ')}, and ${entries.at(-1)}`;
   if (!report.opponent || typeof report.opponent.player_name !== 'string') {
     throw new Error('Battle report is missing its opponent record.');
   }
@@ -2900,6 +2932,14 @@ function battlePage(report) {
     }
     const hits = shots.filter((shot) => shot.hit).length;
     const start = result.starting?.[side];
+    const endingCrew = reportValue(ship.crew, 'ending crew');
+    const crewLost = start
+      ? Math.max(0, reportValue(start.crew, 'starting crew') - endingCrew)
+      : casualtiesForSide.length;
+    const crewLossText = crewLost === 0 ? 'No crew were lost.'
+      : `${reportNumber(crewLost, 'crew lost')} crew member${crewLost === 1 ? ' was' : 's were'} lost.`;
+    const shotText = `${shots.length} cannon shot${shots.length === 1 ? '' : 's'}`;
+    const hitText = `${hits} hit${hits === 1 ? '' : 's'}`;
     const startingText = start
       ? `It started with ${reportNumber(start.hull, 'starting hull')} hull, ${reportNumber(start.speed, 'starting speed')} speed, and ${reportNumber(start.crew, 'starting crew')} crew. ` : '';
     const ammunitionNames = { 1: 'Cannonball', 2: 'Chain shot', 3: 'Grape shot' };
@@ -2923,13 +2963,50 @@ function battlePage(report) {
         : round.winner ? `${round.winner - 1 === side ? 'Your' : 'Opponent'} crew forced the victory` : 'No casualty';
       return `<tr><td>${reportNumber(round.round, 'boarding round')}</td><td>${reportNumber(round.strength?.[side] ?? 0, 'boarding strength')}</td><td>${reportNumber(round.strength?.[(side + 1) % 2] ?? 0, 'opponent boarding strength')}</td><td>${casualty}</td></tr>`;
     }).join('');
+    const escapeWinnerSide = Number(result.winner) - 1;
+    const escapeWon = escapeWinnerSide === side;
+    const escapeUsedChainShot = Boolean(result.chainEscape
+      && result.shots?.[escapeWinnerSide]?.some((shot) =>
+        shot.hit && Number(shot.type) === 2 && shot.damageField === 'speed'));
+    const opponentShip = result.ships?.[(side + 1) % 2];
+    const noBoardingReason = result.chainEscape
+      ? escapeWon
+        ? escapeUsedChainShot
+          ? 'Your chain shot slowed the pursuing enemy, letting your faster ship escape before boarding could begin.'
+          : 'Your faster ship escaped the pursuing enemy before boarding could begin.'
+        : escapeUsedChainShot
+          ? 'An enemy chain shot slowed your ship, letting the faster enemy escape before boarding could begin.'
+          : 'The faster enemy ship escaped your pursuit before boarding could begin.'
+      : ship.hull === 0 && opponentShip?.hull === 0
+        ? 'Both ships sank before boarding could begin.'
+        : ship.hull === 0
+          ? 'Your ship sank before boarding could begin.'
+          : opponentShip?.hull === 0
+            ? 'The enemy ship sank before boarding could begin.'
+            : 'No boarding action took place.';
     const boarding = boardingRows
       ? `<h3>Boarding</h3><div class="table-scroll"><table><thead><tr><th>Round</th><th>Your strength</th><th>Opponent strength</th><th>Outcome</th></tr></thead><tbody>${boardingRows}</tbody></table></div>`
-      : '<h3>Boarding</h3><p>No boarding action took place.</p>';
+      : `<h3>Boarding</h3><p>${noBoardingReason}</p>`;
     const repair = result.repairs?.[side];
-    const repairText = repair
-      ? `<p>After combat, repairs restored ${reportNumber(repair.hull, 'hull repair')} hull, ${reportNumber(repair.speed, 'sail repair')} speed, and ${reportNumber(repair.crew, 'crew recovery')} crew. The ship resumed with ${reportNumber(repair.ending.hull, 'repaired hull')} hull, ${reportNumber(repair.ending.speed, 'repaired speed')} speed, and ${reportNumber(repair.ending.crew, 'repaired crew')} crew.</p>` : '';
-    details = `<h2>Cannon and crew battle</h2><p>${startingText}Your ship fired ${shots.length} cannon shots and landed ${hits}. It finished combat with ${reportNumber(ship.hull, 'ending hull')} hull, ${reportNumber(ship.speed, 'ending speed')} speed, and ${reportNumber(ship.crew, 'ending crew')} crew; ${casualtiesForSide.length} crew were lost.${ship.hull === 0 ? ' The ship sank.' : ''}${result.chainEscape ? ' Chain-shot damage allowed the faster ship to escape.' : ''}</p>${cannonTable}${boarding}${repairText}`;
+    let repairText = '';
+    if (repair) {
+      const hullRepair = reportValue(repair.hull, 'hull repair');
+      const speedRepair = reportValue(repair.speed, 'sail repair');
+      const crewRecovery = reportValue(repair.crew, 'crew recovery');
+      const repairedStats = [
+        hullRepair > 0 ? `${reportNumber(hullRepair, 'hull repair')} hull` : null,
+        speedRepair > 0 ? `${reportNumber(speedRepair, 'sail repair')} speed` : null
+      ].filter(Boolean);
+      const recoveryClauses = [];
+      if (repairedStats.length) recoveryClauses.push(`repairs restored ${naturalList(repairedStats)}`);
+      if (crewRecovery > 0) {
+        recoveryClauses.push(`${reportNumber(crewRecovery, 'crew recovery')} crew member${crewRecovery === 1 ? '' : 's'} returned to duty`);
+      }
+      if (recoveryClauses.length) {
+        repairText = `<p>After combat, ${recoveryClauses.join('; ')}. The ship resumed with ${reportNumber(repair.ending.hull, 'repaired hull')} hull, ${reportNumber(repair.ending.speed, 'repaired speed')} speed, and ${reportNumber(repair.ending.crew, 'repaired crew')} crew.</p>`;
+      }
+    }
+    details = `<h2>Cannon and crew battle</h2><p>${startingText}Your ship fired ${shotText} and landed ${hitText}. It finished combat with ${reportNumber(ship.hull, 'ending hull')} hull, ${reportNumber(ship.speed, 'ending speed')} speed, and ${reportNumber(ship.crew, 'ending crew')} crew. ${crewLossText}${ship.hull === 0 ? ' The ship sank.' : ''}</p>${cannonTable}${boarding}${repairText}`;
   } else {
     throw new Error(`Unknown battle report type: ${report.details.type}.`);
   }
@@ -3035,13 +3112,21 @@ function originalOilFieldState(player, field, catalog, currentTime) {
     if (!machine || machines[machine.id]) return;
     const typeId = machine.machineTypeId ?? machine.type;
     if (!machine.typeName) throw new Error(`Missing Oil Field machine type name for ${machine.id}.`);
+    const machineType = catalog.machineTypeById.get(Number(typeId));
+    if (!machineType) throw new Error(`Missing Oil Field machine type ${typeId}.`);
+    const machineInfo = machineDescription(machineType, Number(machine.rarity), catalog.settings);
+    const item = catalog.byId.get(Number(machine.itemId));
+    if (!item) throw new Error(`Missing Oil Field machine item ${machine.itemId}.`);
     machineTypes[typeId] = machine.typeName;
     machines[machine.id] = {
       Machine: { id: machine.id, item_id: machine.itemId, machine_type_id: typeId },
-      MachineType: { id: typeId, name: machine.typeName },
+      MachineType: {
+        id: typeId, name: machine.typeName, power: machineInfo.power,
+        lifeDays: machineInfo.lifeDays
+      },
       Item: {
-        id: machine.itemId, name: machine.name, icon: machine.icon,
-        rarity: String(machine.rarity)
+        id: item.id, name: item.name, icon: item.icon,
+        rarity: String(item.rarity), description: item.description
       }
     };
   };
@@ -3077,7 +3162,11 @@ function originalOilFieldState(player, field, catalog, currentTime) {
     .filter(Boolean).map((machine) => [machine.playerId, machine.ownerName]));
   const ownedMachines = field.ownedMachines.map((machine) => ({
     ...machines[machine.id], count: machine.quantity,
-    MachineType: { id: machine.machineTypeId ?? machine.type, name: machine.typeName }
+    MachineType: {
+      ...machines[machine.id].MachineType,
+      id: machine.machineTypeId ?? machine.type,
+      name: machine.typeName
+    }
   }));
   const machineItemNames = (predicate) => catalog.machines.filter(predicate).map((machine) => {
     const item = catalog.byId.get(machine.itemId);
@@ -3122,23 +3211,29 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
   const packerNames = joinedNames(labels.packers);
   const craneNames = joinedNames(labels.cranes);
   const eventRows = field.events.map((event) => `<tr><td>${new Date(event.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(event.type)}</td><td>${event.hexId}</td><td>${event.otherPlayerName ? escapeHtml(event.otherPlayerName) : ''}</td><td>${event.details.litersLost ? `${event.details.litersLost}L burned` : escapeHtml(event.details.name ?? event.details.type ?? '')}</td></tr>`).join('');
-  const stats = field.stats ? `<section><h2>${escapeHtml(catalogGadgetForBehavior(catalog, 'ledger').displayName)} field report</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Machines</th><th>Oil</th><th>Pumping</th><th>Packing</th><th>Barrels</th></tr></thead><tbody>${field.stats.map((entry) => `<tr><td><a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a> (${entry.meldCount})</td><td>${entry.machines}</td><td>${entry.oilLiters}L</td><td>${entry.pumpingLitersPerHour}L/h</td><td>${entry.packingLitersPerHour}L/h</td><td>${entry.barrels}</td></tr>`).join('')}</tbody></table></div></section>` : '';
+  const stats = field.stats ? `<section class="oil-report"><p class="eyebrow">Live intelligence</p><h2>${escapeHtml(catalogGadgetForBehavior(catalog, 'ledger').displayName)} field report</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Machines</th><th>Oil</th><th>Pumping</th><th>Packing</th><th>Barrels</th></tr></thead><tbody>${field.stats.map((entry) => `<tr><td><a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a> (${entry.meldCount})</td><td>${entry.machines}</td><td>${entry.oilLiters}L</td><td>${entry.pumpingLitersPerHour}L/h</td><td>${entry.packingLitersPerHour}L/h</td><td>${entry.barrels}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   const serializedState = escapeHtml(JSON.stringify(state));
   const litersPerBarrel = Number(catalog.settings.oil_units_per_barrel)
     / Number(catalog.settings.oil_units_per_liter);
-  return `<section class="page-title"><div><p class="eyebrow">Original machine board</p><h1>Oil Field</h1></div><p>Pump, pipe, and pack ${formatGold(litersPerBarrel)} litres into each barrel of ${escapeHtml(labels.oil)}. Fight for the field with the original machines.</p></section>
-    <section class="oil-summary"><p>The shared field is in <strong>${escapeHtml(cityName)}</strong>. Drag a machine from the rack onto a hex, rotate it, then deploy, replace, queue, or bomb.</p><strong class="active-state">Field access active</strong></section>
-    <p class="oil-aircraft">${escapeHtml(labels.helicopter)}: <strong>${field.hasHelicopter ? 'ready' : 'missing'}</strong> · ${escapeHtml(labels.searchPlane)}: <strong>${field.hasSearchPlane ? 'revealing all oil' : 'other miners’ oil hidden'}</strong> · ${escapeHtml(labels.bomber)}: <strong>${field.hasBomber ? 'ready' : 'missing'}</strong></p>
-    <section class="oil-original-panel" aria-labelledby="oil-board-heading"><div class="oil-board-heading"><div><h2 id="oil-board-heading">Machine field</h2><p>${field.hexes.length} hexes · radius ${Number(catalog.settings.oil_field_max_radius)} · original vector machines and live effects</p></div><div class="oil-board-controls"><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button></div></div>
+  return `<article class="oil-page"><header class="oil-page-title"><div><p class="eyebrow">${escapeHtml(field.mapName)} regional operation</p><h1>Oil Field</h1><p>Pump, pipe, and pack ${formatGold(litersPerBarrel)} litres into each barrel of ${escapeHtml(labels.oil)}. Build a network, defend it, and bring the oil home.</p></div><span class="oil-title-mark" aria-hidden="true">OIL</span></header>
+    <dl class="oil-facts"><div><dt>Field status</dt><dd><span class="oil-live-status"><i aria-hidden="true"></i><span class="active-state">Field access active</span></span></dd></div><div><dt>Regional base</dt><dd>${escapeHtml(field.mapName)} · ${escapeHtml(cityName)}</dd></div><div><dt>Machine board</dt><dd>${field.hexes.length} hexes · radius ${Number(catalog.settings.oil_field_max_radius)}</dd></div></dl>
+    <section class="oil-briefing"><div><p class="eyebrow">Deployment brief</p><p>The field is based in <strong>${escapeHtml(cityName)}</strong>. Drag a machine from the rack onto a hex, rotate it, then deploy, replace, queue, or bomb.</p></div><dl class="oil-aircraft"><div><dt>${escapeHtml(labels.helicopter)}</dt><dd class="${field.hasHelicopter ? 'ready' : 'missing'}"><strong>${field.hasHelicopter ? 'Ready' : 'Missing'}</strong><small>Outer-row deployment</small></dd></div><div><dt>${escapeHtml(labels.searchPlane)}</dt><dd class="${field.hasSearchPlane ? 'ready' : 'limited'}"><strong>${field.hasSearchPlane ? 'All oil revealed' : 'Rival oil hidden'}</strong><small>Field intelligence</small></dd></div><div><dt>${escapeHtml(labels.bomber)}</dt><dd class="${field.hasBomber ? 'ready' : 'missing'}"><strong>${field.hasBomber ? 'Ready' : 'Missing'}</strong><small>Bomb delivery</small></dd></div></dl></section>
+    <section class="oil-original-panel" aria-labelledby="oil-board-heading"><div class="oil-board-heading"><div><p class="eyebrow">MT2 // Regional machine grid</p><h2 id="oil-board-heading">Machine field</h2><p>Original vector machines · live power, flow, packing, and combat effects</p></div><div class="oil-board-controls"><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button><button type="button" id="oil-toggle-volume-labels" aria-pressed="false">Hide oil volume labels</button></div></div>
       <div class="oil-legend" aria-label="Board legend"><span class="oil-key oil-key-own">Your machine</span><span class="oil-key oil-key-rival">Other machine</span><span class="oil-key oil-key-build">Buildable</span><span class="oil-key oil-key-heli">${escapeHtml(labels.helicopter)} row</span><span class="oil-key oil-key-oil">${escapeHtml(labels.oil)}</span><span class="oil-key oil-key-spill">${escapeHtml(labels.oil)} spill</span><span class="oil-key oil-key-closed">Unavailable</span></div>
       <p id="oil-board-status" class="oil-board-status" role="status">Loading the original Oil Field…</p>
       <div class="oil-field-board-shell" data-hex-count="${field.hexes.length}" data-machine-count="${field.hexes.filter((hex) => hex.machine).length}"><div id="board" aria-label="Interactive Oil Field hex board"></div></div>
       <textarea id="oil-field-state" hidden>${serializedState}</textarea>
     </section>
     ${stats}
-    <section class="oil-instructions"><h2>Instructions</h2><ul><li>Drag a machine onto a hex, or click it and then click its destination.</li><li>Use the on-board L and R controls before deploying. Once deployed or queued, it cannot be moved or rotated.</li><li>Blue hexes are buildable. The outer blue row requires a ${escapeHtml(labels.helicopter)} in ${escapeHtml(cityName)}.</li><li>Drop onto your own machine to replace it immediately or queue its successor.</li><li>Drop ${escapeHtml(bombNames)} bombs onto a machine or oil spill; a ${escapeHtml(labels.bomber)} is required.</li><li>Click any hex to open its full summary. Only ${escapeHtml(packerNames)} can release completed barrels. Barrels stolen by ${escapeHtml(craneNames)} remain on their hex when you replace the machine with one of those packing machines.</li></ul></section>
-    <section><h2>Your field events</h2><div class="table-scroll"><table><thead><tr><th>When</th><th>Event</th><th>Hex</th><th>Other miner</th><th>Details</th></tr></thead><tbody>${eventRows || '<tr><td colspan="5">No field events yet.</td></tr>'}</tbody></table></div></section>
-    <script src="/js/raphael2.1.2.js" defer></script><script src="/js/machines11.js" defer></script><script src="/node/oil-field.js?v=20260822b" defer></script>`;
+    <section class="oil-instructions"><p class="eyebrow">Operator handbook</p><h2>Instructions</h2><ol><li>Drag a machine onto a hex, or click it and then click its destination.</li><li>Use the on-board L and R controls before deploying. Once deployed or queued, it cannot be moved or rotated.</li><li>Blue hexes are buildable. The outer blue row requires a ${escapeHtml(labels.helicopter)} in ${escapeHtml(cityName)}.</li><li>Drop onto your own machine to replace it immediately or queue its successor.</li><li>Drop ${escapeHtml(bombNames)} bombs onto a machine or oil spill; a ${escapeHtml(labels.bomber)} is required.</li><li>Click any hex to open its full summary. Only ${escapeHtml(packerNames)} can release completed barrels. Barrels stolen by ${escapeHtml(craneNames)} remain on their hex when you replace the machine with one of those packing machines.</li></ol></section>
+    <section class="oil-events"><header><div><p class="eyebrow">Local activity log</p><h2>Your field events</h2></div><p>Deployments, replacements, attacks, and machine failures from this regional board.</p></header><div class="table-scroll"><table><thead><tr><th>When</th><th>Event</th><th>Hex</th><th>Other miner</th><th>Details</th></tr></thead><tbody>${eventRows || '<tr><td colspan="5">No field events yet.</td></tr>'}</tbody></table></div></section>
+    <script src="/js/raphael2.1.2.js" defer></script><script src="/js/machines11.js?v=20260826i" defer></script><script src="/node/oil-field.js?v=20260826i" defer></script></article>`;
+}
+
+function unavailableOilFieldPage(player) {
+  return `<article class="oil-page oil-page-unavailable"><header class="oil-page-title"><div><p class="eyebrow">Regional industry</p><h1>Oil Field</h1><p>Oil Fields are independent regional operations, and only around half of the world’s regions contain one.</p></div><span class="oil-title-mark" aria-hidden="true">OIL</span></header>
+    <dl class="oil-facts"><div><dt>Field status</dt><dd><span class="oil-offline-status"><i aria-hidden="true"></i>Unavailable</span></dd></div><div><dt>Current region</dt><dd>${escapeHtml(player.mapName)}</dd></div><div><dt>Next move</dt><dd>Find a field region</dd></div></dl>
+    <section class="empty-state oil-empty-state"><p class="eyebrow">No local operation</p><h2>No Oil Field in ${escapeHtml(player.mapName)}</h2><p>Travel to a region with an Oil Field to deploy machines, inspect its board, or collect barrels. Each field has its own hexes, machines, oil, and events.</p><a class="button" href="/map">Open world map</a></section></article>`;
 }
 
 function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug = '') {
@@ -3457,7 +3552,7 @@ function helpPage(catalog) {
     <h2>Weather, moon, creatures, and ghosts</h2><p>The world does not wait for miners. Weather shifts, strange shapes cross familiar routes, and some wrecks refuse to stay dead. Check <a href="/events">World Events</a> before sending a vehicle beyond the city, and only risk what you are prepared to lose.</p>
     <h2>Dwarves</h2><p>After a random delay within ${formatDuration(Number(settings.dwarf_find_max_delay_ms))}, each Dwarf stored in a city finds one thing in its configured rarity range, using only that city's mine types. Every Dwarf has ${dwarfRisk} chance to disappear after each find and may stow away on a compatible land or sea journey. Mining can also uncover a captive Dwarf; it immediately joins that city's inventory and begins finding things in the normal Dwarf cycle.</p>
     <h2>Aircraft and the ore thieves</h2><p>Every specialisation can fly ore-thief missions from the city where ore is mined; ${escapeHtml(pilot.name)} flies ${formatGold(Number(pilot.bonuses.aircraftSpeed) * 100)}% faster. ${escapeHtml(searchPlane)} missions take ${formatDuration(Number(settings.aircraft_search_duration_ms))} before speed bonuses. Once the location is known, ${escapeHtml(bomber)} aircraft can attack it, and ${escapeHtml(helicopter)} aircraft recover ore after its destruction.</p><p>Aircraft approaching the base have a ${formatGold(shotDown * 100)}% chance of being shot down, reduced to ${formatGold(shieldedShotDown * 100)}% by an active ${escapeHtml(shield)}. A lost aircraft also loses its cargo. Every ${settings.aircraft_melds_per_slot} melds permits one aircraft in flight at a time.</p>
-    <h2>Oil Field</h2><p>Every miner can operate the field. ${escapeHtml(helicopter)} aircraft deploy machines on the outer field, ${escapeHtml(searchPlane)} aircraft reveal other miners’ oil, and ${escapeHtml(bomber)} aircraft attack occupied hexes with ${escapeHtml(bombNames)} bombs. ${escapeHtml(pilot.name)}-specialised deployments last ${formatGold(Number(pilot.bonuses.oilMachineLife) * 100)}% longer. Pumps, power networks, pipes, and pads turn ${formatGold(litersPerBarrel)} litres into each ${escapeHtml(oil)} barrel.</p></section>`;
+    <h2>Oil Field</h2><p>Around half of the regions have independent Oil Fields, and every miner in one of those regions can operate its local field. ${escapeHtml(helicopter)} aircraft deploy machines on the outer field, ${escapeHtml(searchPlane)} aircraft reveal other miners’ oil, and ${escapeHtml(bomber)} aircraft attack occupied hexes with ${escapeHtml(bombNames)} bombs. ${escapeHtml(pilot.name)}-specialised deployments last ${formatGold(Number(pilot.bonuses.oilMachineLife) * 100)}% longer. Pumps, power networks, pipes, and pads turn ${formatGold(litersPerBarrel)} litres into each ${escapeHtml(oil)} barrel.</p></section>`;
 }
 
 export function createApp(options = {}) {
@@ -3939,6 +4034,10 @@ export function createApp(options = {}) {
     }
     if (url.pathname === '/node/navigation.js') {
       if (!staticFile(request, response, PUBLIC_ROOT, '/navigation.js', 'no-store')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/chat-filters.js') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/chat-filters.js', 'no-store')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/vehicle-journey.js') {
@@ -4665,8 +4764,12 @@ export function createApp(options = {}) {
         const vehicles = store.vehiclesForPlayer(player.id, now());
         for (const vehicle of vehicles) vehicle.routes = store.routesForVehicle(player.id, vehicle.id, now());
         const thiefBase = store.thiefBaseStatus(player.id);
+        const activationAvailability = new Map(Object.entries(player.inventory)
+          .map(([itemId, count]) => [Number(itemId), Number(count)])
+          .filter(([itemId, count]) => count > 0 && catalog.vehicleByItemId.has(itemId))
+          .map(([itemId]) => [itemId, store.vehicleActivationAvailability(player.id, itemId)]));
         responseHtml(response, 200, layout('Vehicles',
-          vehiclesPage(player, catalog, vehicles, now(), thiefBase), player, flash));
+          vehiclesPage(player, catalog, vehicles, now(), thiefBase, activationAvailability), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/vehicles/boxes') {
         if (!requirePlayer()) return;
         const requestedVehicleId = Number(url.searchParams.get('vehicleId'));
@@ -4760,15 +4863,17 @@ export function createApp(options = {}) {
         if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId) {
           throw new Error('Only an idle vehicle in your selected city can change cargo.');
         }
-        const cargo = Object.fromEntries(Object.entries(form)
-          .filter(([key]) => /^cargo_\d+$/.test(key))
-          .map(([key, value]) => {
-            const quantity = Number(value);
-            if (!Number.isSafeInteger(quantity) || quantity < 0) {
-              throw new Error('Cargo quantities must be whole numbers.');
-            }
-            return [key.slice(6), quantity];
-          }).sort(([first], [second]) => Number(first) - Number(second)));
+        const cargo = form.intent === 'rarest'
+          ? store.rarestVehicleCargo(player.id, vehicleId)
+          : Object.fromEntries(Object.entries(form)
+            .filter(([key]) => /^cargo_\d+$/.test(key))
+            .map(([key, value]) => {
+              const quantity = Number(value);
+              if (!Number.isSafeInteger(quantity) || quantity < 0) {
+                throw new Error('Cargo quantities must be whole numbers.');
+              }
+              return [key.slice(6), quantity];
+            }).sort(([first], [second]) => Number(first) - Number(second)));
         const selections = { cargo };
         if (form.intent === 'commit') {
           consumePreview(sessionId, session, player.id, vehicleId, 'cargo', selections,
@@ -4778,7 +4883,9 @@ export function createApp(options = {}) {
           redirect(response, `/vehicles/${vehicleId}`);
           return;
         }
-        if (form.intent !== 'preview') throw new Error('Preview this cargo before committing it.');
+        if (!['preview', 'rarest'].includes(form.intent)) {
+          throw new Error('Preview this cargo before committing it.');
+        }
         const preview = store.previewVehicleCargo(player.id, vehicleId, cargo);
         const previewState = rememberPreview(sessionId, session, player.id, vehicleId,
           'cargo', selections, preview);
@@ -4839,7 +4946,8 @@ export function createApp(options = {}) {
           } else {
             throw new Error('This vehicle has no customizable fittings.');
           }
-          redirect(response, `/vehicles/${vehicleId}`);
+          redirect(response, vehicle.type === 'sea'
+            ? `/vehicles/${vehicleId}/customize#ammunition` : `/vehicles/${vehicleId}`);
           return;
         }
         if (form.intent !== 'preview') throw new Error('Preview this loadout before committing it.');
@@ -4872,7 +4980,7 @@ export function createApp(options = {}) {
         store.loadShipAmmo(player.id, vehicleId, Number(form.type), quantity);
         session?.loadoutPreviews?.delete(previewKey('ship', vehicleId));
         setFlash(`${quantity} ammunition crate${quantity === 1 ? '' : 's'} loaded.`);
-        redirect(response, `/vehicles/${vehicleId}/customize`);
+        redirect(response, `/vehicles/${vehicleId}/customize#ammunition`);
       } else if (request.method === 'POST' && /^\/vehicles\/\d+\/ammo\/unload$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const vehicleId = Number(url.pathname.split('/')[2]);
@@ -4896,7 +5004,7 @@ export function createApp(options = {}) {
         store.unloadShipAmmo(player.id, vehicleId);
         session?.loadoutPreviews?.delete(previewKey('ship', vehicleId));
         setFlash(`${crates} complete ammunition crate${crates === 1 ? '' : 's'} returned to inventory.${loose ? ` ${loose} loose shot${loose === 1 ? '' : 's'} discarded.` : ' No shots lost.'}`);
-        redirect(response, `/vehicles/${vehicleId}/customize`);
+        redirect(response, `/vehicles/${vehicleId}/customize#ammunition`);
       } else if (request.method === 'POST' && /^\/vehicles\/\d+\/oil$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const vehicleId = Number(url.pathname.split('/')[2]);
@@ -4944,7 +5052,9 @@ export function createApp(options = {}) {
         const field = maintenanceRunning
           ? store.oilFieldView(player.id, requestedAt) : store.oilField(player.id, requestedAt);
         responseHtml(response, 200,
-          layout('Oil Field', originalOilFieldPage(player, field, catalog, requestedAt), player, flash));
+          layout('Oil Field', field.available
+            ? originalOilFieldPage(player, field, catalog, requestedAt)
+            : unavailableOilFieldPage(player), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/oil-field/deploy') {
         if (!requirePlayer()) return;
         const form = await readForm(request);
@@ -5362,7 +5472,8 @@ export function createApp(options = {}) {
         const chatAt = now();
         responseHtml(response, 200, layout('Public chat', chatPage(
           player, store.recentChats(null, player.id, chatAt - historyWindowMs),
-          store.chatIgnores(player.id), catalog, store.chatAppearance(player.id), historyWindowMs
+          store.chatIgnores(player.id), catalog, store.chatAppearance(player.id), historyWindowMs,
+          store.chatRatingTiers(player.id)
         ), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/chat') {
         if (!requirePlayer()) return;
