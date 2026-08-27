@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ashen Empire</title>
+  <desc id="desc">Own road, guild, and field
+Starve each town, then sell escape
+Let each rival pay</desc>
+  <path fill="#ffe29a" stroke="#5d2d08" stroke-width="5" stroke-linejoin="round" d="M19 24h90L95 52l14 27H78l-14 30-14-30H19l14-27z"/>
+    <path fill="none" stroke="#df8b16" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M34 39h60M45 55h38M37 70h21M70 70h21"/>
+    <circle cx="64" cy="91" r="6" fill="#df8b16"/>
+</svg>

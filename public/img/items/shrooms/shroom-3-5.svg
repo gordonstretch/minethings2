@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Devil's Cigar</title>
+  <path fill="#373a3a" stroke="#292d29" stroke-width="4" d="M35 78C25 57 27 28 48 11c21 17 23 46 13 67z"/>
+  <path fill="#799c9c" stroke="#292d29" stroke-width="3" d="m48 9 6 27 22-16-15 23 27 2-26 8 18 21-23-15-4 28-5-28-23 15 18-21-26-8 27-2-15-23 22 16z" opacity=".7"/>
+  <circle cx="48" cy="48" r="9" fill="#292d29"/>
+</svg>

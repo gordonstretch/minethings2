@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Petrified Timber</title>
+  <desc id="desc">Ancient Calbuco timber replaced by stone grain by grain; masonry tools barely trouble it.</desc>
+  <path fill="#59636a" stroke="#252b2e" stroke-width="5" stroke-linejoin="round" d="M14 39l92-14 8 58-92 20z"/><path fill="none" stroke="#c1ccd0" stroke-width="3" stroke-linecap="round" opacity=".82" d="M28 51c18-8 45-11 67-12M31 67c15-7 43-9 67-10M34 83c19-8 42-9 62-10"/><path fill="#c1ccd0" d="M23 43l8-1 8 57-8 2z" opacity=".55"/>
+</svg>

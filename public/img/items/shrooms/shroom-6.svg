@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Crown of Bromo</title>
+  <circle cx="48" cy="42" r="38" fill="#f79721" opacity=".16"/>
+  <path fill="#f4ddbd" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M40 49c2 12 0 24-7 35h30c-7-11-9-23-7-35z"/>
+  <path fill="#f79721" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M13 53c3-12 10-20 21-24 0-11 5-18 14-23 9 5 14 12 14 23 11 4 18 12 21 24-19 8-51 8-70 0z"/>
+  <g fill="#fff0b0"><circle cx="29" cy="43" r="4"/><circle cx="48" cy="22" r="5"/><circle cx="67" cy="43" r="4"/></g>
+  <path fill="none" stroke="#8d4a08" stroke-width="3" stroke-linecap="round" d="M35 34c8 4 18 4 26 0M38 66c7 3 13 3 20 0M38 75c7 3 13 3 20 0"/>
+  <path fill="#f79721" d="m12 18 2 5 5 2-5 2-2 5-2-5-5-2 5-2zM82 17l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>
+</svg>

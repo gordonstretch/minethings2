@@ -26,6 +26,7 @@ let occasionPlayerId;
 let occasionItem;
 let visualMapId;
 let visualCapitalCityId;
+let oilDirectionalMachineName;
 
 function addVehicle(store, player, vehicleType) {
   player.inventory[vehicleType.itemId] = 1;
@@ -60,6 +61,11 @@ test.beforeAll(async () => {
   visual.inventory[ammoBox.itemId] = 1;
   store.savePlayer(visual);
   vehicleId = addVehicle(store, visual, landVehicle);
+  const ghostFleet = store.addPlayer(createPlayer(
+    'Visual Ghost Fleet', '', hashPassword(password), catalog, 1000, () => 0.5
+  ));
+  addVehicle(store, ghostFleet, landVehicle);
+  store.database.prepare('UPDATE players SET is_npc = 1 WHERE id = ?').run(ghostFleet.id);
   store.fitVehicleLoadout(visual.id, vehicleId, [mod.id], [weapon.id]);
   store.setVehicleCargo(visual.id, vehicleId, { [cargo.id]: 1 });
   const shipType = catalog.vehicles.find((vehicle) => vehicle.ship?.cannonPortals > 0);
@@ -111,8 +117,30 @@ test.beforeAll(async () => {
     VALUES (NULL, ?, 'Vehicle', 'Kraken defeated', ?, ?, 1, ?)
   `).run(visual.id,
     `Your Krakenbreaker dealt 244 damage to the Kraken and took 24 damage. You defeated it. The remaining 37 cargo slots were filled with bounty: ${bountyText}.`,
-    JSON.stringify({ event: 'world-creature-combat', defeated: true, rewards: bounty,
-      actions: [{ label: 'Manage vehicle', path: `/vehicles/${shipVehicleId}` }] }),
+    JSON.stringify({
+      event: 'world-creature-combat', defeated: true, rewards: bounty,
+      creatureName: 'Legendary Kraken', vehicleName: 'Krakenbreaker',
+      damage: 244, counterDamage: 24, hp: 0,
+      starting: { creatureHp: 244, creatureMaxHp: 244,
+        vehicle: { hull: 80, maxHull: 80 } },
+      ending: { creatureHp: 0, vehicle: { hull: 56, maxHull: 80 } },
+      phases: [{
+        kind: 'cannon', round: 1,
+        creatureBefore: { hp: 244, maxHp: 244 },
+        creatureAfter: { hp: 0, maxHp: 244 },
+        vehicleBefore: { hull: 80, maxHull: 80 },
+        vehicleAfter: { hull: 56, maxHull: 80 },
+        vehicleAttacks: [{
+          kind: 'cannon', portal: 1, cannonName: 'Thunder',
+          ammunitionType: 1, ammunitionName: 'Cannonball', accuracy: 0.6,
+          hit: true, critical: true, damage: 244
+        }],
+        creatureAttack: { name: 'Tentacle smash', target: 'hull', damage: 24 }
+      }],
+      skippedPhases: [{ kind: 'boarding',
+        reason: 'Boarding was skipped because a ship crew cannot board a world creature.' }],
+      actions: [{ label: 'Manage vehicle', path: `/vehicles/${shipVehicleId}` }]
+    }),
     Date.now()).lastInsertRowid);
   const robber = store.addPlayer(createPlayer('RenderRobber', '', hashPassword(password), catalog, 1000, () => 0.5));
   robber.profession = 2;
@@ -142,6 +170,7 @@ test.beforeAll(async () => {
     && catalog.byId.get(machine.itemId)?.rarity === 1);
   const power = catalog.machines.find((machine) => machine.type === 'power'
     && catalog.byId.get(machine.itemId)?.rarity === 1);
+  oilDirectionalMachineName = catalog.byId.get(power.itemId).name;
   const flower = catalog.machines.find((machine) => machine.type === 'flower');
   const bomber = catalog.items.find((item) => item.name === 'Bomber');
   const searchPlane = catalog.items.find((item) => item.name === 'Search Plane');
@@ -150,7 +179,7 @@ test.beforeAll(async () => {
   pilot.cityId = 2;
   pilot.inventoryByCity[2] = {
     [pump.itemId]: 1,
-    [power.itemId]: 1,
+    [power.itemId]: 2,
     [flower.itemId]: 1,
     [bomber.id]: 1,
     [searchPlane.id]: 1,
@@ -294,6 +323,27 @@ test.beforeAll(async () => {
   visualMapId = store.database.prepare(
     'SELECT map_id FROM catalog_cities WHERE id = ?'
   ).get(visual.cityId).map_id;
+  const creatureRoutes = [
+    ['t_rex', catalog.settings.route_type_ids.land],
+    ['kraken', catalog.settings.route_type_ids.sea]
+  ];
+  const insertCreature = store.database.prepare(`
+    INSERT INTO world_creatures
+      (creature_type, rarity, map_id, route_id, location, spawn_location,
+       destination_city_id, hp, max_hp, awakened_at, moved_at, rating)
+    VALUES (?, 6, ?, ?, ?, ?, ?, 250, 250, ?, ?, 1600)
+  `);
+  for (const [creatureType, routeType] of creatureRoutes) {
+    const creatureRoute = catalog.routes.find((route) => route.open
+      && route.type === routeType && route.city1Id !== route.city2Id);
+    const creatureMapId = store.database.prepare(
+      'SELECT map_id FROM catalog_cities WHERE id = ?'
+    ).get(creatureRoute.city1Id).map_id;
+    const location = Number(creatureRoute.length) / 2;
+    const awakenedAt = Date.now();
+    insertCreature.run(creatureType, creatureMapId, creatureRoute.id,
+      location, location, creatureRoute.city1Id, awakenedAt, awakenedAt);
+  }
   visualCapitalCityId = store.loadCatalog().maps
     .find((map) => map.id === visualMapId)?.capitalCityId;
   const visualWeather = store.currentWeatherForMap(visualMapId, Date.now());
@@ -651,7 +701,7 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.getByText(catalog.byId.get(traderListingItemId).name, { exact: true })).toBeVisible();
   await assertHealthyRender(page);
   await page.goto(`${base}/items/${detailItemId}`);
-  await expect(page.locator('.detail-art img[src="/img/border.png"]')).toBeVisible();
+  await expect(page.locator('.detail-art img[src="/img/border.png"]')).toHaveCount(0);
   await expect(page.locator(`.detail-art img[src="${catalog.byId.get(detailItemId).icon}"]`)).toBeVisible();
   await assertHealthyRender(page);
   await page.goto(`${base}/avatar`);
@@ -724,6 +774,10 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
 
   await page.goto(`${base}/messages/view/${bountyMessageId}`);
   await expect(page.getByRole('heading', { name: 'Kraken defeated' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Combat phases' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cannon round 1' })).toBeVisible();
+  await expect(page.getByText(/Tentacle smash dealt 24 damage to hull/)).toBeVisible();
+  await expect(page.getByText(/cannot board a world creature/)).toBeVisible();
   await expect(page.locator('.message-item-group').getByRole('heading', { name: 'Bounty' })).toBeVisible();
   await expect(page.locator('.message-item')).toHaveCount(37);
   await expect(page.locator('.message-item img')).toHaveCount(37);
@@ -796,7 +850,20 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.goto(`${base}/ratings?class=4`);
   await expect(page.getByRole('heading', { name: 'Vehicle rankings' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View season prizes' })).toBeVisible();
+  await expect(page.getByText(/participates automatically from its live rating/)).toBeVisible();
+  expect(await page.locator('.ratings-list').getByText(/Event creature/).count())
+    .toBeGreaterThanOrEqual(2);
+  expect(await page.locator('.ratings-list').getByText(/NPC fleet/).count())
+    .toBeGreaterThanOrEqual(1);
+  await expect(page.getByText(/Legendary T-Rex #/)).toBeVisible();
+  await expect(page.getByText(/Legendary Kraken #/)).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('ratings-audit-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 360, height: 900 });
+  await assertHealthyRender(page);
+  await page.screenshot({ path: path.resolve('ratings-audit-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('link', { name: 'View season prizes' }).click();
   await expect(page.getByRole('heading', { name: 'Season prizes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Fight upward' })).toBeVisible();
@@ -826,9 +893,46 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(oilBoardShell).toHaveCSS('overflow-y', 'hidden');
   expect(await oilBoardShell.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
   await expect(page.locator('#board svg')).toBeVisible();
+  await expect(page.locator('#board')).toHaveAttribute('data-renderer', 'svgjs');
+  await expect(page.locator('#board svg')).toHaveAttribute('data-renderer', 'svgjs');
+  await expect(page.locator('#oil-toggle-renderer')).toHaveText('Renderer: SVG.js');
   await expect(page.locator('#board svg')).toHaveAttribute('width', '1000');
   await expect(page.locator('#board .oil-rack-caption')).toContainText('MACHINE RACK');
   await expect(page.locator('#board .oil-rack-slot')).toHaveCount(0);
+  await expect(page.locator('#board .oil-rack-label')).toHaveCount(2);
+  await expect(page.locator('#board image.oil-rack-machine-icon')).toHaveCount(2);
+  const escapedDirectionalName = oilDirectionalMachineName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const directionalCandidate = page.locator('#board').getByRole('button', {
+    name: new RegExp(`^Select ${escapedDirectionalName}\\.`)
+  });
+  await expect(directionalCandidate).toHaveCount(1);
+  const directionTarget = page.locator('#board .oil-hex-shape[data-hex-x="1"][data-hex-y="0"]');
+  const directionTargetId = await directionTarget.getAttribute('data-hex-id');
+  await directionalCandidate.dispatchEvent('click');
+  await directionTarget.dispatchEvent('click');
+  await page.evaluate(() => {
+    window.dialog.machine.rotateRight();
+    window.dialog.machine.rotateRight();
+  });
+  expect(await page.evaluate(() => ({
+    point: window.dialog.machine.point,
+    transform: window.dialog.machine.rackIcon.node.getAttribute('transform')
+  }))).toMatchObject({ point: 2, transform: expect.stringContaining('rotate(120 ') });
+  await Promise.all([
+    page.waitForNavigation(),
+    page.evaluate(() => window.dialog.Deploy(false))
+  ]);
+  expect(await page.evaluate((hexId) => {
+    const machine = window.boardMachines.find((candidate) =>
+      String(candidate.hm?.HexesMachine?.hex_id) === String(hexId));
+    return machine ? {
+      point: Number(machine.point),
+      transforms: machine.set.elements.map((element) => element.node.getAttribute('transform'))
+    } : null;
+  }, directionTargetId)).toMatchObject({
+    point: 2,
+    transforms: expect.arrayContaining([expect.stringContaining('rotate(120 ')])
+  });
   await expect(page.locator('#board .oil-rack-label')).toHaveCount(1);
   const rackIcon = page.locator('#board image.oil-rack-machine-icon');
   await expect(rackIcon).toHaveCount(1);
@@ -881,11 +985,15 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   const volumeLabelsButton = page.locator('#oil-toggle-volume-labels');
   await expect(volumeLabelsButton).toHaveText('Hide oil volume labels');
   await volumeLabelsButton.click();
+  await expect(page.locator('#board .oil-volume-halo').first()).toBeHidden();
+  await expect(page.locator('#board .oil-slick').first()).toBeHidden();
   await expect(page.locator('#board .oil-volume-badge').first()).toBeHidden();
   await expect(page.locator('#board .oil-volume-label').first()).toBeHidden();
-  await expect(page.locator('#board .oil-slick').first()).toBeVisible();
   await expect(page.locator('#oil-board-status')).toContainText('Oil volume labels hidden');
+  await page.screenshot({ path: path.resolve('migration-audit-oil-field-labels-hidden.png'), fullPage: true });
   await volumeLabelsButton.click();
+  await expect(page.locator('#board .oil-volume-halo').first()).toBeVisible();
+  await expect(page.locator('#board .oil-slick').first()).toBeVisible();
   await expect(page.locator('#board .oil-volume-label').first()).toBeVisible();
   await page.locator('#oil-toggle-animation').click();
   await expect(page.locator('#oil-board-status')).toContainText('Animations are paused');
@@ -921,6 +1029,23 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.locator('#board svg')).toContainText('Bomb');
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-oil-field.png'), fullPage: true });
+
+  await Promise.all([
+    page.waitForNavigation(),
+    page.locator('#oil-toggle-renderer').click()
+  ]);
+  await expect(page.locator('#board')).toHaveAttribute('data-renderer', 'raphael');
+  await expect(page.locator('#oil-toggle-renderer')).toHaveText('Renderer: Raphael');
+  await expect(page.locator('#oil-board-status')).toContainText('ready with Raphael');
+  await expect(page.locator('#board .oil-hex-shape')).toHaveCount(469);
+  await Promise.all([
+    page.waitForNavigation(),
+    page.locator('#oil-toggle-renderer').click()
+  ]);
+  await expect(page.locator('#board')).toHaveAttribute('data-renderer', 'svgjs');
+  await expect(page.locator('#oil-toggle-renderer')).toHaveText('Renderer: SVG.js');
+  await expect(page.locator('#oil-board-status')).toContainText('ready with SVG.js');
+  await expect(page.locator('#board .oil-hex-shape')).toHaveCount(469);
 
   await page.locator('form[action="/logout"] button').click();
   await login(page, 'RenderCustomer');
@@ -1036,18 +1161,20 @@ test('renders the MineThings 2 rebirth landing cleanly at every viewport', async
   await expect(page.locator('#content')).toBeFocused();
   await page.locator('.landing-shell footer a[href="/history"]').click();
   await expect(page).toHaveURL(`${base}/history`);
-  await expect(page.getByRole('heading', { name: 'The story of MineThings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
   await expect(page.locator('.editorial-switcher a[aria-current="page"]')).toHaveText('History');
   await page.goto(base);
   await page.locator('.landing-shell footer a[href="/legal"]').click();
   await expect(page).toHaveURL(`${base}/legal`);
-  await expect(page.getByRole('heading', { name: /MineThings Terms/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Legal', exact: true })).toBeVisible();
   await expect(page.locator('.editorial-switcher a[aria-current="page"]')).toHaveText('Legal');
-  for (const [route, mark] of [['/history', 'H'], ['/legal', '§']]) {
+  for (const route of ['/history', '/legal']) {
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${base}${route}`);
-      await expect(page.locator('.editorial-hero')).toHaveAttribute('data-mark', mark);
+      const title = page.locator('.editorial-page > .page-title');
+      await expect(title).toBeVisible();
+      await expect(page.locator('.editorial-hero')).toHaveCount(0);
       await expect(page.locator('.editorial-facts > div')).toHaveCount(3);
       await expect(page.locator('.article-index')).toBeVisible();
       const indexTargetHeights = await page.locator('.article-index a').evaluateAll((links) =>
@@ -1170,7 +1297,7 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/chat`);
   const chatLog = page.locator('#chat-log');
-  await expect(page.locator('.chat-page-title')).toBeVisible();
+  await expect(page.locator('.chat-page > .page-title')).toBeVisible();
   await expect(page.locator('.chat-console')).toBeVisible();
   await expect(page.locator('.chat-sidecar')).toBeVisible();
   await expect(page.locator('#chat-live-status')).toContainText('Live');

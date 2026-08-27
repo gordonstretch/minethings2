@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Parasol Mushroom</title>
+  <path fill="#e8ddc4" stroke="#292d29" stroke-width="4" d="M43 40v43h12V40z"/>
+  <path fill="#b99b72" stroke="#292d29" stroke-width="4" d="M10 43C18 20 32 10 48 10s30 10 38 33c-21 8-55 8-76 0z"/>
+  <g fill="#f1ddaf"><path d="m30 26 5 3-4 5-5-3zM48 17l5 5-5 5-5-5zM66 27l4 4-5 4-4-4z"/></g>
+  <path fill="#777" d="M37 61h23v7H37z"/>
+</svg>

@@ -47,6 +47,13 @@
       seenFindingEventIds.delete(seenFindingEventIdOrder.shift());
     }
   };
+  const rememberFindingEventIdsFromRows = () => {
+    for (const row of items.querySelectorAll('[data-finding-event-ids]')) {
+      for (const id of String(row.dataset.findingEventIds ?? '').split(',')) {
+        rememberFindingEventId(id.trim());
+      }
+    }
+  };
 
   const hasItems = () => items.children.length > 0;
   const hasMessage = () => message.textContent.trim().length > 0;
@@ -103,6 +110,7 @@
     const noticeKey = incomingNotice.dataset.noticeKey ?? '';
     notice.dataset.noticeKey = noticeKey;
     rememberNoticeKey(noticeKey);
+    rememberFindingEventIdsFromRows();
     if (hasMessage() || hasItems()) showNotice();
     return true;
   };
@@ -364,6 +372,7 @@
 
   restoreRememberedScroll();
   rememberNoticeKey(notice.dataset.noticeKey);
+  rememberFindingEventIdsFromRows();
   showNotice();
 
   document.addEventListener('submit', async (event) => {

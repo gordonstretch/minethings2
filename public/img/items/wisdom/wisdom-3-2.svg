@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Decoy Convoy</title>
+  <desc id="desc">Two carts leave at dawn
+One shows gold, one hides the prize
+Raiders choose the shine</desc>
+  <path fill="#afe4e8" stroke="#173d49" stroke-width="5" stroke-linejoin="round" d="M14 34c23-13 39-9 50 2 11-11 27-15 50-2v72c-20-10-36-7-50 5-14-12-30-15-50-5z"/>
+    <path fill="none" stroke="#398699" stroke-width="4" stroke-linecap="round" d="M64 38v66M27 52c12-5 21-4 28 1M27 68c12-5 21-4 28 1M73 53c8-5 17-6 28-1M73 69c8-5 17-6 28-1"/>
+</svg>

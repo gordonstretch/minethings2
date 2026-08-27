@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Dreamcap</title>
+  <path fill="#e8e3d8" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M40 47c2 13 0 25-7 37h30c-7-12-9-24-7-37z"/>
+  <path fill="#799c9c" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M16 51c3-10 9-16 18-20 1-12 6-20 14-24 8 4 13 12 14 24 9 4 15 10 18 20-17 7-47 7-64 0z"/>
+  <g fill="#d8ffff"><circle cx="32" cy="42" r="4"/><circle cx="48" cy="22" r="4"/><circle cx="64" cy="42" r="4"/></g>
+  <path fill="none" stroke="#37606c" stroke-width="3" stroke-linecap="round" d="M39 62c6 3 12 3 18 0M39 72c6 3 12 3 18 0"/>
+  <g fill="#799c9c"><path d="m16 18 2 5 5 2-5 2-2 5-2-5-5-2 5-2zM78 21l1 4 4 1-4 2-1 4-2-4-4-2 4-1z"/></g>
+</svg>

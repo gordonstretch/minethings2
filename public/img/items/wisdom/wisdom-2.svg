@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Weather Eye</title>
+  <desc id="desc">Clouds gather on roads
+Snow can strand the strongest hull
+Wait beneath clear skies</desc>
+  <path fill="#c9dfa7" stroke="#263c2c" stroke-width="5" stroke-linejoin="round" d="M25 17h69l10 12v80H34L24 98z"/>
+    <path fill="none" stroke="#638352" stroke-width="5" stroke-linecap="round" d="M43 42h43M43 57h34M43 72h43M43 87h26"/>
+    <path fill="#638352" d="M19 91l10-4 7 8-7 10-10-4z"/>
+</svg>

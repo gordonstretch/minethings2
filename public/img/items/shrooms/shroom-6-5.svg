@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Wishcap</title>
+  <path fill="#f3dfbf" stroke="#292d29" stroke-width="4" d="M39 48c2 12 0 24-6 36h30c-6-12-8-24-6-36z"/>
+  <path fill="#f79721" stroke="#292d29" stroke-width="4" d="M13 52c5-24 19-38 35-38s30 14 35 38c-19 8-51 8-70 0z"/>
+  <g fill="#fff4ad"><path d="m48 20 4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1zM20 20l2 5 5 2-5 2-2 5-2-5-5-2 5-2zm62 8 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></g>
+  <path fill="none" stroke="#8d4a08" stroke-width="3" d="M36 68c8 4 16 4 24 0"/>
+</svg>

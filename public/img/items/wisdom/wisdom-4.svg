@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Choke Point</title>
+  <desc id="desc">Own both road markets
+Raise the far price, cut the near
+Each traveler pays</desc>
+  <path fill="#f2b79d" stroke="#4b211d" stroke-width="5" stroke-linejoin="round" d="M25 17h69l10 12v80H34L24 98z"/>
+    <path fill="none" stroke="#a64f42" stroke-width="5" stroke-linecap="round" d="M43 42h43M43 57h34M43 72h43M43 87h26"/>
+    <path fill="#a64f42" d="M19 91l10-4 7 8-7 10-10-4z"/>
+</svg>

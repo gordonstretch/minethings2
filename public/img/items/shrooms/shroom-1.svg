@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Button Shroom</title>
+  <path fill="#ece1c6" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M39 50c1 9-1 20-8 31 9 5 25 5 34 0-7-11-9-22-8-31z"/>
+  <path fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M17 51c2-23 15-36 31-36s29 13 31 36c-16 7-46 7-62 0z"/>
+  <g fill="#fff4b0"><circle cx="34" cy="31" r="5"/><circle cx="55" cy="25" r="4"/><circle cx="65" cy="41" r="5"/></g>
+  <path fill="none" stroke="#292d29" stroke-width="3" stroke-linecap="round" d="M38 69c6 2 13 2 20 0"/>
+</svg>

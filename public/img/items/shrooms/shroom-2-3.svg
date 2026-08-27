@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Scarlet Waxcap</title>
+  <path fill="#e8dfc8" stroke="#292d29" stroke-width="4" d="M39 48c2 12 0 24-6 36h30c-6-12-8-24-6-36z"/>
+  <path fill="#cf3e31" stroke="#292d29" stroke-width="4" d="M15 51c4-24 18-37 33-37s29 13 33 37c-18 7-48 7-66 0z"/>
+  <path fill="#ff7768" opacity=".75" d="M30 37c5-12 13-18 24-18-8 5-12 12-13 22z"/>
+  <path fill="none" stroke="#698b18" stroke-width="4" d="M32 84h34"/>
+</svg>

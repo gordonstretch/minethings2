@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
-import { loadLegacyCatalog, parseValues } from '../src/legacy-catalog.js';
+import {
+  loadLegacyCatalog, parseValues, SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
+} from '../src/legacy-catalog.js';
 
 test('parses MySQL values including escaped apostrophes and nulls', () => {
   assert.deepEqual(parseValues("(1, 'Tzolk\\'in', NULL),\n(2, '50\\\" HDTV', 3)"), [
@@ -12,8 +14,8 @@ test('parses MySQL values including escaped apostrophes and nulls', () => {
 
 test('loads the playable catalog from the legacy dump', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(catalog.items.length, 1400);
-  assert.equal(catalog.discoverableItems.length, 698);
+  assert.equal(catalog.items.length, 1490);
+  assert.equal(catalog.discoverableItems.length, 788);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
   assert.equal(catalog.byId.get(1).name, 'Sneakers');
@@ -63,8 +65,8 @@ test('loads the playable catalog from the legacy dump', () => {
     .map((roll) => randomDwarfTier(catalog.dwarfTiers, () => roll / 63).rarity),
   [1, 2, 3, 4, 5, 6]);
   assert.throws(() => randomDwarfTier(undefined), /Missing catalog Dwarf tier data/);
-  assert.equal(catalog.melds.length, 191);
-  assert.equal(catalog.meldRequirements.length, 620);
+  assert.equal(catalog.melds.length, 209);
+  assert.equal(catalog.meldRequirements.length, 726);
   assert.equal(catalog.gadgets.length, 13);
   assert.equal(catalog.gadgetItems.length, 38);
   assert.equal(catalog.factoryActions.length, 17);
@@ -80,4 +82,62 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.stones.length, 42);
   assert.equal(catalog.stones[0].name, 'Chatted');
   assert.equal(catalog.stones.at(-1).rarity, 6);
+
+  const shrooms = catalog.items.filter((item) =>
+    item.mineTypeId === SHROOM_CATALOG.mineType.id);
+  assert.equal(catalog.mineTypes.find((mineType) =>
+    mineType.id === SHROOM_CATALOG.mineType.id).name, 'Shrooms');
+  assert.equal(shrooms.length, 30);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((rarity) =>
+    shrooms.filter((item) => item.rarity === rarity).length), [5, 5, 5, 5, 5, 5]);
+  assert.deepEqual(shrooms.map((item) => item.icon),
+    SHROOM_CATALOG.items.map((item) => item.icon));
+  assert.ok(shrooms.every((item) => item.canFind && item.hasLargeImage
+    && item.description.length > 20));
+  assert.deepEqual(catalog.melds.filter((meld) =>
+    meld.mineTypeId === SHROOM_CATALOG.mineType.id).map((meld) => meld.rarity),
+  [1, 2, 3, 4, 5, 6]);
+  assert.equal(new Set(SHROOM_CATALOG.meldRequirements.map((requirement) =>
+    requirement.itemId)).size, 30);
+  assert.ok(shrooms.filter((item) => item.rarity >= 5).every((item) =>
+    /magic|magical/u.test(item.description)));
+
+  const wood = catalog.items.filter((item) =>
+    item.mineTypeId === WOOD_CATALOG.mineType.id);
+  assert.equal(catalog.mineTypes.find((mineType) =>
+    mineType.id === WOOD_CATALOG.mineType.id).name, 'Wood');
+  assert.equal(wood.length, 30);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((rarity) =>
+    wood.filter((item) => item.rarity === rarity).length), [5, 5, 5, 5, 5, 5]);
+  assert.ok(wood.every((item) => item.canFind && item.hasLargeImage
+    && item.description.length > 20));
+  assert.ok(wood.filter((item) => item.rarity >= 5).every((item) =>
+    /magic|magical/u.test(item.description)));
+  assert.equal(catalog.byId.get(WOOD_CATALOG.screwItemId).name, 'Wood Screws');
+  const woodMelds = catalog.melds.filter((meld) =>
+    meld.mineTypeId === WOOD_CATALOG.mineType.id);
+  assert.deepEqual(woodMelds.map((meld) => meld.rarity), [1, 2, 3, 4, 5, 6]);
+  assert.ok(woodMelds.every((meld) => meld.requirements.some((requirement) =>
+    requirement.itemId === WOOD_CATALOG.screwItemId)));
+  assert.ok(woodMelds.every((meld) => meld.requirements.some((requirement) =>
+    requirement.itemId === WOOD_CATALOG.boltItemId
+      && requirement.count >= 3 && requirement.count <= 8)));
+
+  const wisdom = catalog.items.filter((item) =>
+    item.mineTypeId === WISDOM_CATALOG.mineType.id);
+  assert.equal(catalog.mineTypes.find((mineType) =>
+    mineType.id === WISDOM_CATALOG.mineType.id).name, 'Wisdom');
+  assert.equal(wisdom.length, 30);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((rarity) =>
+    wisdom.filter((item) => item.rarity === rarity).length), [5, 5, 5, 5, 5, 5]);
+  assert.ok(wisdom.every((item) => item.canFind && item.hasLargeImage
+    && item.description.split('\n').length === 3
+    && item.description.split('\n').every((line) => line.length > 0)));
+  const wisdomMelds = catalog.melds.filter((meld) =>
+    meld.mineTypeId === WISDOM_CATALOG.mineType.id);
+  assert.deepEqual(wisdomMelds.map((meld) => meld.rarity), [1, 2, 3, 4, 5, 6]);
+  assert.ok(wisdomMelds.every((meld) => meld.requirements.length === 5));
+  assert.deepEqual(wisdom.filter((item) => item.rarity === 6).map((item) => item.name),
+    ['Invisible Cartel', 'Oilfield Deluge', 'Guild Puppeteer',
+      'Exploit Cartographer', 'Ashen Empire']);
 });

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wisdom Mine</title>
+  <desc id="desc">A Dempo mine of tactical haiku and hard-won strategy.</desc>
+  <path fill="#f5e6b9" stroke="#422a18" stroke-width="5" stroke-linejoin="round" d="M12 36c22-12 39-9 52 3 13-12 30-15 52-3v72c-21-10-38-7-52 6-14-13-31-16-52-6z"/>
+  <path fill="none" stroke="#d88717" stroke-width="5" stroke-linecap="round" d="M64 40v68M26 55c12-5 22-4 29 2M26 73c12-5 22-4 29 2M73 57c8-6 18-7 29-2M73 75c8-6 18-7 29-2"/>
+  <path fill="#d88717" d="M64 7l5 15 15 5-15 5-5 15-5-15-15-5 15-5z"/>
+</svg>

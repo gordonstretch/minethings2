@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Earthstar</title>
+  <path fill="#698b18" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="m48 8 10 25 25-11-11 25 16 18-28-1-12 24-12-24-28 1 16-18L13 22l25 11z"/>
+  <circle cx="48" cy="48" r="19" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <circle cx="48" cy="43" r="5" fill="#fff0a6"/>
+  <g fill="#8b7415"><circle cx="38" cy="52" r="2"/><circle cx="53" cy="57" r="2"/><circle cx="59" cy="45" r="2"/></g>
+</svg>

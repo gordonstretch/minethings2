@@ -61,7 +61,7 @@ function DrawOilRackLabel(machine, position) {
 }
 
 var drawboard = function () {
-	paper = Raphael("board", oilBoardWidth, oilBoardHeight);
+	paper = OilVectorRenderer("board", oilBoardWidth, oilBoardHeight);
 	barrels = paper.set();
 		
 	var center = Hex2Cart(0,0);
@@ -314,10 +314,10 @@ Machine.prototype.calcTransform = function() {
 	rotation = this.point * 60;
 	rp = this.startingPos;
 	var trstr = "t"+tx+","+ty+"r"+rotation+','+rp[0]+','+rp[1];
-	if (this.animate)
-		this.set.animate({transform:trstr}, 200, this.animate);
-	else
-		this.set.transform(trstr);
+	// Rack previews and deployed machines must resolve through the same transform
+	// path. Renderer-specific animation interpolation can otherwise leave the
+	// preview at a different angle from the persisted machine point.
+	this.set.transform(trstr);
 	this.animate = false;	
 }
 Machine.prototype.rotateRight = function() {
@@ -472,7 +472,7 @@ Pipe.prototype.draw = function() {
 	}
 }
 Pipe.prototype.dropAnimation = function(start, finish, t) {
-	var ani = Raphael.animation({cx:finish[0], cy:finish[1]}, parseInt(t)).repeat(Infinity);
+	var ani = OilVectorRenderer.animation({cx:finish[0], cy:finish[1]}, parseInt(t)).repeat(Infinity);
 	var p = paper.circle(start[0], start[1], 2).attr({fill:'#000'}).animate(ani);	
 }
 		
@@ -520,7 +520,7 @@ StraightPipe.prototype.draw = function() {
 	}
 }
 StraightPipe.prototype.dropAnimation = function(start, finish, t) {
-	var ani = Raphael.animation({cx:finish[0], cy:finish[1]}, parseInt(t)).repeat(Infinity);
+	var ani = OilVectorRenderer.animation({cx:finish[0], cy:finish[1]}, parseInt(t)).repeat(Infinity);
 	paper.circle(start[0], start[1], 2).attr({fill:'#000'}).animate(ani);	
 }
 
@@ -733,7 +733,7 @@ Pelter.prototype.draw = function() {
 	paper.rect(x-2, y+4, 4, 4);
 
 	if (animate && this.hm && this.hm.HexesMachine.animation_rate > 0) {
-		var ani = Raphael.animation({cx:this.pos[0], cy:this.pos[1]-hexDiameter*this.hm.HexesMachine.power}, 2000).repeat(Infinity);
+		var ani = OilVectorRenderer.animation({cx:this.pos[0], cy:this.pos[1]-hexDiameter*this.hm.HexesMachine.power}, 2000).repeat(Infinity);
 		this.rock = paper.circle(x, y, 2).attr({fill:'#fff'}).animate(ani);		
 	}
 	
@@ -753,7 +753,7 @@ Mallet.prototype.draw = function() {
 	if (animate && this.hm && this.hm.HexesMachine.animation_rate > 0) {
 		var range = hexDiameter;
 		var rate = 2000 / this.hm.HexesMachine.animation_rate;
-		var ani = Raphael.animation({cx:this.pos[0], cy:this.pos[1]-range}, rate).repeat(Infinity);
+		var ani = OilVectorRenderer.animation({cx:this.pos[0], cy:this.pos[1]-range}, rate).repeat(Infinity);
 		this.rock = paper.circle(x, y, 2).attr({fill:'#fff'}).animate(ani);		
 	}
 	
@@ -783,7 +783,7 @@ Zapper.prototype.draw = function() {
 	if (animate && this.hm && this.hm.HexesMachine.animation_rate > 0) {
 		var range = hexDiameter*this.hm.HexesMachine.animation_flag;
 		var rate = 2000 / this.hm.HexesMachine.animation_rate;
-		var ani = Raphael.animation({cx:this.pos[0], cy:this.pos[1]-range}, rate).repeat(Infinity);
+		var ani = OilVectorRenderer.animation({cx:this.pos[0], cy:this.pos[1]-range}, rate).repeat(Infinity);
 		this.rock = paper.circle(x, y, 2).attr({fill:'#fff'}).animate(ani);		
 	}
 	
@@ -813,7 +813,7 @@ Grinder.prototype.draw = function() {
 			r *= Math.PI / 180;
 			var cx = x + Math.cos(r) * range;
 			var cy = y - Math.sin(r) * range;
-			var ani = Raphael.animation({cx:cx, cy:cy}, rate).repeat(Infinity);
+			var ani = OilVectorRenderer.animation({cx:cx, cy:cy}, rate).repeat(Infinity);
 			paper.circle(x, y, 2).attr({fill:'#fff'}).animate(ani);	
 		}
 	}	
@@ -848,7 +848,7 @@ Turret.prototype.draw = function() {
 		var cart = Hex2Cart(hex.Hex.x, hex.Hex.y);
 		var rate = 2000 / this.hm.HexesMachine.animation_rate;			
 		
-		var ani = Raphael.animation({cx: cart[0], cy: cart[1]}, rate).repeat(Infinity);
+		var ani = OilVectorRenderer.animation({cx: cart[0], cy: cart[1]}, rate).repeat(Infinity);
 		paper.circle(x, y, 2).attr({fill:'#fff'}).animate(ani);
 	}	
 }	

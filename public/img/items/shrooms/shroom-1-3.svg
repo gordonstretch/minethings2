@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Shaggy Inkcap</title>
+  <path fill="#ddd7c8" stroke="#292d29" stroke-width="4" d="M40 54c1 10-1 20-6 30h28c-5-10-7-20-6-30z"/>
+  <path fill="#aaa99f" stroke="#292d29" stroke-width="4" d="M27 56C27 28 36 10 48 8c12 2 21 20 21 48-12 6-30 6-42 0z"/>
+  <path fill="none" stroke="#f4f0df" stroke-width="3" d="m37 22 5 9-5 9m13-23 5 10-5 10m11-5-5 10"/>
+  <path fill="#292d29" d="M30 62c6 8 3 14-2 14s-7-7 2-14zm36 1c7 7 5 13 0 13s-6-6 0-13z"/>
+</svg>

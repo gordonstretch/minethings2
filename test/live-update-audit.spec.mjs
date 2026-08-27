@@ -303,7 +303,7 @@ test('follows live chat at the bottom without yanking a reader who scrolled up',
   external.close();
   await page.goto(`${base}/chat`);
   const chatLog = page.locator('#chat-log');
-  await expect(page.locator('.chat-page-title')).toBeVisible();
+  await expect(page.locator('.chat-page > .page-title')).toBeVisible();
   await expect(page.locator('.chat-console')).toBeVisible();
   await expect(page.locator('#chat-live-status')).toContainText('Live');
   await expect(page.locator('.chat-row-world').filter({ hasText: 'Earlier world event' })).toHaveCount(24);

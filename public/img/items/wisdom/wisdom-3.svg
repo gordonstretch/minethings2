@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Route Ledger</title>
+  <desc id="desc">Write each arrival
+Buy where the next town is bare
+Bring home market gold</desc>
+  <path fill="#afe4e8" stroke="#173d49" stroke-width="5" stroke-linejoin="round" d="M25 17h69l10 12v80H34L24 98z"/>
+    <path fill="none" stroke="#398699" stroke-width="5" stroke-linecap="round" d="M43 42h43M43 57h34M43 72h43M43 87h26"/>
+    <path fill="#398699" d="M19 91l10-4 7 8-7 10-10-4z"/>
+</svg>

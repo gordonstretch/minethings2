@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Wood Blewit</title>
+  <path fill="#e5dfd0" stroke="#292d29" stroke-width="4" d="M39 49c2 12 0 23-6 35h30c-6-12-8-23-6-35z"/>
+  <path fill="#8e7bb1" stroke="#292d29" stroke-width="4" d="M15 52c5-23 18-35 33-35s28 12 33 35c-18 8-48 8-66 0z"/>
+  <path fill="none" stroke="#d8be32" stroke-width="3" d="M23 51c15-6 35-6 50 0"/>
+  <g fill="#c9b8e5"><circle cx="36" cy="34" r="4"/><circle cx="58" cy="29" r="3"/></g>
+</svg>

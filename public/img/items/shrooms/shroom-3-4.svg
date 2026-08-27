@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Bird's Nest Fungus</title>
+  <g stroke="#292d29" stroke-width="4"><path fill="#9c7657" d="M12 28h32l-5 52H17z"/><path fill="#9c7657" d="M52 18h32l-5 62H57z"/></g>
+  <g fill="#d8e4e4" stroke="#799c9c" stroke-width="3"><circle cx="24" cy="35" r="6"/><circle cx="35" cy="38" r="6"/><circle cx="63" cy="29" r="6"/><circle cx="74" cy="32" r="6"/></g>
+  <path fill="none" stroke="#e7c798" stroke-width="3" d="M18 51h20m20-5h20"/>
+</svg>

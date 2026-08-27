@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wood Screws</title>
+  <desc id="desc">A salvaged box of sharp wood screws. Timber becomes useful when these and a handful of Bolts hold it together.</desc>
+  <g fill="none" stroke="#46545a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M30 25l35 35-30 30"/><path d="M66 21l36 36-31 31"/>
+  </g>
+  <g stroke="#d9e1df" stroke-width="4" stroke-linecap="round">
+    <path d="M24 19l12 12M36 19L24 31M60 15l12 12M72 15L60 27"/>
+    <path d="M38 86l12 4-16 4 12 4-15 4M74 84l12 4-16 4 12 4-15 4"/>
+  </g>
+</svg>

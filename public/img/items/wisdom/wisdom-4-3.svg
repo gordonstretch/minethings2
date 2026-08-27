@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Midnight Convoy</title>
+  <desc id="desc">Move while rivals sleep
+Chain three cities before dawn
+Reset every price</desc>
+  <circle cx="64" cy="64" r="43" fill="#f2b79d" stroke="#4b211d" stroke-width="5"/>
+    <path fill="#a64f42" stroke="#4b211d" stroke-width="3" stroke-linejoin="round" d="M75 53l22-21-13 29 12 11-18 4-6 18-11-12-29 14 21-23z"/>
+    <circle cx="64" cy="64" r="7" fill="#4b211d"/>
+</svg>

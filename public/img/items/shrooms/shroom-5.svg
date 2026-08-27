@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Void Morel</title>
+  <path fill="#dfd6cb" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M40 55c2 10 0 20-6 29h28c-6-9-8-19-6-29z"/>
+  <path fill="#a64891" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M26 51C23 32 32 11 48 8c16 3 25 24 22 43-12 8-32 8-44 0z"/>
+  <g fill="#382c3e" stroke="#d482c2" stroke-width="2">
+    <path d="m38 16 10 8-10 8-8-8zM58 16l8 8-8 8-10-8zM30 32l9 8-8 10-7-8zM48 25l10 9-10 10-9-10zM66 32l6 10-7 8-8-10zM40 43l8 9-10 5-7-7zM57 43l8 7-7 7-10-5z"/>
+  </g>
+  <path fill="none" stroke="#a64891" stroke-width="3" stroke-linecap="round" d="M40 69c5 3 11 3 16 0"/>
+</svg>

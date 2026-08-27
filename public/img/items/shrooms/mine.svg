@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Shrooms Mine</title>
+  <path fill="#202420" stroke="#f79721" stroke-width="4" d="M48 5 84 26v44L48 91 12 70V26z"/>
+  <path fill="#eadfc8" stroke="#0d100e" stroke-width="3" stroke-linejoin="round" d="M42 48c1 9-1 18-6 27h18c-5-9-7-18-6-27z"/>
+  <path fill="#f79721" stroke="#0d100e" stroke-width="3" stroke-linejoin="round" d="M22 50c3-16 13-25 23-25s20 9 23 25c-13 6-33 6-46 0z"/>
+  <path fill="#d7d0bd" stroke="#0d100e" stroke-width="3" stroke-linejoin="round" d="M59 58c1 6 0 12-4 18h15c-4-6-5-12-4-18z"/>
+  <path fill="#698b18" stroke="#0d100e" stroke-width="3" stroke-linejoin="round" d="M49 59c2-11 8-17 14-17s12 6 14 17c-8 4-20 4-28 0z"/>
+  <g fill="#fff2b2"><circle cx="36" cy="39" r="3"/><circle cx="51" cy="34" r="3"/><circle cx="62" cy="51" r="2.5"/></g>
+</svg>

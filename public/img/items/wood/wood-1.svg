@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pine Plank</title>
+  <desc id="desc">A straight Calbuco pine plank, light enough for crates and sturdy enough for the first Wood Meld.</desc>
+  <path fill="#9a6938" stroke="#54351f" stroke-width="5" stroke-linejoin="round" d="M14 39l92-14 8 58-92 20z"/><path fill="none" stroke="#d4a365" stroke-width="3" stroke-linecap="round" opacity=".82" d="M28 51c18-8 45-11 67-12M31 67c15-7 43-9 67-10M34 83c19-8 42-9 62-10"/><path fill="#d4a365" d="M23 43l8-1 8 57-8 2z" opacity=".55"/>
+</svg>

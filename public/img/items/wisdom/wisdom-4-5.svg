@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Guild Tide</title>
+  <desc id="desc">Fill the guild bank first
+Friends withdraw what markets lack
+Favors steer the vote</desc>
+  <path fill="#f2b79d" stroke="#4b211d" stroke-width="5" stroke-linejoin="round" d="M19 24h90L95 52l14 27H78l-14 30-14-30H19l14-27z"/>
+    <path fill="none" stroke="#a64f42" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M34 39h60M45 55h38M37 70h21M70 70h21"/>
+    <circle cx="64" cy="91" r="6" fill="#a64f42"/>
+</svg>

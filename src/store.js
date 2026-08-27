@@ -7,7 +7,7 @@ import { itemGoldValueUnits } from './item-values.js';
 import {
   indexCatalog, LEGACY_COMBAT_SEASON_SETTINGS, LEGACY_ITEM_VALUE_RULES, LEGACY_MACHINE_BEHAVIOR_RULES,
   LEGACY_MACHINE_TYPE_RULES, LEGACY_SPECIALISATION_TITLES, LEGACY_WORLD_EVENT_SETTINGS,
-  WORLD_CREATURE_TYPES
+  SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG, WORLD_CREATURE_TYPES
 } from './legacy-catalog.js';
 import { travelCombatBonuses, travelSpeedMultiplier } from './specialisations.js';
 import { CRYPTO_TYPES, cryptoType, cryptoTypesForMap } from './crypto.js';
@@ -28,7 +28,10 @@ import {
 } from './world-events.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 103;
+const CURRENT_SCHEMA_VERSION = 109;
+const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
+const GUILD_CREATION_COST_UNITS = 100 * GOLD_SCALE;
+const GUILD_BANK_CAPACITY = 1000;
 const STARTER_ITEM_LIMIT = 5000;
 const DEFAULT_FINDINGS_TIME_ZONE = 'Europe/London';
 const CALENDAR_DAY_FORMATTERS = new Map();
@@ -293,6 +296,8 @@ export class SqliteStore {
       }
       this.#initialize();
       this.#migrate();
+      this.#migrateWoodCatalog();
+      this.#migrateWisdomCatalog();
       this.#migrateMachineItemDescriptions();
       this.#migrateEventThreats();
       this.#migrateShipFiringRounds();
@@ -636,6 +641,9 @@ export class SqliteStore {
         mine_type_id INTEGER NOT NULL,
         side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
         price_units INTEGER NOT NULL CHECK (price_units > 0),
+        crypto_type_id INTEGER CHECK (crypto_type_id BETWEEN 1 AND 7),
+        crypto_quantity INTEGER CHECK (crypto_quantity > 0),
+        crypto_price_units INTEGER CHECK (crypto_price_units > 0),
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         created_at INTEGER NOT NULL
       );
@@ -650,6 +658,9 @@ export class SqliteStore {
         city_id INTEGER NOT NULL,
         mine_type_id INTEGER NOT NULL,
         price_units INTEGER NOT NULL,
+        crypto_type_id INTEGER CHECK (crypto_type_id BETWEEN 1 AND 7),
+        crypto_quantity INTEGER CHECK (crypto_quantity > 0),
+        crypto_price_units INTEGER CHECK (crypto_price_units > 0),
         quantity INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       );
@@ -1077,6 +1088,57 @@ export class SqliteStore {
       );
 
       CREATE INDEX IF NOT EXISTS chats_recent ON chats (created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS guilds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS guild_members (
+        player_id INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+        guild_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        joined_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS guild_members_guild
+        ON guild_members (guild_id, joined_at, player_id);
+
+      CREATE TABLE IF NOT EXISTS guild_inventory (
+        guild_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL,
+        quantity INTEGER NOT NULL CHECK (quantity > 0),
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, item_id)
+      );
+      CREATE TRIGGER IF NOT EXISTS guild_inventory_capacity_insert
+      BEFORE INSERT ON guild_inventory
+      WHEN NEW.quantity + COALESCE((
+        SELECT SUM(quantity) FROM guild_inventory WHERE guild_id = NEW.guild_id
+      ), 0) > 1000
+      BEGIN
+        SELECT RAISE(ABORT, 'Guild bank can hold at most 1000 things.');
+      END;
+      CREATE TRIGGER IF NOT EXISTS guild_inventory_capacity_update
+      BEFORE UPDATE OF guild_id, item_id, quantity ON guild_inventory
+      WHEN NEW.quantity + COALESCE((
+        SELECT SUM(quantity) FROM guild_inventory
+        WHERE guild_id = NEW.guild_id
+          AND NOT (guild_id = OLD.guild_id AND item_id = OLD.item_id)
+      ), 0) > 1000
+      BEGIN
+        SELECT RAISE(ABORT, 'Guild bank can hold at most 1000 things.');
+      END;
+
+      CREATE TABLE IF NOT EXISTS guild_chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS guild_chats_recent
+        ON guild_chats (guild_id, created_at DESC, id DESC);
 
       CREATE TABLE IF NOT EXISTS chat_ignores (
         player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -1706,6 +1768,30 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 108) {
+      this.#migrateTo109();
+      return;
+    }
+    if (schemaVersion === 107) {
+      this.#migrateTo108();
+      return;
+    }
+    if (schemaVersion === 106) {
+      this.#migrateTo107();
+      return;
+    }
+    if (schemaVersion === 105) {
+      this.#migrateTo106();
+      return;
+    }
+    if (schemaVersion === 104) {
+      this.#migrateTo105();
+      return;
+    }
+    if (schemaVersion === 103) {
+      this.#migrateTo104();
+      return;
+    }
     if (schemaVersion === 102) {
       this.#migrateTo103();
       return;
@@ -3711,7 +3797,8 @@ export class SqliteStore {
         }
       };
       for (const key of [
-        'world_creature_names', 'world_creature_icons', 'world_creature_route_types',
+        'world_creature_names', 'world_creature_attack_names', 'world_creature_icons',
+        'world_creature_route_types',
         'world_creature_reward_types', 'world_creature_wake_chances',
         'world_creature_hp', 'world_creature_speed_kph',
         'world_creature_counter_damage_ratio'
@@ -4451,6 +4538,578 @@ export class SqliteStore {
         PRAGMA user_version = 103;
       `);
     });
+    this.#migrateTo104();
+  }
+
+  #migrateTo104() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 104) return;
+      if (currentVersion !== 103) {
+        throw new Error(`Cannot migrate creature attack settings v${currentVersion} directly to v104.`);
+      }
+      this.database.prepare(`
+        INSERT OR IGNORE INTO catalog_settings (key, value_json) VALUES (?, ?)
+      `).run('world_creature_attack_names',
+        JSON.stringify(LEGACY_WORLD_EVENT_SETTINGS.world_creature_attack_names));
+      this.database.exec('PRAGMA user_version = 104');
+    });
+    this.#migrateTo105();
+  }
+
+  #migrateTo105() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 105) return;
+      if (currentVersion !== 104) {
+        throw new Error(`Cannot migrate creature ratings v${currentVersion} directly to v105.`);
+      }
+      const creatureColumns = new Set(this.database.prepare(
+        'PRAGMA table_info(world_creatures)'
+      ).all().map((column) => column.name));
+      if (!creatureColumns.has('rating')) {
+        this.database.exec('ALTER TABLE world_creatures ADD COLUMN rating REAL');
+      }
+      this.database.prepare(`
+        UPDATE world_creatures SET rating = ? WHERE rating IS NULL
+      `).run(Number(this.#setting('vehicle_starting_rating')));
+
+      const attackColumns = new Set(this.database.prepare(
+        'PRAGMA table_info(world_creature_attacks)'
+      ).all().map((column) => column.name));
+      for (const column of [
+        'vehicle_rating_before', 'vehicle_rating_after',
+        'creature_rating_before', 'creature_rating_after'
+      ]) {
+        if (!attackColumns.has(column)) {
+          this.database.exec(`ALTER TABLE world_creature_attacks ADD COLUMN ${column} REAL`);
+        }
+      }
+      this.database.exec('PRAGMA user_version = 105');
+    });
+    this.#migrateTo106();
+  }
+
+  #migrateTo106() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 106) return;
+      if (currentVersion !== 105) {
+        throw new Error(`Cannot migrate guild schema v${currentVersion} directly to v106.`);
+      }
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS guilds (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+          created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS guild_members (
+          player_id INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+          guild_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+          joined_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS guild_members_guild
+          ON guild_members (guild_id, joined_at, player_id);
+        CREATE TABLE IF NOT EXISTS guild_inventory (
+          guild_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+          item_id INTEGER NOT NULL,
+          quantity INTEGER NOT NULL CHECK (quantity > 0),
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (guild_id, item_id)
+        );
+        CREATE TRIGGER IF NOT EXISTS guild_inventory_capacity_insert
+        BEFORE INSERT ON guild_inventory
+        WHEN NEW.quantity + COALESCE((
+          SELECT SUM(quantity) FROM guild_inventory WHERE guild_id = NEW.guild_id
+        ), 0) > 1000
+        BEGIN
+          SELECT RAISE(ABORT, 'Guild bank can hold at most 1000 things.');
+        END;
+        CREATE TRIGGER IF NOT EXISTS guild_inventory_capacity_update
+        BEFORE UPDATE OF guild_id, item_id, quantity ON guild_inventory
+        WHEN NEW.quantity + COALESCE((
+          SELECT SUM(quantity) FROM guild_inventory
+          WHERE guild_id = NEW.guild_id
+            AND NOT (guild_id = OLD.guild_id AND item_id = OLD.item_id)
+        ), 0) > 1000
+        BEGIN
+          SELECT RAISE(ABORT, 'Guild bank can hold at most 1000 things.');
+        END;
+        CREATE TABLE IF NOT EXISTS guild_chats (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+          player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+          body TEXT NOT NULL,
+          color TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS guild_chats_recent
+          ON guild_chats (guild_id, created_at DESC, id DESC);
+      `);
+
+      const changedAt = "CAST(unixepoch('subsec') * 1000 AS INTEGER)";
+      const topicTrigger = (table, operation) => {
+        this.database.exec(`
+          DROP TRIGGER IF EXISTS live_update_${table}_${operation};
+          CREATE TRIGGER live_update_${table}_${operation}
+          AFTER ${operation.toUpperCase()} ON ${table}
+          BEGIN
+            INSERT INTO live_update_events (scope, changed_at)
+              VALUES ('topic:guilds', ${changedAt});
+          END;
+        `);
+      };
+      for (const table of ['guilds', 'guild_inventory', 'guild_chats']) {
+        for (const operation of ['insert', 'update', 'delete']) topicTrigger(table, operation);
+      }
+      for (const operation of ['insert', 'update', 'delete']) {
+        const alias = operation === 'delete' ? 'OLD' : 'NEW';
+        this.database.exec(`
+          DROP TRIGGER IF EXISTS live_update_guild_members_${operation};
+          CREATE TRIGGER live_update_guild_members_${operation}
+          AFTER ${operation.toUpperCase()} ON guild_members
+          BEGIN
+            INSERT INTO live_update_events (scope, changed_at)
+              VALUES ('topic:guilds', ${changedAt});
+            INSERT INTO live_update_events (scope, changed_at)
+              VALUES ('player:' || ${alias}.player_id, ${changedAt});
+          END;
+        `);
+      }
+      this.database.exec('PRAGMA user_version = 106');
+    });
+    this.#migrateTo107();
+  }
+
+  #migrateTo107() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 107) return;
+      if (currentVersion !== 106) {
+        throw new Error(`Cannot migrate mine crypto market v${currentVersion} directly to v107.`);
+      }
+
+      // Mine bids before v107 escrowed gold. They cannot be converted because no
+      // cryptocurrency was selected, so return that gold before clearing the old book.
+      const refunds = this.database.prepare(`
+        SELECT player_id, SUM(price_units * quantity) AS units
+        FROM mine_market_orders WHERE side = 'buy' GROUP BY player_id
+      `).all();
+      const refund = this.database.prepare(
+        'UPDATE players SET gold_units = gold_units + ? WHERE id = ?'
+      );
+      for (const entry of refunds) refund.run(entry.units, entry.player_id);
+      this.database.prepare('DELETE FROM mine_market_orders').run();
+
+      for (const table of ['mine_market_orders', 'mine_market_sales']) {
+        const columns = new Set(this.database.prepare(`PRAGMA table_info(${table})`)
+          .all().map((column) => column.name));
+        if (!columns.has('crypto_type_id')) {
+          this.database.exec(`ALTER TABLE ${table} ADD COLUMN crypto_type_id INTEGER`);
+        }
+        if (!columns.has('crypto_quantity')) {
+          this.database.exec(`ALTER TABLE ${table} ADD COLUMN crypto_quantity INTEGER`);
+        }
+        if (!columns.has('crypto_price_units')) {
+          this.database.exec(`ALTER TABLE ${table} ADD COLUMN crypto_price_units INTEGER`);
+        }
+      }
+      this.database.exec('PRAGMA user_version = 107');
+    });
+    this.#migrateTo108();
+  }
+
+  #insertShroomCatalog() {
+    const mineType = SHROOM_CATALOG.mineType;
+    const existingMineType = this.database.prepare(
+      'SELECT name FROM catalog_mine_types WHERE id = ?'
+    ).get(mineType.id);
+    if (existingMineType && existingMineType.name !== mineType.name) {
+      throw new Error(`Cannot install Shrooms: mine type ${mineType.id} is already ${existingMineType.name}.`);
+    }
+    this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_mine_types
+        (id, name, credit_cost, rent_cost, has_ore, refundable, icon)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(mineType.id, mineType.name, mineType.creditCost, mineType.rentCost,
+      mineType.hasOre ? 1 : 0, mineType.refundable ? 1 : 0, mineType.icon);
+
+    const selectItem = this.database.prepare(
+      'SELECT name, mine_type_id FROM catalog_items WHERE id = ?'
+    );
+    const insertItem = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_items
+        (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+         can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+         has_large_image, gold_value_units)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, 'shroom-svg', 0, NULL, ?, 1, ?)
+    `);
+    for (const item of SHROOM_CATALOG.items) {
+      const existingItem = selectItem.get(item.id);
+      if (existingItem && (existingItem.name !== item.name
+        || Number(existingItem.mine_type_id) !== mineType.id)) {
+        throw new Error(`Cannot install Shrooms: item ${item.id} is already ${existingItem.name}.`);
+      }
+      const icon = item.icon;
+      insertItem.run(item.id, item.name, item.rarity, item.description, item.marketableId,
+        mineType.id, icon, icon, item.goldValueUnits);
+    }
+
+    const selectMeld = this.database.prepare(
+      'SELECT name, mine_type_id FROM catalog_melds WHERE id = ?'
+    );
+    const insertMeld = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_melds
+        (id, name, mine_type_id, modified, rarity, is_public)
+      VALUES (?, ?, ?, '2026-08-27 00:00:00', ?, 1)
+    `);
+    for (const meld of SHROOM_CATALOG.melds) {
+      const existingMeld = selectMeld.get(meld.id);
+      if (existingMeld && (existingMeld.name !== meld.name
+        || Number(existingMeld.mine_type_id) !== mineType.id)) {
+        throw new Error(`Cannot install Shrooms: meld ${meld.id} is already ${existingMeld.name}.`);
+      }
+      insertMeld.run(meld.id, meld.name, mineType.id, meld.rarity);
+    }
+
+    const selectRequirement = this.database.prepare(`
+      SELECT meld_id, item_id, quantity FROM catalog_meld_requirements WHERE id = ?
+    `);
+    const insertRequirement = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_meld_requirements (id, meld_id, item_id, quantity)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const requirement of SHROOM_CATALOG.meldRequirements) {
+      const existingRequirement = selectRequirement.get(requirement.id);
+      if (existingRequirement && (Number(existingRequirement.meld_id) !== requirement.meldId
+        || Number(existingRequirement.item_id) !== requirement.itemId
+        || Number(existingRequirement.quantity) !== requirement.count)) {
+        throw new Error(`Cannot install Shrooms: meld requirement ${requirement.id} is already in use.`);
+      }
+      insertRequirement.run(requirement.id, requirement.meldId,
+        requirement.itemId, requirement.count);
+    }
+  }
+
+  #insertWoodCatalog() {
+    const mineType = WOOD_CATALOG.mineType;
+    const existingMineType = this.database.prepare(
+      'SELECT name FROM catalog_mine_types WHERE id = ?'
+    ).get(mineType.id);
+    if (existingMineType && existingMineType.name !== mineType.name) {
+      throw new Error(`Cannot install Wood: mine type ${mineType.id} is already ${existingMineType.name}.`);
+    }
+    this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_mine_types
+        (id, name, credit_cost, rent_cost, has_ore, refundable, icon)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(mineType.id, mineType.name, mineType.creditCost, mineType.rentCost,
+      mineType.hasOre ? 1 : 0, mineType.refundable ? 1 : 0, mineType.icon);
+
+    const selectItem = this.database.prepare(
+      'SELECT name, mine_type_id FROM catalog_items WHERE id = ?'
+    );
+    const insertItem = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_items
+        (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+         can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+         has_large_image, gold_value_units)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, 'wood-svg', 0, NULL, ?, 1, ?)
+    `);
+    for (const item of WOOD_CATALOG.items) {
+      const existingItem = selectItem.get(item.id);
+      if (existingItem && (existingItem.name !== item.name
+        || Number(existingItem.mine_type_id) !== mineType.id)) {
+        throw new Error(`Cannot install Wood: item ${item.id} is already ${existingItem.name}.`);
+      }
+      insertItem.run(item.id, item.name, item.rarity, item.description, item.marketableId,
+        mineType.id, item.icon, item.icon, item.goldValueUnits);
+    }
+
+    const selectMeld = this.database.prepare(
+      'SELECT name, mine_type_id FROM catalog_melds WHERE id = ?'
+    );
+    const insertMeld = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_melds
+        (id, name, mine_type_id, modified, rarity, is_public)
+      VALUES (?, ?, ?, '2026-08-27 00:00:00', ?, 1)
+    `);
+    for (const meld of WOOD_CATALOG.melds) {
+      const existingMeld = selectMeld.get(meld.id);
+      if (existingMeld && (existingMeld.name !== meld.name
+        || Number(existingMeld.mine_type_id) !== mineType.id)) {
+        throw new Error(`Cannot install Wood: meld ${meld.id} is already ${existingMeld.name}.`);
+      }
+      insertMeld.run(meld.id, meld.name, mineType.id, meld.rarity);
+    }
+
+    const selectRequirement = this.database.prepare(`
+      SELECT meld_id, item_id, quantity FROM catalog_meld_requirements WHERE id = ?
+    `);
+    const insertRequirement = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_meld_requirements (id, meld_id, item_id, quantity)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const requirement of WOOD_CATALOG.meldRequirements) {
+      const existingRequirement = selectRequirement.get(requirement.id);
+      if (existingRequirement && (Number(existingRequirement.meld_id) !== requirement.meldId
+        || Number(existingRequirement.item_id) !== requirement.itemId
+        || Number(existingRequirement.quantity) !== requirement.count)) {
+        throw new Error(`Cannot install Wood: meld requirement ${requirement.id} is already in use.`);
+      }
+      insertRequirement.run(requirement.id, requirement.meldId,
+        requirement.itemId, requirement.count);
+    }
+  }
+
+  #insertWisdomCatalog() {
+    const mineType = WISDOM_CATALOG.mineType;
+    const existingMineType = this.database.prepare(
+      'SELECT name FROM catalog_mine_types WHERE id = ?'
+    ).get(mineType.id);
+    if (existingMineType && existingMineType.name !== mineType.name) {
+      throw new Error(`Cannot install Wisdom: mine type ${mineType.id} is already ${existingMineType.name}.`);
+    }
+    this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_mine_types
+        (id, name, credit_cost, rent_cost, has_ore, refundable, icon)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(mineType.id, mineType.name, mineType.creditCost, mineType.rentCost,
+      mineType.hasOre ? 1 : 0, mineType.refundable ? 1 : 0, mineType.icon);
+
+    const selectItem = this.database.prepare(
+      'SELECT name, mine_type_id FROM catalog_items WHERE id = ?'
+    );
+    const insertItem = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_items
+        (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+         can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+         has_large_image, gold_value_units)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, 'wisdom-svg', 0, NULL, ?, 1, ?)
+    `);
+    for (const item of WISDOM_CATALOG.items) {
+      const existingItem = selectItem.get(item.id);
+      if (existingItem && (existingItem.name !== item.name
+        || Number(existingItem.mine_type_id) !== mineType.id)) {
+        throw new Error(`Cannot install Wisdom: item ${item.id} is already ${existingItem.name}.`);
+      }
+      insertItem.run(item.id, item.name, item.rarity, item.description, item.marketableId,
+        mineType.id, item.icon, item.icon, item.goldValueUnits);
+    }
+
+    const selectMeld = this.database.prepare(
+      'SELECT name, mine_type_id FROM catalog_melds WHERE id = ?'
+    );
+    const insertMeld = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_melds
+        (id, name, mine_type_id, modified, rarity, is_public)
+      VALUES (?, ?, ?, '2026-08-27 00:00:00', ?, 1)
+    `);
+    for (const meld of WISDOM_CATALOG.melds) {
+      const existingMeld = selectMeld.get(meld.id);
+      if (existingMeld && (existingMeld.name !== meld.name
+        || Number(existingMeld.mine_type_id) !== mineType.id)) {
+        throw new Error(`Cannot install Wisdom: meld ${meld.id} is already ${existingMeld.name}.`);
+      }
+      insertMeld.run(meld.id, meld.name, mineType.id, meld.rarity);
+    }
+
+    const selectRequirement = this.database.prepare(`
+      SELECT meld_id, item_id, quantity FROM catalog_meld_requirements WHERE id = ?
+    `);
+    const insertRequirement = this.database.prepare(`
+      INSERT OR IGNORE INTO catalog_meld_requirements (id, meld_id, item_id, quantity)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const requirement of WISDOM_CATALOG.meldRequirements) {
+      const existingRequirement = selectRequirement.get(requirement.id);
+      if (existingRequirement && (Number(existingRequirement.meld_id) !== requirement.meldId
+        || Number(existingRequirement.item_id) !== requirement.itemId
+        || Number(existingRequirement.quantity) !== requirement.count)) {
+        throw new Error(`Cannot install Wisdom: meld requirement ${requirement.id} is already in use.`);
+      }
+      insertRequirement.run(requirement.id, requirement.meldId,
+        requirement.itemId, requirement.count);
+    }
+  }
+
+  #ensureShroomMineAvailability(now = Date.now()) {
+    if (!this.database.prepare(
+      'SELECT 1 FROM catalog_mine_types WHERE id = ?'
+    ).get(SHROOM_CATALOG.mineType.id)) return false;
+    if (this.database.prepare(
+      "SELECT 1 FROM schema_migrations WHERE name = 'shrooms-bromo-v1'"
+    ).get()) return false;
+    const bromo = this.database.prepare(
+      'SELECT id FROM world_maps WHERE slug = ?'
+    ).get(SHROOM_CATALOG.mapSlug);
+    if (!bromo) return false;
+    const cityIds = this.database.prepare(
+      'SELECT id FROM catalog_cities WHERE map_id = ? ORDER BY id'
+    ).all(bromo.id).map((entry) => Number(entry.id));
+    if (!cityIds.length) return false;
+
+    this.database.prepare(
+      'DELETE FROM catalog_city_mine_types WHERE mine_type_id = ?'
+    ).run(SHROOM_CATALOG.mineType.id);
+    let nextId = Number(this.database.prepare(
+      'SELECT COALESCE(MAX(id), 0) + 1 AS id FROM catalog_city_mine_types'
+    ).get().id);
+    const insertAvailability = this.database.prepare(`
+      INSERT INTO catalog_city_mine_types (id, city_id, mine_type_id) VALUES (?, ?, ?)
+    `);
+    for (const cityId of cityIds) {
+      insertAvailability.run(nextId++, cityId, SHROOM_CATALOG.mineType.id);
+    }
+    this.database.prepare(`
+      INSERT INTO schema_migrations (name, applied_at, details_json)
+      VALUES ('shrooms-bromo-v1', ?, ?)
+    `).run(now, JSON.stringify({ map: SHROOM_CATALOG.mapSlug, cities: cityIds.length }));
+    return true;
+  }
+
+  #ensureWoodMineAvailability(now = Date.now()) {
+    if (!this.database.prepare(
+      'SELECT 1 FROM catalog_mine_types WHERE id = ?'
+    ).get(WOOD_CATALOG.mineType.id)) return false;
+    if (this.database.prepare(
+      "SELECT 1 FROM schema_migrations WHERE name = 'wood-calbuco-v1'"
+    ).get()) return false;
+    const calbuco = this.database.prepare(
+      'SELECT id FROM world_maps WHERE slug = ?'
+    ).get(WOOD_CATALOG.mapSlug);
+    if (!calbuco) return false;
+    const cityIds = this.database.prepare(
+      'SELECT id FROM catalog_cities WHERE map_id = ? ORDER BY id'
+    ).all(calbuco.id).map((entry) => Number(entry.id));
+    if (!cityIds.length) return false;
+
+    this.database.prepare(
+      'DELETE FROM catalog_city_mine_types WHERE mine_type_id = ?'
+    ).run(WOOD_CATALOG.mineType.id);
+    let nextId = Number(this.database.prepare(
+      'SELECT COALESCE(MAX(id), 0) + 1 AS id FROM catalog_city_mine_types'
+    ).get().id);
+    const insertAvailability = this.database.prepare(`
+      INSERT INTO catalog_city_mine_types (id, city_id, mine_type_id) VALUES (?, ?, ?)
+    `);
+    for (const cityId of cityIds) {
+      insertAvailability.run(nextId++, cityId, WOOD_CATALOG.mineType.id);
+    }
+    this.database.prepare(`
+      INSERT INTO schema_migrations (name, applied_at, details_json)
+      VALUES ('wood-calbuco-v1', ?, ?)
+    `).run(now, JSON.stringify({ map: WOOD_CATALOG.mapSlug, cities: cityIds.length }));
+    return true;
+  }
+
+  #ensureWisdomMineAvailability(now = Date.now()) {
+    if (!this.database.prepare(
+      'SELECT 1 FROM catalog_mine_types WHERE id = ?'
+    ).get(WISDOM_CATALOG.mineType.id)) return false;
+    if (this.database.prepare(
+      "SELECT 1 FROM schema_migrations WHERE name = 'wisdom-dempo-v1'"
+    ).get()) return false;
+    const dempo = this.database.prepare(
+      'SELECT id FROM world_maps WHERE slug = ?'
+    ).get(WISDOM_CATALOG.mapSlug);
+    if (!dempo) return false;
+    const cityIds = this.database.prepare(
+      'SELECT id FROM catalog_cities WHERE map_id = ? ORDER BY id'
+    ).all(dempo.id).map((entry) => Number(entry.id));
+    if (!cityIds.length) return false;
+
+    this.database.prepare(
+      'DELETE FROM catalog_city_mine_types WHERE mine_type_id = ?'
+    ).run(WISDOM_CATALOG.mineType.id);
+    let nextId = Number(this.database.prepare(
+      'SELECT COALESCE(MAX(id), 0) + 1 AS id FROM catalog_city_mine_types'
+    ).get().id);
+    const insertAvailability = this.database.prepare(`
+      INSERT INTO catalog_city_mine_types (id, city_id, mine_type_id) VALUES (?, ?, ?)
+    `);
+    for (const cityId of cityIds) {
+      insertAvailability.run(nextId++, cityId, WISDOM_CATALOG.mineType.id);
+    }
+    this.database.prepare(`
+      INSERT INTO schema_migrations (name, applied_at, details_json)
+      VALUES ('wisdom-dempo-v1', ?, ?)
+    `).run(now, JSON.stringify({ map: WISDOM_CATALOG.mapSlug, cities: cityIds.length }));
+    return true;
+  }
+
+  #migrateTo108() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 108) return;
+      if (currentVersion !== 107) {
+        throw new Error(`Cannot migrate Shroom catalog v${currentVersion} directly to v108.`);
+      }
+      if (this.hasCatalog()) {
+        this.#insertShroomCatalog();
+        this.#ensureShroomMineAvailability();
+      }
+      this.database.exec('PRAGMA user_version = 108');
+    });
+    this.#migrateTo109();
+  }
+
+  #migrateTo109() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 109) return;
+      if (currentVersion !== 108) {
+        throw new Error(`Cannot expand Shroom catalog v${currentVersion} directly to v109.`);
+      }
+      if (this.hasCatalog()) this.#insertShroomCatalog();
+      this.database.exec('PRAGMA user_version = 109');
+    });
+  }
+
+  #migrateWoodCatalog(now = Date.now()) {
+    if (!this.hasCatalog()) return false;
+    // An intentionally emptied live catalog remains authoritative. Install this
+    // additive family only when an existing playable item catalog is present.
+    if (!this.database.prepare('SELECT 1 FROM catalog_items LIMIT 1').get()) return false;
+    if (this.database.prepare(
+      "SELECT 1 FROM schema_migrations WHERE name = 'wood-catalog-v1'"
+    ).get()) return false;
+    this.#transaction(() => {
+      this.#insertWoodCatalog();
+      this.#ensureWoodMineAvailability(now);
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES ('wood-catalog-v1', ?, ?)
+      `).run(now, JSON.stringify({
+        mineTypeId: WOOD_CATALOG.mineType.id,
+        items: WOOD_CATALOG.items.length,
+        melds: WOOD_CATALOG.melds.length
+      }));
+    });
+    return true;
+  }
+
+  #migrateWisdomCatalog(now = Date.now()) {
+    if (!this.hasCatalog()) return false;
+    // An intentionally emptied live catalog remains authoritative. Install this
+    // additive family only when an existing playable item catalog is present.
+    if (!this.database.prepare('SELECT 1 FROM catalog_items LIMIT 1').get()) return false;
+    if (this.database.prepare(
+      "SELECT 1 FROM schema_migrations WHERE name = 'wisdom-catalog-v1'"
+    ).get()) return false;
+    this.#transaction(() => {
+      this.#insertWisdomCatalog();
+      this.#ensureWisdomMineAvailability(now);
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES ('wisdom-catalog-v1', ?, ?)
+      `).run(now, JSON.stringify({
+        mineTypeId: WISDOM_CATALOG.mineType.id,
+        items: WISDOM_CATALOG.items.length,
+        melds: WISDOM_CATALOG.melds.length
+      }));
+    });
+    return true;
   }
 
   #migrateMachineItemDescriptions(now = Date.now()) {
@@ -5617,6 +6276,10 @@ export class SqliteStore {
     const currentMapId = this.database.prepare(
       'SELECT map_id FROM catalog_cities WHERE id = ?'
     ).get(row.city_id)?.map_id;
+    const meldIds = this.database.prepare(
+      'SELECT meld_id FROM player_melds WHERE player_id = ? ORDER BY meld_id'
+    ).all(row.id).map((meld) => meld.meld_id);
+    const chatAppearance = this.#chatAppearanceFor(row, meldIds.length);
 
     return {
       id: row.id,
@@ -5647,6 +6310,8 @@ export class SqliteStore {
       suspended: Boolean(row.suspended),
       chatBanned: Boolean(row.chat_banned),
       chatColor: row.chat_color ?? 'ff033e',
+      effectiveChatColor: chatAppearance.color,
+      meldCount: meldIds.length,
       pmBanned: Boolean(row.pm_banned),
       isNpc: Boolean(row.is_npc),
       termsVersion: row.terms_version ?? '',
@@ -5669,9 +6334,7 @@ export class SqliteStore {
       unreadMessages: this.database.prepare(
         'SELECT COUNT(*) AS count FROM messages WHERE recipient_id = ? AND is_read = 0 AND is_deleted = 0'
       ).get(row.id).count,
-      meldIds: this.database.prepare(
-        'SELECT meld_id FROM player_melds WHERE player_id = ? ORDER BY meld_id'
-      ).all(row.id).map((meld) => meld.meld_id),
+      meldIds,
       brokenMeldIds: this.database.prepare(
         'SELECT meld_id FROM broken_melds WHERE player_id = ? ORDER BY meld_id'
       ).all(row.id).map((meld) => meld.meld_id),
@@ -6043,6 +6706,9 @@ export class SqliteStore {
         INSERT OR IGNORE INTO schema_migrations (name, applied_at, details_json)
         VALUES ('regional-oil-fields-v1', ?, '{"selection":"alternating-regions","preservesExisting":true}')
       `).run(now);
+      this.#ensureShroomMineAvailability(now);
+      this.#ensureWoodMineAvailability(now);
+      this.#ensureWisdomMineAvailability(now);
       this.#adminWorldAuditBootstrap(now);
     });
   }
@@ -7960,12 +8626,14 @@ export class SqliteStore {
       const outputMineTypeId = mine.crypto_type_id ? null : mine.mine_things ? mine.mine_type_id
         : mineType?.hasOre && catalog.byMineType.has(oreMineTypeId) ? oreMineTypeId : null;
       const groups = new Map();
+      let findingEvents = [];
       let gold = 0;
       if (mine.crypto_type_id) {
         this.#changeCryptoBalance(playerId, mine.crypto_type_id, outputCount);
-        this.#recordCryptoFinding(
+        const findingEvent = this.#recordCryptoFinding(
           playerId, mine.crypto_type_id, outputCount, mine.city_id, 'explosives', now
         );
+        if (findingEvent) findingEvents.push(findingEvent);
         groups.set(`crypto:${mine.crypto_type_id}`, {
           cryptoTypeId: mine.crypto_type_id, count: outputCount
         });
@@ -8028,7 +8696,7 @@ export class SqliteStore {
           discovery.cityId ?? null, discovery.foundAt,
           discovery.exploded ? 1 : 0, discovery.dwarfed ? 1 : 0
         ));
-        this.#recordFindings(playerId, [...groups.values()].map((group) => ({
+        findingEvents = this.#recordFindings(playerId, [...groups.values()].map((group) => ({
           itemId: group.itemId, quantity: group.count, cityId: mine.city_id,
           foundAt: now, recycled: group.recycled
         })), 'explosives', now);
@@ -8041,7 +8709,7 @@ export class SqliteStore {
       return {
         explosive, quantityUsed, buckets, outputCount,
         findCount: mine.crypto_type_id || outputMineTypeId !== null ? outputCount : 0,
-        finds: [...groups.values()], gold, cityId: mine.city_id, foundAt: now
+        finds: [...groups.values()], findingEvents, gold, cityId: mine.city_id, foundAt: now
       };
     });
   }
@@ -8720,14 +9388,327 @@ export class SqliteStore {
     });
   }
 
-  chatAppearance(playerId) {
-    const player = this.database.prepare(
-      'SELECT authority, chat_color FROM players WHERE id = ?'
-    ).get(playerId);
+  guildDirectory(playerId) {
+    const player = this.database.prepare('SELECT id FROM players WHERE id = ?').get(playerId);
     if (!player) throw new Error('Player not found.');
-    const meldCount = this.database.prepare(
-      'SELECT COUNT(*) AS count FROM player_melds WHERE player_id = ?'
-    ).get(playerId).count;
+    const guilds = this.database.prepare(`
+      SELECT guilds.id, guilds.name, guilds.created_at,
+        COUNT(DISTINCT guild_members.player_id) AS member_count,
+        COALESCE((
+          SELECT SUM(quantity) FROM guild_inventory
+          WHERE guild_inventory.guild_id = guilds.id
+        ), 0) AS item_count
+      FROM guilds
+      LEFT JOIN guild_members ON guild_members.guild_id = guilds.id
+      GROUP BY guilds.id
+      ORDER BY guilds.name COLLATE NOCASE, guilds.id
+    `).all().map((guild) => ({
+      id: guild.id, name: guild.name, createdAt: guild.created_at,
+      memberCount: Number(guild.member_count), itemCount: Number(guild.item_count),
+      bankCapacity: GUILD_BANK_CAPACITY
+    }));
+    const membership = this.database.prepare(`
+      SELECT guild_id, joined_at FROM guild_members WHERE player_id = ?
+    `).get(playerId);
+    return {
+      guilds,
+      membership: membership ? {
+        guildId: membership.guild_id, joinedAt: membership.joined_at
+      } : null,
+      creationCostGold: GUILD_CREATION_COST_UNITS / GOLD_SCALE,
+      bankCapacity: GUILD_BANK_CAPACITY
+    };
+  }
+
+  guildForPlayer(playerId) {
+    const guild = this.database.prepare(`
+      SELECT guilds.id, guilds.name, guilds.created_at, guild_members.joined_at,
+        (SELECT COUNT(*) FROM guild_members AS members
+          WHERE members.guild_id = guilds.id) AS member_count,
+        COALESCE((SELECT SUM(quantity) FROM guild_inventory
+          WHERE guild_inventory.guild_id = guilds.id), 0) AS item_count
+      FROM guild_members
+      JOIN guilds ON guilds.id = guild_members.guild_id
+      WHERE guild_members.player_id = ?
+    `).get(playerId);
+    if (!guild) throw new Error('Join a guild first.');
+    const members = this.database.prepare(`
+      SELECT players.id, players.name, guild_members.joined_at
+      FROM guild_members
+      JOIN players ON players.id = guild_members.player_id
+      WHERE guild_members.guild_id = ?
+      ORDER BY players.name COLLATE NOCASE, players.id
+    `).all(guild.id).map((member) => ({
+      id: member.id, name: member.name, joinedAt: member.joined_at
+    }));
+    return {
+      id: guild.id, name: guild.name, createdAt: guild.created_at,
+      joinedAt: guild.joined_at, memberCount: Number(guild.member_count),
+      itemCount: Number(guild.item_count), bankCapacity: GUILD_BANK_CAPACITY, members
+    };
+  }
+
+  createGuild(playerId, name, now = Date.now()) {
+    const normalizedName = String(name ?? '').normalize('NFKC').trim().replace(/\s+/gu, ' ');
+    if (normalizedName.length < 3 || normalizedName.length > 40
+      || /[\p{Cc}\p{Cf}]/u.test(normalizedName)) {
+      throw new Error('Guild names must contain 3–40 visible characters.');
+    }
+    return this.#transaction(() => {
+      this.#settleBumGold(playerId, now);
+      const player = this.database.prepare(
+        'SELECT id, gold_units FROM players WHERE id = ?'
+      ).get(playerId);
+      if (!player) throw new Error('Player not found.');
+      if (this.database.prepare(
+        'SELECT 1 FROM guild_members WHERE player_id = ?'
+      ).get(playerId)) throw new Error('Leave your current guild before starting another.');
+      if (this.database.prepare(
+        'SELECT 1 FROM guilds WHERE name = ? COLLATE NOCASE'
+      ).get(normalizedName)) throw new Error('That guild name is already taken.');
+      if (Number(player.gold_units) < GUILD_CREATION_COST_UNITS) {
+        throw new Error('Starting a guild costs 100g.');
+      }
+      const charged = this.database.prepare(`
+        UPDATE players SET gold_units = gold_units - ?
+        WHERE id = ? AND gold_units >= ?
+      `).run(GUILD_CREATION_COST_UNITS, playerId, GUILD_CREATION_COST_UNITS);
+      if (charged.changes !== 1) throw new Error('Starting a guild costs 100g.');
+      const result = this.database.prepare(
+        'INSERT INTO guilds (name, created_at) VALUES (?, ?)'
+      ).run(normalizedName, now);
+      const guildId = Number(result.lastInsertRowid);
+      this.database.prepare(`
+        INSERT INTO guild_members (player_id, guild_id, joined_at) VALUES (?, ?, ?)
+      `).run(playerId, guildId, now);
+      return { id: guildId, name: normalizedName, costGold: 100 };
+    });
+  }
+
+  joinGuild(playerId, guildId, now = Date.now()) {
+    const id = Number(guildId);
+    if (!Number.isSafeInteger(id) || id < 1) throw new Error('Guild not found.');
+    return this.#transaction(() => {
+      if (!this.database.prepare('SELECT 1 FROM players WHERE id = ?').get(playerId)) {
+        throw new Error('Player not found.');
+      }
+      if (this.database.prepare(
+        'SELECT 1 FROM guild_members WHERE player_id = ?'
+      ).get(playerId)) throw new Error('Leave your current guild before joining another.');
+      const guild = this.database.prepare('SELECT id, name FROM guilds WHERE id = ?').get(id);
+      if (!guild) throw new Error('Guild not found.');
+      this.database.prepare(`
+        INSERT INTO guild_members (player_id, guild_id, joined_at) VALUES (?, ?, ?)
+      `).run(playerId, id, now);
+      return { id: guild.id, name: guild.name };
+    });
+  }
+
+  leaveGuild(playerId) {
+    return this.#transaction(() => {
+      const guild = this.database.prepare(`
+        SELECT guilds.id, guilds.name FROM guild_members
+        JOIN guilds ON guilds.id = guild_members.guild_id
+        WHERE guild_members.player_id = ?
+      `).get(playerId);
+      if (!guild) throw new Error('You are not in a guild.');
+      this.database.prepare('DELETE FROM guild_members WHERE player_id = ?').run(playerId);
+      return { id: guild.id, name: guild.name };
+    });
+  }
+
+  guildBank(playerId) {
+    const guild = this.guildForPlayer(playerId);
+    const location = this.#currentRegionHome(playerId);
+    const items = this.database.prepare(`
+      SELECT item_id, quantity, updated_at FROM guild_inventory
+      WHERE guild_id = ? ORDER BY item_id
+    `).all(guild.id).map((entry) => ({
+      itemId: entry.item_id, quantity: entry.quantity, updatedAt: entry.updated_at
+    }));
+    const localInventory = this.database.prepare(`
+      SELECT item_id, quantity FROM inventory
+      WHERE player_id = ? AND city_id = ? ORDER BY item_id
+    `).all(playerId, location.cityId).map((entry) => ({
+      itemId: entry.item_id, quantity: entry.quantity
+    }));
+    return {
+      guild, items, localInventory, cityId: location.cityId,
+      capitalCityId: location.capitalCityId,
+      canTransfer: location.cityId === location.capitalCityId
+    };
+  }
+
+  depositGuildItem(playerId, itemId, quantityValue, now = Date.now()) {
+    const id = Number(itemId);
+    const quantity = orderQuantity(quantityValue);
+    if (!Number.isSafeInteger(id) || id < 1) throw new Error('Thing not found.');
+    return this.#transaction(() => {
+      const location = this.#currentRegionHome(playerId);
+      const membership = this.database.prepare(`
+        SELECT guild_members.guild_id
+        FROM guild_members
+        WHERE guild_members.player_id = ?
+      `).get(playerId);
+      if (!membership) throw new Error('Join a guild before using its bank.');
+      if (location.cityId !== location.capitalCityId) {
+        throw new Error('Guild bank transfers are only available in this region\'s capital.');
+      }
+      if (!this.database.prepare('SELECT 1 FROM catalog_items WHERE id = ?').get(id)) {
+        throw new Error('Thing not found.');
+      }
+      const inventory = this.database.prepare(`
+        SELECT quantity FROM inventory WHERE player_id = ? AND city_id = ? AND item_id = ?
+      `).get(playerId, location.cityId, id);
+      if (!inventory || Number(inventory.quantity) < quantity) {
+        throw new Error('You do not have that many in this city.');
+      }
+      const used = Number(this.database.prepare(`
+        SELECT COALESCE(SUM(quantity), 0) AS count FROM guild_inventory WHERE guild_id = ?
+      `).get(membership.guild_id).count);
+      if (used + quantity > GUILD_BANK_CAPACITY) {
+        throw new Error(`The guild bank can hold at most ${GUILD_BANK_CAPACITY} things.`);
+      }
+      if (Number(inventory.quantity) === quantity) {
+        this.database.prepare(`
+          DELETE FROM inventory WHERE player_id = ? AND city_id = ? AND item_id = ?
+        `).run(playerId, location.cityId, id);
+      } else {
+        this.database.prepare(`
+          UPDATE inventory SET quantity = quantity - ?
+          WHERE player_id = ? AND city_id = ? AND item_id = ?
+        `).run(quantity, playerId, location.cityId, id);
+      }
+      this.database.prepare(`
+        INSERT INTO guild_inventory (guild_id, item_id, quantity, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (guild_id, item_id) DO UPDATE SET
+          quantity = guild_inventory.quantity + excluded.quantity,
+          updated_at = excluded.updated_at
+      `).run(membership.guild_id, id, quantity, now);
+      return { itemId: id, quantity, guildId: membership.guild_id, used: used + quantity };
+    });
+  }
+
+  withdrawGuildItem(playerId, itemId, quantityValue, now = Date.now()) {
+    const id = Number(itemId);
+    const quantity = orderQuantity(quantityValue);
+    if (!Number.isSafeInteger(id) || id < 1) throw new Error('Thing not found.');
+    return this.#transaction(() => {
+      const location = this.#currentRegionHome(playerId);
+      const membership = this.database.prepare(`
+        SELECT guild_members.guild_id
+        FROM guild_members
+        WHERE guild_members.player_id = ?
+      `).get(playerId);
+      if (!membership) throw new Error('Join a guild before using its bank.');
+      if (location.cityId !== location.capitalCityId) {
+        throw new Error('Guild bank transfers are only available in this region\'s capital.');
+      }
+      const stored = this.database.prepare(`
+        SELECT quantity FROM guild_inventory WHERE guild_id = ? AND item_id = ?
+      `).get(membership.guild_id, id);
+      if (!stored || Number(stored.quantity) < quantity) {
+        throw new Error('Those things have already been withdrawn.');
+      }
+      if (Number(stored.quantity) === quantity) {
+        this.database.prepare(`
+          DELETE FROM guild_inventory WHERE guild_id = ? AND item_id = ?
+        `).run(membership.guild_id, id);
+      } else {
+        this.database.prepare(`
+          UPDATE guild_inventory SET quantity = quantity - ?, updated_at = ?
+          WHERE guild_id = ? AND item_id = ?
+        `).run(quantity, now, membership.guild_id, id);
+      }
+      this.database.prepare(`
+        INSERT INTO inventory (player_id, city_id, item_id, quantity) VALUES (?, ?, ?, ?)
+        ON CONFLICT (player_id, city_id, item_id) DO UPDATE SET
+          quantity = inventory.quantity + excluded.quantity
+      `).run(playerId, location.cityId, id, quantity);
+      return { itemId: id, quantity, guildId: membership.guild_id };
+    });
+  }
+
+  addGuildChat(playerId, body, now = Date.now()) {
+    const text = String(body ?? '').trim();
+    const maximumLength = Number(this.#setting('chat_message_max_length'));
+    if (!text || text.length > maximumLength) {
+      throw new Error(`Chat messages must contain 1–${maximumLength} characters.`);
+    }
+    return this.#transaction(() => {
+      const member = this.database.prepare(`
+        SELECT players.name, players.authority, players.chat_banned, players.chat_color,
+          guild_members.guild_id
+        FROM guild_members JOIN players ON players.id = guild_members.player_id
+        WHERE guild_members.player_id = ?
+      `).get(playerId);
+      if (!member) throw new Error('Join a guild before using guild chat.');
+      if (member.chat_banned) throw new Error('Your account is not permitted to use chat.');
+      const cutoff = now - Number(this.#setting('chat_rate_window_ms'));
+      const recent = Number(this.database.prepare(`
+        SELECT (SELECT COUNT(*) FROM chats WHERE player_id = ? AND created_at > ?)
+          + (SELECT COUNT(*) FROM guild_chats WHERE player_id = ? AND created_at > ?) AS count
+      `).get(playerId, cutoff, playerId, cutoff).count);
+      if (recent >= Number(this.#setting('chat_rate_max_messages'))) {
+        throw new Error('Too many messages. Please wait a moment before chatting again.');
+      }
+      const melds = Number(this.database.prepare(
+        'SELECT COUNT(*) AS count FROM player_melds WHERE player_id = ?'
+      ).get(playerId).count);
+      const colorRules = this.#setting('chat_color_thresholds')
+        .map((entry) => ({
+          minimumMelds: Number(entry.minimumMelds),
+          color: String(entry.color).replace(/^#/, '').toLowerCase()
+        }))
+        .sort((first, second) => second.minimumMelds - first.minimumMelds);
+      const tierColor = colorRules.find((entry) => melds >= entry.minimumMelds)?.color;
+      if (!tierColor || !/^[0-9a-f]{6}$/.test(tierColor)) {
+        throw new Error('The live database has no valid matching chat color rule.');
+      }
+      const savedColor = /^[0-9a-f]{6}$/.test(String(member.chat_color ?? '').toLowerCase())
+        ? String(member.chat_color).toLowerCase() : tierColor;
+      const color = melds >= 140 ? savedColor
+        : Number(member.authority) > 0 ? '000000' : tierColor;
+      const result = this.database.prepare(`
+        INSERT INTO guild_chats (guild_id, player_id, body, color, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(member.guild_id, playerId, text, color, now);
+      return {
+        id: Number(result.lastInsertRowid), guildId: member.guild_id,
+        playerId, playerName: member.name, body: text, color, createdAt: now
+      };
+    });
+  }
+
+  recentGuildChats(playerId, sinceAt = null, limit = null) {
+    const guild = this.guildForPlayer(playerId);
+    const defaultLimit = Number(this.#setting('chat_page_size'));
+    const maximumLimit = Number(this.#setting('chat_query_max_limit'));
+    const cutoff = sinceAt === null || sinceAt === undefined ? null : Number(sinceAt);
+    if (cutoff !== null && !Number.isFinite(cutoff)) {
+      throw new Error('Chat history cutoff must be a valid timestamp.');
+    }
+    const count = limit === null || limit === undefined || String(limit).trim() === ''
+      ? (cutoff === null ? defaultLimit : -1)
+      : Math.max(1, Math.min(maximumLimit, Number(limit) || defaultLimit));
+    const chats = this.database.prepare(`
+      SELECT * FROM (
+        SELECT guild_chats.id, guild_chats.player_id, players.name AS player_name,
+          guild_chats.body, guild_chats.color, guild_chats.created_at
+        FROM guild_chats JOIN players ON players.id = guild_chats.player_id
+        WHERE guild_chats.guild_id = ? AND (? IS NULL OR guild_chats.created_at >= ?)
+        ORDER BY guild_chats.created_at DESC, guild_chats.id DESC
+        LIMIT ?
+      ) ORDER BY created_at, id
+    `).all(guild.id, cutoff, cutoff, count).map((chat) => ({
+      id: chat.id, playerId: chat.player_id, playerName: chat.player_name,
+      body: chat.body, color: chat.color, createdAt: chat.created_at
+    }));
+    return { guild, chats };
+  }
+
+  #chatAppearanceFor(player, meldCount) {
     const rules = this.#setting('chat_color_thresholds')
       .map((entry) => ({
         minimumMelds: Number(entry.minimumMelds),
@@ -8747,6 +9728,17 @@ export class SqliteStore {
       color: meldCount >= customMinimumMelds ? customColor
         : Number(player.authority) > 0 ? '000000' : tierColor
     };
+  }
+
+  chatAppearance(playerId) {
+    const player = this.database.prepare(
+      'SELECT authority, chat_color FROM players WHERE id = ?'
+    ).get(playerId);
+    if (!player) throw new Error('Player not found.');
+    const meldCount = Number(this.database.prepare(
+      'SELECT COUNT(*) AS count FROM player_melds WHERE player_id = ?'
+    ).get(playerId).count);
+    return this.#chatAppearanceFor(player, meldCount);
   }
 
   addChat(playerId, body, now = Date.now(), requestedColor = null) {
@@ -10806,16 +11798,21 @@ export class SqliteStore {
     }));
     const mines = this.database.prepare(`
       SELECT mine_market_orders.id, mine_market_orders.side, mine_market_orders.price_units,
+        mine_market_orders.crypto_type_id, mine_market_orders.crypto_quantity,
         mine_market_orders.quantity, catalog_mine_types.id AS subject_id,
         catalog_mine_types.name, catalog_mine_types.icon
       FROM mine_market_orders
       JOIN catalog_mine_types ON catalog_mine_types.id = mine_market_orders.mine_type_id
       WHERE mine_market_orders.player_id = ? AND mine_market_orders.city_id = ?
-    `).all(owner.id, cityId).map((order) => ({
-      id: order.id, side: order.side, price: order.price_units / GOLD_SCALE,
-      quantity: order.quantity, name: `${order.name} Mine`, rarity: order.subject_id,
-      icon: order.icon, href: `/market/mines/${order.subject_id}`
-    }));
+    `).all(owner.id, cityId).map((order) => {
+      const currency = cryptoType(order.crypto_type_id);
+      return {
+        id: order.id, side: order.side, price: order.price_units / GOLD_SCALE,
+        cryptoQuantity: order.crypto_quantity, cryptoSymbol: currency?.symbol ?? 'crypto',
+        quantity: order.quantity, name: `${order.name} Mine`, rarity: order.subject_id,
+        icon: order.icon, href: `/market/mines/${order.subject_id}`
+      };
+    });
     const factoryNames = this.#setting('factory_market_names');
     const factoryIcon = this.#setting('factory_market_icon');
     if (!factoryNames || typeof factoryNames !== 'object' || Array.isArray(factoryNames)
@@ -11377,12 +12374,39 @@ export class SqliteStore {
     return buyerMineId;
   }
 
-  placeMineSellOrder(playerId, mineTypeId, price, quantity, now = Date.now()) {
-    const priceUnits = goldToUnits(price);
+  #currentCryptoPriceUnits(cryptoTypeId, now = Date.now()) {
+    const currency = cryptoType(cryptoTypeId);
+    if (!currency) throw new Error('Unknown crypto type.');
+    const latest = this.database.prepare(`
+      SELECT price_units FROM crypto_market_sales
+      WHERE crypto_type_id = ? AND created_at <= ?
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    `).get(currency.id, now);
+    return latest?.price_units ?? goldToUnits(currency.goldPrice);
+  }
+
+  #mineCryptoTerms(playerId, cryptoTypeId, cryptoQuantityValue, now = Date.now()) {
+    const currency = cryptoType(cryptoTypeId);
+    if (!currency) throw new Error('Unknown crypto type.');
+    this.#assertCryptoAvailable(playerId, currency);
+    const cryptoQuantity = orderQuantity(cryptoQuantityValue);
+    const cryptoPriceUnits = this.#currentCryptoPriceUnits(currency.id, now);
+    const goldValueUnits = cryptoPriceUnits * cryptoQuantity;
+    if (!Number.isSafeInteger(goldValueUnits)) throw new Error('That mine price is too large.');
+    if (goldValueUnits < MIN_MINE_CRYPTO_VALUE_UNITS) {
+      const minimum = Math.ceil(MIN_MINE_CRYPTO_VALUE_UNITS / cryptoPriceUnits);
+      throw new Error(`A mine order must be worth at least 10,000g at the current ${currency.symbol} price. Use at least ${minimum.toLocaleString('en-GB')} ${currency.symbol}.`);
+    }
+    return { currency, cryptoQuantity, cryptoPriceUnits, goldValueUnits };
+  }
+
+  placeMineSellOrder(playerId, mineTypeId, cryptoTypeId, cryptoQuantity, quantity,
+    now = Date.now()) {
     const count = orderQuantity(quantity);
     return this.#transaction(() => {
       const player = this.#marketPlayer(playerId);
       this.#mineMarketType(mineTypeId);
+      const terms = this.#mineCryptoTerms(playerId, cryptoTypeId, cryptoQuantity, now);
       this.#trimMineListings(playerId);
       const typeCount = this.database.prepare(`
         SELECT COUNT(*) AS count FROM mines WHERE player_id = ? AND city_id = ?
@@ -11403,27 +12427,32 @@ export class SqliteStore {
       if (available < count) throw new Error('You must own enough unlisted mines and cannot sell your last permanent mine.');
       const result = this.database.prepare(`
         INSERT INTO mine_market_orders
-          (player_id, city_id, mine_type_id, side, price_units, quantity, created_at)
-        VALUES (?, ?, ?, 'sell', ?, ?, ?)
-      `).run(playerId, player.city_id, mineTypeId, priceUnits, count, now);
+          (player_id, city_id, mine_type_id, side, price_units, crypto_type_id,
+            crypto_quantity, crypto_price_units, quantity, created_at)
+        VALUES (?, ?, ?, 'sell', ?, ?, ?, ?, ?, ?)
+      `).run(playerId, player.city_id, mineTypeId, terms.goldValueUnits,
+        terms.currency.id, terms.cryptoQuantity, terms.cryptoPriceUnits, count, now);
       return Number(result.lastInsertRowid);
     });
   }
 
-  placeMineBuyOrder(playerId, mineTypeId, price, quantity, now = Date.now()) {
-    const priceUnits = goldToUnits(price);
+  placeMineBuyOrder(playerId, mineTypeId, cryptoTypeId, cryptoQuantity, quantity,
+    now = Date.now()) {
     const count = orderQuantity(quantity);
     return this.#transaction(() => {
       const player = this.#marketPlayer(playerId);
       this.#mineMarketType(mineTypeId);
-      const escrow = priceUnits * count;
-      if (player.gold_units < escrow) throw new Error('You do not have enough gold.');
-      this.database.prepare('UPDATE players SET gold_units = gold_units - ? WHERE id = ?').run(escrow, playerId);
+      const terms = this.#mineCryptoTerms(playerId, cryptoTypeId, cryptoQuantity, now);
+      const escrow = terms.cryptoQuantity * count;
+      if (!Number.isSafeInteger(escrow)) throw new Error('That bid is too large.');
+      this.#changeCryptoBalance(playerId, terms.currency.id, -escrow);
       const result = this.database.prepare(`
         INSERT INTO mine_market_orders
-          (player_id, city_id, mine_type_id, side, price_units, quantity, created_at)
-        VALUES (?, ?, ?, 'buy', ?, ?, ?)
-      `).run(playerId, player.city_id, mineTypeId, priceUnits, count, now);
+          (player_id, city_id, mine_type_id, side, price_units, crypto_type_id,
+            crypto_quantity, crypto_price_units, quantity, created_at)
+        VALUES (?, ?, ?, 'buy', ?, ?, ?, ?, ?, ?)
+      `).run(playerId, player.city_id, mineTypeId, terms.goldValueUnits,
+        terms.currency.id, terms.cryptoQuantity, terms.cryptoPriceUnits, count, now);
       return Number(result.lastInsertRowid);
     });
   }
@@ -11434,9 +12463,10 @@ export class SqliteStore {
         'SELECT * FROM mine_market_orders WHERE id = ? AND player_id = ?'
       ).get(orderId, playerId);
       if (!order) throw new Error('Mine market order not found.');
-      if (order.side === 'buy') this.database.prepare(
-        'UPDATE players SET gold_units = gold_units + ? WHERE id = ?'
-      ).run(order.price_units * order.quantity, playerId);
+      if (order.side === 'buy') {
+        this.#changeCryptoBalance(playerId, order.crypto_type_id,
+          order.crypto_quantity * order.quantity);
+      }
       this.database.prepare('DELETE FROM mine_market_orders WHERE id = ?').run(order.id);
       return true;
     });
@@ -11457,17 +12487,29 @@ export class SqliteStore {
         "SELECT * FROM mine_market_orders WHERE id = ? AND side = 'sell'"
       ).get(orderId);
       if (!order || order.quantity < count) throw new Error('That listing no longer has enough mines.');
-      const cost = order.price_units * count;
-      if (buyer.gold_units < cost) throw new Error('You do not have enough gold.');
+      const terms = this.#mineCryptoTerms(
+        buyerId, order.crypto_type_id, order.crypto_quantity, now
+      );
+      const cost = terms.cryptoQuantity * count;
+      if (!Number.isSafeInteger(cost)) throw new Error('That purchase is too large.');
+      const balance = this.database.prepare(`
+        SELECT quantity FROM player_crypto_balances
+        WHERE player_id = ? AND crypto_type_id = ?
+      `).get(buyerId, terms.currency.id)?.quantity ?? 0;
+      if (balance < cost) throw new Error(`You do not have enough ${terms.currency.symbol}.`);
       for (let index = 0; index < count; index += 1) {
         this.#transferMarketMine(order.player_id, buyerId, order.city_id, order.mine_type_id, now);
       }
-      this.database.prepare('UPDATE players SET gold_units = gold_units - ? WHERE id = ?').run(cost, buyerId);
-      this.database.prepare('UPDATE players SET gold_units = gold_units + ? WHERE id = ?').run(cost, order.player_id);
+      this.#changeCryptoBalance(buyerId, terms.currency.id, -cost);
+      this.#changeCryptoBalance(order.player_id, terms.currency.id, cost);
       this.#completeMineOrder(order, count);
       this.#trimMineListings(order.player_id);
-      this.#recordMineSale(buyerId, order.player_id, order, count, now);
-      return { cost: cost / GOLD_SCALE, mineTypeId: order.mine_type_id, quantity: count };
+      this.#recordMineSale(buyerId, order.player_id, { ...order,
+        price_units: terms.goldValueUnits, crypto_price_units: terms.cryptoPriceUnits
+      }, count, now);
+      return { cryptoQuantity: cost, unitCryptoQuantity: terms.cryptoQuantity,
+        currency: terms.currency, goldValue: terms.goldValueUnits * count / GOLD_SCALE,
+        mineTypeId: order.mine_type_id, quantity: count };
     });
   }
 
@@ -11480,6 +12522,9 @@ export class SqliteStore {
       ).get(orderId);
       if (!order || order.player_id === sellerId || order.city_id !== seller.city_id
         || order.quantity < count) throw new Error('That mine bid is unavailable.');
+      const terms = this.#mineCryptoTerms(
+        sellerId, order.crypto_type_id, order.crypto_quantity, now
+      );
       const total = this.database.prepare(
         'SELECT COUNT(*) AS count FROM mines WHERE player_id = ? AND rental_until = 0'
       ).get(sellerId).count;
@@ -11494,12 +12539,16 @@ export class SqliteStore {
       for (let index = 0; index < count; index += 1) {
         this.#transferMarketMine(sellerId, order.player_id, order.city_id, order.mine_type_id, now);
       }
-      const proceeds = order.price_units * count;
-      this.database.prepare('UPDATE players SET gold_units = gold_units + ? WHERE id = ?').run(proceeds, sellerId);
+      const proceeds = terms.cryptoQuantity * count;
+      this.#changeCryptoBalance(sellerId, terms.currency.id, proceeds);
       this.#completeMineOrder(order, count);
       this.#trimMineListings(sellerId);
-      this.#recordMineSale(order.player_id, sellerId, order, count, now);
-      return { proceeds: proceeds / GOLD_SCALE, mineTypeId: order.mine_type_id, quantity: count };
+      this.#recordMineSale(order.player_id, sellerId, { ...order,
+        price_units: terms.goldValueUnits, crypto_price_units: terms.cryptoPriceUnits
+      }, count, now);
+      return { cryptoQuantity: proceeds, unitCryptoQuantity: terms.cryptoQuantity,
+        currency: terms.currency, goldValue: terms.goldValueUnits * count / GOLD_SCALE,
+        mineTypeId: order.mine_type_id, quantity: count };
     });
   }
 
@@ -11515,36 +12564,88 @@ export class SqliteStore {
   #recordMineSale(buyerId, sellerId, order, quantity, now) {
     const sale = this.database.prepare(`
       INSERT INTO mine_market_sales
-        (buyer_id, seller_id, city_id, mine_type_id, price_units, quantity, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(buyerId, sellerId, order.city_id, order.mine_type_id, order.price_units, quantity, now);
+        (buyer_id, seller_id, city_id, mine_type_id, price_units, crypto_type_id,
+          crypto_quantity, crypto_price_units, quantity, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(buyerId, sellerId, order.city_id, order.mine_type_id, order.price_units,
+      order.crypto_type_id, order.crypto_quantity, order.crypto_price_units, quantity, now);
     const mineType = this.database.prepare('SELECT name FROM catalog_mine_types WHERE id = ?')
       .get(order.mine_type_id);
-    if (!mineType) throw new Error('Market sale mine type was not found.');
-    this.#notifyMarketTrade({
-      saleKey: `mine:${sale.lastInsertRowid}`, buyerId, sellerId,
-      assetName: `${mineType.name} Mine`, quantity, priceUnits: order.price_units,
-      cityId: order.city_id, createdAt: now,
+    const currency = cryptoType(order.crypto_type_id);
+    if (!mineType || !currency) throw new Error('Market sale details were not found.');
+    const participants = this.database.prepare(`
+      SELECT buyer.name AS buyer_name, seller.name AS seller_name,
+        catalog_cities.name AS city_name
+      FROM players AS buyer, players AS seller, catalog_cities
+      WHERE buyer.id = ? AND seller.id = ? AND catalog_cities.id = ?
+    `).get(buyerId, sellerId, order.city_id);
+    if (!participants) throw new Error('Market sale participants were not found.');
+    const assetText = `${quantity}\u00d7 ${mineType.name} Mine`;
+    const cryptoTotal = order.crypto_quantity * quantity;
+    const goldValue = order.price_units * quantity / GOLD_SCALE;
+    const paymentText = `${cryptoTotal.toLocaleString('en-GB')} ${currency.symbol}`;
+    const details = {
+      event: 'mine-market-sale', saleId: Number(sale.lastInsertRowid), buyerId, sellerId,
+      mineTypeId: order.mine_type_id, cryptoTypeId: currency.id,
+      cryptoQuantity: cryptoTotal, unitCryptoQuantity: order.crypto_quantity,
+      unitGoldValue: order.price_units / GOLD_SCALE, totalGoldValue: goldValue,
+      cityId: order.city_id, cityName: participants.city_name,
       actions: [{ label: 'View this market', path: `/market/mines/${order.mine_type_id}` }]
-    });
+    };
+    this.#insertSystemMessage(buyerId, 'Market', `Bought ${assetText}`,
+      `You bought ${assetText} from ${participants.seller_name} for ${paymentText} in ${participants.city_name} (worth ${goldUnitsSummary(order.price_units * quantity)} at execution).`,
+      now, `market:mine:${sale.lastInsertRowid}:buyer`, { ...details, role: 'buyer' });
+    this.#insertSystemMessage(sellerId, 'Market', `Sold ${assetText}`,
+      `You sold ${assetText} to ${participants.buyer_name} for ${paymentText} in ${participants.city_name} (worth ${goldUnitsSummary(order.price_units * quantity)} at execution).`,
+      now, `market:mine:${sale.lastInsertRowid}:seller`, { ...details, role: 'seller' });
     return Number(sale.lastInsertRowid);
   }
 
-  mineMarket(mineTypeId, cityId, playerId) {
+  mineMarket(mineTypeId, cityId, playerId, now = Date.now()) {
     const mineType = this.#mineMarketType(mineTypeId);
     this.#trimMineListings(playerId);
+    const player = this.database.prepare(`
+      SELECT catalog_cities.map_id FROM players
+      JOIN catalog_cities ON catalog_cities.id = players.city_id
+      WHERE players.id = ? AND players.city_id = ?
+    `).get(playerId, cityId);
+    if (!player) throw new Error('Player not found in this city.');
+    const balanceMap = new Map(this.database.prepare(`
+      SELECT crypto_type_id, quantity FROM player_crypto_balances WHERE player_id = ?
+    `).all(playerId).map((entry) => [entry.crypto_type_id, entry.quantity]));
+    const currencies = cryptoTypesForMap(player.map_id).map((currency) => {
+      const currentPriceUnits = this.#currentCryptoPriceUnits(currency.id, now);
+      return {
+        ...currency, balance: balanceMap.get(currency.id) ?? 0,
+        currentPrice: currentPriceUnits / GOLD_SCALE,
+        currentPriceUnits,
+        minimumQuantity: Math.ceil(MIN_MINE_CRYPTO_VALUE_UNITS / currentPriceUnits)
+      };
+    });
+    const currencyMap = new Map(currencies.map((currency) => [currency.id, currency]));
     const orders = this.database.prepare(`
       SELECT mine_market_orders.*, players.name AS player_name
       FROM mine_market_orders JOIN players ON players.id = mine_market_orders.player_id
       WHERE mine_market_orders.mine_type_id = ? AND mine_market_orders.city_id = ?
-      ORDER BY CASE side WHEN 'sell' THEN 0 ELSE 1 END,
-        CASE side WHEN 'sell' THEN price_units END ASC,
-        CASE side WHEN 'buy' THEN price_units END DESC, created_at, id
-    `).all(mineTypeId, cityId).map((order) => ({
-      id: order.id, playerId: order.player_id, playerName: order.player_name,
-      side: order.side, price: order.price_units / GOLD_SCALE,
-      quantity: order.quantity, createdAt: order.created_at
-    }));
+    `).all(mineTypeId, cityId).map((order) => {
+      const currency = currencyMap.get(order.crypto_type_id) ?? cryptoType(order.crypto_type_id);
+      const currentPriceUnits = this.#currentCryptoPriceUnits(order.crypto_type_id, now);
+      return {
+        id: order.id, playerId: order.player_id, playerName: order.player_name,
+        side: order.side, cryptoTypeId: order.crypto_type_id,
+        cryptoQuantity: order.crypto_quantity, cryptoSymbol: currency.symbol,
+        currentGoldValue: currentPriceUnits * order.crypto_quantity / GOLD_SCALE,
+        validAtCurrentPrice: currentPriceUnits * order.crypto_quantity >= MIN_MINE_CRYPTO_VALUE_UNITS,
+        affordable: Math.floor((balanceMap.get(order.crypto_type_id) ?? 0) / order.crypto_quantity),
+        quantity: order.quantity, createdAt: order.created_at
+      };
+    }).sort((left, right) => {
+      if (left.side !== right.side) return left.side === 'sell' ? -1 : 1;
+      const priceOrder = left.side === 'sell'
+        ? left.currentGoldValue - right.currentGoldValue
+        : right.currentGoldValue - left.currentGoldValue;
+      return priceOrder || left.createdAt - right.createdAt || left.id - right.id;
+    });
     const sales = this.database.prepare(`
       SELECT mine_market_sales.*, buyer.name AS buyer_name, seller.name AS seller_name
       FROM mine_market_sales JOIN players AS buyer ON buyer.id = mine_market_sales.buyer_id
@@ -11552,10 +12653,15 @@ export class SqliteStore {
       WHERE mine_market_sales.mine_type_id = ? AND mine_market_sales.city_id = ?
       ORDER BY mine_market_sales.created_at DESC, mine_market_sales.id DESC LIMIT ?
     `).all(mineTypeId, cityId,
-      this.#positiveIntegerSetting('mine_market_history_limit')).map((sale) => ({
-      id: sale.id, buyerName: sale.buyer_name, sellerName: sale.seller_name,
-      price: sale.price_units / GOLD_SCALE, quantity: sale.quantity, createdAt: sale.created_at
-    }));
+      this.#positiveIntegerSetting('mine_market_history_limit')).map((sale) => {
+      const currency = cryptoType(sale.crypto_type_id);
+      return {
+        id: sale.id, buyerName: sale.buyer_name, sellerName: sale.seller_name,
+        price: sale.price_units / GOLD_SCALE,
+        cryptoQuantity: sale.crypto_quantity, cryptoSymbol: currency?.symbol ?? null,
+        quantity: sale.quantity, createdAt: sale.created_at
+      };
+    });
     const owned = this.database.prepare(`
       SELECT COUNT(*) AS count FROM mines WHERE player_id = ? AND city_id = ?
         AND mine_type_id = ? AND rental_until = 0
@@ -11570,6 +12676,8 @@ export class SqliteStore {
       creditCost: mineType.credit_cost, owned,
       sellable: Math.max(0, Math.min(owned - ownListings,
         totalPermanent - Number(this.#setting('minimum_permanent_mines')) - ownListings)),
+      currencies,
+      minimumGoldValue: MIN_MINE_CRYPTO_VALUE_UNITS / GOLD_SCALE,
       listings: orders.filter((order) => order.side === 'sell'),
       bids: orders.filter((order) => order.side === 'buy'), sales
     };
@@ -14805,10 +15913,11 @@ export class SqliteStore {
     const inserted = this.database.prepare(`
       INSERT INTO world_creatures
         (creature_type, rarity, map_id, route_id, location, spawn_location,
-         destination_city_id, hp, max_hp, awakened_at, moved_at, arrives_at, speed)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         destination_city_id, hp, max_hp, awakened_at, moved_at, arrives_at, speed, rating)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(type, tier.id, mapId, route.id, location, location, destinationCityId, hp, hp,
-      awakenedAt, awakenedAt, arrivesAt, speed);
+      awakenedAt, awakenedAt, arrivesAt, speed,
+      Number(this.#setting('vehicle_starting_rating')));
     const creatureId = Number(inserted.lastInsertRowid);
     const creatureName = this.#worldCreatureName(type, tier.id);
     const rewardType = this.#worldCreatureRewardType(type);
@@ -15206,13 +16315,24 @@ export class SqliteStore {
       if (!liveCreature) throw new Error('Another hunter defeated that creature first.');
       const traveling = this.#vehicleRecord(vehicle.id, playerId);
       const loadout = this.#vehicleLoadout(traveling);
+      const startingRating = Number(this.#setting('vehicle_starting_rating'));
+      const vehicleRatingBefore = Number(traveling.rating ?? startingRating);
+      const creatureRatingBefore = Number(liveCreature.rating ?? startingRating);
       const random = seededRandom('world-creature-combat', creature.id, vehicle.id, now);
       const moon = moonPhaseAt(now);
-      let firepower;
-      let counterDamage;
+      let damage = 0;
+      let counterDamage = 0;
       let shotsFired = 0;
       let hunterOperational = true;
       let shipSunk = false;
+      let hp = Number(liveCreature.hp);
+      let starting;
+      let ending;
+      const phases = [];
+      const skippedPhases = [];
+      const creatureAttackName = this.#settingString(
+        'world_creature_attack_names', creature.creature_type
+      );
       const damageMultiplier = this.#worldCreatureTierMultiplier(
         'world_creature_tier_damage_multipliers', liveCreature.rarity
       );
@@ -15220,45 +16340,120 @@ export class SqliteStore {
         this.#setting('world_creature_counter_damage_ratio')[creature.creature_type]
       );
       if (this.#routeTypeBehavior(creature.route_type) === 'sea') {
-        const ammunitionRules = Object.values(this.#ammunitionRules());
-        let availableShots = ammunitionRules.reduce(
-          (sum, rule) => sum + Number(loadout.ship[rule.storageField] ?? 0), 0
-        );
-        const cannonPower = loadout.cannons.reduce((sum, cannon) => {
-          const shots = Math.min(availableShots, Math.max(1, cannon.rateOfFire));
-          availableShots -= shots;
-          shotsFired += shots;
-          return sum + cannon.damage * shots;
-        }, 0);
-        let shotsToConsume = shotsFired;
-        const ammunitionAfter = [];
-        for (const rule of ammunitionRules) {
-          const before = Number(loadout.ship[rule.storageField] ?? 0);
-          const consumed = Math.min(before, shotsToConsume);
-          shotsToConsume -= consumed;
-          ammunitionAfter.push(before - consumed);
-        }
-        const crewPower = loadout.cargo.reduce(
-          (sum, item) => sum + (item.weaponId ? (item.offense + item.defense) * item.quantity : 0), 0);
-        firepower = Math.max(traveling.rarity * 4, cannonPower + crewPower * 0.5);
-        counterDamage = Math.max(1, Math.round(Number(loadout.ship.max_hull ?? traveling.max_hull)
-          * counterRatio * damageMultiplier
-          * (0.75 + random() * 0.5)));
+        const ammunitionRules = this.#ammunitionRules();
+        const ammunitionEntries = Object.entries(ammunitionRules);
+        const ammunitionNames = new Map(this.database.prepare(`
+          SELECT catalog_cannonballs.ammo_type, catalog_items.name
+          FROM catalog_cannonballs
+          JOIN catalog_items ON catalog_items.id = catalog_cannonballs.item_id
+        `).all().map((entry) => [Number(entry.ammo_type), entry.name]));
+        const ammunition = Object.fromEntries(ammunitionEntries.map(([, rule]) =>
+          [rule.storageField, Number(loadout.ship[rule.storageField] ?? 0)]));
         const ship = this.database.prepare(
           'SELECT hull FROM player_ship_state WHERE vehicle_id = ?'
         ).get(vehicle.id);
-        const hull = Math.max(0, ship.hull - counterDamage);
+        let hull = Number(ship.hull);
+        const maxHull = Number(loadout.ship.max_hull ?? traveling.max_hull);
+        const cannonRounds = Number(this.#setting('ship_cannon_rounds'));
+        const firingRoundsByRate = this.#setting('ship_cannon_rounds_by_rate');
+        const criticalMultiplier = Number(this.#setting('ship_critical_damage_multiplier'));
+        const cannons = [...loadout.cannons].sort((first, second) =>
+          Number(first.portal) - Number(second.portal));
+        starting = {
+          creatureHp: hp, creatureMaxHp: Number(liveCreature.max_hp),
+          vehicle: { hull, maxHull, ammunition: { ...ammunition } }
+        };
+        for (let round = 1; round <= cannonRounds && hull > 0 && hp > 0; round += 1) {
+          const creatureHpBefore = hp;
+          const hullBefore = hull;
+          const vehicleAttacks = [];
+          let roundDamage = 0;
+          for (const cannon of cannons) {
+            const firingRounds = firingRoundsByRate[cannon.rateOfFire];
+            if (!Array.isArray(firingRounds) || !firingRounds.includes(round)) continue;
+            const available = ammunitionEntries.filter(([, rule]) =>
+              ammunition[rule.storageField] > 0);
+            const total = available.reduce((sum, [, rule]) =>
+              sum + ammunition[rule.storageField], 0);
+            if (!total) continue;
+            let pick = Math.floor(random() * total) + 1;
+            let type = Number(available[0][0]);
+            for (const [candidate, rule] of available) {
+              pick -= ammunition[rule.storageField];
+              if (pick <= 0) { type = Number(candidate); break; }
+            }
+            const ammunitionRule = ammunitionRules[type];
+            ammunition[ammunitionRule.storageField] -= 1;
+            let shotDamage = Math.floor(Number(cannon.damage));
+            if (random() < Number(cannon.damage) - shotDamage) shotDamage += 1;
+            const critical = random() < Number(traveling.offense_bonus_factor ?? 0);
+            if (critical) shotDamage *= criticalMultiplier;
+            const hit = random() < Number(ammunitionRule.accuracy);
+            const appliedDamage = hit
+              ? Math.max(1, Math.round(shotDamage * Number(moon.creatureDamage))) : 0;
+            roundDamage += appliedDamage;
+            shotsFired += 1;
+            vehicleAttacks.push({
+              kind: 'cannon', round, portal: Number(cannon.portal),
+              cannonId: cannon.id, cannonName: cannon.name,
+              ammunitionType: type,
+              ammunitionName: ammunitionNames.get(type) ?? `Ammunition ${type}`,
+              accuracy: Number(ammunitionRule.accuracy), hit, critical,
+              rolledDamage: shotDamage, damage: appliedDamage
+            });
+          }
+          if (!vehicleAttacks.length) {
+            const maneuverDamage = Math.max(1, Math.round(
+              Number(traveling.rarity) * 4 / cannonRounds
+                * (0.75 + random() * 0.5) * Number(moon.creatureDamage)
+            ));
+            roundDamage += maneuverDamage;
+            vehicleAttacks.push({
+              kind: 'maneuver', round, name: 'Ship manoeuvre', hit: true,
+              critical: false, damage: maneuverDamage
+            });
+          }
+          const creatureRoundDamage = Math.max(1, Math.round(
+            maxHull * counterRatio * damageMultiplier / cannonRounds
+              * (0.75 + random() * 0.5)
+          ));
+          hp = Math.max(0, hp - roundDamage);
+          hull = Math.max(0, hull - creatureRoundDamage);
+          damage += roundDamage;
+          counterDamage += creatureRoundDamage;
+          phases.push({
+            kind: 'cannon', round,
+            creatureBefore: { hp: creatureHpBefore, maxHp: Number(liveCreature.max_hp) },
+            vehicleBefore: { hull: hullBefore, maxHull },
+            vehicleAttacks,
+            creatureAttack: {
+              name: creatureAttackName, target: 'hull', damage: creatureRoundDamage
+            },
+            creatureAfter: { hp, maxHp: Number(liveCreature.max_hp) },
+            vehicleAfter: { hull, maxHull }
+          });
+        }
+        const ammunitionAfter = ammunitionEntries.map(([, rule]) =>
+          ammunition[rule.storageField]);
         this.database.prepare(`UPDATE player_ship_state SET hull = ?, sunk = ?, ${
-          ammunitionRules.map((rule) => `${rule.storageField} = ?`).join(', ')
+          ammunitionEntries.map(([, rule]) => `${rule.storageField} = ?`).join(', ')
         } WHERE vehicle_id = ?`).run(hull, hull === 0 ? 1 : 0,
           ...ammunitionAfter, vehicle.id);
+        ending = {
+          creatureHp: hp,
+          vehicle: { hull, maxHull, ammunition: { ...ammunition } }
+        };
+        skippedPhases.push({
+          kind: 'boarding',
+          reason: 'Boarding was skipped because a ship crew cannot board a world creature.'
+        });
         if (hull === 0) {
           hunterOperational = false;
           shipSunk = true;
         }
       } else {
         const stats = loadout.combatStats;
-        firepower = Math.max(traveling.rarity * 4, stats.attack * 8 + stats.offense);
+        const firepower = Math.max(traveling.rarity * 4, stats.attack * 8 + stats.offense);
         const whaleForce = liveCreature.max_hp
           * counterRatio * damageMultiplier
           * (0.75 + random() * 0.5);
@@ -15269,11 +16464,41 @@ export class SqliteStore {
         if (counterDamage > 0) {
           this.database.prepare('UPDATE player_vehicles SET damaged = 1 WHERE id = ?').run(vehicle.id);
         }
+        damage = Math.max(1, Math.round(firepower * (0.75 + random() * 0.5)
+          * moon.creatureDamage));
+        hp = Math.max(0, liveCreature.hp - damage);
+        starting = {
+          creatureHp: Number(liveCreature.hp), creatureMaxHp: Number(liveCreature.max_hp),
+          vehicle: { attack: stats.attack, armor: stats.armor, offense: stats.offense,
+            defense: stats.defense, dodge: stats.dodge, damaged: Boolean(traveling.damaged) }
+        };
+        ending = {
+          creatureHp: hp,
+          vehicle: { ...starting.vehicle, damaged: counterDamage > 0 || starting.vehicle.damaged }
+        };
+        phases.push({
+          kind: 'land', round: 1,
+          creatureBefore: { hp: Number(liveCreature.hp), maxHp: Number(liveCreature.max_hp) },
+          vehicleBefore: { armor: stats.armor, damaged: Boolean(traveling.damaged) },
+          vehicleAttacks: [{
+            kind: 'weapons', name: 'Weapons and fittings', hit: true,
+            critical: false, damage
+          }],
+          creatureAttack: {
+            name: creatureAttackName, target: 'vehicle structure', damage: counterDamage
+          },
+          creatureAfter: { hp, maxHp: Number(liveCreature.max_hp) },
+          vehicleAfter: {
+            armor: Math.max(0, Number(stats.armor) - counterDamage),
+            damaged: counterDamage > 0 || Boolean(traveling.damaged)
+          }
+        });
       }
-      const damage = Math.max(1, Math.round(firepower * (0.75 + random() * 0.5)
-        * moon.creatureDamage));
-      const hp = Math.max(0, liveCreature.hp - damage);
       const defeated = hp === 0;
+      const [vehicleRatingAfter, creatureRatingAfter] = ratingPair(
+        vehicleRatingBefore, creatureRatingBefore, defeated ? 1 : 2,
+        this.#setting('rating_expected_value_table'), Number(this.#setting('rating_k_factor'))
+      );
       const rewards = [];
       const rewardType = this.#worldCreatureRewardType(creature.creature_type);
       const freeCapacity = hunterOperational
@@ -15323,24 +16548,31 @@ export class SqliteStore {
       }
       this.database.prepare(`
         UPDATE world_creatures SET hp = ?, status = ?, resolved_at = ?,
-          defeated_by_player_id = ?, defeated_by_vehicle_id = ? WHERE id = ?
+          defeated_by_player_id = ?, defeated_by_vehicle_id = ?, rating = ? WHERE id = ?
       `).run(hp, defeated ? 'defeated' : 'active', defeated ? now : null,
-        defeated ? playerId : null, defeated ? vehicle.id : null, creature.id);
+        defeated ? playerId : null, defeated ? vehicle.id : null,
+        creatureRatingAfter, creature.id);
+      this.database.prepare('UPDATE player_vehicles SET rating = ? WHERE id = ?')
+        .run(vehicleRatingAfter, vehicle.id);
       this.database.prepare(`
         INSERT INTO world_creature_attacks
           (creature_id, player_id, vehicle_id, damage, counter_damage,
-           defeated, reward_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           defeated, reward_json, created_at, vehicle_rating_before,
+           vehicle_rating_after, creature_rating_before, creature_rating_after)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(creature.id, playerId, vehicle.id, damage, counterDamage,
-        defeated ? 1 : 0, JSON.stringify(rewards), now);
+        defeated ? 1 : 0, JSON.stringify(rewards), now,
+        vehicleRatingBefore, vehicleRatingAfter, creatureRatingBefore, creatureRatingAfter);
       this.database.prepare(`
         INSERT INTO vehicle_events
           (vehicle_id, player_id, event_type, route_id, details_json, created_at)
         VALUES (?, ?, 'creature', ?, ?, ?)
       `).run(vehicle.id, playerId, creature.route_id,
-        JSON.stringify({ creatureId: creature.id, creatureType: creature.creature_type,
-          creatureRarity: liveCreature.rarity, rewardType, damage, counterDamage,
-          shotsFired, hp, defeated, rewards, initiator }), now);
+         JSON.stringify({ creatureId: creature.id, creatureType: creature.creature_type,
+           creatureRarity: liveCreature.rarity, rewardType, damage, counterDamage,
+           shotsFired, hp, defeated, rewards, initiator, starting, ending,
+           phases, skippedPhases, vehicleRatingBefore, vehicleRatingAfter,
+           creatureRatingBefore, creatureRatingAfter }), now);
       const creatureName = this.#worldCreatureName(
         creature.creature_type, liveCreature.rarity
       );
@@ -15365,11 +16597,12 @@ export class SqliteStore {
         now, `world-creature:${creature.id}:vehicle:${vehicle.id}`, {
           event: 'world-creature-combat', creatureId: creature.id, vehicleId: vehicle.id,
           creatureName, creatureType: creature.creature_type,
-          creatureRarity: liveCreature.rarity,
-          vehicleName: this.#vehicleName(traveling), rewardType,
-          damage, counterDamage, shotsFired, hp, defeated, rewards, rewardQuantity, initiator,
-          availableRewardQuantity,
-           actions: [{ label: 'View world events', path: '/events' },
+           creatureRarity: liveCreature.rarity,
+           vehicleName: this.#vehicleName(traveling), rewardType,
+           damage, counterDamage, shotsFired, hp, defeated, rewards, rewardQuantity, initiator,
+           availableRewardQuantity, starting, ending, phases, skippedPhases,
+           vehicleRatingBefore, vehicleRatingAfter, creatureRatingBefore, creatureRatingAfter,
+            actions: [{ label: 'View world events', path: '/events' },
              ...(shipSunk ? [] : [{ label: 'Manage vehicle', path: `/vehicles/${vehicle.id}` }])]
         });
       if (defeated) {
@@ -15386,11 +16619,13 @@ export class SqliteStore {
         routeId: creature.route_id, location: encounterLocation, now,
         cause: `world-creature:${creature.creature_type}`, loadout
       });
-    return {
-      creatureId: creature.id, creatureName, damage, counterDamage, hp, defeated,
-      creatureRarity: liveCreature.rarity, rewardType, shotsFired,
-      rewards, rewardQuantity, availableRewardQuantity
-    };
+     return {
+       creatureId: creature.id, creatureName, damage, counterDamage, hp, defeated,
+       creatureRarity: liveCreature.rarity, rewardType, shotsFired,
+       rewards, rewardQuantity, availableRewardQuantity, starting, ending,
+       phases, skippedPhases, vehicleRatingBefore, vehicleRatingAfter,
+       creatureRatingBefore, creatureRatingAfter
+     };
   }
 
   attackWorldCreature(playerId, creatureId, vehicleId, now = Date.now()) {
@@ -16121,16 +17356,24 @@ export class SqliteStore {
     return this.#publicVehicle(vehicle, this.#vehicleLoadout(vehicle), events);
   }
 
-  vehiclesForPlayer(playerId, now = Date.now()) {
-    this.#settleVehicles(playerId, now);
-    return this.database.prepare(
+  vehiclesForPlayer(playerId, now = Date.now(), options = {}) {
+    const settle = options.settle !== false;
+    if (settle) this.#settleVehicles(playerId, now);
+    const vehicles = this.database.prepare(
       'SELECT id FROM player_vehicles WHERE player_id = ? ORDER BY id'
     ).all(playerId).map(({ id }) => {
       let vehicle = this.#vehicleRecord(id, playerId);
-      this.#repairDockedShip(vehicle, now);
-      vehicle = this.#vehicleRecord(id, playerId);
+      if (settle) {
+        this.#repairDockedShip(vehicle, now);
+        vehicle = this.#vehicleRecord(id, playerId);
+      }
       return this.#publicVehicle(vehicle);
     });
+    if (options.includeRoutes) {
+      const routesByVehicleId = this.#routesForVehicles(playerId, vehicles, now);
+      for (const vehicle of vehicles) vehicle.routes = routesByVehicleId.get(vehicle.id) ?? [];
+    }
+    return vehicles;
   }
 
   #availableVehicleRoutes(playerId, cityId, routeType, aircraftType = null) {
@@ -17679,12 +18922,33 @@ export class SqliteStore {
           items: (pillageResult.items ?? []).map((item) => ({
             name: item.name, quantity: item.quantity
           })), disarmed: Boolean(pillageResult.disarmed)
-        } : null
+          } : null
       };
       this.database.prepare(`
         INSERT INTO live_update_events (scope, changed_at, event_type, payload_json)
         VALUES (?, ?, 'battle-complete', ?)
       `).run(`player:${entry.player_id}`, now, JSON.stringify(payload));
+      const outcomeLabel = tied ? 'Draw' : won ? 'Victory' : 'Defeat';
+      this.#insertSystemMessage(entry.player_id, 'Vehicle',
+        `${outcomeLabel} against ${this.#vehicleName(opponent)}`,
+        `Your ${this.#vehicleName(entry)} ${tied ? 'drew with' : won ? 'defeated' : 'lost to'} ${
+          playerNames.get(opponent.player_id) ?? 'Unknown miner'}'s ${
+          this.#vehicleName(opponent)}. The complete account of every combat phase is below.`,
+        now, `vehicle-combat:${battleId}:player:${entry.player_id}`, {
+          event: 'vehicle-combat', battleId, battleType: result.type, side: index,
+          outcome: payload.outcome,
+          vehicleName: this.#vehicleName(entry),
+          opponentVehicleName: this.#vehicleName(opponent),
+          opponentPlayerName: playerNames.get(opponent.player_id) ?? 'Unknown miner',
+          aggressive: index === 0 ? aggressive1 : aggressive2,
+          opponentAggressive: index === 0 ? aggressive2 : aggressive1,
+          ratingBefore, ratingAfter, encounterLocation, combatDuration,
+          starting: result.type === 'land2' ? startingLandStats : result.starting,
+          result, pillage: payload.pillage,
+          actions: [{ label: 'Open battle report', path: `/battles/${battleId}` },
+            ...(result.type === 'ship' && result.ships[index]?.hull === 0
+              ? [] : [{ label: 'Manage vehicle', path: `/vehicles/${entry.id}` }])]
+        });
     }
     for (const [index, entry] of [vehicle, other].entries()) {
       const sunk = result.type === 'ship' && result.ships[index]?.hull === 0;
@@ -17814,79 +19078,142 @@ export class SqliteStore {
     };
   }
 
+  #routesForVehicles(playerId, vehicles, now) {
+    const routesByVehicleId = new Map(vehicles.map((vehicle) => [vehicle.id, []]));
+    const eligible = vehicles.filter((vehicle) => vehicle.status === 'idle'
+      && !vehicle.aircraftDestroyed && vehicle.cityId !== null);
+    if (!eligible.length) return routesByVehicleId;
+
+    const routeCache = new Map();
+    const activeGadgets = this.#activeGadgetBehaviorKeys(playerId, now);
+    const radarActive = activeGadgets.has('radar');
+    const airRouteType = this.#routeTypeId('air');
+    const opponentsByRouteId = new Map();
+    if (radarActive) {
+      for (const opponent of this.database.prepare(`
+        SELECT player_vehicles.route_id, player_vehicles.travel_order,
+          catalog_items.rarity, catalog_aircrafts.aircraft_type
+        FROM player_vehicles
+        JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
+        LEFT JOIN catalog_aircrafts
+          ON catalog_aircrafts.vehicle_id = player_vehicles.vehicle_type_id
+        WHERE player_vehicles.status = 'traveling'
+          AND player_vehicles.route_id IS NOT NULL
+          AND player_vehicles.player_id != ?
+      `).all(playerId)) {
+        if (!opponentsByRouteId.has(opponent.route_id)) {
+          opponentsByRouteId.set(opponent.route_id, []);
+        }
+        opponentsByRouteId.get(opponent.route_id).push(opponent);
+      }
+    }
+
+    const classRules = radarActive ? this.#setting('combat_class_by_rarity') : null;
+    const radarCache = new Map();
+    let roleLabels = null;
+    let roleIds = null;
+    let orderLabels = null;
+    const radarFor = (vehicle, routeId) => {
+      const classKey = vehicle.routeType === airRouteType
+        ? 'air' : combatClass(vehicle.rarity, classRules);
+      const key = `${routeId}:${classKey}`;
+      if (radarCache.has(key)) return radarCache.get(key);
+      const opponents = opponentsByRouteId.get(routeId) ?? [];
+      let radar;
+      if (vehicle.routeType === airRouteType) {
+        if (!roleLabels) {
+          roleLabels = new Map(this.database.prepare(`
+            SELECT id, name FROM catalog_labels WHERE domain = 'aircraft_role' ORDER BY id
+          `).all().map((entry) => [entry.id, entry.name]));
+          roleIds = Object.values(this.#setting('aircraft_role_ids')).map(Number);
+        }
+        const counts = new Map(roleIds.map((roleId) => {
+          const label = roleLabels.get(roleId);
+          if (typeof label !== 'string' || !label) {
+            throw new Error(`Missing aircraft-role label: ${roleId}.`);
+          }
+          return [roleId, { label, count: 0 }];
+        }));
+        for (const opponent of opponents) {
+          const count = counts.get(opponent.aircraft_type);
+          if (count) count.count += 1;
+        }
+        radar = [...counts.values()];
+      } else {
+        if (!orderLabels) {
+          const travelOrderNames = this.#setting('travel_order_names');
+          orderLabels = new Map(['peaceful', 'pillage', 'patrol'].map((order) => {
+            const label = travelOrderNames?.[order];
+            if (typeof label !== 'string' || !label) {
+              throw new Error(`Missing travel-order name: ${order}.`);
+            }
+            return [order, label];
+          }));
+        }
+        const counts = new Map([...orderLabels]
+          .map(([order, label]) => [order, { label, count: 0 }]));
+        for (const opponent of opponents) {
+          if (combatClass(opponent.rarity, classRules) === classKey
+            && counts.has(opponent.travel_order)) {
+            counts.get(opponent.travel_order).count += 1;
+          }
+        }
+        radar = [...counts.values()];
+      }
+      radarCache.set(key, radar);
+      return radar;
+    };
+
+    for (const vehicle of eligible) {
+      const cacheKey = `${vehicle.cityId}:${vehicle.routeType}:${vehicle.aircraftType ?? ''}`;
+      if (!routeCache.has(cacheKey)) {
+        routeCache.set(cacheKey, this.#availableVehicleRoutes(
+          playerId, vehicle.cityId, vehicle.routeType, vehicle.aircraftType
+        ));
+      }
+      const routes = routeCache.get(cacheKey).map((route) => {
+        const available = {
+          id: route.id,
+          originCityId: vehicle.cityId,
+          destinationCityId: route.city1_id === vehicle.cityId
+            ? route.city2_id : route.city1_id,
+          length: route.length,
+          type: route.type,
+          mission: route.city1_id === route.city2_id
+        };
+        if (radarActive) {
+          available.radar = radarFor(vehicle, route.id)
+            .map((entry) => ({ ...entry }));
+        }
+        return available;
+      });
+      routesByVehicleId.set(vehicle.id, routes);
+    }
+    return routesByVehicleId;
+  }
+
   routesForVehicle(playerId, vehicleId, now = Date.now()) {
     this.#settleVehicles(playerId, now);
-    const vehicle = this.database.prepare(`
+    const row = this.database.prepare(`
       SELECT player_vehicles.city_id, player_vehicles.status, player_vehicles.aircraft_destroyed,
-        catalog_vehicles.route_type, catalog_aircrafts.aircraft_type
+        catalog_vehicles.route_type, catalog_aircrafts.aircraft_type, catalog_items.rarity
       FROM player_vehicles
       JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
+      JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
       LEFT JOIN catalog_aircrafts ON catalog_aircrafts.vehicle_id = player_vehicles.vehicle_type_id
       WHERE player_vehicles.id = ? AND player_vehicles.player_id = ?
     `).get(vehicleId, playerId);
-    if (!vehicle || vehicle.status !== 'idle' || vehicle.aircraft_destroyed) return [];
-    let routes = this.#availableVehicleRoutes(
-      playerId, vehicle.city_id, vehicle.route_type, vehicle.aircraft_type
-    );
-    routes = routes.map((route) => ({
-      id: route.id,
-      originCityId: vehicle.city_id,
-      destinationCityId: route.city1_id === vehicle.city_id ? route.city2_id : route.city1_id,
-      length: route.length,
-      type: route.type,
-      mission: route.city1_id === route.city2_id
-    }));
-    if (!this.#activeGadgetBehaviorKeys(playerId, now).has('radar')) return routes;
-    const rarity = this.#vehicleRecord(vehicleId, playerId).rarity;
-    const classRules = this.#setting('combat_class_by_rarity');
-    const travelOrderNames = this.#setting('travel_order_names');
-    const orderLabels = new Map(['peaceful', 'pillage', 'patrol'].map((order) => {
-      const label = travelOrderNames?.[order];
-      if (typeof label !== 'string' || !label) throw new Error(`Missing travel-order name: ${order}.`);
-      return [order, label];
-    }));
-    for (const route of routes) {
-      if (vehicle.route_type === this.#routeTypeId('air')) {
-        const roleLabels = new Map(this.database.prepare(`
-          SELECT id, name FROM catalog_labels WHERE domain = 'aircraft_role' ORDER BY id
-        `).all().map((entry) => [entry.id, entry.name]));
-        const counts = new Map(Object.values(this.#setting('aircraft_role_ids')).map(Number)
-          .map((roleId) => {
-            const label = roleLabels.get(roleId);
-            if (typeof label !== 'string' || !label) {
-              throw new Error(`Missing aircraft-role label: ${roleId}.`);
-            }
-            return [roleId, { label, count: 0 }];
-          }));
-        for (const entry of this.database.prepare(`
-          SELECT catalog_aircrafts.aircraft_type
-          FROM player_vehicles
-          JOIN catalog_aircrafts ON catalog_aircrafts.vehicle_id = player_vehicles.vehicle_type_id
-          WHERE player_vehicles.route_id = ? AND player_vehicles.status = 'traveling'
-            AND player_vehicles.player_id != ?
-        `).all(route.id, playerId)) {
-          const count = counts.get(entry.aircraft_type);
-          if (count) count.count += 1;
-        }
-        route.radar = [...counts.values()];
-      } else {
-        const counts = new Map([...orderLabels].map(([order, label]) => [order, { label, count: 0 }]));
-        for (const entry of this.database.prepare(`
-          SELECT player_vehicles.travel_order, catalog_items.rarity
-          FROM player_vehicles
-          JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
-          WHERE player_vehicles.route_id = ? AND player_vehicles.status = 'traveling'
-            AND player_vehicles.player_id != ?
-        `).all(route.id, playerId)) {
-          if (combatClass(entry.rarity, classRules) === combatClass(rarity, classRules)
-            && counts.has(entry.travel_order)) {
-            counts.get(entry.travel_order).count += 1;
-          }
-        }
-        route.radar = [...counts.values()];
-      }
-    }
-    return routes;
+    if (!row) return [];
+    const vehicle = {
+      id: vehicleId,
+      cityId: row.city_id,
+      status: row.status,
+      aircraftDestroyed: Boolean(row.aircraft_destroyed),
+      routeType: row.route_type,
+      aircraftType: row.aircraft_type,
+      rarity: row.rarity
+    };
+    return this.#routesForVehicles(playerId, [vehicle], now).get(vehicleId) ?? [];
   }
 
   battleReport(playerId, battleId) {
@@ -18012,61 +19339,149 @@ export class SqliteStore {
   }
 
   #combatSeasonStandings(season, routeType, classValue) {
-    const rows = this.database.prepare(`
-      WITH eligible AS (
-        SELECT sides.player_id, sides.vehicle_id, sides.won, sides.rating_after,
-          battles.id AS battle_id, battles.created_at,
-          ROW_NUMBER() OVER (
-            PARTITION BY sides.vehicle_id
-            ORDER BY battles.created_at DESC, battles.id DESC
-          ) AS vehicle_recency
+    const classRules = this.#setting('combat_class_by_rarity');
+    const rarityList = classRules.map((value, rarity) => ({
+      value: Number(value), rarity
+    })).filter((entry) => entry.value === Number(classValue))
+      .map((entry) => entry.rarity);
+    if (!rarityList.length) return [];
+    const raritySql = rarityList.map(Number).join(',');
+    const startsAt = Number(season.startsAt);
+    const endsAt = Number(season.endsAt);
+    const routeTypeValue = Number(routeType);
+    const classNumber = Number(classValue);
+    const startingRating = Number(this.#setting('vehicle_starting_rating'));
+    const playerRows = this.database.prepare(`
+      WITH candidates AS (
+        SELECT player_vehicles.id AS vehicle_id, player_vehicles.player_id,
+          player_vehicles.rating, 1 AS is_current, 0 AS occurred_at
+        FROM player_vehicles
+        JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
+        JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
+        WHERE catalog_items.rarity IN (${raritySql})
+          AND catalog_vehicles.route_type = ${routeTypeValue}
+        UNION ALL
+        SELECT sides.vehicle_id, sides.player_id, sides.rating_after, 0,
+          battles.created_at
         FROM vehicle_battle_sides AS sides
         JOIN vehicle_battles AS battles ON battles.id = sides.battle_id
-        JOIN players ON players.id = sides.player_id
-        JOIN vehicle_battle_sides AS opponents
-          ON opponents.battle_id = sides.battle_id
-          AND opponents.vehicle_id = sides.opponent_vehicle_id
-        JOIN players AS opponent_players ON opponent_players.id = opponents.player_id
-        WHERE battles.created_at >= ? AND battles.created_at < ?
-          AND battles.route_type = ? AND battles.combat_class = ?
-          AND players.is_npc = 0 AND opponent_players.is_npc = 0
+        WHERE battles.created_at >= ${startsAt} AND battles.created_at < ${endsAt}
+          AND battles.route_type = ${routeTypeValue}
+          AND battles.combat_class = ${classNumber}
+        UNION ALL
+        SELECT attacks.vehicle_id, attacks.player_id,
+          COALESCE(attacks.vehicle_rating_after, ${startingRating}), 0,
+          attacks.created_at
+        FROM world_creature_attacks AS attacks
+        JOIN world_creatures ON world_creatures.id = attacks.creature_id
+        JOIN catalog_routes ON catalog_routes.id = world_creatures.route_id
+        WHERE attacks.created_at >= ${startsAt} AND attacks.created_at < ${endsAt}
+          AND world_creatures.rarity IN (${raritySql})
+          AND catalog_routes.type = ${routeTypeValue}
       ),
-      latest AS (
-        SELECT player_id, vehicle_id, rating_after
-        FROM eligible WHERE vehicle_recency = 1
+      ranked_candidates AS (
+        SELECT candidates.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY vehicle_id
+            ORDER BY is_current DESC, occurred_at DESC
+          ) AS vehicle_recency
+        FROM candidates
+      ),
+      participants AS (
+        SELECT vehicle_id, player_id, rating
+        FROM ranked_candidates WHERE vehicle_recency = 1
+      ),
+      combat_totals AS (
+        SELECT sides.player_id, SUM(sides.won) AS wins, COUNT(*) AS battles
+        FROM vehicle_battle_sides AS sides
+        JOIN vehicle_battles AS battles ON battles.id = sides.battle_id
+        WHERE battles.created_at >= ${startsAt} AND battles.created_at < ${endsAt}
+          AND battles.route_type = ${routeTypeValue}
+          AND battles.combat_class = ${classNumber}
+        GROUP BY sides.player_id
+        UNION ALL
+        SELECT attacks.player_id, SUM(attacks.defeated) AS wins, COUNT(*) AS battles
+        FROM world_creature_attacks AS attacks
+        JOIN world_creatures ON world_creatures.id = attacks.creature_id
+        JOIN catalog_routes ON catalog_routes.id = world_creatures.route_id
+        WHERE attacks.created_at >= ${startsAt} AND attacks.created_at < ${endsAt}
+          AND world_creatures.rarity IN (${raritySql})
+          AND catalog_routes.type = ${routeTypeValue}
+        GROUP BY attacks.player_id
       ),
       totals AS (
-        SELECT player_id, SUM(won) AS wins, COUNT(*) AS battles
-        FROM eligible GROUP BY player_id HAVING SUM(won) > 0
+        SELECT player_id, SUM(wins) AS wins, SUM(battles) AS battles
+        FROM combat_totals GROUP BY player_id
       )
-      SELECT players.id, players.name, players.created_at,
-        MAX(latest.rating_after) AS rating,
-        COUNT(DISTINCT latest.vehicle_id) AS vehicle_count,
-        totals.wins, totals.battles,
+      SELECT players.id, players.name, players.created_at, players.is_npc,
+        MAX(participants.rating) AS rating,
+        COUNT(DISTINCT participants.vehicle_id) AS vehicle_count,
+        COALESCE(totals.wins, 0) AS wins,
+        COALESCE(totals.battles, 0) AS battles,
         (SELECT COUNT(*) FROM player_melds WHERE player_id = players.id) AS meld_count
-      FROM totals
-      JOIN players ON players.id = totals.player_id
-      JOIN latest ON latest.player_id = players.id
-      GROUP BY players.id, players.name, players.created_at, totals.wins, totals.battles
-      ORDER BY rating DESC, totals.wins DESC, vehicle_count DESC,
-        meld_count DESC, players.created_at DESC
-    `).all(season.startsAt, season.endsAt, routeType, Number(classValue));
-    return rows.map((entry, index) => ({
+      FROM participants
+      JOIN players ON players.id = participants.player_id
+      LEFT JOIN totals ON totals.player_id = players.id
+      GROUP BY players.id, players.name, players.created_at, players.is_npc,
+        totals.wins, totals.battles
+    `).all().map((entry) => ({
       playerId: Number(entry.id),
+      participantType: 'fleet',
+      isNpc: Boolean(entry.is_npc),
       name: entry.name,
       rating: Number(entry.rating),
       vehicleCount: Number(entry.vehicle_count),
       meldCount: Number(entry.meld_count),
       wins: Number(entry.wins),
       battles: Number(entry.battles),
-      rank: index + 1,
-      tierRank: this.database.prepare(`
-        SELECT rank FROM catalog_tiers WHERE route_type = ? AND combat_class = ?
-          AND (min_rating IS NULL OR ? >= min_rating)
-          AND (max_rating IS NULL OR ? <= max_rating)
-        ORDER BY rank LIMIT 1
-      `).get(routeType, Number(classValue), entry.rating, entry.rating)?.rank ?? null
+      createdAt: Number(entry.created_at)
     }));
+    const creatureRows = this.database.prepare(`
+      SELECT world_creatures.id, world_creatures.creature_type,
+        world_creatures.rarity, world_creatures.rating,
+        world_creatures.awakened_at,
+        COUNT(world_creature_attacks.id) AS battles,
+        COALESCE(SUM(CASE WHEN world_creature_attacks.defeated = 0 THEN 1 ELSE 0 END), 0)
+          AS wins
+      FROM world_creatures
+      JOIN catalog_routes ON catalog_routes.id = world_creatures.route_id
+      LEFT JOIN world_creature_attacks
+        ON world_creature_attacks.creature_id = world_creatures.id
+        AND world_creature_attacks.created_at >= ?
+        AND world_creature_attacks.created_at < ?
+      WHERE catalog_routes.type = ? AND world_creatures.rarity IN (${raritySql})
+        AND world_creatures.awakened_at < ?
+        AND (world_creatures.resolved_at IS NULL OR world_creatures.resolved_at >= ?)
+      GROUP BY world_creatures.id
+    `).all(startsAt, endsAt, routeTypeValue, endsAt, startsAt).map((entry) => ({
+      playerId: null,
+      participantType: 'creature',
+      isNpc: true,
+      creatureId: Number(entry.id),
+      name: `${this.#worldCreatureName(entry.creature_type, entry.rarity)} #${entry.id}`,
+      rating: Number(entry.rating ?? startingRating),
+      vehicleCount: 1,
+      meldCount: 0,
+      wins: Number(entry.wins),
+      battles: Number(entry.battles),
+      createdAt: Number(entry.awakened_at)
+    }));
+    const tierRankFor = (rating) => this.database.prepare(`
+      SELECT rank FROM catalog_tiers WHERE route_type = ? AND combat_class = ?
+        AND (min_rating IS NULL OR ? >= min_rating)
+        AND (max_rating IS NULL OR ? <= max_rating)
+      ORDER BY rank LIMIT 1
+    `).get(routeTypeValue, classNumber, rating, rating)?.rank ?? null;
+    return [...playerRows, ...creatureRows]
+      .sort((first, second) => second.rating - first.rating
+        || second.wins - first.wins
+        || second.vehicleCount - first.vehicleCount
+        || second.meldCount - first.meldCount
+        || second.createdAt - first.createdAt
+        || first.name.localeCompare(second.name))
+      .map((entry, index) => ({
+        ...entry, rank: index + 1, tierRank: tierRankFor(entry.rating)
+      }));
   }
 
   #ensureCombatSeasonRecord(now) {
@@ -18102,9 +19517,11 @@ export class SqliteStore {
         for (const routeType of routeTypes) {
           const prizes = this.#combatSeasonPrizeItems(routeType, classValue);
           const standings = this.#combatSeasonStandings(season, routeType, classValue)
-            .slice(0, prizes.length);
+            .filter((entry) => entry.playerId !== null && !entry.isNpc && entry.battles > 0)
+            .slice(0, prizes.length)
+            .map((entry, index) => ({ ...entry, prizeRank: index + 1 }));
           for (const entry of standings) {
-            const prize = prizes[entry.rank - 1];
+            const prize = prizes[entry.prizeRank - 1];
             const player = this.database.prepare(`
               SELECT id, city_id FROM players WHERE id = ? AND is_npc = 0
             `).get(entry.playerId);
@@ -18116,15 +19533,15 @@ export class SqliteStore {
                  rating, wins, battles, vehicle_count, prize_item_id, prize_name,
                  awarded_city_id, awarded_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(season.id, routeType, Number(classValue), entry.rank,
+            `).run(season.id, routeType, Number(classValue), entry.prizeRank,
               player.id, entry.name, entry.rating, entry.wins, entry.battles,
               entry.vehicleCount, prize.itemId, prize.name, player.city_id, Number(now));
             this.#insertSystemMessage(player.id, 'Vehicle',
-              `Combat season ${entry.rank === 1 ? 'champion' : `place ${entry.rank}`}`,
-              `You finished #${entry.rank} in your combat division and won an unfitted ${prize.name}. It is waiting in your current city.`,
-              Number(now), `combat-season:${season.id}:${routeType}:${classValue}:${entry.rank}`, {
+              `Combat season ${entry.prizeRank === 1 ? 'champion' : `place ${entry.prizeRank}`}`,
+              `You finished #${entry.prizeRank} among prize-eligible miners in your combat division and won an unfitted ${prize.name}. It is waiting in your current city.`,
+              Number(now), `combat-season:${season.id}:${routeType}:${classValue}:${entry.prizeRank}`, {
                 event: 'combat-season-prize', seasonId: season.id,
-                routeType, combatClass: Number(classValue), place: entry.rank,
+                routeType, combatClass: Number(classValue), place: entry.prizeRank,
                 itemId: prize.itemId, itemName: prize.name, cityId: player.city_id,
                 actions: [
                   { label: 'View season prizes', path: '/ratings/prizes' },
@@ -18139,6 +19556,9 @@ export class SqliteStore {
         .run(Number(now), season.id);
       this.database.prepare('UPDATE player_vehicles SET rating = ?')
         .run(Number(this.#setting('vehicle_starting_rating')));
+      this.database.prepare(`
+        UPDATE world_creatures SET rating = ? WHERE status = 'active'
+      `).run(Number(this.#setting('vehicle_starting_rating')));
       seasonsFinalized += 1;
     }
     return { current, seasonsFinalized, prizesAwarded };
@@ -18744,22 +20164,39 @@ export class SqliteStore {
     });
   }
 
-  listMiners(query = '') {
+  listMiners(query = '', limit = null) {
     const search = `%${String(query).trim()}%`;
+    const configuredLimit = this.#positiveIntegerSetting('miner_search_result_limit');
+    const requestedLimit = Number(limit);
+    const resultLimit = limit === null || limit === undefined
+      ? configuredLimit
+      : Number.isSafeInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : configuredLimit;
     return this.database.prepare(`
-      SELECT players.id, players.name, players.description, players.city_id, players.created_at,
-        (SELECT COUNT(*) FROM mines WHERE mines.player_id = players.id) AS mine_count,
-        (SELECT COALESCE(SUM(quantity), 0) FROM inventory WHERE inventory.player_id = players.id) AS item_count
-      FROM players
-      WHERE players.is_npc = 0 AND players.name LIKE ? COLLATE NOCASE
-      ORDER BY players.name COLLATE NOCASE
+      WITH miner_totals AS (
+        SELECT players.id, players.name, players.description, players.city_id,
+          players.created_at, players.authority, players.chat_color,
+          (SELECT COUNT(*) FROM player_melds WHERE player_melds.player_id = players.id) AS meld_count,
+          (SELECT COUNT(*) FROM mines WHERE mines.player_id = players.id) AS mine_count,
+          (SELECT COALESCE(SUM(quantity), 0) FROM inventory WHERE inventory.player_id = players.id) AS item_count
+        FROM players
+        WHERE players.is_npc = 0
+      ), ranked_miners AS (
+        SELECT *, RANK() OVER (ORDER BY meld_count DESC) AS meld_rank
+        FROM miner_totals
+      )
+      SELECT * FROM ranked_miners
+      WHERE name LIKE ? COLLATE NOCASE
+      ORDER BY meld_count DESC, name COLLATE NOCASE, id
       LIMIT ?
-    `).all(search, this.#positiveIntegerSetting('miner_search_result_limit')).map((miner) => ({
+    `).all(search, resultLimit).map((miner) => ({
       id: miner.id,
       name: miner.name,
       description: miner.description,
       cityId: miner.city_id,
       createdAt: miner.created_at,
+      meldCount: Number(miner.meld_count),
+      meldRank: Number(miner.meld_rank),
+      chatColor: this.#chatAppearanceFor(miner, Number(miner.meld_count)).color,
       mineCount: miner.mine_count,
       itemCount: miner.item_count
     }));

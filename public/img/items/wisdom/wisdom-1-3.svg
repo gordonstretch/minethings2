@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Local Price</title>
+  <desc id="desc">Watch each city price
+What is cheap here sells well there
+Distance makes the gold</desc>
+  <circle cx="64" cy="64" r="43" fill="#d9e0e3" stroke="#27333a" stroke-width="5"/>
+    <path fill="#7b8790" stroke="#27333a" stroke-width="3" stroke-linejoin="round" d="M75 53l22-21-13 29 12 11-18 4-6 18-11-12-29 14 21-23z"/>
+    <circle cx="64" cy="64" r="7" fill="#27333a"/>
+</svg>

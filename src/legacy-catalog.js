@@ -13,6 +13,352 @@ const IMAGE_ROOT = path.join(ROOT, 'td', 'public_html', 'app', 'webroot', 'img')
 const RARITY_NAMES = ['', 'Common', 'Uncommon', 'Rare', 'Exceptional', 'Fabled', 'Legendary'];
 const EQUIPMENT_TYPE_NAMES = ['', 'Tool Belt', 'Boots', 'Pickaxe', 'Drill', 'Cart', 'Hardhat', 'Light'];
 const EQUIPMENT_RARITY_ADJECTIVES = ['', 'Flimsy', 'Standard', 'Hardy', 'Crafted', 'Fabled', 'Legendary'];
+export const SHROOM_CATALOG = Object.freeze({
+  mapId: 2,
+  mapSlug: 'bromo',
+  mineType: Object.freeze({
+    id: 26, name: 'Shrooms', creditCost: 325, rentCost: 22,
+    hasOre: false, refundable: true, icon: '/node/shrooms/mine.svg'
+  }),
+  items: Object.freeze([
+    { id: 1434, name: 'Button Shroom', rarity: 1,
+      description: 'A squat Bromo mushroom with a nutty cap. Mostly harmless, always useful in an introductory Spore Print.',
+      marketableId: 1261, goldValueUnits: 10000, icon: '/node/shrooms/shroom-1.svg' },
+    { id: 1440, name: 'Field Mushroom', rarity: 1,
+      description: 'A sturdy white mushroom gathered from Bromo ash meadows. Its broad gills hold a clean Spore Print.',
+      marketableId: 1267, goldValueUnits: 9246, icon: '/node/shrooms/shroom-1-2.svg' },
+    { id: 1441, name: 'Shaggy Inkcap', rarity: 1,
+      description: 'A shaggy Bromo inkcap that dissolves into black ink. Melders use the ink to fix spores to paper.',
+      marketableId: 1268, goldValueUnits: 9246, icon: '/node/shrooms/shroom-1-3.svg' },
+    { id: 1442, name: 'Common Puffball', rarity: 1,
+      description: 'A round puffball packed with dry spores. A careful squeeze supplies an entire Spore Print.',
+      marketableId: 1269, goldValueUnits: 9246, icon: '/node/shrooms/shroom-1-4.svg' },
+    { id: 1443, name: 'Parasol Mushroom', rarity: 1,
+      description: 'A tall, scaly mushroom whose cap opens like an umbrella after Bromo rain.',
+      marketableId: 1270, goldValueUnits: 9246, icon: '/node/shrooms/shroom-1-5.svg' },
+    { id: 1435, name: 'Glowcap', rarity: 2,
+      description: 'A cool green mushroom that glows after dusk. Miners use it to mark the edge of a Fairy Ring.',
+      marketableId: 1262, goldValueUnits: 40000, icon: '/node/shrooms/shroom-2.svg' },
+    { id: 1444, name: 'Golden Chanterelle', rarity: 2,
+      description: 'A gold-folded forest mushroom whose trumpet shape carries whispers around a Fairy Ring.',
+      marketableId: 1271, goldValueUnits: 40000, icon: '/node/shrooms/shroom-2-2.svg' },
+    { id: 1445, name: 'Scarlet Waxcap', rarity: 2,
+      description: 'A bright waxy cap found on Bromo slopes. Its colour remains vivid when worked into a meld.',
+      marketableId: 1272, goldValueUnits: 40000, icon: '/node/shrooms/shroom-2-3.svg' },
+    { id: 1446, name: 'Earthstar', rarity: 2,
+      description: 'A leathery fungus that unfolds into a many-pointed star when Bromo soil becomes damp.',
+      marketableId: 1273, goldValueUnits: 40000, icon: '/node/shrooms/shroom-2-4.svg' },
+    { id: 1447, name: 'Wood Blewit', rarity: 2,
+      description: 'A lilac woodland mushroom used to give a Fairy Ring its cool outer boundary.',
+      marketableId: 1274, goldValueUnits: 40000, icon: '/node/shrooms/shroom-2-5.svg' },
+    { id: 1436, name: 'Dreamcap', rarity: 3,
+      description: 'A blue-veined Bromo shroom said to make sleepers remember routes they have never travelled.',
+      marketableId: 1263, goldValueUnits: 290000, icon: '/node/shrooms/shroom-3.svg' },
+    { id: 1448, name: "Lion's Mane", rarity: 3,
+      description: 'A cascading white fungus prized by navigators for the clear dreams it lends to a Dreamwalk.',
+      marketableId: 1275, goldValueUnits: 280000, icon: '/node/shrooms/shroom-3-2.svg' },
+    { id: 1449, name: 'Amethyst Deceiver', rarity: 3,
+      description: 'A violet mushroom that changes shade when nobody looks directly at it.',
+      marketableId: 1276, goldValueUnits: 280000, icon: '/node/shrooms/shroom-3-3.svg' },
+    { id: 1450, name: "Bird's Nest Fungus", rarity: 3,
+      description: 'A tiny cup holding spore-filled eggs. Melders arrange them as waypoints for a Dreamwalk.',
+      marketableId: 1277, goldValueUnits: 280000, icon: '/node/shrooms/shroom-3-4.svg' },
+    { id: 1451, name: "Devil's Cigar", rarity: 3,
+      description: 'A dark closed fungus that bursts into a smoky star when disturbed.',
+      marketableId: 1278, goldValueUnits: 280000, icon: '/node/shrooms/shroom-3-5.svg' },
+    { id: 1437, name: "Witch's Cap", rarity: 4,
+      description: 'A sharp red cap prized by careful brewers. It is the dangerous heart of a Witch’s Brew meld.',
+      marketableId: 1264, goldValueUnits: 2000000, icon: '/node/shrooms/shroom-4.svg' },
+    { id: 1452, name: 'Ghost Fungus', rarity: 4,
+      description: 'A pale fungus that shines from within. Its cold light reveals whether a Witch’s Brew is ready.',
+      marketableId: 1279, goldValueUnits: 2000000, icon: '/node/shrooms/shroom-4-2.svg' },
+    { id: 1453, name: 'Bleeding Tooth', rarity: 4,
+      description: 'A white cap beaded with crimson sap. One drop gives a dangerous meld its bite.',
+      marketableId: 1280, goldValueUnits: 2000000, icon: '/node/shrooms/shroom-4-3.svg' },
+    { id: 1454, name: 'Veiled Lady', rarity: 4,
+      description: 'A delicate Bromo stinkhorn draped in a lace-like veil used to strain potent brews.',
+      marketableId: 1281, goldValueUnits: 2000000, icon: '/node/shrooms/shroom-4-4.svg' },
+    { id: 1455, name: 'Destroying Angel', rarity: 4,
+      description: 'A beautiful white mushroom handled only with sealed tools. It makes a Witch’s Brew irreversible.',
+      marketableId: 1282, goldValueUnits: 2000000, icon: '/node/shrooms/shroom-4-5.svg' },
+    { id: 1438, name: 'Void Morel', rarity: 5,
+      description: 'A magical honeycombed fungus that seems deeper inside than outside. Essential to the Mycelial Mind meld.',
+      marketableId: 1265, goldValueUnits: 14010000, icon: '/node/shrooms/shroom-5.svg' },
+    { id: 1456, name: 'Pixie Parasol', rarity: 5,
+      description: 'A magical silver parasol under which tiny footprints appear overnight, even in locked vaults.',
+      marketableId: 1283, goldValueUnits: 14010000, icon: '/node/shrooms/shroom-5-2.svg' },
+    { id: 1457, name: 'Witchwood Polypore', rarity: 5,
+      description: 'A magical shelf fungus that stores a whispered thought in each coloured ring.',
+      marketableId: 1284, goldValueUnits: 14010000, icon: '/node/shrooms/shroom-5-3.svg' },
+    { id: 1458, name: 'Mooncap', rarity: 5,
+      description: 'A magical crescent-capped mushroom that grows only in the shadow of Bromo’s moon.',
+      marketableId: 1285, goldValueUnits: 14010000, icon: '/node/shrooms/shroom-5-4.svg' },
+    { id: 1459, name: "Oracle's Ear", rarity: 5,
+      description: 'A magical ear-shaped fungus that repeats tomorrow’s rumours in a voice like distant thunder.',
+      marketableId: 1286, goldValueUnits: 14010000, icon: '/node/shrooms/shroom-5-5.svg' },
+    { id: 1439, name: 'Crown of Bromo', rarity: 6,
+      description: 'A legendary magical shroom found only in Bromo. The final living piece of the Crown of Bromo meld.',
+      marketableId: 1266, goldValueUnits: 84040000, icon: '/node/shrooms/shroom-6.svg' },
+    { id: 1460, name: 'Phoenix Morel', rarity: 6,
+      description: 'A legendary magical morel that burns to warm ash and grows back before sunrise.',
+      marketableId: 1287, goldValueUnits: 84040000, icon: '/node/shrooms/shroom-6-2.svg' },
+    { id: 1461, name: "Djinn's Lantern", rarity: 6,
+      description: 'A legendary magical cap lit by captive blue fire. Rubbing its stem grants excellent bad advice.',
+      marketableId: 1288, goldValueUnits: 84040000, icon: '/node/shrooms/shroom-6-3.svg' },
+    { id: 1462, name: 'Time Truffle', rarity: 6,
+      description: 'A legendary magical truffle that is always dug up one minute before it was buried.',
+      marketableId: 1289, goldValueUnits: 84040000, icon: '/node/shrooms/shroom-6-4.svg' },
+    { id: 1463, name: 'Wishcap', rarity: 6,
+      description: 'A legendary magical mushroom that fulfils wishes literally, briefly, and usually inconveniently.',
+      marketableId: 1290, goldValueUnits: 84040000, icon: '/node/shrooms/shroom-6-5.svg' }
+  ]),
+  melds: Object.freeze([
+    { id: 234, name: 'Spore Print', rarity: 1 },
+    { id: 235, name: 'Fairy Ring', rarity: 2 },
+    { id: 236, name: 'Dreamwalk', rarity: 3 },
+    { id: 237, name: "Witch's Brew", rarity: 4 },
+    { id: 238, name: 'Mycelial Mind', rarity: 5 },
+    { id: 239, name: 'Crown of Bromo', rarity: 6 }
+  ]),
+  meldRequirements: Object.freeze([
+    { id: 1701, meldId: 234, itemId: 1434, count: 5 },
+    { id: 1702, meldId: 235, itemId: 1434, count: 3 },
+    { id: 1703, meldId: 235, itemId: 1435, count: 2 },
+    { id: 1704, meldId: 236, itemId: 1435, count: 3 },
+    { id: 1705, meldId: 236, itemId: 1436, count: 2 },
+    { id: 1706, meldId: 237, itemId: 1436, count: 3 },
+    { id: 1707, meldId: 237, itemId: 1437, count: 2 },
+    { id: 1708, meldId: 238, itemId: 1437, count: 3 },
+    { id: 1709, meldId: 238, itemId: 1438, count: 2 },
+    { id: 1710, meldId: 239, itemId: 1438, count: 3 },
+    { id: 1711, meldId: 239, itemId: 1439, count: 1 },
+    { id: 1712, meldId: 234, itemId: 1440, count: 1 },
+    { id: 1713, meldId: 234, itemId: 1441, count: 1 },
+    { id: 1714, meldId: 234, itemId: 1442, count: 1 },
+    { id: 1715, meldId: 234, itemId: 1443, count: 1 },
+    { id: 1716, meldId: 235, itemId: 1444, count: 1 },
+    { id: 1717, meldId: 235, itemId: 1445, count: 1 },
+    { id: 1718, meldId: 235, itemId: 1446, count: 1 },
+    { id: 1719, meldId: 235, itemId: 1447, count: 1 },
+    { id: 1720, meldId: 236, itemId: 1448, count: 1 },
+    { id: 1721, meldId: 236, itemId: 1449, count: 1 },
+    { id: 1722, meldId: 236, itemId: 1450, count: 1 },
+    { id: 1723, meldId: 236, itemId: 1451, count: 1 },
+    { id: 1724, meldId: 237, itemId: 1452, count: 1 },
+    { id: 1725, meldId: 237, itemId: 1453, count: 1 },
+    { id: 1726, meldId: 237, itemId: 1454, count: 1 },
+    { id: 1727, meldId: 237, itemId: 1455, count: 1 },
+    { id: 1728, meldId: 238, itemId: 1456, count: 1 },
+    { id: 1729, meldId: 238, itemId: 1457, count: 1 },
+    { id: 1730, meldId: 238, itemId: 1458, count: 1 },
+    { id: 1731, meldId: 238, itemId: 1459, count: 1 },
+    { id: 1732, meldId: 239, itemId: 1460, count: 1 },
+    { id: 1733, meldId: 239, itemId: 1461, count: 1 },
+    { id: 1734, meldId: 239, itemId: 1462, count: 1 },
+    { id: 1735, meldId: 239, itemId: 1463, count: 1 }
+  ])
+});
+const WOOD_ITEMS = Object.freeze([
+  { id: 1464, name: 'Pine Plank', rarity: 1,
+    description: 'A straight Calbuco pine plank, light enough for crates and sturdy enough for the first Wood Meld.',
+    marketableId: 1291, goldValueUnits: 10000, icon: '/node/wood/wood-1.svg' },
+  { id: 1465, name: 'Cedar Board', rarity: 1,
+    description: 'A fragrant Calbuco cedar board that resists damp and keeps a packing crate respectable.',
+    marketableId: 1292, goldValueUnits: 9246, icon: '/node/wood/wood-1-2.svg' },
+  { id: 1466, name: 'Birch Slat', rarity: 1,
+    description: 'A pale, flexible birch slat cut for bracing useful things without adding much weight.',
+    marketableId: 1293, goldValueUnits: 9246, icon: '/node/wood/wood-1-3.svg' },
+  { id: 1467, name: 'Spruce Beam', rarity: 1,
+    description: 'A clean Calbuco spruce beam used wherever a simple Wood Meld needs a dependable spine.',
+    marketableId: 1294, goldValueUnits: 9246, icon: '/node/wood/wood-1-4.svg' },
+  { id: 1468, name: 'Wood Screws', rarity: 1,
+    description: 'A salvaged box of sharp wood screws. Timber becomes useful when these and a handful of Bolts hold it together.',
+    marketableId: 1295, goldValueUnits: 10000, icon: '/node/wood/wood-1-5.svg' },
+  { id: 1469, name: 'Oak Board', rarity: 2,
+    description: 'A dense Calbuco oak board seasoned for workbenches that must survive enthusiastic miners.',
+    marketableId: 1296, goldValueUnits: 40000, icon: '/node/wood/wood-2.svg' },
+  { id: 1470, name: 'Beech Plank', rarity: 2,
+    description: 'A smooth beech plank whose even grain makes it a patient surface for precise work.',
+    marketableId: 1297, goldValueUnits: 40000, icon: '/node/wood/wood-2-2.svg' },
+  { id: 1471, name: 'Maple Stock', rarity: 2,
+    description: 'Hard maple stock from Calbuco, cut square for handles, legs, and practical Meld construction.',
+    marketableId: 1298, goldValueUnits: 40000, icon: '/node/wood/wood-2-3.svg' },
+  { id: 1472, name: 'Ash Beam', rarity: 2,
+    description: 'A springy ash beam that bends under a heavy load and remembers where it started.',
+    marketableId: 1299, goldValueUnits: 40000, icon: '/node/wood/wood-2-4.svg' },
+  { id: 1473, name: 'Walnut Panel', rarity: 2,
+    description: 'A dark walnut panel reserved for the visible face of a miner’s finest early handiwork.',
+    marketableId: 1300, goldValueUnits: 40000, icon: '/node/wood/wood-2-5.svg' },
+  { id: 1474, name: 'Teak Plank', rarity: 3,
+    description: 'An oily teak plank that shrugs off Calbuco rain and the neglect of long journeys.',
+    marketableId: 1301, goldValueUnits: 280000, icon: '/node/wood/wood-3.svg' },
+  { id: 1475, name: 'Mahogany Board', rarity: 3,
+    description: 'A deep red mahogany board, strong enough for a handcart and handsome enough to steal.',
+    marketableId: 1302, goldValueUnits: 280000, icon: '/node/wood/wood-3-2.svg' },
+  { id: 1476, name: 'Ironwood Beam', rarity: 3,
+    description: 'A brutally heavy ironwood beam that turns a useful frame into a lasting one.',
+    marketableId: 1303, goldValueUnits: 280000, icon: '/node/wood/wood-3-3.svg' },
+  { id: 1477, name: 'Rosewood Stock', rarity: 3,
+    description: 'Fragrant rosewood stock with a resonant grain that hums when a cart gathers speed.',
+    marketableId: 1304, goldValueUnits: 280000, icon: '/node/wood/wood-3-4.svg' },
+  { id: 1478, name: 'Ebony Panel', rarity: 3,
+    description: 'A near-black ebony panel polished until it reflects the builder and all their ambitions.',
+    marketableId: 1305, goldValueUnits: 280000, icon: '/node/wood/wood-3-5.svg' },
+  { id: 1479, name: 'Petrified Timber', rarity: 4,
+    description: 'Ancient Calbuco timber replaced by stone grain by grain; masonry tools barely trouble it.',
+    marketableId: 1306, goldValueUnits: 2000000, icon: '/node/wood/wood-4.svg' },
+  { id: 1480, name: 'Carbonwood Beam', rarity: 4,
+    description: 'A fire-blackened beam compressed harder than steel without losing the memory of wood.',
+    marketableId: 1307, goldValueUnits: 2000000, icon: '/node/wood/wood-4-2.svg' },
+  { id: 1481, name: 'Storm-Felled Oak', rarity: 4,
+    description: 'An oak trunk split by Calbuco lightning, leaving bright branching scars through its heart.',
+    marketableId: 1308, goldValueUnits: 2000000, icon: '/node/wood/wood-4-3.svg' },
+  { id: 1482, name: 'Ember Cedar', rarity: 4,
+    description: 'Warm cedar that continues to smoulder without burning away, ideal for an occupied watchtower.',
+    marketableId: 1309, goldValueUnits: 2000000, icon: '/node/wood/wood-4-4.svg' },
+  { id: 1483, name: 'Leviathan Driftwood', rarity: 4,
+    description: 'A salt-white timber rib carried inland from something far larger than any known ship.',
+    marketableId: 1310, goldValueUnits: 2000000, icon: '/node/wood/wood-4-5.svg' },
+  { id: 1484, name: 'Witchwood Bough', rarity: 5,
+    description: 'A magical purple bough that knots itself around loose screws while nobody is watching.',
+    marketableId: 1311, goldValueUnits: 14010000, icon: '/node/wood/wood-5.svg' },
+  { id: 1485, name: 'Moonwood Plank', rarity: 5,
+    description: 'A magical silver plank that becomes weightless under the Calbuco moon.',
+    marketableId: 1312, goldValueUnits: 14010000, icon: '/node/wood/wood-5-2.svg' },
+  { id: 1486, name: 'Whispering Willow', rarity: 5,
+    description: 'A magical willow timber that quietly repeats every plan discussed over a workbench made from it.',
+    marketableId: 1313, goldValueUnits: 14010000, icon: '/node/wood/wood-5-3.svg' },
+  { id: 1487, name: 'Runebark Slab', rarity: 5,
+    description: 'A magical slab whose living grain rearranges itself into instructions for impossible joinery.',
+    marketableId: 1314, goldValueUnits: 14010000, icon: '/node/wood/wood-5-4.svg' },
+  { id: 1488, name: 'Starfall Timber', rarity: 5,
+    description: 'A magical blue timber grown around a fallen star and still faintly warm between the rings.',
+    marketableId: 1315, goldValueUnits: 14010000, icon: '/node/wood/wood-5-5.svg' },
+  { id: 1489, name: 'Worldtree Heartwood', rarity: 6,
+    description: 'Legendary magical heartwood from a tree whose roots appear on every world map.',
+    marketableId: 1316, goldValueUnits: 84040000, icon: '/node/wood/wood-6.svg' },
+  { id: 1490, name: 'Phoenix Ash', rarity: 6,
+    description: 'Legendary magical ash wood that burns with its creation and grows whole again by dawn.',
+    marketableId: 1317, goldValueUnits: 84040000, icon: '/node/wood/wood-6-2.svg' },
+  { id: 1491, name: 'Timeworn Yew', rarity: 6,
+    description: 'Legendary magical yew whose youngest ring is older than the timber surrounding it.',
+    marketableId: 1318, goldValueUnits: 84040000, icon: '/node/wood/wood-6-3.svg' },
+  { id: 1492, name: 'Dragonroot Timber', rarity: 6,
+    description: 'Legendary magical rootwood scaled in gold and hot enough to soften a Bolt in the hand.',
+    marketableId: 1319, goldValueUnits: 84040000, icon: '/node/wood/wood-6-4.svg' },
+  { id: 1493, name: 'Dreaming Redwood', rarity: 6,
+    description: 'Legendary magical redwood that dreams complete buildings before the first cut is made.',
+    marketableId: 1320, goldValueUnits: 84040000, icon: '/node/wood/wood-6-5.svg' }
+]);
+const WOOD_MELDS = Object.freeze([
+  { id: 240, name: 'Packing Crate', rarity: 1 },
+  { id: 241, name: 'Master Workbench', rarity: 2 },
+  { id: 242, name: 'Reinforced Handcart', rarity: 3 },
+  { id: 243, name: 'Timber Watchtower', rarity: 4 },
+  { id: 244, name: 'Witchwood Workshop', rarity: 5 },
+  { id: 245, name: 'Worldtree Ark', rarity: 6 }
+]);
+let nextWoodRequirementId = 1736;
+const WOOD_MELD_REQUIREMENTS = Object.freeze(WOOD_MELDS.flatMap((meld) => {
+  const tierItems = WOOD_ITEMS.filter((item) => item.rarity === meld.rarity).map((item) => ({
+    id: nextWoodRequirementId++, meldId: meld.id, itemId: item.id,
+    count: item.id === 1468 ? 4 + meld.rarity * 2 : 1
+  }));
+  if (meld.rarity > 1) tierItems.push({
+    id: nextWoodRequirementId++, meldId: meld.id, itemId: 1468,
+    count: 4 + meld.rarity * 2
+  });
+  tierItems.push({
+    id: nextWoodRequirementId++, meldId: meld.id, itemId: 2,
+    count: meld.rarity + 2
+  });
+  return tierItems;
+}));
+export const WOOD_CATALOG = Object.freeze({
+  mapId: 3,
+  mapSlug: 'calbuco',
+  mineType: Object.freeze({
+    id: 27, name: 'Wood', creditCost: 350, rentCost: 24,
+    hasOre: false, refundable: true, icon: '/node/wood/mine.svg'
+  }),
+  items: WOOD_ITEMS,
+  melds: WOOD_MELDS,
+  meldRequirements: WOOD_MELD_REQUIREMENTS,
+  screwItemId: 1468,
+  boltItemId: 2
+});
+const WISDOM_HAIKUS = Object.freeze([
+  { name: 'Patient Pickaxe', lines: ['Let quiet drills turn', 'Charged hours gather small things', 'Return with full hands'] },
+  { name: 'Empty Cart', lines: ['Leave one space unfilled', 'Roads punish the greedy load', 'Arrive without loss'] },
+  { name: 'Local Price', lines: ['Watch each city price', 'What is cheap here sells well there', 'Distance makes the gold'] },
+  { name: 'Safe Road', lines: ['Patrol before trade', 'Armor buys a safer road', 'Cargo reaches town'] },
+  { name: 'Quiet Stash', lines: ['Stage the rare things first', 'Meld storage bears no burden', 'Your carts remain clear'] },
+  { name: 'Weather Eye', lines: ['Clouds gather on roads', 'Snow can strand the strongest hull', 'Wait beneath clear skies'] },
+  { name: 'Split Cargo', lines: ['Two carts leave at dawn', 'One bears wealth, one draws the thieves', 'Loss chooses lightly'] },
+  { name: 'Dwarf Passage', lines: ['Hide a Dwarf aboard', 'Match the Dwarf tier to the road', 'New hands reach the town'] },
+  { name: 'Oil Reserve', lines: ['Barrels wait at home', 'Machines drink before they work', 'Claim before you build'] },
+  { name: 'Patient Bid', lines: ['Low bids sleep in town', 'Fast sellers wake them at dusk', 'Margin greets sunrise'] },
+  { name: 'Route Ledger', lines: ['Write each arrival', 'Buy where the next town is bare', 'Bring home market gold'] },
+  { name: 'Decoy Convoy', lines: ['Two carts leave at dawn', 'One shows gold, one hides the prize', 'Raiders choose the shine'] },
+  { name: 'Workshop Queue', lines: ['Queue the shortest work', 'Reserve Ore before hiring', 'No worker waits dry'] },
+  { name: 'Barrel Current', lines: ['Turn pipes to the pad', 'Power follows every joint', 'Black oil fills the drums'] },
+  { name: 'Cannon Economy', lines: ['Load shot for the prey', 'Chain shot slows, grape clears the decks', 'Hull yields to iron'] },
+  { name: 'Choke Point', lines: ['Own both road markets', 'Raise the far price, cut the near', 'Each traveler pays'] },
+  { name: 'False Scarcity', lines: ['List one thing at dusk', 'Let empty shelves teach desire', 'Sell the dawn dearly'] },
+  { name: 'Midnight Convoy', lines: ['Move while rivals sleep', 'Chain three cities before dawn', 'Reset every price'] },
+  { name: 'Flak Orchard', lines: ['Ring the field with Flak', 'Make their bombs bloom into smoke', 'Build beneath the ash'] },
+  { name: 'Guild Tide', lines: ['Fill the guild bank first', 'Friends withdraw what markets lack', 'Favors steer the vote'] },
+  { name: 'Flooded Hexes', lines: ['Drown all the Oil Field', 'Spills conceal the pipes below', 'Vacuum what remains'] },
+  { name: 'Empty Shelves', lines: ['Buy the whole supply', 'Relist one piece at a time', 'Name tomorrow’s price'] },
+  { name: 'Borrowed Loyalty', lines: ['Stock the guild bank deep', 'Give freely until they lean', 'Then ask for the road'] },
+  { name: 'Pirate Calendar', lines: ['Chart each convoy bell', 'Raid when loaded traders leave', 'Sell their cargo home'] },
+  { name: 'Route Monopoly', lines: ['Hold both gates with steel', 'Patrol peace, pillage all else', 'Set the road’s own toll'] },
+  { name: 'Invisible Cartel', lines: ['Five quiet bidders', 'Move one market with no words', 'Gold obeys the tide'] },
+  { name: 'Oilfield Deluge', lines: ['Wake every Siphon', 'Flood their grid, drain through your ring', 'Black rivers crown you'] },
+  { name: 'Guild Puppeteer', lines: ['No leader is named', 'Yet gifts turn each open hand', 'The bank speaks your will'] },
+  { name: 'Exploit Cartographer', lines: ['Probe each hidden seam', 'Tell the keepers what you find', 'Profit when it mends'] },
+  { name: 'Ashen Empire', lines: ['Own road, guild, and field', 'Starve each town, then sell escape', 'Let each rival pay'] }
+]);
+const WISDOM_GOLD_VALUE_UNITS = Object.freeze([
+  10000, 40000, 280000, 2000000, 14010000, 84040000
+]);
+const WISDOM_ITEMS = Object.freeze(WISDOM_HAIKUS.map((haiku, index) => {
+  const rarity = Math.floor(index / 5) + 1;
+  const variant = index % 5;
+  return Object.freeze({
+    id: 1494 + index,
+    name: haiku.name,
+    rarity,
+    description: haiku.lines.join('\n'),
+    marketableId: 1321 + index,
+    goldValueUnits: WISDOM_GOLD_VALUE_UNITS[rarity - 1],
+    icon: `/node/wisdom/wisdom-${rarity}${variant ? `-${variant + 1}` : ''}.svg`
+  });
+}));
+const WISDOM_MELDS = Object.freeze([
+  { id: 246, name: 'Miner’s Primer', rarity: 1 },
+  { id: 247, name: 'Roadside Koan', rarity: 2 },
+  { id: 248, name: 'Strategist’s Verse', rarity: 3 },
+  { id: 249, name: 'Book of Leverage', rarity: 4 },
+  { id: 250, name: 'Audacious Sutra', rarity: 5 },
+  { id: 251, name: 'Forbidden Playbook', rarity: 6 }
+]);
+let nextWisdomRequirementId = 1777;
+const WISDOM_MELD_REQUIREMENTS = Object.freeze(WISDOM_MELDS.flatMap((meld) =>
+  WISDOM_ITEMS.filter((item) => item.rarity === meld.rarity).map((item) => ({
+    id: nextWisdomRequirementId++, meldId: meld.id, itemId: item.id, count: 1
+  }))));
+export const WISDOM_CATALOG = Object.freeze({
+  mapId: 4,
+  mapSlug: 'dempo',
+  mineType: Object.freeze({
+    id: 28, name: 'Wisdom', creditCost: 400, rentCost: 28,
+    hasOre: false, refundable: true, icon: '/node/wisdom/mine.svg'
+  }),
+  items: WISDOM_ITEMS,
+  melds: WISDOM_MELDS,
+  meldRequirements: WISDOM_MELD_REQUIREMENTS
+});
 export const WORLD_CREATURE_TYPES = Object.freeze([
   'kraken', 'land_whale', 'white_whale', 'orca_pod', 'elephant_herd', 't_rex'
 ]);
@@ -187,6 +533,10 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_creature_names: {
     kraken: 'Kraken', land_whale: 'Land Whale', white_whale: 'White Whale',
     orca_pod: 'Orca Pod', elephant_herd: 'Elephant Herd', t_rex: 'T-Rex'
+  },
+  world_creature_attack_names: {
+    kraken: 'Tentacle smash', land_whale: 'Body slam', white_whale: 'Hull ram',
+    orca_pod: 'Coordinated ram', elephant_herd: 'Stampede', t_rex: 'Bite'
   },
   world_creature_icons: {
     kraken: '/node/creatures/kraken.svg',
@@ -528,6 +878,11 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     hasOre: Boolean(row[5]), refundable: Boolean(row[6]),
     icon: `/legacy/img/icons/M${row[0]}L6.png`
   }));
+  mineTypes.push(
+    { ...SHROOM_CATALOG.mineType },
+    { ...WOOD_CATALOG.mineType },
+    { ...WISDOM_CATALOG.mineType }
+  );
   const cities = tableRows(sql, 'cities').map((row) => ({ id: row[0], name: row[1], hasMarket: Boolean(row[2]) }));
   const cityMineTypes = tableRows(sql, 'cities_mine_types').map((row) => ({
     id: row[0], cityId: row[1], mineTypeId: row[2]
@@ -592,6 +947,9 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   const meldRequirements = tableRows(sql, 'items_melds').map((row) => ({
     id: row[0], meldId: row[1], itemId: row[2], count: row[3]
   }));
+  meldRequirements.push(...SHROOM_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
+  meldRequirements.push(...WOOD_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
+  meldRequirements.push(...WISDOM_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
   const requirementsByMeld = new Map();
   for (const requirement of meldRequirements) {
     if (!requirementsByMeld.has(requirement.meldId)) requirementsByMeld.set(requirement.meldId, []);
@@ -605,6 +963,33 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       public: Boolean(row[5]), requirements
     };
   });
+  for (const meld of SHROOM_CATALOG.melds) {
+    melds.push({
+      ...meld,
+      mineTypeId: SHROOM_CATALOG.mineType.id,
+      modified: '2026-08-27 00:00:00',
+      public: true,
+      requirements: meldRequirements.filter((entry) => entry.meldId === meld.id)
+    });
+  }
+  for (const meld of WOOD_CATALOG.melds) {
+    melds.push({
+      ...meld,
+      mineTypeId: WOOD_CATALOG.mineType.id,
+      modified: '2026-08-27 00:00:00',
+      public: true,
+      requirements: meldRequirements.filter((entry) => entry.meldId === meld.id)
+    });
+  }
+  for (const meld of WISDOM_CATALOG.melds) {
+    melds.push({
+      ...meld,
+      mineTypeId: WISDOM_CATALOG.mineType.id,
+      modified: '2026-08-27 00:00:00',
+      public: true,
+      requirements: meldRequirements.filter((entry) => entry.meldId === meld.id)
+    });
+  }
   const gadgets = tableRows(sql, 'gadgets').map((row) => ({
     id: row[0], name: row[1], behaviorKey: row[1],
     displayName: row[2], description: row[3], hasPage: Boolean(row[4])
@@ -662,6 +1047,54 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       hasLargeImage
     };
   });
+  items.push(...SHROOM_CATALOG.items.map((item) => {
+    const icon = item.icon;
+    return {
+      ...item,
+      mineTypeId: SHROOM_CATALOG.mineType.id,
+      repairedItemId: null,
+      canFind: true,
+      icon,
+      iconSource: 'shroom-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: icon,
+      hasLargeImage: true,
+      goldValue: item.goldValueUnits / 10000
+    };
+  }));
+  items.push(...WOOD_CATALOG.items.map((item) => {
+    const icon = item.icon;
+    return {
+      ...item,
+      mineTypeId: WOOD_CATALOG.mineType.id,
+      repairedItemId: null,
+      canFind: true,
+      icon,
+      iconSource: 'wood-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: icon,
+      hasLargeImage: true,
+      goldValue: item.goldValueUnits / 10000
+    };
+  }));
+  items.push(...WISDOM_CATALOG.items.map((item) => {
+    const icon = item.icon;
+    return {
+      ...item,
+      mineTypeId: WISDOM_CATALOG.mineType.id,
+      repairedItemId: null,
+      canFind: true,
+      icon,
+      iconSource: 'wisdom-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: icon,
+      hasLargeImage: true,
+      goldValue: item.goldValueUnits / 10000
+    };
+  }));
   const dwarfDescription = (tier) => {
     const range = dwarfFindRange(tier.rarity, LEGACY_DWARF_TIERS);
     const quality = range.minimum === range.maximum
@@ -1380,6 +1813,8 @@ export function indexCatalog({
     || WORLD_CREATURE_TYPES.some((type) =>
       typeof settings.world_creature_names?.[type] !== 'string'
       || !settings.world_creature_names[type].trim()
+      || typeof settings.world_creature_attack_names?.[type] !== 'string'
+      || !settings.world_creature_attack_names[type].trim()
       || typeof settings.world_creature_icons?.[type] !== 'string'
       || !settings.world_creature_icons[type].trim()
       || !['land', 'sea'].includes(settings.world_creature_route_types?.[type])

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Guild Puppeteer</title>
+  <desc id="desc">No leader is named
+Yet gifts turn each open hand
+The bank speaks your will</desc>
+  <circle cx="64" cy="64" r="43" fill="#ffe29a" stroke="#5d2d08" stroke-width="5"/>
+    <path fill="#df8b16" stroke="#5d2d08" stroke-width="3" stroke-linejoin="round" d="M75 53l22-21-13 29 12 11-18 4-6 18-11-12-29 14 21-23z"/>
+    <circle cx="64" cy="64" r="7" fill="#5d2d08"/>
+</svg>

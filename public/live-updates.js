@@ -71,6 +71,7 @@
     }
     if (/^\/(?:map|cities|move|events)/.test(pathname)) topics.add('world');
     if (/^\/chat/.test(pathname)) topics.add('chat');
+    if (/^\/guilds/.test(pathname)) topics.add('guilds');
     if (/^\/messages/.test(pathname)) topics.add('messages');
     if (/^\/(?:vehicles|ratings)/.test(pathname)) {
       topics.add('vehicles');

@@ -1,22 +1,52 @@
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { SqliteStore } from '../src/store.js';
+import { createPlayer } from '../src/game.js';
+import { SqliteStore, hashPassword } from '../src/store.js';
+import { travelSpeedMultiplier } from '../src/specialisations.js';
 import { armsRarities, combatClass } from '../src/vehicle-combat.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const execute = process.argv.includes('--execute');
+const verbose = process.argv.includes('--verbose');
 const waveArgument = process.argv.find((argument) => argument.startsWith('--wave='));
 const wave = waveArgument ? Number(waveArgument.slice('--wave='.length)) : 1;
 if (!Number.isSafeInteger(wave) || wave < 1 || wave > 99) {
   throw new Error('Wave must be a whole number from 1 to 99.');
+}
+const fightsArgument = process.argv.find(
+  (argument) => argument.startsWith('--fights-per-permutation=')
+);
+const fightsPerPermutation = fightsArgument
+  ? Number(fightsArgument.slice('--fights-per-permutation='.length)) : 5;
+if (!Number.isSafeInteger(fightsPerPermutation)
+  || fightsPerPermutation < 5 || fightsPerPermutation > 20) {
+  throw new Error('Fights per permutation must be a whole number from 5 to 20.');
 }
 const databaseArgument = process.argv.find((argument) => argument.startsWith('--database='));
 const databaseFile = databaseArgument
   ? path.resolve(databaseArgument.slice('--database='.length))
   : path.join(root, 'data', 'minethings.sqlite');
 const exercisePrefix = wave === 1 ? 'War Trial' : `War Trial W${wave}`;
+const exercisePlayerNames = [`${exercisePrefix} Red`, `${exercisePrefix} Blue`];
+const exercisePlayerCapacityMargin = 5;
 const now = Date.now();
 const store = new SqliteStore(databaseFile, { busyTimeoutMs: 1000 });
+
+const aggressionPermutations = Object.freeze([
+  Object.freeze({
+    key: 'aggressor-vs-defender', aggressive: [true, false],
+    orders: ['pillage', 'peaceful'], aggressiveVsSentry: [false, false]
+  }),
+  Object.freeze({
+    key: 'defender-vs-aggressor', aggressive: [false, true],
+    orders: ['peaceful', 'pillage'], aggressiveVsSentry: [false, false]
+  }),
+  Object.freeze({
+    key: 'mutual-aggression', aggressive: [true, true],
+    orders: ['patrol', 'pillage'], aggressiveVsSentry: [true, true]
+  })
+]);
 
 function setting(key) {
   return store.loadCatalog().settings[key];
@@ -71,42 +101,85 @@ function activeHazards() {
   return { creatures, ghosts };
 }
 
-function eligiblePlayers() {
-  const players = store.database.prepare(`
-    SELECT players.id, players.name, players.city_id, catalog_cities.name AS city_name,
-      players.authority, players.created_at,
-      COALESCE(SUM(inventory.quantity), 0) AS inventory_items,
-      (SELECT COUNT(*) FROM player_vehicles
-       WHERE player_vehicles.player_id = players.id) AS vehicles,
-      (SELECT COUNT(*) FROM player_vehicles
-       WHERE player_vehicles.player_id = players.id
-         AND player_vehicles.status = 'traveling') AS traveling_vehicles
-    FROM players
-    JOIN catalog_cities ON catalog_cities.id = players.city_id
-    LEFT JOIN inventory ON inventory.player_id = players.id
-    WHERE players.is_npc = 0 AND players.suspended = 0
-    GROUP BY players.id
-    ORDER BY players.id
-  `).all();
-  return players.filter((player) => {
-    try {
-      const capacity = store.inventoryCapacity(player.id, now);
-      player.item_limit = capacity.itemLimit;
-      player.item_count = capacity.itemCount;
-      return capacity.itemCount <= capacity.itemLimit
-        + Number(setting('travel_inventory_overage_limit'));
-    } catch {
-      return false;
-    }
-  });
+function plannedExercisePlayers() {
+  const catalog = store.loadCatalog();
+  const starterCityId = Number(setting('starter_city_id'));
+  const starterCity = catalog.cities.find((city) => Number(city.id) === starterCityId);
+  const profession = Number(setting('default_specialisation_id'));
+  return exercisePlayerNames.map((name, index) => ({
+    id: -(index + 1),
+    name,
+    city_id: starterCityId,
+    city_name: starterCity?.name ?? `City ${starterCityId}`,
+    authority: 0,
+    created_at: now,
+    profession,
+    turbo_active: false,
+    item_limit: 0,
+    item_count: 0,
+    vehicles: 0,
+    traveling_vehicles: 0,
+    exercise_vehicle_slots: Number.MAX_SAFE_INTEGER,
+    exercise_vehicles: 0
+  }));
+}
+
+function finalizeExercisePlayerCapacity(players) {
+  for (const player of players) {
+    player.item_limit = player.exercise_vehicles + exercisePlayerCapacityMargin;
+    player.exercise_vehicle_slots = exercisePlayerCapacityMargin;
+  }
+}
+
+function provisionExercisePlayers(players) {
+  const existing = store.database.prepare(`
+    SELECT id, name FROM players WHERE name IN (?, ?) ORDER BY id
+  `).all(...exercisePlayerNames);
+  if (existing.length) {
+    throw new Error(`Dedicated exercise player already exists for wave ${wave}: ${
+      existing.map((player) => player.name).join(', ')}. Use --wave=${nextExerciseWave()}.`);
+  }
+  const catalog = store.loadCatalog();
+  for (const planned of players) {
+    const player = createPlayer(
+      planned.name,
+      '',
+      hashPassword(crypto.randomUUID()),
+      catalog,
+      now,
+      () => 0.5
+    );
+    Object.assign(player, {
+      description: `Dedicated automated combat exercise account for ${exercisePrefix}.`,
+      itemLimit: planned.item_limit,
+      publishFindings: false,
+      showMines: false,
+      mines: [],
+      nextMineId: 1,
+      inventory: {},
+      inventoryByCity: { [player.cityId]: {} },
+      discoveries: []
+    });
+    const saved = store.addPlayer(player);
+    Object.assign(planned, {
+      id: saved.id,
+      city_id: saved.cityId,
+      city_name: catalog.cities.find((city) => Number(city.id) === Number(saved.cityId))?.name
+        ?? planned.city_name,
+      created_at: saved.createdAt,
+      profession: saved.profession,
+      item_count: 0,
+      vehicles: 0,
+      traveling_vehicles: 0
+    });
+  }
 }
 
 function routeName(route) {
   return `${route.city1_name} - ${route.city2_name}`;
 }
 
-function quietSeaRoutes(count, hazards, weather) {
-  const seaType = Number(setting('route_type_ids').sea);
+function quietCombatRoutes(routeType, count, hazards, weather) {
   const hazardousRoutes = new Set([
     ...hazards.creatures.map((entry) => Number(entry.route_id)),
     ...hazards.ghosts.map((entry) => Number(entry.route_id))
@@ -127,7 +200,7 @@ function quietSeaRoutes(count, hazards, weather) {
           AND player_vehicles.status = 'traveling'
       )
     ORDER BY catalog_routes.length, catalog_routes.id
-  `).all(seaType).filter((route) => !hazardousRoutes.has(Number(route.id))
+  `).all(Number(routeType)).filter((route) => !hazardousRoutes.has(Number(route.id))
     && weather.get(Number(route.city1_id))?.condition !== 'snow'
     && weather.get(Number(route.city2_id))?.condition !== 'snow').slice(0, count);
 }
@@ -154,6 +227,80 @@ function strongestVehicle(routeType, targetRarity) {
     === targetClass);
 }
 
+function strongestVehicleForClass(routeType, classValue) {
+  const classRules = setting('combat_class_by_rarity');
+  return store.database.prepare(`
+    SELECT catalog_vehicles.id AS vehicle_type_id, catalog_vehicles.item_id,
+      catalog_vehicles.speed, catalog_vehicles.capacity, catalog_vehicles.route_type,
+      catalog_items.name, catalog_items.rarity,
+      catalog_lands.attack, catalog_lands.armor,
+      catalog_ships.cannon_portals, catalog_ships.hull, catalog_ships.crew
+    FROM catalog_vehicles
+    JOIN catalog_items ON catalog_items.id = catalog_vehicles.item_id
+    LEFT JOIN catalog_lands ON catalog_lands.vehicle_id = catalog_vehicles.id
+    LEFT JOIN catalog_ships ON catalog_ships.vehicle_id = catalog_vehicles.id
+    WHERE catalog_vehicles.route_type = ?
+    ORDER BY catalog_items.rarity DESC,
+      (COALESCE(catalog_ships.hull, 0) + COALESCE(catalog_ships.crew, 0)
+       + COALESCE(catalog_lands.attack, 0) + COALESCE(catalog_lands.armor, 0)) DESC,
+      catalog_vehicles.speed DESC, catalog_vehicles.id
+  `).all(Number(routeType)).find((vehicle) =>
+    combatClass(vehicle.rarity, classRules) === Number(classValue));
+}
+
+function ratingTiers(routeType, classValue) {
+  return store.database.prepare(`
+    SELECT rank, min_rating, max_rating FROM catalog_tiers
+    WHERE route_type = ? AND combat_class = ? ORDER BY rank
+  `).all(Number(routeType), Number(classValue)).map((tier) => ({
+    rank: Number(tier.rank),
+    rating: tier.min_rating !== null && tier.max_rating !== null
+      ? Math.floor((Number(tier.min_rating) + Number(tier.max_rating)) / 2)
+      : tier.min_rating !== null ? Number(tier.min_rating) : Number(tier.max_rating)
+  }));
+}
+
+function playerTravelSpeed(player, routeBehavior, vehicle) {
+  const turboBonus = player.turbo_active ? Number(setting('turbo_speed_bonus')) : 0;
+  return (Number(vehicle.speed) + turboBonus) * travelSpeedMultiplier(
+    Number(player.profession), routeBehavior, false, store.loadCatalog().specialisations
+  );
+}
+
+function combatants(players, startIndex, permutation, routeBehavior, vehicle) {
+  const rotated = [...players.slice(startIndex % players.length),
+    ...players.slice(0, startIndex % players.length)];
+  for (const first of rotated) {
+    if (first.exercise_vehicle_slots < 1) continue;
+    for (const second of rotated) {
+      if (first.id === second.id || second.exercise_vehicle_slots < 1) continue;
+      const firstSpeed = playerTravelSpeed(first, routeBehavior, vehicle);
+      const secondSpeed = playerTravelSpeed(second, routeBehavior, vehicle);
+      if (permutation.aggressive[0] && !permutation.aggressive[1]
+        && firstSpeed < secondSpeed) continue;
+      if (!permutation.aggressive[0] && permutation.aggressive[1]
+        && secondSpeed < firstSpeed) continue;
+      first.exercise_vehicle_slots -= 1;
+      first.exercise_vehicles += 1;
+      second.exercise_vehicle_slots -= 1;
+      second.exercise_vehicles += 1;
+      return [first, second];
+    }
+  }
+  throw new Error(`No capacity-safe player pairing can guarantee ${permutation.key} combat.`);
+}
+
+function reserveHunter(players, startIndex) {
+  for (let offset = 0; offset < players.length; offset += 1) {
+    const player = players[(startIndex + offset) % players.length];
+    if (player.exercise_vehicle_slots < 1) continue;
+    player.exercise_vehicle_slots -= 1;
+    player.exercise_vehicles += 1;
+    return player;
+  }
+  throw new Error('The dedicated exercise players do not have enough capacity for every hunter.');
+}
+
 function strongestArm(vehicle, kind) {
   const allowed = armsRarities(vehicle.rarity, store.loadCatalog().settings);
   if (kind === 'cannon') {
@@ -177,29 +324,73 @@ function strongestArm(vehicle, kind) {
 function createPlan() {
   const weather = currentWeatherByCity();
   const hazards = activeHazards();
-  const eligible = eligiblePlayers();
-  const offset = (wave - 1) % eligible.length;
-  const players = [...eligible.slice(offset), ...eligible.slice(0, offset)];
-  if (players.length < 2) throw new Error('At least two eligible existing players are required.');
-  const duelPairCount = Math.min(2, Math.floor(players.length / 2));
-  const duelRoutes = quietSeaRoutes(duelPairCount, hazards, weather);
-  if (duelRoutes.length < duelPairCount) {
-    throw new Error(`Only ${duelRoutes.length} quiet, snow-free sea routes are available for ${duelPairCount} duels.`);
+  const players = plannedExercisePlayers();
+  const routeTypeIds = setting('route_type_ids');
+  const combatRoutes = [
+    { key: 'land', id: Number(routeTypeIds.land) },
+    { key: 'sea', id: Number(routeTypeIds.sea) }
+  ].map((type) => ({
+    ...type,
+    routes: quietCombatRoutes(type.id, fightsPerPermutation, hazards, weather)
+  }));
+  for (const type of combatRoutes) {
+    if (type.routes.length < fightsPerPermutation) {
+      throw new Error(`Only ${type.routes.length} quiet, snow-free ${type.key} routes are available; ${
+        fightsPerPermutation} are required.`);
+    }
+  }
+  const combatClasses = [...new Set(store.database.prepare(`
+    SELECT combat_class FROM catalog_tiers
+    WHERE route_type IN (?, ?) ORDER BY combat_class
+  `).all(...combatRoutes.map((type) => type.id)).map((row) => Number(row.combat_class)))];
+  const pvpFights = [];
+  let playerIndex = 0;
+  for (const type of combatRoutes) {
+    for (const classValue of combatClasses) {
+      const vehicle = strongestVehicleForClass(type.id, classValue);
+      if (!vehicle) {
+        throw new Error(`No ${type.key} vehicle exists for combat class ${classValue}.`);
+      }
+      const kind = type.key === 'sea' ? 'cannon' : 'weapon';
+      const arm = strongestArm(vehicle, kind);
+      if (!arm) {
+        throw new Error(`No compatible ${kind} exists for ${vehicle.name}.`);
+      }
+      const tiers = ratingTiers(type.id, classValue);
+      if (tiers.length !== 6 || tiers.some((tier, index) =>
+        tier.rank !== index + 1 || !Number.isFinite(tier.rating))) {
+        throw new Error(`Combat class ${classValue} ${type.key} ratings must define ranks 1 to 6.`);
+      }
+      for (const permutation of aggressionPermutations) {
+        for (const tier of tiers) {
+          const permutationKey = `${type.key}:class-${classValue}:rank-${tier.rank}:${
+            permutation.key}`;
+          for (let repetition = 1; repetition <= fightsPerPermutation; repetition += 1) {
+            const [firstPlayer, secondPlayer] = combatants(
+              players, playerIndex, permutation, type.key, vehicle
+            );
+            playerIndex += 2;
+            pvpFights.push({
+              permutationKey, routeType: type, classValue, tier, permutation, repetition,
+              route: type.routes[repetition - 1], vehicle, arm, kind,
+              first: {
+                player: firstPlayer, cityId: Number(type.routes[repetition - 1].city1_id),
+                order: permutation.orders[0],
+                aggressiveVsSentry: permutation.aggressiveVsSentry[0]
+              },
+              second: {
+                player: secondPlayer, cityId: Number(type.routes[repetition - 1].city2_id),
+                order: permutation.orders[1],
+                aggressiveVsSentry: permutation.aggressiveVsSentry[1]
+              }
+            });
+          }
+        }
+      }
+    }
   }
   const seaType = Number(setting('route_type_ids').sea);
-  const champion = strongestVehicle(seaType, 6);
-  if (!champion) throw new Error('No top-tier ship is available.');
-  const cannon = strongestArm(champion, 'cannon');
-  if (!cannon) throw new Error('No compatible top-tier cannon is available.');
-  const duels = duelRoutes.map((route, index) => ({
-    route,
-    first: { player: players[index * 2], cityId: Number(route.city1_id), order: 'patrol' },
-    second: { player: players[index * 2 + 1], cityId: Number(route.city2_id), order: 'pillage' },
-    vehicle: champion,
-    cannon
-  }));
   const hazardJobs = [];
-  let playerIndex = duelPairCount * 2;
   for (const creature of hazards.creatures) {
     const destination = Number(creature.destination_city_id);
     const alternate = destination === Number(creature.city1_id)
@@ -210,10 +401,13 @@ function createPlan() {
     const vehicle = strongestVehicle(creature.route_type, creature.rarity);
     if (!vehicle) throw new Error(`No compatible hunter exists for creature ${creature.id}.`);
     const kind = Number(creature.route_type) === seaType ? 'cannon' : 'weapon';
-    hazardJobs.push({
-      hazardType: 'creature', hazard: creature, player: players[playerIndex++ % players.length],
-      cityId, vehicle, arm: strongestArm(vehicle, kind), kind
-    });
+    for (let attempt = 1; attempt <= fightsPerPermutation; attempt += 1) {
+      hazardJobs.push({
+        hazardType: 'creature', hazard: creature,
+        player: reserveHunter(players, playerIndex++),
+        cityId, vehicle, arm: strongestArm(vehicle, kind), kind, attempt
+      });
+    }
   }
   for (const ghost of hazards.ghosts) {
     const preferred = Number(ghost.destination_city_id || ghost.city2_id);
@@ -225,21 +419,25 @@ function createPlan() {
     const vehicle = strongestVehicle(ghost.route_type, ghost.rarity);
     if (!vehicle) throw new Error(`No compatible hunter exists for ghost ${ghost.id}.`);
     const kind = Number(ghost.route_type) === seaType ? 'cannon' : 'weapon';
-    hazardJobs.push({
-      hazardType: 'ghost', hazard: ghost, player: players[playerIndex++ % players.length],
-      cityId, vehicle, arm: strongestArm(vehicle, kind), kind
-    });
+    for (let attempt = 1; attempt <= fightsPerPermutation; attempt += 1) {
+      hazardJobs.push({
+        hazardType: 'ghost', hazard: ghost,
+        player: reserveHunter(players, playerIndex++),
+        cityId, vehicle, arm: strongestArm(vehicle, kind), kind, attempt
+      });
+    }
   }
-  return { weather, hazards, players, duels, hazardJobs };
+  finalizeExercisePlayerCapacity(players);
+  return { weather, hazards, players, pvpFights, hazardJobs };
 }
 
-function grantVehicle(player, vehicle, cityId, name, arm, kind) {
+function grantVehicle(player, vehicle, cityId, name, arm, kind,
+  rating = Number(setting('vehicle_starting_rating'))) {
   const inserted = store.database.prepare(`
     INSERT INTO player_vehicles
       (player_id, vehicle_type_id, item_id, city_id, name, rating)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(player.id, vehicle.vehicle_type_id, vehicle.item_id, cityId, name,
-    Number(setting('vehicle_starting_rating')));
+  `).run(player.id, vehicle.vehicle_type_id, vehicle.item_id, cityId, name, rating);
   const vehicleId = Number(inserted.lastInsertRowid);
   store.database.prepare(
     'INSERT OR IGNORE INTO known_cities (player_id, city_id) VALUES (?, ?)'
@@ -272,24 +470,73 @@ function grantVehicle(player, vehicle, cityId, name, arm, kind) {
 }
 
 function summary(plan) {
+  const pvpPermutations = new Map();
+  for (const fight of plan.pvpFights) {
+    const entry = pvpPermutations.get(fight.permutationKey) ?? {
+      key: fight.permutationKey,
+      routeType: fight.routeType.key,
+      combatClass: fight.classValue,
+      ratingRank: fight.tier.rank,
+      startingRating: fight.tier.rating,
+      aggression: fight.permutation.aggressive,
+      orders: fight.permutation.orders,
+      vehicle: fight.vehicle.name,
+      arm: fight.arm.name,
+      fights: 0,
+      routes: []
+    };
+    entry.fights += 1;
+    if (!entry.routes.some((route) => route.id === fight.route.id)) {
+      entry.routes.push({ id: fight.route.id, name: routeName(fight.route) });
+    }
+    pvpPermutations.set(fight.permutationKey, entry);
+  }
+  const hazardTargets = new Map();
+  for (const job of plan.hazardJobs) {
+    const key = `${job.hazardType}:${job.hazard.id}`;
+    const entry = hazardTargets.get(key) ?? {
+      type: job.hazardType,
+      id: job.hazard.id,
+      target: job.hazard.name ?? job.hazard.creature_type,
+      rarity: Number(job.hazard.rarity),
+      route: routeName(job.hazard),
+      attempts: 0
+    };
+    entry.attempts += 1;
+    hazardTargets.set(key, entry);
+  }
   return {
     databaseFile,
     mode: execute ? 'execute' : 'dry-run',
     wave,
     exercisePrefix,
+    fightsPerPermutation,
+    coverage: {
+      routeTypes: [...new Set(plan.pvpFights.map((fight) => fight.routeType.key))],
+      combatClasses: [...new Set(plan.pvpFights.map((fight) => fight.classValue))],
+      ratingRanks: [...new Set(plan.pvpFights.map((fight) => fight.tier.rank))],
+      aggression: aggressionPermutations.map((entry) => ({
+        key: entry.key, aggressive: entry.aggressive, orders: entry.orders
+      })),
+      permutations: pvpPermutations.size,
+      pvpFights: plan.pvpFights.length,
+      pvpVehicles: plan.pvpFights.length * 2,
+      excluded: [
+        'Aircraft: the combat planner deliberately excludes air routes.',
+        'Peaceful versus peaceful: no fight is scheduled.'
+      ],
+      supplementalActiveHazardTargets: hazardTargets.size,
+      supplementalHazardAttempts: plan.hazardJobs.length
+    },
     players: plan.players.map((player) => ({
-      id: player.id, name: player.name, city: player.city_name,
+      id: player.id > 0 ? player.id : null, name: player.name, city: player.city_name,
+      dedicated: true,
       inventory: `${player.item_count}/${player.item_limit}`,
-      vehicles: player.vehicles, traveling: player.traveling_vehicles
+      vehicles: player.vehicles, traveling: player.traveling_vehicles,
+      exerciseVehicles: player.exercise_vehicles,
+      remainingExerciseSlots: player.exercise_vehicle_slots
     })),
-    duels: plan.duels.map((duel) => ({
-      routeId: duel.route.id, route: routeName(duel.route), distance: duel.route.length,
-      ship: duel.vehicle.name, cannon: duel.cannon.name,
-      cannonPortals: duel.vehicle.cannon_portals,
-      cannonballs: (Number(duel.vehicle.capacity) - Number(duel.vehicle.cannon_portals))
-        * Number(setting('shots_per_crate')),
-      players: [duel.first.player.name, duel.second.player.name]
-    })),
+    pvpPermutations: verbose ? [...pvpPermutations.values()] : undefined,
     hazards: {
       creatures: plan.hazards.creatures.map((hazard) => ({
         id: hazard.id, type: hazard.creature_type, rarity: hazard.rarity,
@@ -300,40 +547,67 @@ function summary(plan) {
         rarity: hazard.rarity, route: routeName(hazard), status: hazard.status
       }))
     },
-    hazardJobs: plan.hazardJobs.map((job) => ({
-      type: job.hazardType, id: job.hazard.id,
-      target: job.hazard.name ?? job.hazard.creature_type,
-      player: job.player.name, transport: job.vehicle.name,
-      arm: job.arm?.name ?? null, route: routeName(job.hazard)
-    }))
+    hazardTargets: [...hazardTargets.values()]
   };
 }
 
+function existingExerciseVehicles() {
+  const namePrefix = `${exercisePrefix} `;
+  return store.database.prepare(`
+    SELECT id, name, status FROM player_vehicles
+    WHERE name LIKE ? ORDER BY id
+  `).all(`${namePrefix}%`).filter((vehicle) =>
+    /^\d+$/.test(vehicle.name.slice(namePrefix.length)));
+}
+
+function nextExerciseWave() {
+  const waves = store.database.prepare(`
+    SELECT name FROM player_vehicles WHERE name LIKE 'War Trial %'
+    UNION ALL
+    SELECT name FROM players WHERE name LIKE 'War Trial %'
+  `).all().map(({ name }) => {
+    const match = /^War Trial(?: W(\d+))? (?:\d+|Red|Blue)$/.exec(name);
+    return match ? Number(match[1] ?? 1) : 0;
+  });
+  return Math.max(0, ...waves) + 1;
+}
+
 try {
-  if (execute) store.settleWorldEvents(now);
+  if (execute) {
+    const existing = existingExerciseVehicles();
+    if (existing.length) {
+      throw new Error(`${existing.length} existing vehicles belong to wave ${wave} (${
+        exercisePrefix}). Use --wave=${nextExerciseWave()} to create the next wave.`);
+    }
+    store.settleWorldEvents(now);
+  }
   const plan = createPlan();
+  if (execute) provisionExercisePlayers(plan.players);
   const output = summary(plan);
   if (!execute) {
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
     process.exitCode = 0;
   } else {
-    const existing = store.database.prepare(`
-      SELECT COUNT(*) AS count FROM player_vehicles WHERE name LIKE ?
-    `).get(`${exercisePrefix} %`).count;
-    if (existing) throw new Error(`${existing} existing ${exercisePrefix} vehicles make this run ambiguous.`);
-    const launches = [];
+    const pvpLaunches = new Map();
+    const hazardLaunches = [];
     let sequence = 1;
-    for (const duel of plan.duels) {
-      const firstId = grantVehicle(duel.first.player, duel.vehicle, duel.first.cityId,
-        `${exercisePrefix} ${sequence++}`, duel.cannon, 'cannon');
-      const secondId = grantVehicle(duel.second.player, duel.vehicle, duel.second.cityId,
-        `${exercisePrefix} ${sequence++}`, duel.cannon, 'cannon');
-      const firstLaunch = store.sendVehicle(duel.first.player.id, firstId, duel.route.id, now, {
-        travelOrder: duel.first.order, aggressiveVsSentry: true
-      });
-      const secondLaunch = store.sendVehicle(duel.second.player.id, secondId, duel.route.id, now, {
-        travelOrder: duel.second.order, aggressiveVsSentry: true
-      });
+    for (const fight of plan.pvpFights) {
+      const firstId = grantVehicle(fight.first.player, fight.vehicle, fight.first.cityId,
+        `${exercisePrefix} ${sequence++}`, fight.arm, fight.kind, fight.tier.rating);
+      const secondId = grantVehicle(fight.second.player, fight.vehicle, fight.second.cityId,
+        `${exercisePrefix} ${sequence++}`, fight.arm, fight.kind, fight.tier.rating);
+      store.sendVehicle(
+        fight.first.player.id, firstId, fight.route.id, now, {
+          travelOrder: fight.first.order,
+          aggressiveVsSentry: fight.first.aggressiveVsSentry
+        }
+      );
+      store.sendVehicle(
+        fight.second.player.id, secondId, fight.route.id, now, {
+          travelOrder: fight.second.order,
+          aggressiveVsSentry: fight.second.aggressiveVsSentry
+        }
+      );
       const encounter = store.database.prepare(`
         SELECT id, encounter_at, encounter_location, status
         FROM vehicle_encounters
@@ -341,22 +615,35 @@ try {
           AND ((vehicle1_id = ? AND vehicle2_id = ?)
             OR (vehicle1_id = ? AND vehicle2_id = ?))
         ORDER BY id DESC LIMIT 1
-      `).get(duel.route.id, firstId, secondId, secondId, firstId);
-      if (!encounter) throw new Error(`No duel was planned on ${routeName(duel.route)}.`);
-      launches.push({
-        kind: 'duel', route: routeName(duel.route),
-        vehicles: [firstId, secondId], players: [duel.first.player.name, duel.second.player.name],
-        encounterId: encounter.id, encounterAt: encounter.encounter_at,
-        arrivalsAt: [firstLaunch.arrivesAt, secondLaunch.arrivesAt]
-      });
+      `).get(fight.route.id, firstId, secondId, secondId, firstId);
+      if (!encounter) {
+        throw new Error(`No ${fight.permutationKey} fight ${fight.repetition} was planned on ${
+          routeName(fight.route)}.`);
+      }
+      const aggregate = pvpLaunches.get(fight.permutationKey) ?? {
+        key: fight.permutationKey,
+        count: 0,
+        firstVehicleId: firstId,
+        lastVehicleId: secondId,
+        encounterIds: []
+      };
+      aggregate.count += 1;
+      aggregate.lastVehicleId = secondId;
+      aggregate.encounterIds.push(Number(encounter.id));
+      pvpLaunches.set(fight.permutationKey, aggregate);
+    }
+    if (pvpLaunches.size !== output.coverage.permutations
+      || [...pvpLaunches.values()].some((entry) => entry.count < fightsPerPermutation)) {
+      throw new Error('The launched PvP matrix does not satisfy its permutation coverage.');
     }
     for (const job of plan.hazardJobs) {
       const vehicleId = grantVehicle(job.player, job.vehicle, job.cityId,
         `${exercisePrefix} ${sequence++}`, job.arm, job.kind);
       if (job.hazardType === 'creature') {
         const pursuit = store.attackWorldCreature(job.player.id, job.hazard.id, vehicleId, now);
-        launches.push({
-          kind: 'creature-hunt', target: job.hazard.creature_type,
+        hazardLaunches.push({
+          kind: 'creature-hunt', attempt: job.attempt,
+          target: job.hazard.creature_type,
           targetId: job.hazard.id, player: job.player.name, vehicleId,
           pursuitId: pursuit.pursuitId, encounterAt: pursuit.encounterAt,
           route: routeName(job.hazard)
@@ -372,15 +659,34 @@ try {
             AND (vehicle1_id = ? OR vehicle2_id = ?)
           ORDER BY id DESC LIMIT 1
         `).get(vehicleId, vehicleId);
-        launches.push({
-          kind: encounter ? 'ghost-hunt' : 'ghost-hunt-reinforcement', target: job.hazard.name,
+        hazardLaunches.push({
+          kind: encounter ? 'ghost-hunt' : 'ghost-hunt-reinforcement',
+          attempt: job.attempt, target: job.hazard.name,
           targetId: job.hazard.id, player: job.player.name, vehicleId,
           encounterId: encounter?.id ?? null, encounterAt: encounter?.encounter_at ?? null,
           arrivesAt: launch.arrivesAt, route: routeName(job.hazard)
         });
       }
     }
-    output.launches = launches;
+    const pvpLaunchDetails = [...pvpLaunches.values()];
+    output.launches = {
+      pvp: verbose ? pvpLaunchDetails : {
+        permutations: pvpLaunchDetails.length,
+        fights: pvpLaunchDetails.reduce((sum, entry) => sum + entry.count, 0),
+        firstVehicleId: pvpLaunchDetails[0]?.firstVehicleId ?? null,
+        lastVehicleId: pvpLaunchDetails.at(-1)?.lastVehicleId ?? null
+      },
+      hazards: verbose ? hazardLaunches : {
+        attempts: hazardLaunches.length,
+        directEncounters: hazardLaunches.filter((entry) =>
+          entry.kind === 'creature-hunt' || entry.kind === 'ghost-hunt').length,
+        reinforcements: hazardLaunches.filter((entry) =>
+          entry.kind === 'ghost-hunt-reinforcement').length,
+        firstVehicleId: hazardLaunches[0]?.vehicleId ?? null,
+        lastVehicleId: hazardLaunches.at(-1)?.vehicleId ?? null
+      },
+      totalVehicles: sequence - 1
+    };
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
   }
 } finally {

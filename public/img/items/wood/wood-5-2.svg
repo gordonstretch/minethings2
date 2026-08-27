@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Moonwood Plank</title>
+  <desc id="desc">A magical silver plank that becomes weightless under the Calbuco moon.</desc>
+  <g transform="rotate(-9 64 64)"><path fill="#74459a" stroke="#321d49" stroke-width="5" d="M20 24h36v83H20zM68 16h38v91H68z"/><path fill="none" stroke="#e1b4ff" stroke-width="3" stroke-linecap="round" opacity=".82" d="M30 34v62M43 31v66M79 27v68M94 25v71"/></g>
+</svg>

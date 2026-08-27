@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Witchwood Bough</title>
+  <desc id="desc">A magical purple bough that knots itself around loose screws while nobody is watching.</desc>
+  <path fill="#74459a" stroke="#321d49" stroke-width="5" stroke-linejoin="round" d="M14 39l92-14 8 58-92 20z"/><path fill="none" stroke="#e1b4ff" stroke-width="3" stroke-linecap="round" opacity=".82" d="M28 51c18-8 45-11 67-12M31 67c15-7 43-9 67-10M34 83c19-8 42-9 62-10"/><path fill="#e1b4ff" d="M23 43l8-1 8 57-8 2z" opacity=".55"/>
+</svg>

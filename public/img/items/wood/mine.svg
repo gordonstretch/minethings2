@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wood Mine</title>
+  <desc id="desc">A Calbuco lumber mine marked by a saw blade, tree, and cut timber.</desc>
+  <path fill="#a86d31" stroke="#4c2e1a" stroke-width="5" stroke-linejoin="round" d="M12 89l70-17 8 30-70 16z"/>
+  <path fill="none" stroke="#e6b66d" stroke-width="3" stroke-linecap="round" d="M25 95l49-12M29 105l49-12"/>
+  <path fill="#4e7650" stroke="#243b29" stroke-width="5" stroke-linejoin="round" d="M69 78V51H55l18-17H62L84 9l22 25H95l18 17H98v24z"/>
+  <circle cx="43" cy="51" r="24" fill="#d3d9d7" stroke="#475357" stroke-width="5"/>
+  <path fill="#475357" d="M43 20l5 19 17-11-10 18 20 4-20 5 10 18-17-11-5 20-5-20-17 11 10-18-20-5 20-4-10-18 17 11z"/>
+  <circle cx="43" cy="51" r="7" fill="#f2a024"/>
+</svg>

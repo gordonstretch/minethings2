@@ -104,12 +104,13 @@ export function fightLand(stats1, aggressive1, stats2, aggressive2, random = Mat
   if (!rules) throw new Error('Missing land combat rules.');
   const vehicles = [activeVehicle(aggressive1, stats1), activeVehicle(aggressive2, stats2)];
   if (!vehicles.some((vehicle, index) => attack(vehicle, vehicles[(index + 1) % 2].dodge) > 0)) {
-    return { winner: 0, rounds: 0, finalBlow: 0, ending: vehicles };
+    return { winner: 0, rounds: 0, finalBlow: 0, ending: vehicles, roundLog: [] };
   }
   const alternate = vehicles[0].aggressive && vehicles[1].aggressive;
   let active = random() < 0.5 ? 0 : 1;
   let rounds = 0;
   let finalBlow = 0;
+  const roundLog = [];
   while (vehicles[0].armor > 0 && vehicles[1].armor > 0
     && rounds < Number(rules.land_combat_max_rounds)) {
     rounds += 1;
@@ -118,24 +119,38 @@ export function fightLand(stats1, aggressive1, stats2, aggressive2, random = Mat
       active = (active + 1) % 2;
       vehicles[active].aggressive = vehicles[active].baseAggressive;
     }
+    const before = vehicles.map((vehicle) => ({
+      attack: vehicle.attack, armor: vehicle.armor, aggressive: vehicle.aggressive
+    }));
+    const reductions = [];
     for (let side = 0; side < 2; side += 1) {
       const opponent = (side + 1) % 2;
+      const attackBefore = vehicles[opponent].attack;
       const reduced = Math.max(Number(rules.land_combat_minimum_attack), vehicles[opponent].attack
         - defense(vehicles[side], vehicles[opponent].dodge));
       vehicles[opponent].attack = Math.min(vehicles[opponent].attack, reduced);
+      reductions.push({ side, opponent, attackBefore, attackAfter: vehicles[opponent].attack });
     }
     const order = vehicles[0].aggressive ? [0, 1] : [1, 0];
+    const blows = [];
     for (const side of order) {
       const opponent = (side + 1) % 2;
       const blow = attack(vehicles[side], vehicles[opponent].dodge);
       if (blow > 0) finalBlow = blow;
+      const armorBefore = vehicles[opponent].armor;
       vehicles[opponent].armor = Math.max(0, vehicles[opponent].armor - blow);
+      blows.push({ side, opponent, damage: blow, armorBefore,
+        armorAfter: vehicles[opponent].armor });
       if (vehicles[opponent].armor === 0) break;
     }
+    roundLog.push({ round: rounds, before, reductions, blows,
+      after: vehicles.map((vehicle) => ({
+        attack: vehicle.attack, armor: vehicle.armor, aggressive: vehicle.aggressive
+      })) });
   }
   const alive = vehicles.map((vehicle) => vehicle.armor > 0);
   const winner = alive[0] === alive[1] ? 0 : alive[0] ? 1 : 2;
-  return { winner, rounds, finalBlow, ending: vehicles };
+  return { winner, rounds, finalBlow, ending: vehicles, roundLog };
 }
 
 export function expectedValue(difference, table) {

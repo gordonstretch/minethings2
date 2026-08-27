@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Storm-Felled Oak</title>
+  <desc id="desc">An oak trunk split by Calbuco lightning, leaving bright branching scars through its heart.</desc>
+  <path fill="#59636a" stroke="#252b2e" stroke-width="5" stroke-linejoin="round" d="M18 74L77 17l33 34-59 58z"/><path fill="none" stroke="#c1ccd0" stroke-width="3" stroke-linecap="round" opacity=".82" d="M35 77l50-48M45 88l50-48M55 98l48-46"/>
+</svg>

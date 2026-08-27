@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Phoenix Morel</title>
+  <path fill="#f3dfbf" stroke="#292d29" stroke-width="4" d="M40 55c2 10 0 20-6 29h28c-6-9-8-19-6-29z"/>
+  <path fill="#f79721" stroke="#292d29" stroke-width="4" d="M25 53C22 33 31 12 48 7c17 5 26 26 23 46-13 8-33 8-46 0z"/>
+  <path fill="#e32121" d="M48 13c10 12 4 19 12 25-5 0-8-2-11-6-2 8-7 12-14 14 5-9 0-19 13-33z"/>
+  <path fill="none" stroke="#fff0a2" stroke-width="3" d="m34 30 8 7-8 8m28-15-8 7 8 8M41 48h14"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Dwarf Passage</title>
+  <desc id="desc">Hide a Dwarf aboard
+Match the Dwarf tier to the road
+New hands reach the town</desc>
+  <circle cx="64" cy="64" r="43" fill="#c9dfa7" stroke="#263c2c" stroke-width="5"/>
+    <path fill="#638352" stroke="#263c2c" stroke-width="3" stroke-linejoin="round" d="M75 53l22-21-13 29 12 11-18 4-6 18-11-12-29 14 21-23z"/>
+    <circle cx="64" cy="64" r="7" fill="#263c2c"/>
+</svg>

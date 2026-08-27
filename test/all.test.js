@@ -5,6 +5,7 @@ import './email.test.js';
 import './authority.test.js';
 import './game.test.js';
 import './google-auth.test.js';
+import './guilds.test.js';
 import './item-values.test.js';
 import './item-icons.test.js';
 import './loadout-regression.test.js';

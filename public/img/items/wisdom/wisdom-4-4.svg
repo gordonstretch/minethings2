@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Flak Orchard</title>
+  <desc id="desc">Ring the field with Flak
+Make their bombs bloom into smoke
+Build beneath the ash</desc>
+  <g fill="#f2b79d" stroke="#4b211d" stroke-width="5"><circle cx="25" cy="70" r="13"/><circle cx="64" cy="25" r="13"/><circle cx="103" cy="70" r="13"/><circle cx="64" cy="103" r="13"/></g>
+    <path fill="none" stroke="#a64f42" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" d="M35 60l19-24M74 35l19 25M91 82l-17 12M54 94L37 81"/>
+    <circle cx="64" cy="64" r="12" fill="#a64f42" stroke="#4b211d" stroke-width="4"/>
+</svg>

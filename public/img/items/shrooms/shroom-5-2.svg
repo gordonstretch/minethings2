@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Pixie Parasol</title>
+  <path fill="#eeeaf3" stroke="#292d29" stroke-width="4" d="M42 39v45h12V39z"/>
+  <path fill="#c7bed7" stroke="#292d29" stroke-width="4" d="M11 43C20 21 33 11 48 11s28 10 37 32c-20 8-54 8-74 0z"/>
+  <g fill="#a64891"><path d="m24 20 2 5 5 2-5 2-2 5-2-5-5-2 5-2zm51 8 2 4 4 2-4 2-2 4-2-4-4-2 4-2z"/></g>
+  <path fill="none" stroke="#a64891" stroke-width="3" d="M23 43c14-6 36-6 50 0"/>
+</svg>

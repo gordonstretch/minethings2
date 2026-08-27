@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Borrowed Loyalty</title>
+  <desc id="desc">Stock the guild bank deep
+Give freely until they lean
+Then ask for the road</desc>
+  <circle cx="64" cy="64" r="43" fill="#e4b4f0" stroke="#3b1e48" stroke-width="5"/>
+    <path fill="#8d48a0" stroke="#3b1e48" stroke-width="3" stroke-linejoin="round" d="M75 53l22-21-13 29 12 11-18 4-6 18-11-12-29 14 21-23z"/>
+    <circle cx="64" cy="64" r="7" fill="#3b1e48"/>
+</svg>

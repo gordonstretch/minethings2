@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Destroying Angel</title>
+  <path fill="#f3efe3" stroke="#292d29" stroke-width="4" d="M40 43c2 15 0 28-7 41h30c-7-13-9-26-7-41z"/>
+  <path fill="#fffdf1" stroke="#292d29" stroke-width="4" d="M16 47c5-23 18-35 32-35s27 12 32 35c-18 7-46 7-64 0z"/>
+  <path fill="#e32121" d="m48 23 5 10 11 2-8 8 2 11-10-5-10 5 2-11-8-8 11-2z"/>
+  <path fill="none" stroke="#e32121" stroke-width="4" d="M34 83h28"/>
+</svg>

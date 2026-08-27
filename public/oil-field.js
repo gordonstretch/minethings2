@@ -6,7 +6,8 @@
 
   const stateElement = document.getElementById('oil-field-state');
   const statusElement = document.getElementById('oil-board-status');
-  if (!stateElement || typeof window.Raphael !== 'function' || typeof window.drawboard !== 'function') return;
+  if (!stateElement || typeof window.OilVectorRenderer !== 'function'
+    || typeof window.drawboard !== 'function') return;
 
   const state = JSON.parse(stateElement.value);
   const status = (message) => {
@@ -402,6 +403,8 @@
   };
 
   window.drawboard();
+  const boardElement = document.getElementById('board');
+  if (boardElement) boardElement.dataset.renderer = window.oilRendererMode;
 
   let visibleOilHexes = 0;
   const oilOverlays = [];
@@ -478,7 +481,6 @@
     decorateDeployedMachines();
     bringOilOverlaysToFront();
   };
-  const boardElement = document.getElementById('board');
   const rackTooltip = document.createElement('aside');
   rackTooltip.id = 'oil-machine-tooltip';
   rackTooltip.className = 'oil-machine-tooltip';
@@ -576,6 +578,7 @@
   const animationButton = document.getElementById('oil-toggle-animation');
   const colorButton = document.getElementById('oil-toggle-colors');
   const volumeLabelsButton = document.getElementById('oil-toggle-volume-labels');
+  const rendererButton = document.getElementById('oil-toggle-renderer');
   queuedButton?.addEventListener('click', () => {
     window.ToggleQueued();
     queuedButton.textContent = window.showQueued ? 'Show deployed' : 'Show queued';
@@ -612,9 +615,21 @@
     } catch {}
     status(volumeLabelsHidden ? 'Oil volume labels hidden.' : 'Oil volume labels shown.');
   });
+  const rendererLabel = window.oilRendererMode === 'svgjs' ? 'SVG.js' : 'Raphael';
+  if (rendererButton) {
+    rendererButton.textContent = `Renderer: ${rendererLabel}`;
+    rendererButton.title = `Switch to the ${window.oilRendererMode === 'svgjs' ? 'Raphael' : 'SVG.js'} renderer`;
+    rendererButton.addEventListener('click', () => {
+      const nextRenderer = window.oilRendererMode === 'svgjs' ? 'raphael' : 'svgjs';
+      try { localStorage.setItem('oil-field-renderer', nextRenderer); } catch {}
+      rendererButton.disabled = true;
+      rendererButton.textContent = `Loading ${nextRenderer === 'svgjs' ? 'SVG.js' : 'Raphael'}…`;
+      window.location.reload();
+    });
+  }
   renderVolumeLabelPreference();
   if (animationButton) animationButton.textContent = window.animate ? 'Pause animation' : 'Play animation';
-  status(`Oil Field ready: ${window.boardHexes.length} hexes, ${visibleOilHexes} containing visible oil, ${window.boardMachines.length} deployed machines, ${rackMachines.length} machine parts in the rack.`);
+  status(`Oil Field ready with ${rendererLabel}: ${window.boardHexes.length} hexes, ${visibleOilHexes} containing visible oil, ${window.boardMachines.length} deployed machines, ${rackMachines.length} machine parts in the rack.`);
   };
   initialize();
 })();

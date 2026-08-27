@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Split Cargo</title>
+  <desc id="desc">Two carts leave at dawn
+One bears wealth, one draws the thieves
+Loss chooses lightly</desc>
+  <path fill="#c9dfa7" stroke="#263c2c" stroke-width="5" stroke-linejoin="round" d="M14 34c23-13 39-9 50 2 11-11 27-15 50-2v72c-20-10-36-7-50 5-14-12-30-15-50-5z"/>
+    <path fill="none" stroke="#638352" stroke-width="4" stroke-linecap="round" d="M64 38v66M27 52c12-5 21-4 28 1M27 68c12-5 21-4 28 1M73 53c8-5 17-6 28-1M73 69c8-5 17-6 28-1"/>
+</svg>

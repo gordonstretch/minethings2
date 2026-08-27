@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Witch's Cap</title>
+  <path fill="#ead8c3" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M40 51c2 11 0 22-7 33h30c-7-11-9-22-7-33z"/>
+  <path fill="#e32121" stroke="#292d29" stroke-width="4" stroke-linejoin="round" d="M13 54c8-12 19-19 32-21 4-12 12-21 25-27-2 10-1 18 4 25-3 2-6 4-10 5 9 4 15 10 19 18-19 7-51 7-70 0z"/>
+  <g fill="#ffd1aa"><circle cx="32" cy="45" r="4"/><circle cx="53" cy="30" r="4"/><circle cx="68" cy="48" r="4"/></g>
+  <g fill="#e32121"><circle cx="18" cy="72" r="3"/><circle cx="76" cy="70" r="2"/><circle cx="79" cy="80" r="3"/></g>
+</svg>

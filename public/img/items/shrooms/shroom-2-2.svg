@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Golden Chanterelle</title>
+  <path fill="#ead98e" stroke="#292d29" stroke-width="4" d="M35 42c10 12 9 27 2 42h28c-8-15-9-30 1-42z"/>
+  <path fill="#d8be32" stroke="#292d29" stroke-width="4" d="M17 43c7-13 16-19 27-17 3-11 10-17 20-18 0 10 4 17 14 21-2 9-8 15-18 19-13 5-30 3-43-5z"/>
+  <path fill="none" stroke="#8b7415" stroke-width="3" d="m42 46 6 14m10-16-7 16"/>
+</svg>
