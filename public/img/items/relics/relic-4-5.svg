@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Witness Stone</title>
+  <desc id="desc">A black mirror used to record confessions. Reflections in it sometimes mouth a denial a moment too late.</desc>
+  <path d="M14 64q50-49 100 0-50 49-100 0z" fill="#efb09c" stroke="#411a15" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="64" cy="64" r="22" fill="#a84b39" stroke="#411a15" stroke-width="6"/>
+    <path d="M42 64h44" stroke="#411a15" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 42v44" stroke="#efb09c" stroke-width="4" stroke-dasharray="4 5"/>
+</svg>

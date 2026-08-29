@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Adaptive Camouflage Circuit</title>
+  <desc id="desc">A fabled circuit that samples its surroundings and tells connected panels which colours to pretend to be.</desc>
+  <path fill="#edb9f5" stroke="#431d4b" stroke-width="5" stroke-linejoin="round" d="M18 43h92v58H18z"/>
+    <path fill="none" stroke="#974da8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M30 82l17-19 15 10 18-25 18 13"/>
+    <path fill="#431d4b" d="M36 18h56v18H36z"/><circle cx="46" cy="27" r="4" fill="#974da8"/><circle cx="64" cy="27" r="4" fill="#974da8"/><circle cx="82" cy="27" r="4" fill="#974da8"/>
+</svg>

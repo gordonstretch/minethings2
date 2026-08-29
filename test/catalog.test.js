@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
 import {
-  loadLegacyCatalog, parseValues, SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
+  ELECTRONICS_CATALOG, loadLegacyCatalog, parseValues, RELICS_CATALOG, SHROOM_CATALOG,
+  WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
 
 test('parses MySQL values including escaped apostrophes and nulls', () => {
@@ -14,8 +15,8 @@ test('parses MySQL values including escaped apostrophes and nulls', () => {
 
 test('loads the playable catalog from the legacy dump', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(catalog.items.length, 1490);
-  assert.equal(catalog.discoverableItems.length, 788);
+  assert.equal(catalog.items.length, 1550);
+  assert.equal(catalog.discoverableItems.length, 848);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
   assert.equal(catalog.byId.get(1).name, 'Sneakers');
@@ -25,6 +26,15 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.deepEqual(catalog.mineTypesByCity.get(2).map((mineType) => mineType.name), ['Bugs', 'Machines', 'Music']);
   assert.ok(catalog.vehicles.length > 50);
   assert.ok(catalog.vehicleByItemId.size > 50);
+  const welcomePack = catalog.settings.starter_welcome_pack;
+  const welcomeVehicle = catalog.vehicleByItemId.get(welcomePack.vehicleItemId);
+  assert.equal(catalog.byId.get(welcomePack.vehicleItemId).name, 'Camel');
+  assert.equal(catalog.byId.get(welcomePack.vehicleItemId).rarity, 1);
+  assert.equal(welcomeVehicle.routeType, catalog.settings.route_type_ids.land);
+  assert.deepEqual({
+    cryptoTypeId: welcomePack.cryptoTypeId,
+    cryptoQuantity: welcomePack.cryptoQuantity
+  }, { cryptoTypeId: 1, cryptoQuantity: 5 });
   assert.equal(catalog.equipment.length, 43);
   assert.equal(catalog.explosives.length, 6);
   assert.equal(catalog.robots.length, 28);
@@ -65,11 +75,11 @@ test('loads the playable catalog from the legacy dump', () => {
     .map((roll) => randomDwarfTier(catalog.dwarfTiers, () => roll / 63).rarity),
   [1, 2, 3, 4, 5, 6]);
   assert.throws(() => randomDwarfTier(undefined), /Missing catalog Dwarf tier data/);
-  assert.equal(catalog.melds.length, 209);
-  assert.equal(catalog.meldRequirements.length, 726);
+  assert.equal(catalog.melds.length, 221);
+  assert.equal(catalog.meldRequirements.length, 786);
   assert.equal(catalog.gadgets.length, 13);
   assert.equal(catalog.gadgetItems.length, 38);
-  assert.equal(catalog.factoryActions.length, 17);
+  assert.equal(catalog.factoryActions.length, 18);
   assert.equal(catalog.machineTypes.length, 33);
   assert.equal(catalog.machines.length, 46);
   assert.equal(catalog.machineById.get(6).type, 'pump');
@@ -140,4 +150,38 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.deepEqual(wisdom.filter((item) => item.rarity === 6).map((item) => item.name),
     ['Invisible Cartel', 'Oilfield Deluge', 'Guild Puppeteer',
       'Exploit Cartographer', 'Ashen Empire']);
+
+  const electronics = catalog.items.filter((item) =>
+    item.mineTypeId === ELECTRONICS_CATALOG.mineType.id);
+  assert.equal(catalog.mineTypes.find((mineType) =>
+    mineType.id === ELECTRONICS_CATALOG.mineType.id).name, 'Electronic Devices');
+  assert.equal(electronics.length, 30);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((rarity) =>
+    electronics.filter((item) => item.rarity === rarity).length), [5, 5, 5, 5, 5, 5]);
+  assert.ok(electronics.every((item) => item.canFind && item.hasLargeImage
+    && item.iconSource === 'electronics-svg' && item.description.length > 20));
+  const electronicsMelds = catalog.melds.filter((meld) =>
+    meld.mineTypeId === ELECTRONICS_CATALOG.mineType.id);
+  assert.deepEqual(electronicsMelds.map((meld) => meld.rarity), [1, 2, 3, 4, 5, 6]);
+  assert.ok(electronicsMelds.every((meld) => meld.requirements.length === 5));
+  assert.equal(new Set(ELECTRONICS_CATALOG.meldRequirements.map((requirement) =>
+    requirement.itemId)).size, 30);
+
+  const relics = catalog.items.filter((item) =>
+    item.mineTypeId === RELICS_CATALOG.mineType.id);
+  assert.equal(catalog.mineTypes.find((mineType) =>
+    mineType.id === RELICS_CATALOG.mineType.id).name, 'Relics');
+  assert.equal(relics.length, 30);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((rarity) =>
+    relics.filter((item) => item.rarity === rarity).length), [5, 5, 5, 5, 5, 5]);
+  assert.ok(relics.every((item) => item.canFind && item.hasLargeImage
+    && item.iconSource === 'relic-svg' && item.description.length > 20));
+  assert.ok(relics.every((item) => !/definitely cursed|is cursed/iu.test(item.description)));
+  assert.ok(relics.some((item) => /warning|discouraged|curse|unverified/iu.test(item.description)));
+  const relicMelds = catalog.melds.filter((meld) =>
+    meld.mineTypeId === RELICS_CATALOG.mineType.id);
+  assert.deepEqual(relicMelds.map((meld) => meld.rarity), [1, 2, 3, 4, 5, 6]);
+  assert.ok(relicMelds.every((meld) => meld.requirements.length === 5));
+  assert.equal(new Set(RELICS_CATALOG.meldRequirements.map((requirement) =>
+    requirement.itemId)).size, 30);
 });

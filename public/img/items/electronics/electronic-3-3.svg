@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Radio Module</title>
+  <desc id="desc">A tuned transmitter and receiver for gadgets that need to whisper across a city.</desc>
+  <path fill="#a9e6f0" stroke="#123d50" stroke-width="5" stroke-linejoin="round" d="M18 43h92v58H18z"/>
+    <path fill="none" stroke="#287f9e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M30 82l17-19 15 10 18-25 18 13"/>
+    <path fill="#123d50" d="M36 18h56v18H36z"/><circle cx="46" cy="27" r="4" fill="#287f9e"/><circle cx="64" cy="27" r="4" fill="#287f9e"/><circle cx="82" cy="27" r="4" fill="#287f9e"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Quantum Compass</title>
+  <desc id="desc">A fabled electronic compass that points toward the destination its holder is most likely to choose.</desc>
+  <g fill="none" stroke="#431d4b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 64h24m62 0h24M33 43v42l12 12h38l12-12V43L83 31H45z"/>
+      <path d="M46 51h36v26H46z"/>
+    </g><circle cx="64" cy="64" r="9" fill="#974da8"/><path fill="#edb9f5" d="M52 57h24v14H52z"/>
+</svg>

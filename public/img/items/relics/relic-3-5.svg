@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Redacted Tablet</title>
+  <desc id="desc">A slate history from which every royal name was carefully cut. Dust gathers in the missing letters to form unfamiliar ones.</desc>
+  <path d="M14 64q50-49 100 0-50 49-100 0z" fill="#adddea" stroke="#132f3c" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="64" cy="64" r="22" fill="#357f9d" stroke="#132f3c" stroke-width="6"/>
+    <path d="M42 64h44" stroke="#132f3c" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 42v44" stroke="#adddea" stroke-width="4" stroke-dasharray="4 5"/>
+</svg>

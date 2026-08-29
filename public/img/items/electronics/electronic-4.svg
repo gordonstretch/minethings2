@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Thermal Camera</title>
+  <desc id="desc">An electronic eye that sees heat through smoke, darkness, and poorly planned concealment.</desc>
+  <g fill="none" stroke="#501e16" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 64h24m62 0h24M33 43v42l12 12h38l12-12V43L83 31H45z"/>
+      <path d="M46 51h36v26H46z"/>
+    </g><circle cx="64" cy="64" r="9" fill="#b04c36"/><path fill="#ffc0a4" d="M52 57h24v14H52z"/>
+</svg>

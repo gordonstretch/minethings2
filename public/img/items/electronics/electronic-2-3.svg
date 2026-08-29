@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pocket Multimeter</title>
+  <desc id="desc">A compact meter that finds broken wires, weak cells, and confident but incorrect tinkerers.</desc>
+  <path fill="#bce7c7" stroke="#183d29" stroke-width="5" stroke-linejoin="round" d="M18 43h92v58H18z"/>
+    <path fill="none" stroke="#4f8b63" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M30 82l17-19 15 10 18-25 18 13"/>
+    <path fill="#183d29" d="M36 18h56v18H36z"/><circle cx="46" cy="27" r="4" fill="#4f8b63"/><circle cx="64" cy="27" r="4" fill="#4f8b63"/><circle cx="82" cy="27" r="4" fill="#4f8b63"/>
+</svg>

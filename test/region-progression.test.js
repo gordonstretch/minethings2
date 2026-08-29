@@ -75,7 +75,7 @@ test('starts new miners in Aso and reveals Bromo only after gateway arrival', as
   const hiddenFleet = await (await fetch(`${base}/vehicles`, {
     headers: { cookie }
   })).text();
-  assert.match(hiddenFleet, /Undiscovered region · GATEWAY/);
+  assert.match(hiddenFleet, /★ Undiscovered regional capital · GATEWAY/);
   assert.doesNotMatch(hiddenFleet, /\bBromo\b|Ashfall/);
 
   store.database.prepare('UPDATE catalog_routes SET is_inter_map = 0 WHERE id = ?')
@@ -95,7 +95,7 @@ test('starts new miners in Aso and reveals Bromo only after gateway arrival', as
   const inFlightVehicle = await (await fetch(`${base}/vehicles/${vehicleId}`, {
     headers: { cookie }
   })).text();
-  assert.match(inFlightVehicle, /Undiscovered region · GATEWAY/);
+  assert.match(inFlightVehicle, /★ Undiscovered regional capital · GATEWAY/);
   assert.doesNotMatch(inFlightVehicle, /\bBromo\b|Ashfall/);
 
   store.settleVehicles(journey.arrivesAt);

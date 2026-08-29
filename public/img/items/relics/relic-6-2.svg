@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bell That Rang Underground</title>
+  <desc id="desc">A temple bell found beneath its own collapsed tower. It bears tomorrow's date and a warning not to dig further.</desc>
+  <path d="M28 18h72l-7 94H35z" fill="#f5d486" stroke="#4c2b08" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M45 43h38M42 61h44M40 79h48" stroke="#d58918" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 26v78" stroke="#4c2b08" stroke-width="4" stroke-dasharray="7 6"/>
+</svg>

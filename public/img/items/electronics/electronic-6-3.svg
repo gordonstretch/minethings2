@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Probability Engine</title>
+  <desc id="desc">A legendary electronic engine that ranks possible futures and quietly favours the interesting ones.</desc>
+  <path fill="#ffe29a" stroke="#633407" stroke-width="5" stroke-linejoin="round" d="M18 43h92v58H18z"/>
+    <path fill="none" stroke="#e49014" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M30 82l17-19 15 10 18-25 18 13"/>
+    <path fill="#633407" d="M36 18h56v18H36z"/><circle cx="46" cy="27" r="4" fill="#e49014"/><circle cx="64" cy="27" r="4" fill="#e49014"/><circle cx="82" cy="27" r="4" fill="#e49014"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Oracle Mainframe</title>
+  <desc id="desc">A legendary Ebeko computer that answers questions about gadgets nobody has invented yet.</desc>
+  <path fill="#633407" d="M34 28h60v72H34z"/><path fill="#ffe29a" d="M43 39h42v38H43z"/>
+    <g fill="#e49014"><circle cx="49" cy="87" r="5"/><circle cx="64" cy="87" r="5"/><circle cx="79" cy="87" r="5"/></g>
+    <g fill="none" stroke="#633407" stroke-width="5" stroke-linecap="round"><path d="M17 42h17M17 58h17M17 74h17M94 42h17M94 58h17M94 74h17"/><path d="M48 28V13M64 28V13M80 28V13M48 100v15M64 100v15M80 100v15"/></g>
+    <path fill="none" stroke="#e49014" stroke-width="5" stroke-linecap="round" d="M49 65l9-12 8 8 13-14"/>
+</svg>

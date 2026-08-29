@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Broken Votive Tile</title>
+  <desc id="desc">A clay fragment showing a crowd kneeling before a figure deliberately chipped from the scene.</desc>
+  <path d="M28 18h72l-7 94H35z" fill="#ddd2bc" stroke="#2a2723" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M45 43h38M42 61h44M40 79h48" stroke="#8b8274" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 26v78" stroke="#2a2723" stroke-width="4" stroke-dasharray="7 6"/>
+</svg>

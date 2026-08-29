@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sealed Lamp</title>
+  <desc id="desc">An oil lamp fused shut from the inside. A dim red glow has been reported, but never by two witnesses at once.</desc>
+  <path d="M28 18h72l-7 94H35z" fill="#b9dfc2" stroke="#162e21" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M45 43h38M42 61h44M40 79h48" stroke="#4f8764" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 26v78" stroke="#162e21" stroke-width="4" stroke-dasharray="7 6"/>
+</svg>

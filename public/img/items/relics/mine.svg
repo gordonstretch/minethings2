@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Relics Mine</title>
+  <desc id="desc">A sealed Fogo tomb entrance marked by the closed eye of a long-lost civilisation.</desc>
+  <path d="M16 111V74q0-53 48-61 48 8 48 61v37z" fill="#27201c" stroke="#a96324" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M37 111V69q0-28 27-36 27 8 27 36v42z" fill="#080706" stroke="#d2a665" stroke-width="5"/>
+  <path d="M45 62q19-18 38 0-19 17-38 0z" fill="#b34532" stroke="#d2a665" stroke-width="4"/>
+  <path d="M50 62h28" stroke="#17110d" stroke-width="6" stroke-linecap="round"/>
+  <path d="M25 86h13M90 86h13M28 51h14M86 51h14" stroke="#a96324" stroke-width="5" stroke-linecap="round"/>
+</svg>

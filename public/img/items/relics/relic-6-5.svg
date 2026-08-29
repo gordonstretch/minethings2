@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">The Closed Eye</title>
+  <desc id="desc">A polished disc carved as a shut eye, removed from the deepest sealed door. Since then, the carving has begun to open.</desc>
+  <path d="M14 64q50-49 100 0-50 49-100 0z" fill="#f5d486" stroke="#4c2b08" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="64" cy="64" r="22" fill="#d58918" stroke="#4c2b08" stroke-width="6"/>
+    <path d="M42 64h44" stroke="#4c2b08" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 42v44" stroke="#f5d486" stroke-width="4" stroke-dasharray="4 5"/>
+</svg>

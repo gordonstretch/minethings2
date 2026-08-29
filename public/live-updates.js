@@ -5,7 +5,8 @@
     ?? document.querySelector('script[src^="/node/live-updates.js"]');
   if (!script || typeof window.EventSource !== 'function') return;
 
-  const contentMorphEnabled = !/^\/oil-field(?:\/|$)/.test(window.location.pathname);
+  const contentMorphEnabled = !/^\/(?:casino|oil-field)(?:\/|$)/
+    .test(window.location.pathname);
 
   let revision = Math.max(0, Number(script.dataset.liveRevision) || 0);
   let appliedRevision = revision;
@@ -65,7 +66,7 @@
     // Every authenticated page carries current weather in the location panel.
     const topics = new Set(['catalog', 'world']);
     if (/^\/(?:exchange|market|containers)/.test(pathname)) topics.add('market');
-    if (/^\/(?:factories)/.test(pathname)) {
+    if (/^\/(?:factories|mills)/.test(pathname)) {
       topics.add('factories');
       topics.add('market');
     }

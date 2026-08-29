@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cradle Seal</title>
+  <desc id="desc">A royal seal shaped like a sleeping infant. The old civilisation buried it beneath three locked floors and a layer of salt.</desc>
+  <path d="M14 64q50-49 100 0-50 49-100 0z" fill="#ddb3e5" stroke="#351a3b" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="64" cy="64" r="22" fill="#8d4d9b" stroke="#351a3b" stroke-width="6"/>
+    <path d="M42 64h44" stroke="#351a3b" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 42v44" stroke="#ddb3e5" stroke-width="4" stroke-dasharray="4 5"/>
+</svg>

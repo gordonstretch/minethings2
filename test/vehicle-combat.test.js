@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { expectedValue, fightShips, ratingPair } from '../src/vehicle-combat.js';
+import { expectedValue, fightLand, fightShips, ratingPair } from '../src/vehicle-combat.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
 
 test('requires database-supplied vehicle rating and ammunition rules', () => {
@@ -59,6 +59,38 @@ test('fires rate-three cannons in every ship combat round', () => {
   const result = fightShips(ship(true), true, ship(false), true, () => 0,
     catalog.settings.ammunition_rules, catalog.settings);
   assert.deepEqual(result.shots[0].map((shot) => shot.round), [1, 2, 3]);
+});
+
+test('vehicle reinforcement absorbs structural damage before it is destroyed', () => {
+  const catalog = loadLegacyCatalog();
+  const land = fightLand(
+    { attack: 4, armor: 8, offense: 0, defense: 0, dodge: 0, reinforcement: 3 },
+    true,
+    { attack: 4, armor: 1, offense: 0, defense: 0, dodge: 0, reinforcement: 0 },
+    true, () => 0, catalog.settings
+  );
+  const received = land.roundLog.flatMap((round) => round.blows)
+    .find((blow) => blow.opponent === 0);
+  assert.equal(received.absorbed, 3);
+  assert.equal(received.penetratingDamage, 1);
+  assert.equal(received.armorAfter, 7);
+  assert.equal(land.ending[0].reinforcement, 0);
+
+  const ammunition = {
+    ...catalog.settings.ammunition_rules,
+    1: { ...catalog.settings.ammunition_rules[1], accuracy: 1 }
+  };
+  const armed = {
+    speed: 10, hull: 10, crew: 1, reinforcement: 2,
+    massives: 1, chainShots: 0, grapeShots: 0,
+    cannons: [{ id: 1, portal: 1, name: 'Test cannon', rarity: 1,
+      damage: 3, rateOfFire: 1 }], crewWeapons: [], critChance: 0
+  };
+  const ships = fightShips(armed, true, structuredClone(armed), true, () => 0,
+    ammunition, { ...catalog.settings, ship_cannon_rounds_by_rate: { 1: [1] } });
+  assert.deepEqual(ships.ships.map((ship) => ship.reinforcement), [0, 0]);
+  assert.deepEqual(ships.ships.map((ship) => ship.hull), [9, 9]);
+  assert.deepEqual(ships.shots.map((shots) => shots[0].absorbed), [2, 2]);
 });
 
 test('records simultaneous cannon damage, running state, and mutual sinking', () => {

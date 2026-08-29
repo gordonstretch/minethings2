@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dwarfFindRange } from './dwarves.js';
+import { cryptoType } from './crypto.js';
+import { validateCasinoRules } from './casino.js';
 import { assignItemGoldValues } from './item-values.js';
 import { machineIconPath } from './item-icons.js';
 
@@ -13,6 +15,11 @@ const IMAGE_ROOT = path.join(ROOT, 'td', 'public_html', 'app', 'webroot', 'img')
 const RARITY_NAMES = ['', 'Common', 'Uncommon', 'Rare', 'Exceptional', 'Fabled', 'Legendary'];
 const EQUIPMENT_TYPE_NAMES = ['', 'Tool Belt', 'Boots', 'Pickaxe', 'Drill', 'Cart', 'Hardhat', 'Light'];
 const EQUIPMENT_RARITY_ADJECTIVES = ['', 'Flimsy', 'Standard', 'Hardy', 'Crafted', 'Fabled', 'Legendary'];
+export const LEGACY_STARTER_WELCOME_PACK = Object.freeze({
+  vehicleItemId: 154,
+  cryptoTypeId: 1,
+  cryptoQuantity: 5
+});
 export const SHROOM_CATALOG = Object.freeze({
   mapId: 2,
   mapSlug: 'bromo',
@@ -359,9 +366,191 @@ export const WISDOM_CATALOG = Object.freeze({
   melds: WISDOM_MELDS,
   meldRequirements: WISDOM_MELD_REQUIREMENTS
 });
+const ELECTRONICS_DEFINITIONS = Object.freeze([
+  ['Resistor Bundle', 'A paper strip of colour-coded resistors recovered in Ebeko. A modest beginning for circuits that may one day become gadgets.'],
+  ['Copper Wire Coil', 'Fine insulated wire for carrying power and signals through a future electronic device.'],
+  ['LED Strip', 'A row of bright indicator lights. It cannot do much alone, but every useful gadget should say when it is awake.'],
+  ['Toggle Switch', 'A satisfyingly firm switch for giving an electronic device exactly two opinions.'],
+  ['Ceramic Capacitor', 'A handful of tiny charge stores that smooth the rough edges from simple circuits.'],
+  ['Soldering Iron', 'A portable iron used to persuade loose electronic components to remain together.'],
+  ['Breadboard', 'A reusable board for testing a gadget circuit before committing precious components to it.'],
+  ['Pocket Multimeter', 'A compact meter that finds broken wires, weak cells, and confident but incorrect tinkerers.'],
+  ['Relay Board', 'A bank of electrically controlled switches able to let a small signal command a much larger device.'],
+  ['Rechargeable Cell', 'A dependable power cell that can wake a field device more than once.'],
+  ['Microcontroller', 'A programmable electronic brain awaiting instructions for a practical gadget.'],
+  ['Sensor Array', 'A cluster of light, heat, motion, and pressure sensors that lets a device notice Ebeko around it.'],
+  ['Radio Module', 'A tuned transmitter and receiver for gadgets that need to whisper across a city.'],
+  ['Servo Motor', 'A precise motor that turns electronic decisions into small physical movements.'],
+  ['Logic Analyzer', 'A many-eyed instrument that records what a complicated circuit actually did, rather than what its builder intended.'],
+  ['Thermal Camera', 'An electronic eye that sees heat through smoke, darkness, and poorly planned concealment.'],
+  ['Signal Decoder', 'A hardened processor that separates useful instructions from the electronic noise of Ebeko.'],
+  ['Navigation Computer', 'A compact computer built to compare routes, headings, and changing conditions without complaint.'],
+  ['Robotic Controller', 'A rugged control unit with enough inputs and outputs to coordinate an ambitious mechanical gadget.'],
+  ['Mesh Transceiver', 'A self-routing radio that lets a group of devices relay messages when direct contact fails.'],
+  ['Quantum Compass', 'A fabled electronic compass that points toward the destination its holder is most likely to choose.'],
+  ['Predictive Processor', 'A fabled processor that begins calculating the next instruction shortly before it receives the current one.'],
+  ['Adaptive Camouflage Circuit', 'A fabled circuit that samples its surroundings and tells connected panels which colours to pretend to be.'],
+  ['Autonomous Repair Core', 'A fabled controller designed to identify damaged electronics and direct a future gadget to mend itself.'],
+  ['Weather Synthesizer', 'A fabled device that models Ebeko storms so convincingly that nearby instruments reach for umbrellas.'],
+  ['Impossible Battery', 'A legendary power cell whose charge indicator has never moved from full, despite extensive testing.'],
+  ['Ghost Signal Receiver', 'A legendary receiver that picks up transmissions from devices that were never built.'],
+  ['Probability Engine', 'A legendary electronic engine that ranks possible futures and quietly favours the interesting ones.'],
+  ['Pocket Matter Printer', 'A legendary device intended to turn circuit plans into solid components wherever its owner stands.'],
+  ['Oracle Mainframe', 'A legendary Ebeko computer that answers questions about gadgets nobody has invented yet.']
+]);
+const ELECTRONICS_GOLD_VALUE_UNITS = Object.freeze([
+  10000, 40000, 280000, 2000000, 14010000, 84040000
+]);
+const ELECTRONICS_ITEMS = Object.freeze(ELECTRONICS_DEFINITIONS.map(([name, description], index) => {
+  const rarity = Math.floor(index / 5) + 1;
+  const variant = index % 5;
+  return Object.freeze({
+    id: 1524 + index,
+    name,
+    rarity,
+    description,
+    marketableId: 1351 + index,
+    goldValueUnits: ELECTRONICS_GOLD_VALUE_UNITS[rarity - 1],
+    icon: `/node/electronics/electronic-${rarity}${variant ? `-${variant + 1}` : ''}.svg`
+  });
+}));
+const ELECTRONICS_MELDS = Object.freeze([
+  { id: 252, name: 'Starter Circuit', rarity: 1 },
+  { id: 253, name: "Tinkerer's Console", rarity: 2 },
+  { id: 254, name: 'Field Electronics Kit', rarity: 3 },
+  { id: 255, name: 'Autonomous Control Deck', rarity: 4 },
+  { id: 256, name: 'Impossible Device', rarity: 5 },
+  { id: 257, name: 'Gadget Seed', rarity: 6 }
+]);
+let nextElectronicsRequirementId = 1807;
+const ELECTRONICS_MELD_REQUIREMENTS = Object.freeze(ELECTRONICS_MELDS.flatMap((meld) =>
+  ELECTRONICS_ITEMS.filter((item) => item.rarity === meld.rarity).map((item) => ({
+    id: nextElectronicsRequirementId++, meldId: meld.id, itemId: item.id, count: 1
+  }))));
+export const ELECTRONICS_CATALOG = Object.freeze({
+  mapId: 5,
+  mapSlug: 'ebeko',
+  mineType: Object.freeze({
+    id: 29, name: 'Electronic Devices', creditCost: 450, rentCost: 32,
+    hasOre: false, refundable: true, icon: '/node/electronics/mine.svg'
+  }),
+  items: ELECTRONICS_ITEMS,
+  melds: ELECTRONICS_MELDS,
+  meldRequirements: ELECTRONICS_MELD_REQUIREMENTS
+});
+const RELIC_DEFINITIONS = Object.freeze([
+  ['Soot-Clogged Coin', 'A Fogo coin whose ruler has been scratched away. It leaves soot on every hand, even after the coin has been cleaned.'],
+  ['Broken Votive Tile', 'A clay fragment showing a crowd kneeling before a figure deliberately chipped from the scene.'],
+  ['Ashen Bead', 'A warm stone bead taken from a sealed chamber. Miners disagree about whether it grows warmer after sunset.'],
+  ['Burial Thread', 'A length of black funeral cord. Its seven knots are sometimes found tied in a different order.'],
+  ['Nameless Potsherd', 'A pot fragment scored with old tally marks. The freshest stroke does not match the ancient tool that made the others.'],
+  ['Blindfolded Idol', 'A small basalt worshipper with its eyes bound in silver. Nobody has yet volunteered to remove the blindfold.'],
+  ['Sealed Lamp', 'An oil lamp fused shut from the inside. A dim red glow has been reported, but never by two witnesses at once.'],
+  ['Mourning Bell', 'A handbell without a clapper. It was catalogued after several miners heard it ring beneath an empty shaft.'],
+  ['Bone-White Token', 'A pale gaming piece marked with a closed gate. Tests say it is stone; the tooth marks suggest somebody thought otherwise.'],
+  ['Procession Mask Fragment', 'Part of a smiling ceremonial mask. Its painted eye seems to follow whichever miner found it.'],
+  ['Whisper Jar', 'A stoppered jar engraved with warnings in three dead scripts. Holding it to the ear is strongly discouraged.'],
+  ['Blackened Signet', 'The seal of an unnamed magistrate, heat-darkened yet perfectly cold. Wax stamped with it cracks before morning.'],
+  ["Pilgrim's Key", 'A long bronze key worn smooth by generations of hands. No known Fogo lock accepts it, though doors nearby are often found open.'],
+  ['Funeral Compass', 'A compass whose needle ignores north and settles toward the oldest grave in reach. That is the leading theory, at least.'],
+  ['Redacted Tablet', 'A slate history from which every royal name was carefully cut. Dust gathers in the missing letters to form unfamiliar ones.'],
+  ['Sleepless Effigy', 'A polished stone figure with open silver eyes. Mine crews turn it to face the wall before they can rest.'],
+  ['Oath-Eater Chalice', 'A ceremonial cup ringed with broken promises. Spoken vows sound strangely distant when it is uncovered.'],
+  ['Door Without Hinges', 'A miniature obsidian door, sealed and far too heavy for its size. Something has scratched around the frame from within.'],
+  ['Crown of Cinders', 'A charred copper crown recovered intact from a throne reduced to ash. Each wearer reports remembering the same execution.'],
+  ['Witness Stone', 'A black mirror used to record confessions. Reflections in it sometimes mouth a denial a moment too late.'],
+  ['Heart-Salt Reliquary', 'A silver reliquary packed with red salt in the shape of a heart. Its pulse may only be the mine machinery.'],
+  ["Last Magistrate's Mask", 'A gold death mask inscribed with a verdict against an entire civilisation. The sentence itself has been hammered flat.'],
+  ['Chain of Nine Names', 'Nine iron nameplates linked together; eight names translate as traitors. Nobody agrees on the meaning of the ninth.'],
+  ['Sunless Astrolabe', 'An astronomical instrument charting stars that never rose over Fogo. One pointer now tracks the mine entrance.'],
+  ['Cradle Seal', 'A royal seal shaped like a sleeping infant. The old civilisation buried it beneath three locked floors and a layer of salt.'],
+  ['Throne-Shard of the First King', 'A fragment of a throne older than Fogo records. Every surviving account ends just before explaining why it was broken.'],
+  ['Bell That Rang Underground', 'A temple bell found beneath its own collapsed tower. It bears tomorrow\'s date and a warning not to dig further.'],
+  ['Ledger of the Unburied', 'A flawless ledger listing citizens denied burial after the final revolt. The last blank line now carries its finder\'s name.'],
+  ["Child's Crown of Obsidian", 'A tiny crown buried inside a ring of adult skeletons facing outward. None of the excavation photographs show the same child.'],
+  ['The Closed Eye', 'A polished disc carved as a shut eye, removed from the deepest sealed door. Since then, the carving has begun to open.']
+]);
+const RELIC_GOLD_VALUE_UNITS = Object.freeze([
+  10000, 40000, 280000, 2000000, 14010000, 84040000
+]);
+const RELIC_ITEMS = Object.freeze(RELIC_DEFINITIONS.map(([name, description], index) => {
+  const rarity = Math.floor(index / 5) + 1;
+  const variant = index % 5;
+  return Object.freeze({
+    id: 1554 + index,
+    name,
+    rarity,
+    description,
+    marketableId: 1381 + index,
+    goldValueUnits: RELIC_GOLD_VALUE_UNITS[rarity - 1],
+    icon: `/node/relics/relic-${rarity}${variant ? `-${variant + 1}` : ''}.svg`
+  });
+}));
+const RELIC_MELDS = Object.freeze([
+  { id: 258, name: "Excavator's Evidence Tray", rarity: 1 },
+  { id: 259, name: 'Cabinet of Uneasy Offerings', rarity: 2 },
+  { id: 260, name: 'Reliquary of the Last Procession', rarity: 3 },
+  { id: 261, name: 'Archive of Forbidden Oaths', rarity: 4 },
+  { id: 262, name: 'Sepulchral Orrery', rarity: 5 },
+  { id: 263, name: 'Testament of the Unburied', rarity: 6 }
+]);
+let nextRelicRequirementId = 1837;
+const RELIC_MELD_REQUIREMENTS = Object.freeze(RELIC_MELDS.flatMap((meld) =>
+  RELIC_ITEMS.filter((item) => item.rarity === meld.rarity).map((item) => ({
+    id: nextRelicRequirementId++, meldId: meld.id, itemId: item.id, count: 1
+  }))));
+export const RELICS_CATALOG = Object.freeze({
+  mapId: 6,
+  mapSlug: 'fogo',
+  mineType: Object.freeze({
+    id: 30, name: 'Relics', creditCost: 500, rentCost: 36,
+    hasOre: false, refundable: true, icon: '/node/relics/mine.svg'
+  }),
+  items: RELIC_ITEMS,
+  melds: RELIC_MELDS,
+  meldRequirements: RELIC_MELD_REQUIREMENTS
+});
 export const WORLD_CREATURE_TYPES = Object.freeze([
   'kraken', 'land_whale', 'white_whale', 'orca_pod', 'elephant_herd', 't_rex'
 ]);
+export const LEGACY_CASINO_SLOT_RULES = Object.freeze({
+  version: 3,
+  symbolItemIds: [2, 1434, 1464, 1494, 1524, 1554, 277, 278, 279, 280, 281, 282],
+  regularSymbolWeight: 10,
+  maximumBonusSpins: 8,
+  bonusSymbols: [
+    { id: 'shift-bell', name: 'Shift Bell', glyph: '↻', weight: 1,
+      respins: 1, winMultiplierBonus: 0,
+      description: 'Adds one free respin.' },
+    { id: 'twin-drill', name: 'Twin Drill', glyph: '↻2', weight: 1,
+      respins: 2, winMultiplierBonus: 0,
+      description: 'Adds two free respins.' },
+    { id: 'golden-fuse', name: 'Golden Fuse', glyph: '×2', weight: 1,
+      respins: 1, winMultiplierBonus: 1,
+      description: 'Adds one free respin and raises the pull-wide win multiplier by one.' }
+  ],
+  ordinaryMultiplier: 2,
+  payoutMultipliersByItemId: { 277: 3, 278: 5, 279: 10, 280: 20, 281: 40, 282: 80 },
+  explosiveScatterCountFactors: { 5: 1, 6: 2, 7: 3, 8: 4, 9: 5 },
+  jackpotItemId: 282,
+  jackpotBonusMultiplier: 1000,
+  jackpotChanceDenominator: 100000,
+  paylines: [
+    { name: 'Top row', cells: [0, 1, 2] },
+    { name: 'Middle row', cells: [3, 4, 5] },
+    { name: 'Bottom row', cells: [6, 7, 8] },
+    { name: 'Left reel', cells: [0, 3, 6] },
+    { name: 'Centre reel', cells: [1, 4, 7] },
+    { name: 'Right reel', cells: [2, 5, 8] },
+    { name: 'Downhill diagonal', cells: [0, 4, 8] },
+    { name: 'Uphill diagonal', cells: [2, 4, 6] }
+  ],
+  minimumGoldWager: 1,
+  maximumGoldWager: 1000,
+  minimumCryptoWager: 1,
+  maximumCryptoWager: 1000,
+  historyLimit: 20
+});
 const SALE_VALUES = [0, 1, 3, 10, 35, 125, 500];
 const MAX_EXPLOSIVES_PER_DETONATION = [0, 4000, 1000, 250, 50, 15, 4];
 export const LEGACY_ITEM_VALUE_RULES = Object.freeze({
@@ -614,11 +803,11 @@ export const LEGACY_COMBAT_SEASON_SETTINGS = Object.freeze({
 const LEGACY_SPECIALISATIONS = Object.freeze([
   { id: 0, name: 'Bum', melds: 0, bonus: '20% more mine gold, collected automatically', bonuses: { mineGold: 0.2 } },
   { id: 1, name: 'Trader', melds: 0, bonus: '20% faster loaded land travel', bonuses: { loadedLandSpeed: 0.2 } },
-  { id: 2, name: 'Highwayman', melds: 30, bonus: '20% more land offence while pillaging', bonuses: { landPillageOffense: 0.2 } },
-  { id: 3, name: 'Guard', melds: 20, bonus: '20% more land defence while patrolling', bonuses: { landPatrolDefense: 0.2 } },
+  { id: 2, name: 'Highwayman', melds: 30, bonus: '20% more land aggressive power while pillaging', bonuses: { landPillageOffense: 0.2 } },
+  { id: 3, name: 'Guard', melds: 20, bonus: '20% more land defensive power while patrolling', bonuses: { landPatrolDefense: 0.2 } },
   { id: 4, name: 'Merchant', melds: 10, bonus: '20% faster loaded sea travel', bonuses: { loadedSeaSpeed: 0.2 } },
-  { id: 5, name: 'Pirate', melds: 30, bonus: '20% more naval offence while pillaging', bonuses: { seaPillageOffense: 0.2 } },
-  { id: 6, name: 'Bounty Hunter', melds: 20, bonus: '20% more naval defence while patrolling', bonuses: { seaPatrolDefense: 0.2 } },
+  { id: 5, name: 'Pirate', melds: 30, bonus: '20% more naval aggressive power while pillaging', bonuses: { seaPillageOffense: 0.2 } },
+  { id: 6, name: 'Bounty Hunter', melds: 20, bonus: '20% more naval defensive power while patrolling', bonuses: { seaPatrolDefense: 0.2 } },
   { id: 7, name: 'Fisherman', melds: 40, bonus: '20% more fishing opportunities', bonuses: { fishingOpportunities: 0.2 } },
   { id: 8, name: 'Worker', melds: 10, bonus: '20% more components per hour', bonuses: { workerThroughput: 0.2 } },
   { id: 9, name: 'Manufacturer', melds: 50, bonus: '20% more factory throughput', bonuses: { factoryThroughput: 0.2 } },
@@ -881,7 +1070,9 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   mineTypes.push(
     { ...SHROOM_CATALOG.mineType },
     { ...WOOD_CATALOG.mineType },
-    { ...WISDOM_CATALOG.mineType }
+    { ...WISDOM_CATALOG.mineType },
+    { ...ELECTRONICS_CATALOG.mineType },
+    { ...RELICS_CATALOG.mineType }
   );
   const cities = tableRows(sql, 'cities').map((row) => ({ id: row[0], name: row[1], hasMarket: Boolean(row[2]) }));
   const cityMineTypes = tableRows(sql, 'cities_mine_types').map((row) => ({
@@ -950,6 +1141,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   meldRequirements.push(...SHROOM_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
   meldRequirements.push(...WOOD_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
   meldRequirements.push(...WISDOM_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
+  meldRequirements.push(...ELECTRONICS_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
+  meldRequirements.push(...RELICS_CATALOG.meldRequirements.map((entry) => ({ ...entry })));
   const requirementsByMeld = new Map();
   for (const requirement of meldRequirements) {
     if (!requirementsByMeld.has(requirement.meldId)) requirementsByMeld.set(requirement.meldId, []);
@@ -990,6 +1183,24 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       requirements: meldRequirements.filter((entry) => entry.meldId === meld.id)
     });
   }
+  for (const meld of ELECTRONICS_CATALOG.melds) {
+    melds.push({
+      ...meld,
+      mineTypeId: ELECTRONICS_CATALOG.mineType.id,
+      modified: '2026-08-28 00:00:00',
+      public: true,
+      requirements: meldRequirements.filter((entry) => entry.meldId === meld.id)
+    });
+  }
+  for (const meld of RELICS_CATALOG.melds) {
+    melds.push({
+      ...meld,
+      mineTypeId: RELICS_CATALOG.mineType.id,
+      modified: '2026-08-28 00:00:00',
+      public: true,
+      requirements: meldRequirements.filter((entry) => entry.meldId === meld.id)
+    });
+  }
   const gadgets = tableRows(sql, 'gadgets').map((row) => ({
     id: row[0], name: row[1], behaviorKey: row[1],
     displayName: row[2], description: row[3], hasPage: Boolean(row[4])
@@ -1001,6 +1212,10 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     id: row[0], name: row[1], ore: row[2], components: row[3],
     ...FACTORY_ACTION_RULES[row[0]]
   }));
+  factoryActions.push({
+    id: 19, name: 'Reinforce vehicle', ore: 0, components: 1250,
+    actionKind: 'reinforce'
+  });
   const machineTypes = tableRows(sql, 'machine_types').map((row) => {
     const presentation = LEGACY_MACHINE_TYPE_RULES[row[1]];
     const behavior = LEGACY_MACHINE_BEHAVIOR_RULES[row[1]];
@@ -1095,6 +1310,38 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       goldValue: item.goldValueUnits / 10000
     };
   }));
+  items.push(...ELECTRONICS_CATALOG.items.map((item) => {
+    const icon = item.icon;
+    return {
+      ...item,
+      mineTypeId: ELECTRONICS_CATALOG.mineType.id,
+      repairedItemId: null,
+      canFind: true,
+      icon,
+      iconSource: 'electronics-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: icon,
+      hasLargeImage: true,
+      goldValue: item.goldValueUnits / 10000
+    };
+  }));
+  items.push(...RELICS_CATALOG.items.map((item) => {
+    const icon = item.icon;
+    return {
+      ...item,
+      mineTypeId: RELICS_CATALOG.mineType.id,
+      repairedItemId: null,
+      canFind: true,
+      icon,
+      iconSource: 'relic-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: icon,
+      hasLargeImage: true,
+      goldValue: item.goldValueUnits / 10000
+    };
+  }));
   const dwarfDescription = (tier) => {
     const range = dwarfFindRange(tier.rarity, LEGACY_DWARF_TIERS);
     const quality = range.minimum === range.maximum
@@ -1171,6 +1418,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     starter_item_limit: 5000,
     starter_battery_duration_ms: 20 * 60 * 60 * 1000,
     starter_find_count: 5,
+    starter_welcome_pack: LEGACY_STARTER_WELCOME_PACK,
     active_mine_limit: 3,
     control_active_mine_limit: 4,
     stone_buckets_per_hour: 0.5,
@@ -1198,6 +1446,10 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     worker_contract_duration_ms: 7 * 24 * 60 * 60 * 1000,
     factory_max_workers: 7,
     factory_queue_limit: 10,
+    mill_minimum_map_sort_order: 3,
+    mill_wood_mine_type_id: WOOD_CATALOG.mineType.id,
+    mill_reinforcement_action_id: 19,
+    mill_reinforcement_absorption_by_rarity: [0, 5, 10, 20, 40, 80, 160],
     factory_worker_bot_contract_duration_ms: 7 * 24 * 60 * 60 * 1000,
     factory_worker_bot_tiers: [
       { id: 1, name: 'Worker Bot Mk I', cph: 25, costGold: 10000 },
@@ -1386,6 +1638,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     profile_hidden_mine_type_ids: [18, 22],
     item_value_excluded_mine_type_ids: [18],
     item_value_rules: LEGACY_ITEM_VALUE_RULES,
+    casino_slot_rules: LEGACY_CASINO_SLOT_RULES,
     chat_message_max_length: 500,
     chat_rate_window_ms: 30000,
     chat_rate_max_messages: 20,
@@ -1438,7 +1691,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     stats_battle_window_ms: 24 * 60 * 60 * 1000,
     rank_badge_vehicle_count_step: 5,
     rank_badge_vehicle_count_maximum: 25,
-    gadget_primary_bonuses: { hammer: '+25% equipment output', warehouse: '+125 inventory spaces', sharpener: '+10% offense', shield: '+10% defense', turbo: '+5 km/h vehicle speed' },
+    gadget_primary_bonuses: { hammer: '+25% equipment output', warehouse: '+125 inventory spaces', sharpener: '+10% aggressive power', shield: '+10% defensive power', turbo: '+5 km/h vehicle speed' },
     oil_direction_names: ['N', 'NE', 'SE', 'S', 'SW', 'NW'],
     map_route_types: [{ name: 'land', label: 'Land' }, { name: 'sea', label: 'Sea' }, { name: 'air', label: 'Air' }],
     route_type_ids: { land: 0, sea: 1, air: 2 },
@@ -1617,6 +1870,8 @@ export function indexCatalog({
     requireReference(mineTypeById, id, `mine type for ${context}`);
   const requireCity = (id, context) =>
     requireReference(new Map(cities.map((entry) => [entry.id, entry])), id, `city for ${context}`);
+  const casinoRules = validateCasinoRules(settings.casino_slot_rules);
+  for (const itemId of casinoRules.symbolItemIds) requireItem(itemId, 'casino reel');
   const routeTypeIds = settings.route_type_ids;
   const aircraftRoleIds = settings.aircraft_role_ids;
   if (!routeTypeIds || typeof routeTypeIds !== 'object' || Array.isArray(routeTypeIds)) {
@@ -1655,6 +1910,20 @@ export function indexCatalog({
     if (!routeTypeValues.has(Number(vehicle.routeType))) {
       throw new Error(`Missing catalog route-type mapping for vehicle ${vehicle.id}.`);
     }
+  }
+  const welcomePack = settings.starter_welcome_pack;
+  const welcomeVehicleItem = welcomePack && requireItem(
+    welcomePack.vehicleItemId, 'setting starter_welcome_pack.vehicleItemId'
+  );
+  const welcomeVehicle = welcomePack
+    && vehicles.find((vehicle) => vehicle.itemId === Number(welcomePack.vehicleItemId));
+  if (!welcomePack || typeof welcomePack !== 'object' || Array.isArray(welcomePack)
+    || !welcomeVehicle || welcomeVehicleItem.rarity !== 1
+    || welcomeVehicle.routeType !== Number(routeTypeIds.land)
+    || !cryptoType(welcomePack.cryptoTypeId)
+    || !Number.isSafeInteger(Number(welcomePack.cryptoQuantity))
+    || Number(welcomePack.cryptoQuantity) < 1) {
+    throw new Error('Invalid catalog setting: starter_welcome_pack.');
   }
   const vehicleById = new Map(vehicles.map((entry) => [entry.id, entry]));
   for (const entry of lands) requireReference(vehicleById, entry.vehicleId, `vehicle for land subtype ${entry.id}`);
@@ -1897,6 +2166,21 @@ export function indexCatalog({
     || !Number.isSafeInteger(Number(settings.factory_worker_bot_contract_duration_ms))
     || Number(settings.factory_worker_bot_contract_duration_ms) < 1) {
     throw new Error('Invalid catalog Factory Worker bot settings.');
+  }
+  const reinforcementByRarity = settings.mill_reinforcement_absorption_by_rarity;
+  const reinforcementAction = factoryActionById.get(
+    Number(settings.mill_reinforcement_action_id)
+  );
+  if (!Number.isSafeInteger(Number(settings.mill_minimum_map_sort_order))
+    || Number(settings.mill_minimum_map_sort_order) < 1
+    || !mineTypeById.has(Number(settings.mill_wood_mine_type_id))
+    || reinforcementAction?.actionKind !== 'reinforce'
+    || !Array.isArray(reinforcementByRarity)
+    || rarities.some((rarity) => !Number.isFinite(Number(reinforcementByRarity[rarity.id]))
+      || Number(reinforcementByRarity[rarity.id]) < 0)
+    || WOOD_CATALOG.items.some((item) =>
+      Number(reinforcementByRarity[item.rarity]) <= 0)) {
+    throw new Error('Invalid catalog mill reinforcement settings.');
   }
   const requireSettingStrings = (settingKey, paths) => {
     const root = settings[settingKey];

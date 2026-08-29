@@ -82,28 +82,31 @@ function activeVehicle(aggressive, source) {
     attack: Math.max(0, Number(source.attack)),
     armor: Math.max(0, Number(source.armor)),
     baseArmor: Math.max(0, Number(source.armor)),
+    reinforcement: Math.max(0, Number(source.reinforcement ?? 0)),
     offense: Math.max(0, Number(source.offense)),
     defense: Math.max(0, Number(source.defense)),
     dodge: Math.max(0, Number(source.dodge))
   };
 }
 
-function offense(vehicle, opponentDodge) {
+function aggressivePower(vehicle, opponentDodge) {
   return vehicle.aggressive ? Math.max(0, vehicle.offense - opponentDodge) : 0;
 }
 
-function defense(vehicle, opponentDodge) {
+function defensivePower(vehicle, opponentDodge) {
   return vehicle.aggressive ? 0 : Math.max(0, vehicle.defense - opponentDodge);
 }
 
-function attack(vehicle, opponentDodge) {
-  return offense(vehicle, opponentDodge) + vehicle.attack;
+function totalDamage(vehicle, opponentDodge) {
+  return aggressivePower(vehicle, opponentDodge) + vehicle.attack;
 }
 
 export function fightLand(stats1, aggressive1, stats2, aggressive2, random = Math.random, rules) {
   if (!rules) throw new Error('Missing land combat rules.');
   const vehicles = [activeVehicle(aggressive1, stats1), activeVehicle(aggressive2, stats2)];
-  if (!vehicles.some((vehicle, index) => attack(vehicle, vehicles[(index + 1) % 2].dodge) > 0)) {
+  if (!vehicles.some((vehicle, index) => totalDamage(
+    vehicle, vehicles[(index + 1) % 2].dodge
+  ) > 0)) {
     return { winner: 0, rounds: 0, finalBlow: 0, ending: vehicles, roundLog: [] };
   }
   const alternate = vehicles[0].aggressive && vehicles[1].aggressive;
@@ -111,7 +114,8 @@ export function fightLand(stats1, aggressive1, stats2, aggressive2, random = Mat
   let rounds = 0;
   let finalBlow = 0;
   const roundLog = [];
-  while (vehicles[0].armor > 0 && vehicles[1].armor > 0
+  const operational = (vehicle) => vehicle.armor > 0 || vehicle.reinforcement > 0;
+  while (operational(vehicles[0]) && operational(vehicles[1])
     && rounds < Number(rules.land_combat_max_rounds)) {
     rounds += 1;
     if (alternate) {
@@ -120,14 +124,15 @@ export function fightLand(stats1, aggressive1, stats2, aggressive2, random = Mat
       vehicles[active].aggressive = vehicles[active].baseAggressive;
     }
     const before = vehicles.map((vehicle) => ({
-      attack: vehicle.attack, armor: vehicle.armor, aggressive: vehicle.aggressive
+      attack: vehicle.attack, armor: vehicle.armor,
+      reinforcement: vehicle.reinforcement, aggressive: vehicle.aggressive
     }));
     const reductions = [];
     for (let side = 0; side < 2; side += 1) {
       const opponent = (side + 1) % 2;
       const attackBefore = vehicles[opponent].attack;
       const reduced = Math.max(Number(rules.land_combat_minimum_attack), vehicles[opponent].attack
-        - defense(vehicles[side], vehicles[opponent].dodge));
+        - defensivePower(vehicles[side], vehicles[opponent].dodge));
       vehicles[opponent].attack = Math.min(vehicles[opponent].attack, reduced);
       reductions.push({ side, opponent, attackBefore, attackAfter: vehicles[opponent].attack });
     }
@@ -135,20 +140,26 @@ export function fightLand(stats1, aggressive1, stats2, aggressive2, random = Mat
     const blows = [];
     for (const side of order) {
       const opponent = (side + 1) % 2;
-      const blow = attack(vehicles[side], vehicles[opponent].dodge);
+      const blow = totalDamage(vehicles[side], vehicles[opponent].dodge);
       if (blow > 0) finalBlow = blow;
       const armorBefore = vehicles[opponent].armor;
-      vehicles[opponent].armor = Math.max(0, vehicles[opponent].armor - blow);
-      blows.push({ side, opponent, damage: blow, armorBefore,
+      const reinforcementBefore = vehicles[opponent].reinforcement;
+      const absorbed = Math.min(reinforcementBefore, blow);
+      const penetratingDamage = Math.max(0, blow - absorbed);
+      vehicles[opponent].reinforcement = Math.max(0, reinforcementBefore - absorbed);
+      vehicles[opponent].armor = Math.max(0, vehicles[opponent].armor - penetratingDamage);
+      blows.push({ side, opponent, damage: blow, absorbed, penetratingDamage,
+        reinforcementBefore, reinforcementAfter: vehicles[opponent].reinforcement, armorBefore,
         armorAfter: vehicles[opponent].armor });
-      if (vehicles[opponent].armor === 0) break;
+      if (!operational(vehicles[opponent])) break;
     }
     roundLog.push({ round: rounds, before, reductions, blows,
       after: vehicles.map((vehicle) => ({
-        attack: vehicle.attack, armor: vehicle.armor, aggressive: vehicle.aggressive
+        attack: vehicle.attack, armor: vehicle.armor,
+        reinforcement: vehicle.reinforcement, aggressive: vehicle.aggressive
       })) });
   }
-  const alive = vehicles.map((vehicle) => vehicle.armor > 0);
+  const alive = vehicles.map(operational);
   const winner = alive[0] === alive[1] ? 0 : alive[0] ? 1 : 2;
   return { winner, rounds, finalBlow, ending: vehicles, roundLog };
 }
@@ -214,6 +225,7 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
   }
   const ships = [structuredClone(ship1), structuredClone(ship2)];
   for (const [index, ship] of ships.entries()) {
+    ship.reinforcement = Math.max(0, Number(ship.reinforcement ?? 0));
     const critChance = Number(ship.critChance);
     if (!Number.isFinite(critChance) || critChance < 0 || critChance > 1) {
       throw new Error(`Invalid ship critical-hit chance for side ${index + 1}.`);
@@ -230,7 +242,8 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
   outer: for (let round = 1; round <= Number(combatRules.ship_cannon_rounds); round += 1) {
     for (let portal = 1; portal <= portals; portal += 1) {
       const reports = [{ hull: 0, speed: 0, crew: 0 }, { hull: 0, speed: 0, crew: 0 }];
-      const before = ships.map((ship) => ({ hull: ship.hull, speed: ship.speed, crew: ship.crew }));
+      const before = ships.map((ship) => ({ hull: ship.hull, speed: ship.speed,
+        crew: ship.crew, reinforcement: ship.reinforcement }));
       const fired = [null, null];
       for (let side = 0; side < 2; side += 1) {
         const cannon = ships[side].cannons.find((entry) => entry.portal === portal);
@@ -264,16 +277,21 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
       }
       for (let side = 0; side < 2; side += 1) {
         const incoming = reports[(side + 1) % 2];
-        ships[side].hull = Math.max(0, ships[side].hull - incoming.hull);
+        const absorbed = Math.min(ships[side].reinforcement, incoming.hull);
+        ships[side].reinforcement -= absorbed;
+        ships[side].hull = Math.max(0, ships[side].hull - (incoming.hull - absorbed));
         ships[side].speed = Math.max(0, ships[side].speed - incoming.speed);
         ships[side].crew = Math.max(0, ships[side].crew - incoming.crew);
       }
-      const after = ships.map((ship) => ({ hull: ship.hull, speed: ship.speed, crew: ship.crew }));
+      const after = ships.map((ship) => ({ hull: ship.hull, speed: ship.speed,
+        crew: ship.crew, reinforcement: ship.reinforcement }));
       for (let side = 0; side < 2; side += 1) {
         if (!fired[side]) continue;
         const opponent = (side + 1) % 2;
         fired[side].targetBefore = before[opponent];
         fired[side].targetAfter = after[opponent];
+        fired[side].absorbed = Math.max(0,
+          before[opponent].reinforcement - after[opponent].reinforcement);
       }
       if (fired.some(Boolean)) portalRounds.push({ round, portal, before, after,
         shots: fired.map((shot) => shot ? { ...shot } : null) });
@@ -296,7 +314,8 @@ export function fightShips(ship1, aggressive1, ship2, aggressive2, random = Math
     }
   }
   const cannonPhaseEnding = ships.map((ship) => ({
-    hull: ship.hull, speed: ship.speed, crew: ship.crew
+    hull: ship.hull, speed: ship.speed, crew: ship.crew,
+    reinforcement: ship.reinforcement
   }));
   const cannonPhaseCrew = ships.map((ship) => ship.crew);
   const casualties = [[], []];

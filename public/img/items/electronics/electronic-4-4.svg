@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Robotic Controller</title>
+  <desc id="desc">A rugged control unit with enough inputs and outputs to coordinate an ambitious mechanical gadget.</desc>
+  <circle cx="64" cy="64" r="40" fill="#ffc0a4" stroke="#501e16" stroke-width="5"/>
+    <path fill="#b04c36" stroke="#501e16" stroke-width="4" stroke-linejoin="round" d="M58 13h12l5 22 18-13 9 9-12 18 22 6v13l-22 5 12 19-9 9-18-13-5 22H58l-5-22-18 13-9-9 12-19-22-5V55l22-6-12-18 9-9 18 13z"/>
+    <circle cx="64" cy="64" r="15" fill="#501e16"/><circle cx="64" cy="64" r="7" fill="#ffc0a4"/>
+</svg>

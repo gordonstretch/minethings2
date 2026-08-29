@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sleepless Effigy</title>
+  <desc id="desc">A polished stone figure with open silver eyes. Mine crews turn it to face the wall before they can rest.</desc>
+  <circle cx="64" cy="64" r="43" fill="#a84b39" stroke="#411a15" stroke-width="6"/>
+    <circle cx="64" cy="64" r="29" fill="none" stroke="#efb09c" stroke-width="4" stroke-dasharray="5 6"/>
+    <path d="M48 76q16-31 32 0M52 50l12-10 12 10-5 12H57z" fill="#411a15"/>
+</svg>

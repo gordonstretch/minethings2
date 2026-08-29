@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Autonomous Repair Core</title>
+  <desc id="desc">A fabled controller designed to identify damaged electronics and direct a future gadget to mend itself.</desc>
+  <circle cx="64" cy="64" r="40" fill="#edb9f5" stroke="#431d4b" stroke-width="5"/>
+    <path fill="#974da8" stroke="#431d4b" stroke-width="4" stroke-linejoin="round" d="M58 13h12l5 22 18-13 9 9-12 18 22 6v13l-22 5 12 19-9 9-18-13-5 22H58l-5-22-18 13-9-9 12-19-22-5V55l22-6-12-18 9-9 18 13z"/>
+    <circle cx="64" cy="64" r="15" fill="#431d4b"/><circle cx="64" cy="64" r="7" fill="#edb9f5"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Nameless Potsherd</title>
+  <desc id="desc">A pot fragment scored with old tally marks. The freshest stroke does not match the ancient tool that made the others.</desc>
+  <path d="M14 64q50-49 100 0-50 49-100 0z" fill="#ddd2bc" stroke="#2a2723" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="64" cy="64" r="22" fill="#8b8274" stroke="#2a2723" stroke-width="6"/>
+    <path d="M42 64h44" stroke="#2a2723" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 42v44" stroke="#ddd2bc" stroke-width="4" stroke-dasharray="4 5"/>
+</svg>

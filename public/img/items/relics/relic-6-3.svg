@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ledger of the Unburied</title>
+  <desc id="desc">A flawless ledger listing citizens denied burial after the final revolt. The last blank line now carries its finder's name.</desc>
+  <path d="M64 14l31 20-7 67-24 13-24-13-7-67z" fill="#d58918" stroke="#4c2b08" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M48 55q16-18 32 0-16 14-32 0z" fill="#f5d486" stroke="#4c2b08" stroke-width="5"/>
+    <path d="M51 83l13-12 13 12-13 16z" fill="#4c2b08"/>
+</svg>

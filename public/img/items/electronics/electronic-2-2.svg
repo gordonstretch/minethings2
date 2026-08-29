@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Breadboard</title>
+  <desc id="desc">A reusable board for testing a gadget circuit before committing precious components to it.</desc>
+  <path fill="#bce7c7" stroke="#183d29" stroke-width="5" stroke-linejoin="round" d="M23 22h82v84H23z"/>
+    <g fill="#4f8b63" stroke="#183d29" stroke-width="3"><circle cx="43" cy="43" r="9"/><circle cx="84" cy="43" r="9"/><circle cx="43" cy="84" r="9"/><circle cx="84" cy="84" r="9"/></g>
+    <path fill="none" stroke="#183d29" stroke-width="5" stroke-linecap="round" d="M52 43h23M43 52v23M84 52v23M52 84h23"/>
+</svg>

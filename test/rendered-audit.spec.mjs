@@ -1122,6 +1122,7 @@ test('renders the MineThings 2 rebirth landing cleanly at every viewport', async
     await expect(returning.getByLabel('Password')).toBeVisible();
     await expect(page.locator('.landing-archive-card img')).toBeVisible();
     await expect(page.locator('.landing-map-frame img')).toBeVisible();
+    await expect(page.locator('.landing-map-frame img')).toHaveAttribute('src', '/node/maps/aso.png');
     expect(await page.locator('[id]').evaluateAll((elements) => {
       const ids = elements.map((element) => element.id);
       return new Set(ids).size === ids.length;

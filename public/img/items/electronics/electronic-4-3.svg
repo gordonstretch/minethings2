@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Navigation Computer</title>
+  <desc id="desc">A compact computer built to compare routes, headings, and changing conditions without complaint.</desc>
+  <path fill="#ffc0a4" stroke="#501e16" stroke-width="5" stroke-linejoin="round" d="M18 43h92v58H18z"/>
+    <path fill="none" stroke="#b04c36" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M30 82l17-19 15 10 18-25 18 13"/>
+    <path fill="#501e16" d="M36 18h56v18H36z"/><circle cx="46" cy="27" r="4" fill="#b04c36"/><circle cx="64" cy="27" r="4" fill="#b04c36"/><circle cx="82" cy="27" r="4" fill="#b04c36"/>
+</svg>

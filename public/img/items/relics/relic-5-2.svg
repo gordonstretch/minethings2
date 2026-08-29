@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Last Magistrate's Mask</title>
+  <desc id="desc">A gold death mask inscribed with a verdict against an entire civilisation. The sentence itself has been hammered flat.</desc>
+  <path d="M28 18h72l-7 94H35z" fill="#ddb3e5" stroke="#351a3b" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M45 43h38M42 61h44M40 79h48" stroke="#8d4d9b" stroke-width="7" stroke-linecap="round"/>
+    <path d="M64 26v78" stroke="#351a3b" stroke-width="4" stroke-dasharray="7 6"/>
+</svg>

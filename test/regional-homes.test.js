@@ -220,6 +220,75 @@ test('uses the global Meld stash with loose inventory from the active regional c
   'non-home inventory in the active region must not be consumed');
 });
 
+test('builds and operates factories from every discovered regional capital', (context) => {
+  const { store, catalog, player, cities } = regionalFixture(
+    context, 'Regional Factory Owner'
+  );
+  const asoHome = capitalFor(catalog, 'aso');
+  const bromoHome = capitalFor(catalog, 'bromo');
+  const bromoOutpost = cities('bromo').find((city) => city.id !== bromoHome.id);
+  const build = catalog.factoryActions.find((action) => action.actionKind === 'build');
+  const production = catalog.factoryActions.find((action) =>
+    action.actionKind === 'item' && action.ore > 0);
+  assert.ok(bromoOutpost && build && production);
+  revealCity(store, player.id, bromoHome.id);
+  revealCity(store, player.id, bromoOutpost.id);
+  addInventory(store, player.id, bromoHome.id, catalog.settings.ore_item_id,
+    build.ore + production.ore);
+
+  store.changeCity(player.id, bromoHome.id, 1200);
+  assert.notEqual(store.playerById(player.id, 1200, { settle: false }).homeCityId,
+    bromoHome.id, 'the historical single-home field remains non-authoritative');
+  const bromoFactory = store.buildFactory(player.id, 1201);
+  assert.equal(bromoFactory.cityId, bromoHome.id);
+  store.database.prepare(`
+    UPDATE factories SET built = 1, factory_action_id = NULL WHERE id = ?
+  `).run(bromoFactory.id);
+  assert.equal(store.startFactoryAction(
+    player.id, bromoFactory.id, production.id, null, 1202
+  ).actionId, production.id);
+
+  store.changeCity(player.id, bromoOutpost.id, 1300);
+  addInventory(store, player.id, bromoOutpost.id, catalog.settings.ore_item_id, build.ore);
+  assert.throws(() => store.buildFactory(player.id, 1301), /regional capital/i);
+
+  store.changeCity(player.id, asoHome.id, 1400);
+  addInventory(store, player.id, asoHome.id, catalog.settings.ore_item_id, build.ore);
+  assert.equal(store.buildFactory(player.id, 1401).cityId, asoHome.id);
+});
+
+test('makes workers available in each regional capital they have discovered', (context) => {
+  const { store, catalog, player: employer } = regionalFixture(
+    context, 'Regional Factory Employer'
+  );
+  const worker = store.addPlayer(createPlayer(
+    'Regional Factory Worker', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  const bromoHome = capitalFor(catalog, 'bromo');
+  revealCity(store, employer.id, bromoHome.id);
+  revealCity(store, worker.id, bromoHome.id);
+  store.changeCity(employer.id, bromoHome.id, 1100);
+  const ownMeld = store.database.prepare(
+    'INSERT INTO player_melds (player_id, meld_id, created_at) VALUES (?, ?, 1000)'
+  );
+  for (const meld of catalog.melds.slice(0, 10)) ownMeld.run(worker.id, meld.id);
+
+  assert.ok(store.availableWorkers(bromoHome.id, 1200)
+    .some((candidate) => candidate.id === worker.id));
+  store.hireWorker(employer.id, worker.id, 1201);
+  const factoryId = Number(store.database.prepare(`
+    INSERT INTO factories
+      (owner_id, operator_id, city_id, built, factory_action_id, item_id,
+       components_done, last_event_at, completion_at, created_at)
+    VALUES (?, ?, ?, 1, NULL, NULL, 0, 1201, NULL, 1201)
+  `).run(employer.id, employer.id, bromoHome.id).lastInsertRowid);
+  store.assignFactoryWorker(employer.id, factoryId, worker.id, 1202);
+  const employee = store.employees(employer.id, 1202)[0];
+  assert.ok(employee.homeCityIds.includes(capitalFor(catalog, 'aso').id));
+  assert.ok(employee.homeCityIds.includes(bromoHome.id));
+  assert.equal(employee.factoryId, factoryId);
+});
+
 test('v94 migration adds fixed capitals without rewriting legacy miner data', (context) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-regional-v94-'));
   const databaseFile = path.join(directory, 'game.sqlite');
@@ -270,7 +339,7 @@ test('v94 migration adds fixed capitals without rewriting legacy miner data', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 109);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 112);
   store.ensureWorldMaps(2000);
   const migratedCatalog = store.loadCatalog();
   assert.deepEqual({ ...store.database.prepare(
@@ -323,7 +392,7 @@ test('v99 adds only regional-capital catalog metadata before world bootstrap', (
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 109);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 112);
   assert.ok(store.database.prepare('PRAGMA table_info(world_maps)').all()
     .some((column) => column.name === 'capital_city_id'));
   assert.deepEqual({ ...store.database.prepare(

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Electronic Devices Mine</title>
+  <desc id="desc">An Ebeko mine producing electronic components and devices for possible future gadgets.</desc>
+  <path fill="#172f37" stroke="#66d9e8" stroke-width="5" stroke-linejoin="round" d="M31 27h66v74H31z"/>
+  <path fill="#f2a11f" d="M47 43h34v42H47z"/>
+  <g fill="none" stroke="#172f37" stroke-width="5" stroke-linecap="round"><path d="M55 52h18M55 64h18M55 76h10"/></g>
+  <g fill="none" stroke="#66d9e8" stroke-width="5" stroke-linecap="round"><path d="M16 40h15M16 57h15M16 74h15M16 91h15M97 40h15M97 57h15M97 74h15M97 91h15"/><path d="M45 27V12M64 27V12M83 27V12M45 101v15M64 101v15M83 101v15"/></g>
+</svg>
