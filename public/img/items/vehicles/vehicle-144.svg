@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Gun Car</title>
+  <desc id="desc">A compact purple gun car with an open fighting compartment, shielded roof cannon, and squat wheels.</desc>
+  <path d="M13 69h83l19 13-6 17H20L10 88z" fill="#626b67" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 68 50 45h35l11 24" fill="#4b5350" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M58 47h23v18H55z" fill="#9fc5cc" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M69 43V28h22l10 7-10 8z" fill="#a64891" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M94 35h25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="33" cy="98" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="91" cy="98" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M20 79h24m57 0h10" fill="none" stroke="#a64891" stroke-width="4" stroke-linecap="round"/>
+</svg>

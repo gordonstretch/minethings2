@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ladybug</title>
+  <desc id="desc">A round scarlet ladybug viewed from above, with bold black spots, golden highlights, and tiny tucked legs.</desc>
+  <path d="M35 55 17 45M31 71 10 71m25 16-18 11m76-43 18-10M97 71h21M93 87l18 11" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M51 34 43 17 31 11m46 23 8-17 12-6" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="64" cy="72" rx="42" ry="44" fill="#cf4938" stroke="#292d29" stroke-width="7"/>
+  <path d="M64 31v84" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M29 58c4-12 11-19 21-23m49 23c-4-12-11-19-21-23" fill="none" stroke="#d8be32" stroke-width="5" stroke-linecap="round"/>
+  <path d="M43 32c3-16 11-23 21-23s18 7 21 23c-8 9-34 9-42 0z" fill="#292d29" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m58 35 6 9 6-9" fill="#d8be32" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="43" cy="60" r="8" fill="#292d29"/>
+  <circle cx="86" cy="60" r="8" fill="#292d29"/>
+  <circle cx="39" cy="87" r="9" fill="#292d29"/>
+  <circle cx="89" cy="87" r="9" fill="#292d29"/>
+  <circle cx="53" cy="105" r="6" fill="#292d29"/>
+  <circle cx="76" cy="105" r="6" fill="#292d29"/>
+</svg>

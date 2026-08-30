@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Parsley</title>
+  <desc id="desc">A bright parsley bunch made from crisp divided leaves on slender stems.</desc>
+  <path d="M64 119V51m0 17L34 42m30 26 30-27M64 87 28 74m36 13 36-13" stroke="#557d52" stroke-width="6"/><g fill="#82a96c" stroke="#292d29" stroke-width="4"><path d="m34 42-20-20 25 3-3-17 17 17z"/><path d="m94 41 20-20-25 3 3-17-17 17z"/><path d="M28 74 8 56l25 1-1-17 16 18z"/><path d="m100 74 20-18-25 1 1-17-16 18z"/></g><path d="M45 112h38" stroke="#f0dfbd" stroke-width="8"/>
+</svg>

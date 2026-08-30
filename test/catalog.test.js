@@ -19,6 +19,10 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.discoverableItems.length, 848);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
+  assert.deepEqual(catalog.mineTypes.filter((type) => [1, 4, 5].includes(type.id))
+    .map((type) => type.icon), [
+    '/node/mines/mine-1.svg', '/node/mines/mine-4.svg', '/node/mines/mine-5.svg'
+  ]);
   assert.equal(catalog.byId.get(1).name, 'Sneakers');
   assert.ok(catalog.byMineType.get(1).get(1).length > 0);
   assert.equal(catalog.routes.length, 12);
@@ -31,26 +35,48 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.byId.get(welcomePack.vehicleItemId).name, 'Camel');
   assert.equal(catalog.byId.get(welcomePack.vehicleItemId).rarity, 1);
   assert.equal(welcomeVehicle.routeType, catalog.settings.route_type_ids.land);
+  assert.equal(welcomePack.dwarfItemId, 1348);
+  assert.equal(catalog.byId.get(welcomePack.dwarfItemId).name, 'Green Dwarf');
+  assert.equal(catalog.dwarfTiers.find((tier) => tier.itemId === welcomePack.dwarfItemId)?.rarity, 2);
+  assert.deepEqual(welcomePack.gadgetItemIds.map((itemId) => {
+    const item = catalog.byId.get(itemId);
+    const gadget = catalog.gadgetItemByItemId.get(itemId)?.gadget;
+    return { name: item?.name, rarity: item?.rarity, behavior: gadget?.behaviorKey };
+  }), [
+    { name: 'Tin Shield', rarity: 1, behavior: 'shield' },
+    { name: 'Tin Turbo Engine', rarity: 1, behavior: 'turbo' },
+    { name: 'Tin Radar', rarity: 1, behavior: 'radar' }
+  ]);
+  assert.deepEqual(welcomePack.rentalMineTypeIds, [4, 5]);
+  assert.deepEqual(welcomePack.rentalMineTypeIds.map((mineTypeId) =>
+    catalog.mineTypes.find((mineType) => mineType.id === mineTypeId)?.name),
+  ['Equipment', 'Vehicles']);
   assert.deepEqual({
     cryptoTypeId: welcomePack.cryptoTypeId,
-    cryptoQuantity: welcomePack.cryptoQuantity
-  }, { cryptoTypeId: 1, cryptoQuantity: 5 });
+    cryptoQuantity: welcomePack.cryptoQuantity,
+    casinoVoucherCryptoTypeId: welcomePack.casinoVoucherCryptoTypeId,
+    casinoVoucherQuantity: welcomePack.casinoVoucherQuantity
+  }, {
+    cryptoTypeId: 1, cryptoQuantity: 5,
+    casinoVoucherCryptoTypeId: 1, casinoVoucherQuantity: 100
+  });
   assert.equal(catalog.equipment.length, 43);
   assert.equal(catalog.explosives.length, 6);
   assert.equal(catalog.robots.length, 28);
   assert.equal(catalog.equipmentByItemId.get(51).bucketsPerHour, 1);
   assert.equal(catalog.explosiveByItemId.get(277).buckets, 91);
   assert.equal(catalog.robotByItemId.get(340).model, 3);
-  assert.equal(catalog.byId.get(51).icon, '/legacy/img/equipment/src/FlimsyDrill.png');
-  assert.equal(catalog.byId.get(277).icon, '/legacy/img/explosives/explosive1.png');
+  assert.equal(catalog.byId.get(51).icon, '/node/equipment/equipment-51.svg?v=2');
+  assert.equal(catalog.byId.get(277).icon, '/node/explosives/explosive-277.svg');
   assert.equal(catalog.byId.get(340).icon, '/legacy/img/equipment/src/MR3.png');
   assert.equal(catalog.byId.get(358).icon, '/legacy/img/icons/I4.png');
-  assert.equal(catalog.items.find((item) => item.name === 'Search Plane').icon, '/legacy/img/icons/I5.png');
+  assert.equal(catalog.items.find((item) => item.name === 'Search Plane').icon,
+    '/node/vehicles/vehicle-737.svg');
   assert.match(catalog.byId.get(catalog.machineById.get(6).itemId).icon,
     /^\/node\/machine-icons\/pump-[0-6]\.svg$/);
   const avatar = catalog.avatarElements[0];
   assert.equal(catalog.byId.get(avatar.itemId).icon,
-    `/legacy/img/avatars/src/${encodeURIComponent(avatar.filename)}`);
+    `/node/avatars/avatar-${avatar.itemId}.svg?v=2`);
   const damagedEquipment = catalog.items.find((item) => item.repairedItemId === 51);
   assert.equal(damagedEquipment.icon, catalog.byId.get(51).icon);
   assert.equal(damagedEquipment.damaged, true);
@@ -89,9 +115,10 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.avatarElements.length, 156);
   assert.equal(catalog.avatarElementByItemId.get(avatar.itemId).id, avatar.id);
   assert.equal(catalog.avatarElementTypeById.get(avatar.typeId).name, 'Borders');
-  assert.equal(catalog.stones.length, 42);
+  assert.equal(catalog.stones.length, 64);
   assert.equal(catalog.stones[0].name, 'Chatted');
-  assert.equal(catalog.stones.at(-1).rarity, 6);
+  assert.equal(catalog.stones.at(-1).name, 'Constructed');
+  assert.equal(catalog.stones.find((stone) => stone.name === 'Jackpotted').rarity, 6);
 
   const shrooms = catalog.items.filter((item) =>
     item.mineTypeId === SHROOM_CATALOG.mineType.id);

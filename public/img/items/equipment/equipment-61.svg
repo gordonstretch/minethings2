@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Standard Cart</title>
+  <desc id="desc">The Standard Cart shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a6c94c"/><stop offset=".48" stop-color="#698b18"/><stop offset="1" stop-color="#3d5710"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 28h94L93 80H28z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M19 45h83M25 62h72" stroke="#d9e67a" stroke-width="5"/>
+    <path d="M107 28h13" stroke="#242927" stroke-width="8"/>
+    <circle cx="39" cy="99" r="14" fill="#3d5710" stroke="#242927" stroke-width="6"/>
+    <circle cx="84" cy="99" r="14" fill="#3d5710" stroke="#242927" stroke-width="6"/>
+    <circle cx="39" cy="99" r="5" fill="#d9e67a"/><circle cx="84" cy="99" r="5" fill="#d9e67a"/></g>
+</svg>

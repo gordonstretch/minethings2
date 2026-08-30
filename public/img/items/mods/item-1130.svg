@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Sensor Module</title>
+  <desc id="desc">A aluminum vehicle modification depicting a compact scanning sensor with a luminous lens, aerial, and signal arcs.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 60h82v46H23z" fill="#aabcc5"/><path d="M34 49q30-30 60 0v29H34z" fill="#5d727c"/><circle cx="64" cy="61" r="17" fill="#e5eef0"/><circle cx="64" cy="61" r="8" fill="#698b18"/><path d="M64 43V16M48 31 37 17m43 14 11-14" stroke="#698b18"/><path d="M34 89h60M42 99h44" stroke="#5d727c"/></g>
+</svg>

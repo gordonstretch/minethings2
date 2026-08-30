@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Whetting Stone</title>
+  <desc id="desc">Tungsten Whetting Stone, depicted as a powered faceted honing wheel cutting a brilliant blade edge.</desc>
+  <path d="M13 102h102v17H13z" fill="#242827" stroke="#292d29" stroke-width="7"/>
+  <path d="M29 102V63l13-22h44l13 22v39" fill="#4b5050" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m64 17 34 22-8 49-26 14-26-14-8-49z" fill="#242827" stroke="#292d29" stroke-width="6"/>
+  <path d="m64 28 23 15-6 37-17 9-17-9-6-37z" fill="#899693" stroke="#d8be32" stroke-width="5"/>
+  <circle cx="64" cy="58" r="12" fill="#a64891" stroke="#292d29" stroke-width="4"/>
+  <path d="m12 74 42 8 58-30" fill="none" stroke="#dce6e2" stroke-width="7" stroke-linecap="round"/>
+  <path d="m96 29 13-12m-7 24 18-3m-18 14 13 8" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+</svg>

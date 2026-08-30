@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Organ</title>
+  <desc id="desc">A stately pipe organ in a dark wooden case, with ranked silver pipes, twin keyboards, blue trim, and foot pedals.</desc>
+  <path d="M15 44h98v74H15z" fill="#755038" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <g fill="#c9d1cf" stroke="#292d29" stroke-width="5" stroke-linejoin="round">
+    <path d="M23 18q7-8 14 0v51H23z"/><path d="M39 10q7-8 14 0v59H39z"/><path d="M55 19q9-10 18 0v50H55z"/><path d="M75 10q7-8 14 0v59H75z"/><path d="M91 18q7-8 14 0v51H91z"/>
+  </g>
+  <path d="M19 64h90M25 70h78v17H25zm0 20h78v17H25z" fill="#ece4cf" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M32 72v13m11-13v13m11-13v13m11-13v13m11-13v13m11-13v13m11-13v13M32 92v13m11-13v13m11-13v13m11-13v13m11-13v13m11-13v13m11-13v13" fill="none" stroke="#3d94c5" stroke-width="3"/>
+  <path d="M27 117v-8m12 8v-8m12 8v-8m12 8v-8m12 8v-8m12 8v-8m12 8v-8" fill="none" stroke="#d8be8a" stroke-width="5" stroke-linecap="round"/>
+  <path d="M15 56h98" fill="none" stroke="#3d94c5" stroke-width="6"/>
+</svg>

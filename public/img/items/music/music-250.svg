@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Recorder</title>
+  <desc id="desc">An upright wooden recorder with a beveled block mouthpiece, dark windway window, gold bands, and finger holes.</desc>
+  <path d="M47 9h34l-5 29H52z" fill="#bd8250" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M53 35h23l8 80H44z" fill="#a96f43" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M53 35h23l-1 17H52z" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M57 20h19" fill="none" stroke="#e8bd78" stroke-width="4" stroke-linecap="round"/>
+  <rect x="56" y="28" width="17" height="12" rx="2" fill="#292d29"/>
+  <circle cx="64" cy="62" r="5" fill="#292d29"/>
+  <circle cx="64" cy="76" r="5" fill="#292d29"/>
+  <circle cx="64" cy="91" r="5" fill="#292d29"/>
+  <circle cx="64" cy="105" r="5" fill="#292d29"/>
+  <circle cx="53" cy="84" r="4" fill="#292d29"/>
+  <path d="M46 106h36" fill="none" stroke="#d8be32" stroke-width="5" stroke-linecap="round"/>
+  <path d="M47 115h34" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+</svg>

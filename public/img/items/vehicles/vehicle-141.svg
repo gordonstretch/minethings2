@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Assault Truck</title>
+  <desc id="desc">A heavy orange-accented armoured truck with a sloped cab, protected cargo bed, and roof weapon mount.</desc>
+  <path d="M12 58h58l15-22h22l11 29v29H12z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M72 59 87 40h17l7 19z" fill="#9fc5cc" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M16 62h48v22H16zm74 3h26v17H90z" fill="#f79721" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M54 56V39h31m-18 0V27h26m-6 0 18-9" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="34" cy="96" r="16" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="96" cy="96" r="16" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M34 96h1m61 0h1" fill="none" stroke="#f79721" stroke-width="4" stroke-linecap="round"/>
+</svg>

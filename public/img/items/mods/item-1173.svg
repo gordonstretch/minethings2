@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Carbon Roof Plate</title>
+  <desc id="desc">A carbon vehicle modification depicting a faceted roof armor panel with a raised center ridge and six fixing bolts.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 49 49-31 49 31-10 58H25z" fill="#2d3437"/><path d="M64 20v86M16 50l48 12 48-12" stroke="#737f81"/><path d="m31 57 25 7-20 28zm66 0-25 7 20 28z" fill="#151a1c"/><g fill="#f79721"><circle cx="27" cy="48" r="5"/><circle cx="101" cy="48" r="5"/><circle cx="35" cy="98" r="5"/><circle cx="93" cy="98" r="5"/><circle cx="64" cy="30" r="5"/></g></g>
+</svg>

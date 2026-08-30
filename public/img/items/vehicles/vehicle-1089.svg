@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Barque</title>
+  <desc id="desc">A three-masted barque with square sails on its forward masts and a distinctive gaff sail aft.</desc>
+  <path d="M13 79h103l-18 28H29z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 78V15m30 63V12m27 66V21" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="M15 22h22v23H13zm0 28h22v22H16zm56-31h23v24H71zm0 29h23v23H72z"/>
+  </g>
+  <path d="M98 27v42h22z" fill="#698b18" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M28 89h73" fill="none" stroke="#698b18" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Qualm</title>
+  <desc id="desc">Qualm, an uneasy double-barrel cannon with an offset wavering carriage.</desc>
+  <path d="M15 41h87l20 11-20 12H15zm0 24h87l20 12-20 11H15z" fill="#626d6a" stroke="#292d29" stroke-width="6"/><path d="M35 87h64l-13 24H47z" fill="#714b87" stroke="#292d29" stroke-width="6"/><path d="m25 91-12 14 16 9m69-20 13 11-14 10" fill="none" stroke="#714b87" stroke-width="6"/><circle cx="52" cy="99" r="10" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="82" cy="99" r="10" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="52" cy="99" r="4" fill="#d8be32"/><circle cx="82" cy="99" r="4" fill="#d8be32"/>
+</svg>

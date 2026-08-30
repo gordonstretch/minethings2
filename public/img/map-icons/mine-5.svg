@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Vehicles Mine</title>
+  <desc id="desc">A loaded mine cart on heavy wheels.</desc>
+  <path d="M8 17h45l-5 24H15z" fill="#f39a21" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="m14 18 8 11 9-11 9 11 9-11" fill="none" stroke="#ffd36a" stroke-width="3"/><path d="M12 46h40" stroke="#202420" stroke-width="4.5" stroke-linecap="round"/><circle cx="20" cy="49" r="7" fill="#315a64" stroke="#202420" stroke-width="4.5"/><circle cx="44" cy="49" r="7" fill="#315a64" stroke="#202420" stroke-width="4.5"/><path d="M8 58h48" stroke="#202420" stroke-width="3" stroke-linecap="round"/>
+</svg>

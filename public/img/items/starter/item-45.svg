@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Diamond-studded Phone</title>
+  <desc id="desc">A sleek mobile phone framed with small diamonds and a bright gem display.</desc>
+  <rect x="30" y="8" width="68" height="112" rx="12" fill="#3b4544" stroke="#292d29" stroke-width="7"/><rect x="40" y="23" width="48" height="73" rx="4" fill="#714b87"/><path d="m64 35 8 15 17 3-12 12 3 17-16-8-16 8 3-17-12-12 17-3z" fill="#e0c9eb"/><circle cx="64" cy="108" r="5" fill="#d8be32"/><g fill="#cde6e8" stroke="#292d29" stroke-width="2"><circle cx="31" cy="30" r="5"/><circle cx="31" cy="50" r="5"/><circle cx="31" cy="70" r="5"/><circle cx="97" cy="30" r="5"/><circle cx="97" cy="50" r="5"/><circle cx="97" cy="70" r="5"/></g>
+</svg>

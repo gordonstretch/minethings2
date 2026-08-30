@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Jumper</title>
+  <desc id="desc">A high-clearance orange dune buggy with exposed suspension, roll cage, and oversized wheels.</desc>
+  <circle cx="30" cy="91" r="20" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="98" cy="91" r="20" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M25 77h78l10 10H15z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M42 75 53 40h29l18 36" fill="none" stroke="#f79721" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M55 43v32m27-32L61 74M32 75l15 20m50-20L82 96" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M66 54h20l8 18H66z" fill="#9fc5cc" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="30" cy="91" r="7" fill="#f79721" stroke="#292d29" stroke-width="4"/>
+  <circle cx="98" cy="91" r="7" fill="#f79721" stroke="#292d29" stroke-width="4"/>
+</svg>

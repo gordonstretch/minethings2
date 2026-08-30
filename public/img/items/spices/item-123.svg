@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pimento</title>
+  <desc id="desc">A glossy heart-shaped red pimento pepper with a curled green stem.</desc>
+  <path d="M64 30q31-24 48 11 13 39-48 78Q3 80 16 41 33 6 64 30z" fill="#c84a3b" stroke="#292d29" stroke-width="8"/><path d="M64 31q-2-24 21-24" fill="none" stroke="#557d52" stroke-width="8" stroke-linecap="round"/><path d="M64 33q-20 20-12 64m12-64q20 20 12 64" fill="none" stroke="#e67e68" stroke-width="5"/>
+</svg>

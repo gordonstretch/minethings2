@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Microwave</title>
+  <desc id="desc">A countertop microwave with a dark window, handle, dial, and control buttons.</desc>
+  <rect x="13" y="23" width="102" height="83" rx="5" fill="#b8c2bd" stroke="#292d29" stroke-width="7"/><rect x="24" y="36" width="62" height="52" rx="3" fill="#354548" stroke="#292d29" stroke-width="6"/><path d="M31 44h48v36H31z" fill="#526b6e"/><path d="M91 41h15m-15 11h15" stroke="#292d29" stroke-width="4"/><circle cx="99" cy="72" r="9" fill="#f28c28" stroke="#292d29" stroke-width="4"/><path d="M24 97h82" stroke="#707a77" stroke-width="4"/>
+</svg>

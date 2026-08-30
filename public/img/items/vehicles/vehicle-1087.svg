@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sloop</title>
+  <desc id="desc">A low single-masted sloop carrying one broad mainsail and a sharply pointed jib.</desc>
+  <path d="M15 80h101l-18 25H30z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M58 79V14" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M54 20 20 72h34z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M64 25v46h42z" fill="#698b18" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M29 89h71" fill="none" stroke="#698b18" stroke-width="5" stroke-linecap="round"/>
+  <path d="M109 79 119 64" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

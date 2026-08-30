@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Robots Mine</title>
+  <desc id="desc">A square robot head with an alert antenna and bright eyes.</desc>
+  <path d="M32 14V7m0 0 7-3" fill="none" stroke="#202420" stroke-width="4.5" stroke-linecap="round"/><circle cx="41" cy="4" r="3" fill="#ffd36a" stroke="#202420" stroke-width="2"/><rect x="9" y="14" width="46" height="39" rx="7" fill="#aeb9b6" stroke="#202420" stroke-width="4.5"/><path d="M9 31H4m56 0h-5" stroke="#202420" stroke-width="5" stroke-linecap="round"/><circle cx="23" cy="31" r="5" fill="#315a64" stroke="#202420" stroke-width="3"/><circle cx="41" cy="31" r="5" fill="#315a64" stroke="#202420" stroke-width="3"/><path d="M21 43h22" stroke="#f39a21" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cicada</title>
+  <desc id="desc">A stocky cicada viewed from above, with wide veined wings, a dark body, and vivid red eyes.</desc>
+  <path d="M55 45Q35 21 13 29q5 43 42 67z" fill="#c8d7bf" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M73 45q20-24 42-16-5 43-42 67z" fill="#c8d7bf" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="none" stroke="#71866b" stroke-width="3" stroke-linecap="round">
+    <path d="M52 51 20 35m31 29L24 54m30 23L34 74m42-23 32-16M77 64l27-10M74 77l20-3"/>
+  </g>
+  <path d="M48 48q1-25 16-27 15 2 16 27l-5 52-11 14-11-14z" fill="#5d5143" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M49 45q15-12 30 0M53 67h22M54 82h20M57 97h14" fill="none" stroke="#b68d50" stroke-width="4" stroke-linecap="round"/>
+  <path d="M49 50 36 42m43 8 13-8M52 91l-15 13m39-13 15 13" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="50" cy="34" r="6" fill="#d94a36" stroke="#292d29" stroke-width="4"/>
+  <circle cx="78" cy="34" r="6" fill="#d94a36" stroke="#292d29" stroke-width="4"/>
+</svg>

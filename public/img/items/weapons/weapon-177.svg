@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Proximity Mine</title>
+  <desc id="desc">A squat armoured proximity mine with three trigger prongs and a glowing sensor eye.</desc>
+  <path d="m29 68-14-25 24 12M99 68l14-25-24 12M64 52V20" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M24 65q40-25 80 0l9 30q-49 24-98 0z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <ellipse cx="64" cy="68" rx="34" ry="15" fill="#8d9893" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="64" cy="67" rx="15" ry="8" fill="#a64891" stroke="#292d29" stroke-width="5"/>
+  <circle cx="64" cy="65" r="4" fill="#f4d3ed"/>
+  <path d="M31 90q33 12 66 0" fill="none" stroke="#c5cec9" stroke-width="4" stroke-linecap="round"/>
+</svg>

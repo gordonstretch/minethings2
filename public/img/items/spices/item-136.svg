@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Annatto</title>
+  <desc id="desc">A spiny annatto pod split wide to reveal tightly packed scarlet seeds.</desc>
+  <path d="M15 57q4-41 49-45 45 4 49 45-18 5-31 19 12 17 8 36-17-13-26-30-9 17-26 30-4-19 8-36-13-14-31-19z" fill="#a7523d" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M64 17v65M20 54l44 28m44-28L64 82" stroke="#6b352d" stroke-width="5"/><g fill="#c84a3b" stroke="#292d29" stroke-width="3"><circle cx="43" cy="53" r="8"/><circle cx="64" cy="44" r="8"/><circle cx="85" cy="53" r="8"/><circle cx="53" cy="70" r="8"/><circle cx="75" cy="70" r="8"/></g>
+</svg>

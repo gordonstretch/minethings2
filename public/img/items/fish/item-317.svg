@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Dogfish</title>
+  <desc id="desc">A small spotted dogfish shark with a blunt snout, two dorsal fins, and a slim asymmetric tail.</desc>
+  <path d="M12 68q28-31 74-17l28-21-7 27 14 20-30-7q-46 28-79-2z" fill="#788e8a" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M46 49 58 28l13 24M77 69l19 20-28-11" fill="#657a77" stroke="#292d29" stroke-width="5"/><path d="M18 68q30 13 72 2" stroke="#d9e5df" stroke-width="6" fill="none"/><circle cx="28" cy="61" r="4" fill="#292d29"/><g fill="#3f5552"><circle cx="44" cy="58" r="3"/><circle cx="57" cy="64" r="3"/><circle cx="71" cy="57" r="3"/></g>
+</svg>

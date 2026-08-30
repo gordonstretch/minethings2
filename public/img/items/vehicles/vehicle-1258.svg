@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Jalopy</title>
+  <desc id="desc">A battered patchwork jalopy with crooked roof, exposed engine, mismatched wheels, and a rattling exhaust.</desc>
+  <path d="M13 74 26 57h18l11-24 33 5 12 29 16 10v21H13z" fill="#8a744f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m57 39 28 4 8 23H49z" fill="#a9c2c2" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M58 39 55 66m31-22-8 22" fill="none" stroke="#292d29" stroke-width="4"/>
+  <path d="M17 62h27v29H13V72z" fill="#6c736e" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M20 68h17m-14 8h15m-10-15V89" fill="none" stroke="#d8be32" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="34" cy="96" r="17" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="96" cy="98" r="13" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="34" cy="96" r="5" fill="#aeb2aa"/>
+  <circle cx="96" cy="98" r="4" fill="#aeb2aa"/>
+  <path d="M19 61 13 43h12m77 29 12-9" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="m69 81 10 6 9-8" fill="none" stroke="#d8be32" stroke-width="4" stroke-linecap="round"/>
+</svg>

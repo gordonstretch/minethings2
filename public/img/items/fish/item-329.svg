@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Thresher</title>
+  <desc id="desc">A thresher shark with a compact body, small mouth, and extraordinarily long scythe-like upper tail.</desc>
+  <path d="M8 67q31-33 78-16l20-11-6 23 17 11-26-3q-50 23-83-4z" fill="#697f83" stroke="#292d29" stroke-width="7"/><path d="M47 50 61 25l17 29M65 72l29 21-38-10" fill="#526b70" stroke="#292d29" stroke-width="5"/><path d="M101 61q12-40 22-52-1 47-11 67" fill="none" stroke="#292d29" stroke-width="9" stroke-linecap="round"/><path d="M11 68q38 12 78 4" stroke="#d9e5df" stroke-width="6" fill="none"/><circle cx="24" cy="60" r="4" fill="#292d29"/>
+</svg>

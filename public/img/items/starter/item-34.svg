@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Dryer</title>
+  <desc id="desc">A tumble dryer with a warm drum, vent grille, and rising heat marks.</desc>
+  <rect x="18" y="9" width="92" height="110" rx="7" fill="#a6aaa4" stroke="#292d29" stroke-width="7"/><path d="M21 35h86" stroke="#292d29" stroke-width="6"/><circle cx="64" cy="78" r="30" fill="#483d36" stroke="#292d29" stroke-width="6"/><circle cx="64" cy="78" r="19" fill="#f28c28" opacity=".75"/><path d="M39 112h50M33 22h17m9 0h28" stroke="#68716d" stroke-width="5"/><path d="M86 56q12 8 0 16m8-24q17 13 1 29" fill="none" stroke="#d8be32" stroke-width="4" stroke-linecap="round"/>
+</svg>

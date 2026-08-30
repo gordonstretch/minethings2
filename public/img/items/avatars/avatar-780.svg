@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Fishing Background</title>
+  <desc id="desc">A miniature location scene representing the Fishing Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M14 76q25-12 50 0t50 0v36H14z" fill="#3d8190"/><path d="M21 72h57l21 39H78L65 82H21z" fill="#8d6039" stroke="#242927" stroke-width="5"/><path d="M85 28v63m0-54 25 18-25 9" fill="none" stroke="#242927" stroke-width="5"/></g>
+</svg>

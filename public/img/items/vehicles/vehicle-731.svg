@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Dinghy</title>
+  <desc id="desc">A short tubby dinghy with a stout mast and one oversized triangular sail.</desc>
+  <path d="M19 78h96l-19 26H35z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M52 77V16" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M49 20 17 70h32z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M57 24v44h41z" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M31 87h68" fill="none" stroke="#d8be32" stroke-width="5" stroke-linecap="round"/>
+  <path d="M108 78 117 65" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

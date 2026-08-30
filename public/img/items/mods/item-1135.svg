@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Chain Gun</title>
+  <desc id="desc">A iron vehicle modification depicting a rotary chain gun with clustered barrels, a drive drum, and an ammunition feed.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 89h82l-8 19H28z" fill="#39443f"/><path d="M31 63h55v32H31z" fill="#707b76"/><circle cx="43" cy="79" r="15" fill="#39443f"/><circle cx="43" cy="79" r="7" fill="#799c9c"/><path d="M81 66h42M81 75h42M81 84h42M81 93h42" stroke="#39443f"/><path d="M117 62v36" stroke="#799c9c"/><path d="M54 65 68 42h18v23" fill="#b9c2ba"/></g>
+</svg>

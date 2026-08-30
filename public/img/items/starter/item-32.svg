@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Umbrella</title>
+  <desc id="desc">An open orange umbrella with a hooked wooden handle.</desc>
+  <path d="M11 59Q20 14 64 14t53 45L91 48 64 59 37 48z" fill="#f28c28" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M64 17v77q0 22 17 22 15 0 15-15" fill="none" stroke="#95613e" stroke-width="7" stroke-linecap="round"/><path d="M37 48q6-27 27-31m27 31q-6-27-27-31" fill="none" stroke="#ffd17b" stroke-width="4"/>
+</svg>

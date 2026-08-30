@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ski Jacket</title>
+  <desc id="desc">A padded ski jacket with a tall collar, zip, snowflake badge, and pockets.</desc>
+  <path d="m44 16 20 13 20-13 31 25-19 25-13-10v62H45V56L32 66 13 41z" fill="#557d52" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M64 30v84M46 72h18m0 0h18" stroke="#f0dfbd" stroke-width="5"/><path d="m91 35 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1z" fill="white" stroke="#292d29" stroke-width="2"/>
+</svg>

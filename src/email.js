@@ -59,7 +59,7 @@ export class EmailClient {
       to: email,
       subject: 'Verify your MineThings email address',
       text: `Hello ${minerName},\n\nConfirm this email address to unlock your MineThings account:\n${verificationUrl}\n\nThis single-use link expires in ${expiresIn}. If you did not create or update this account, ignore this message.\n`,
-      html: `<p>Hello ${escapeEmailHtml(minerName)},</p><p>Confirm this email address to unlock your MineThings account:</p><p><a href="${escapeEmailHtml(verificationUrl)}">Verify my email address</a></p><p>This single-use link expires in ${escapeEmailHtml(expiresIn)}. If you did not create or update this account, ignore this message.</p>`
+      html: `<p>Hello ${escapeEmailHtml(minerName)},</p><p>Confirm this email address to unlock your MineThings account:</p><p><a class="text-link" href="${escapeEmailHtml(verificationUrl)}">Verify my email address</a></p><p>This single-use link expires in ${escapeEmailHtml(expiresIn)}. If you did not create or update this account, ignore this message.</p>`
     });
   }
 }

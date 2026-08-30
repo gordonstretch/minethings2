@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">AFV</title>
+  <desc id="desc">A six-wheeled angular armoured fighting vehicle with a compact turret, firing slit, and orange command stripe.</desc>
+  <path d="M12 61 32 36h57l27 29v36H12z" fill="#596661" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 36 49 22h39l12 14z" fill="#68746e" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M92 27h24" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M15 72h99" stroke="#f79721" stroke-width="8"/>
+  <path d="M38 49h45l14 15H29z" fill="#74817b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M67 51h20" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="27" cy="98" r="13" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="63" cy="98" r="13" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="99" cy="98" r="13" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="27" cy="98" r="4" fill="#abb0ac"/>
+  <circle cx="63" cy="98" r="4" fill="#abb0ac"/>
+  <circle cx="99" cy="98" r="4" fill="#abb0ac"/>
+</svg>

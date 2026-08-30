@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Steamship</title>
+  <desc id="desc">A sturdy steamship dominated by a side paddle wheel, twin smokestacks, and short utility masts.</desc>
+  <path d="M12 73h104l-15 32H28z" fill="#596563" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M25 72V48h70v24" fill="#d7e0dd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="64" cy="81" r="23" fill="#a64891" stroke="#292d29" stroke-width="6"/>
+  <circle cx="64" cy="81" r="8" fill="#f1e5c8" stroke="#292d29" stroke-width="4"/>
+  <path d="M64 59v44M42 81h44M49 66l30 30m0-30-30 30" fill="none" stroke="#292d29" stroke-width="4"/>
+  <path d="M42 48V21h13v27m20 0V17h13v31" fill="#a64891" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M19 73V30m84 43V34" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

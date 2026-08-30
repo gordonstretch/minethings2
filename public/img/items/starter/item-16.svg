@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Electric Toothbrush</title>
+  <desc id="desc">A blue electric toothbrush with a round brush head and charging base.</desc>
+  <path d="M47 116 55 45h25l4 71z" fill="#3d7f92" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M56 46 46 20q-3-10 8-12l30 7-4 31z" fill="#e8f0ec" stroke="#292d29" stroke-width="6"/><path d="M55 17h26M53 25h28M57 34h22" stroke="#3d7f92" stroke-width="3"/><circle cx="68" cy="78" r="7" fill="#d8be32" stroke="#292d29" stroke-width="4"/><path d="M37 116h57" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+</svg>

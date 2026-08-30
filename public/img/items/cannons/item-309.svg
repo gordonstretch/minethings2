@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Curtains</title>
+  <desc id="desc">Curtains, a compact triple-muzzle cannon throwing a broad smoke screen.</desc>
+  <path d="M16 38h89l17 12-17 12H16zM16 57h89l17 12-17 12H16zM16 76h89l17 12-17 12H16z" fill="#6c7774" stroke="#292d29" stroke-width="5"/><path d="M35 95h61l-13 20H48z" fill="#95613e" stroke="#292d29" stroke-width="5"/><path d="M107 35q16-15 20 1m-17 19q17-12 20 5m-20 14q17-6 18 11" fill="none" stroke="#f0dfbd" stroke-width="5"/>
+</svg>

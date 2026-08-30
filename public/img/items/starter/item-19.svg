@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wool Shirt</title>
+  <desc id="desc">A thick wool shirt with a button placket and knitted chevron pattern.</desc>
+  <path d="m45 19 19 10 19-10 31 20-17 25-15-9v63H46V55l-15 9-17-25z" fill="#8d7658" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M54 31v75m20-75v75M51 50l13 12 13-12M51 72l13 12 13-12" fill="none" stroke="#f0dfbd" stroke-width="4"/><circle cx="64" cy="42" r="3" fill="#292d29"/><circle cx="64" cy="94" r="3" fill="#292d29"/>
+</svg>

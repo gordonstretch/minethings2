@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sidearm</title>
+  <desc id="desc">Sidearm, a compact pistol-like deck cannon with a hooked rear grip.</desc>
+  <path d="m18 53 16-14 73 6 12 16-16 14-73-4z" fill="#697471" stroke="#292d29" stroke-width="7"/><path d="M42 72h49l-5 19H50z" fill="#95613e" stroke="#292d29" stroke-width="6"/><path d="M51 89 38 116m44-26 18 24" stroke="#292d29" stroke-width="8" stroke-linecap="round"/><path d="M31 50 17 31 8 44" fill="none" stroke="#95613e" stroke-width="7" stroke-linejoin="round"/>
+</svg>

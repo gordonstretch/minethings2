@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tin Gun Turret</title>
+  <desc id="desc">A tin vehicle modification depicting a compact rotating turret with an armored mantlet and projecting cannon barrel.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M25 83h75l-8 23H33z" fill="#56635f"/><ellipse cx="63" cy="84" rx="34" ry="13" fill="#9aa7a3"/><path d="M38 76 46 44h40l12 32z" fill="#9aa7a3"/><path d="M53 47V32h25v15" fill="#d9e2dc"/><path d="M76 36h43v13H76z" fill="#56635f"/><path d="m116 36 9 7-9 6z" fill="#d8be32"/><circle cx="63" cy="65" r="7" fill="#d8be32"/></g>
+</svg>

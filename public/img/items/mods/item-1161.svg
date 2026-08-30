@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Roll Bar</title>
+  <desc id="desc">A tungsten vehicle modification depicting a rigid protective roll cage with twin hoops, braces, and bolted mounting feet.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M25 108V59q0-37 30-37h18q30 0 30 37v49" fill="none" stroke="#505862" stroke-width="14"/><path d="M40 108V63q0-22 20-22h8q20 0 20 22v45M24 76h80M34 105l20-29m40 29L74 76" fill="none" stroke="#282f37"/><path d="M16 108h29m38 0h29" stroke="#a64891"/></g>
+</svg>

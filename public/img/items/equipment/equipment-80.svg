@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Fabled Pickaxe</title>
+  <desc id="desc">The Fabled Pickaxe shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d17bc0"/><stop offset=".48" stop-color="#a64891"/><stop offset="1" stop-color="#612957"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m72 43 14 10-49 68-14-10z" fill="#9a6336" stroke="#242927" stroke-width="5"/>
+    <path d="M14 40 28 22q48-14 87 17l-9 17Q73 35 36 49z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M22 37q45-16 84 10" fill="none" stroke="#f1b5dc" stroke-width="4"/></g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pipe Bomb</title>
+  <desc id="desc">A capped steel pipe bomb with a red timer, coiled wire, and warning light.</desc>
+  <path d="M26 49h76v52H26z" fill="#78837f" stroke="#292d29" stroke-width="6"/>
+  <path d="M16 43h18v64H16zM94 43h18v64H94z" fill="#a9b2ad" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M42 58h42v29H42z" fill="#e32121" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M51 68h8v9h-8zm17 0h8v9h-8z" fill="#ffc5b8"/>
+  <circle cx="89" cy="27" r="8" fill="#e32121" stroke="#292d29" stroke-width="5"/>
+  <path d="M45 48Q44 16 81 26l8 1" fill="none" stroke="#e32121" stroke-width="5" stroke-linecap="round"/>
+  <path d="M32 38v-9M96 38v-9" fill="none" stroke="#d9dfdc" stroke-width="5" stroke-linecap="round"/>
+</svg>

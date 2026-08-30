@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Jail Background</title>
+  <desc id="desc">A miniature location scene representing the Jail Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M18 18h92v92H18z" fill="#737d7a" stroke="#242927" stroke-width="6"/><path d="M29 20v88m18-88v88m18-88v88m18-88v88m18-88v88M19 60h90" stroke="#313a3a" stroke-width="7"/><circle cx="90" cy="76" r="6" fill="#d5a73d"/></g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Grenade Launcher</title>
+  <desc id="desc">A short heavy grenade launcher with a rotating drum and vented barrel shroud.</desc>
+  <path d="M51 39h65v29H51z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="73" cy="71" r="24" fill="#7c8782" stroke="#292d29" stroke-width="6"/>
+  <circle cx="73" cy="71" r="8" fill="#e32121" stroke="#292d29" stroke-width="4"/>
+  <circle cx="73" cy="53" r="4" fill="#ffc5b8"/><circle cx="89" cy="66" r="4" fill="#ffc5b8"/><circle cx="83" cy="85" r="4" fill="#ffc5b8"/><circle cx="61" cy="85" r="4" fill="#ffc5b8"/><circle cx="57" cy="64" r="4" fill="#ffc5b8"/>
+  <path d="M50 44 17 54 9 75l30 4 22-16z" fill="#45504c" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M52 87 42 112H27l12-39" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M92 47v13M103 47v13" fill="none" stroke="#cbd3cf" stroke-width="4" stroke-linecap="round"/>
+</svg>

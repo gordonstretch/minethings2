@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Office Chair</title>
+  <desc id="desc">An adjustable office chair with padded back, armrests, gas lift, and five casters.</desc>
+  <path d="M34 14h60v53H34z" fill="#53615e" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M28 70h72v30H28z" fill="#65716e" stroke="#292d29" stroke-width="7"/><path d="M64 99v15m-31 7 31-7 31 7m-31-7-19 7m19-7 19 7" stroke="#292d29" stroke-width="7" stroke-linecap="round"/><circle cx="31" cy="121" r="5" fill="#f28c28"/><circle cx="45" cy="121" r="5" fill="#f28c28"/><circle cx="83" cy="121" r="5" fill="#f28c28"/><circle cx="97" cy="121" r="5" fill="#f28c28"/><path d="M27 63H13v26m88-26h14v26" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/><path d="M46 24h36M42 39h44M39 54h50" stroke="#87938f" stroke-width="4"/>
+</svg>

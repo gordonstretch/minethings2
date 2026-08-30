@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Carbon High Load Tires</title>
+  <desc id="desc">A carbon vehicle modification depicting a wide reinforced tire with deep block tread, sturdy rim, and load bolts.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="64" cy="64" r="53" fill="#151a1c"/><path d="M31 18 44 35m-22 0 17 14M15 56l22 9M15 78l22-7m-11 27 18-18m-3 32 10-24m46-70L84 35m22 0L89 49m24 7-22 9m22 13-22-7m11 27L84 80m3 32L77 88" stroke="#f79721"/><circle cx="64" cy="64" r="32" fill="#2d3437"/><circle cx="64" cy="64" r="15" fill="#737f81"/><circle cx="64" cy="64" r="6" fill="#f79721"/><path d="M64 34v15m0 30v15M34 64h15m30 0h15" stroke="#151a1c"/></g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bigeye Tuna</title>
+  <desc id="desc">A deep-bodied bigeye tuna with a huge bright eye, dark back, golden finlets, and crescent tail.</desc>
+  <path d="M8 66q22-39 76-31l37 31-35 32Q28 106 8 66z" fill="#aebfbe" stroke="#292d29" stroke-width="8"/><path d="M13 59q35-27 75-18" stroke="#244f65" stroke-width="12"/><circle cx="26" cy="57" r="11" fill="#d8be32" stroke="#292d29" stroke-width="5"/><circle cx="26" cy="57" r="4" fill="#292d29"/><path d="m88 37 33-22-8 51 8 47-35-22" fill="#244f65" stroke="#292d29" stroke-width="7"/><g fill="#d8be32"><path d="m91 47 9 7-9 7z"/><path d="m96 63 9 6-9 7z"/><path d="m91 79 9 6-9 7z"/></g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Halfpipe</title>
+  <desc id="desc">A curved skate halfpipe with coping rails and a tiny board climbing one wall.</desc>
+  <path d="M10 26h25v43q0 22 29 22t29-22V26h25v47q0 45-54 45T10 73z" fill="#b8c2bd" stroke="#292d29" stroke-width="7"/><path d="M20 27h15m58 0h15" stroke="#f28c28" stroke-width="6"/><path d="m68 76 23-12 7 11-23 12z" fill="#d8be32" stroke="#292d29" stroke-width="4"/><circle cx="76" cy="88" r="4" fill="#292d29"/><circle cx="94" cy="78" r="4" fill="#292d29"/>
+</svg>

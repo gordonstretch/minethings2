@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Armory</title>
+  <desc id="desc">Tungsten Armory, depicted as a sealed fortress locker with a shielded privacy eye.</desc>
+  <path d="M11 29 30 10h68l19 19v88H11z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M19 109V33l14-15h62l14 15v76z" fill="none" stroke="#899693" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M25 38 64 21l39 17-8 62-31 18-31-18z" fill="#4b5050" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M43 68c5-14 14-21 21-21s16 7 21 21c-6 14-14 21-21 21S49 82 43 68z" fill="#242827" stroke="#292d29" stroke-width="5"/>
+  <path d="M42 45 86 92M86 45 42 92" fill="none" stroke="#d8be32" stroke-width="7" stroke-linecap="round"/>
+  <path d="M50 58 78 80M78 58 50 80" fill="none" stroke="#a64891" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="64" cy="69" r="8" fill="#f28c28" stroke="#292d29" stroke-width="4"/>
+</svg>

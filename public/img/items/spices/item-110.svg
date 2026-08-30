@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Coriander</title>
+  <desc id="desc">Round coriander seeds beside the delicate lobed leaves of the same plant.</desc>
+  <path d="M64 115V31m0 40L35 47m29 39 31-25" stroke="#557d52" stroke-width="6" stroke-linecap="round"/><g fill="#82a96c" stroke="#292d29" stroke-width="4"><path d="M34 48q-23-18-25 8 16 17 25-8z"/><path d="M38 52q-10 27 15 22 13-21-15-22z"/><path d="M94 61q25-16 25 10-17 17-25-10z"/><path d="M90 65q8 28-17 21-11-22 17-21z"/></g><g fill="#b69a61" stroke="#292d29" stroke-width="4"><circle cx="48" cy="25" r="10"/><circle cx="68" cy="18" r="10"/><circle cx="86" cy="29" r="10"/></g><g stroke="#7b653c" stroke-width="2"><path d="m43 23 10 4m10-12 10 6m8 3 10 7"/></g>
+</svg>

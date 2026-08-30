@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">50" HDTV</title>
+  <desc id="desc">A wide flat-screen television on a sturdy central stand.</desc>
+  <rect x="10" y="18" width="108" height="73" rx="5" fill="#273b3e" stroke="#292d29" stroke-width="7"/><path d="m18 78 30-36 22 19 19-25 21 42z" fill="#3d7f92"/><circle cx="90" cy="39" r="10" fill="#d8be32"/><path d="M64 91v17m-29 0h58" stroke="#292d29" stroke-width="8" stroke-linecap="round"/>
+</svg>

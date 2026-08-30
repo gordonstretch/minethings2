@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mustard Seed</title>
+  <desc id="desc">Golden mustard seeds beneath a small four-petalled yellow mustard flower.</desc>
+  <path d="M64 116V47m0 9L40 34m24 22 24-22" stroke="#557d52" stroke-width="5"/><path d="M64 47q-22-6-24-24 20-8 24 14 4-22 24-14-2 18-24 24z" fill="#d8be32" stroke="#292d29" stroke-width="5"/><g fill="#b28c2d" stroke="#292d29" stroke-width="3"><circle cx="22" cy="84" r="8"/><circle cx="44" cy="96" r="8"/><circle cx="68" cy="82" r="8"/><circle cx="91" cy="99" r="8"/><circle cx="108" cy="78" r="8"/></g>
+</svg>

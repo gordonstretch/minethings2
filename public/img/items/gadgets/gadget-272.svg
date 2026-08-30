@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Armory</title>
+  <desc id="desc">Titanium Armory, depicted as an armored vault door shielding crossed weapon silhouettes.</desc>
+  <path d="M18 20 64 9l46 11v96H18z" fill="#4184a8" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="64" cy="67" r="39" fill="#9fc5cc" stroke="#292d29" stroke-width="6"/>
+  <circle cx="64" cy="67" r="26" fill="#4184a8" stroke="#292d29" stroke-width="5"/>
+  <path d="M64 41v52M38 67h52m-44-22 15 16m21-15L67 61m-6 12L45 89m22-16 16 16" fill="none" stroke="#e3f0ef" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="64" cy="67" r="8" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="m29 25 9 7m61-7-9 7M27 105l10-6m64 6-10-6" stroke="#3d94c5" stroke-width="4"/>
+</svg>

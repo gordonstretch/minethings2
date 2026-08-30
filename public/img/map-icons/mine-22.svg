@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Unreleased Mine</title>
+  <desc id="desc">A sealed future crate secured by a heavy padlock.</desc>
+  <path d="M8 19h48v37H8z" fill="#765584" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="M9 20 32 33l23-13M32 33v23" fill="none" stroke="#eadfc8" stroke-width="3"/><path d="M24 17v-4c0-11 16-11 16 0v4" fill="none" stroke="#202420" stroke-width="4.5"/><rect x="21" y="14" width="22" height="19" rx="4" fill="#ffd36a" stroke="#202420" stroke-width="4"/><circle cx="32" cy="23" r="3" fill="#202420"/>
+</svg>

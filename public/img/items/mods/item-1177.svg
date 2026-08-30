@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Carbon Sensor Array</title>
+  <desc id="desc">A carbon vehicle modification depicting a multi-element sensor mast with dish, aerials, scanner eyes, and signal waves.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M52 51h24v61H52z" fill="#2d3437"/><path d="M29 103h70v13H29z" fill="#151a1c"/><path d="M64 51V18M53 36 40 20m35 16 13-16" stroke="#f79721"/><path d="M22 58q42-38 84 0-42 24-84 0z" fill="#2d3437"/><path d="M31 56q33-25 66 0-33 11-66 0z" fill="#737f81"/><circle cx="64" cy="57" r="8" fill="#f79721"/><path d="M23 31q-13 25 0 50m82-50q13 25 0 50" fill="none" stroke="#f79721"/></g>
+</svg>

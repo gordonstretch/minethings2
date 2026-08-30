@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Guitar</title>
+  <desc id="desc">A warm acoustic guitar standing upright, with a waisted wooden body, long fretted neck, tuning pegs, and blue pickguard.</desc>
+  <path d="M64 54c-17-9-31 2-26 18-15 14-8 41 26 44 34-3 41-30 26-44 5-16-9-27-26-18z" fill="#bd763c" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M57 19h14l4 44H53z" fill="#9a5b34" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m56 20-2-13h20l-2 13z" fill="#8b5030" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M58 28h12M57 38h14M56 48h16M55 58h18" fill="none" stroke="#d9c9aa" stroke-width="3"/>
+  <path d="M64 21v91" fill="none" stroke="#f1d5a0" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="64" cy="78" r="11" fill="#322e29" stroke="#292d29" stroke-width="4"/>
+  <path d="M69 84q19 4 20 19-17 8-25-5z" fill="#3d94c5" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M49 106h30" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M54 11h-9m29 0h9M55 17h-9m27 0h9" fill="none" stroke="#3d94c5" stroke-width="4" stroke-linecap="round"/>
+</svg>

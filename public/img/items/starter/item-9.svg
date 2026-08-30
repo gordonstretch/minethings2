@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Stone Watch Tower</title>
+  <desc id="desc">A crenellated stone watch tower with an arched door and narrow lookout windows.</desc>
+  <path d="M29 43h70v75H29z" fill="#8f9690" stroke="#292d29" stroke-width="7"/><path d="M20 14h20v17h15V14h18v17h15V14h20v34H20z" fill="#abb0aa" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M53 118V86q0-13 11-13t11 13v32z" fill="#3b403d" stroke="#292d29" stroke-width="5"/><path d="M41 57h13v15H41zm33 0h13v15H74z" fill="#e8c45d" stroke="#292d29" stroke-width="4"/>
+</svg>

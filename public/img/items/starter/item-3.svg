@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Jet Boots</title>
+  <desc id="desc">A pair of reinforced rocket boots firing hot orange exhaust from their heels.</desc>
+  <path d="M22 22h31v56H17l8-16zM75 22h31l-3 40 8 16H75z" fill="#3d7f92" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M17 78h42v16H12zm52 0h47l-4 16H69z" fill="#b8c2bd" stroke="#292d29" stroke-width="6"/><path d="m27 98 8 23 9-23m42 0 8 23 9-23" fill="#d8be32" stroke="#f28c28" stroke-width="5" stroke-linejoin="round"/><path d="M30 36h20m31 0h20" stroke="#f0dfbd" stroke-width="5"/>
+</svg>

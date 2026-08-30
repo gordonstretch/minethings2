@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Swordfish</title>
+  <desc id="desc">A swordfish with a flattened sword-like bill, smooth dark body, high first dorsal, and crescent tail.</desc>
+  <path d="M20 68q29-32 75-14l28-14-11 26 13 23-32-15q-44 20-73-6z" fill="#586d79" stroke="#292d29" stroke-width="7"/><path d="m20 67-18-5 19-6" fill="#6f838c" stroke="#292d29" stroke-width="4"/><path d="M46 53Q56 15 88 22l6 33" fill="#3d5362" stroke="#292d29" stroke-width="6"/><path d="M30 69q31 11 61 4" stroke="#d9e5df" stroke-width="6" fill="none"/><path d="M62 77 83 99l5-27" fill="#465d68" stroke="#292d29" stroke-width="5"/><circle cx="30" cy="58" r="4" fill="#292d29"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">G. White Shark</title>
+  <desc id="desc">A great white shark with a huge conical body, slate back, white belly, black eye, and toothed jaw.</desc>
+  <path d="M5 65q29-45 86-20l29-27-8 39 14 25-34-13Q37 104 5 65z" fill="#596c70" stroke="#292d29" stroke-width="9"/><path d="M41 48 59 10l23 44M58 73l42 37-53-23" fill="#43575c" stroke="#292d29" stroke-width="7"/><path d="M8 68q39 20 85 2" stroke="#eef0e8" stroke-width="11" fill="none"/><path d="M8 64q17-12 35 0-9 24-31 15" fill="#273033" stroke="#292d29" stroke-width="5"/><path d="m13 68 7 6 7-8 7 6 6-8" stroke="white" stroke-width="4" fill="none"/><circle cx="25" cy="53" r="5" fill="#292d29"/><g fill="none" stroke="#76afba" stroke-width="3"><circle cx="12" cy="25" r="4"/><circle cx="23" cy="15" r="3"/></g>
+</svg>

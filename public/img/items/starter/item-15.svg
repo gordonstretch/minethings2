@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Backhoe</title>
+  <desc id="desc">A yellow tracked backhoe with a glazed cab and raised digging arm.</desc>
+  <path d="M13 82h71v25H13z" fill="#d8be32" stroke="#292d29" stroke-width="7"/><path d="M37 42h40l12 40H31z" fill="#f28c28" stroke="#292d29" stroke-width="7"/><path d="M48 50h22l7 24H43z" fill="#3d7f92" stroke="#292d29" stroke-width="4"/><path d="M82 52 101 26l12 8-16 29 19 13-10 20-22-12" fill="#d8be32" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M18 108h74" stroke="#292d29" stroke-width="14" stroke-linecap="round"/><path d="M25 108h60" stroke="#6d716d" stroke-width="5" stroke-dasharray="8 6"/>
+</svg>

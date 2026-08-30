@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Oak Dining Set</title>
+  <desc id="desc">A round oak dining table surrounded by four matching chairs.</desc>
+  <ellipse cx="64" cy="51" rx="43" ry="30" fill="#b57b48" stroke="#292d29" stroke-width="7"/><path d="M64 80v37M43 117h42" stroke="#292d29" stroke-width="8" stroke-linecap="round"/><g fill="#95613e" stroke="#292d29" stroke-width="5"><path d="M9 27h20v61H9zM14 88v26m10-26v26"/><path d="M99 27h20v61H99zM104 88v26m10-26v26"/><path d="M43 84h42v19H43zM48 103v16m32-16v16"/></g><circle cx="64" cy="50" r="13" fill="#f0dfbd" stroke="#744725" stroke-width="4"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Spot</title>
+  <desc id="desc">Spot, a short bronze cannon with a spotted barrel and broad naval carriage.</desc>
+  <path d="m18 54 20-17 69 8 10 18-17 15-70-6z" fill="#a77943" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><circle cx="52" cy="53" r="6" fill="#5d4939"/><circle cx="78" cy="58" r="6" fill="#5d4939"/><path d="M30 75h72l-13 26H41z" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="43" cy="99" r="14" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="82" cy="99" r="14" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="43" cy="99" r="4" fill="#d8be32"/><circle cx="82" cy="99" r="4" fill="#d8be32"/>
+</svg>

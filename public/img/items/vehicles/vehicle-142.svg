@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tank</title>
+  <desc id="desc">A low purple-accented battle tank with broad tracks, a faceted turret, and a long cannon facing right.</desc>
+  <path d="M17 74h84l13 15-13 21H24L11 94z" fill="#4b5350" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M26 83h67l10 11-9 8H29l-9-8z" fill="#777f7b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="35" cy="94" r="8" fill="#a64891" stroke="#292d29" stroke-width="4"/>
+  <circle cx="59" cy="94" r="8" fill="#a64891" stroke="#292d29" stroke-width="4"/>
+  <circle cx="83" cy="94" r="8" fill="#a64891" stroke="#292d29" stroke-width="4"/>
+  <path d="M39 73 48 48h42l14 25z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M86 53h22l9 7-9 7H91" fill="#a64891" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M61 47V34h15v14" fill="#777f7b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

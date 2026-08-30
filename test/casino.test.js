@@ -13,15 +13,56 @@ test('scores every row, reel, and diagonal on a full ordinary Thing screen', () 
   assert.deepEqual(result.winningCells, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
+test('requires three explosives for a fixed match award and stacks completed lines', () => {
+  const singletons = evaluateCasinoGrid(
+    [277, 278, 2, 1434, 1464, 1494, 1524, 1554, 279],
+    LEGACY_CASINO_SLOT_RULES
+  );
+  assert.equal(singletons.multiplier, 0,
+    'different explosive types do not form a match');
+
+  const pair = evaluateCasinoGrid(
+    [278, 278, 2, 1434, 1464, 1494, 1524, 1554, 277],
+    LEGACY_CASINO_SLOT_RULES
+  );
+  assert.equal(pair.wins.length, 0);
+  assert.equal(pair.lineMultiplier, 0);
+  assert.equal(pair.scatterMultiplier, 0);
+  assert.equal(pair.multiplier, 0);
+
+  const multipleMatches = evaluateCasinoGrid(
+    [277, 277, 278, 278, 279, 277, 279, 278, 277],
+    LEGACY_CASINO_SLOT_RULES
+  );
+  assert.deepEqual(multipleMatches.wins.map((win) => [win.itemId, win.count, win.multiplier]), [
+    [277, 4, 1], [278, 3, 1]
+  ]);
+  assert.equal(multipleMatches.lineMultiplier, 0);
+  assert.equal(multipleMatches.scatterMultiplier, 2);
+  assert.equal(multipleMatches.multiplier, 2);
+
+  const completedLine = evaluateCasinoGrid(
+    [277, 277, 277, 2, 1434, 1464, 1494, 1524, 1554],
+    LEGACY_CASINO_SLOT_RULES
+  );
+  assert.deepEqual(completedLine.wins.map((win) => [win.kind, win.multiplier]), [
+    ['line', 3], ['scatter', 1]
+  ]);
+  assert.equal(completedLine.lineMultiplier, 3);
+  assert.equal(completedLine.scatterMultiplier, 1);
+  assert.equal(completedLine.multiplier, 4);
+});
+
 test('scores explosive matches and reserves the jackpot for nine BLU-82s', () => {
   const diagonal = evaluateCasinoGrid(
     [282, 2, 1434, 1464, 282, 1494, 1524, 1554, 282],
     LEGACY_CASINO_SLOT_RULES
   );
   assert.equal(diagonal.jackpot, false);
-  assert.equal(diagonal.wins.length, 1);
+  assert.equal(diagonal.wins.length, 2);
   assert.equal(diagonal.wins[0].name, 'Downhill diagonal');
-  assert.equal(diagonal.multiplier, 80);
+  assert.equal(diagonal.wins[1].name, '3 matching explosives');
+  assert.equal(diagonal.multiplier, 81);
 
   const scatter = evaluateCasinoGrid(
     [277, 277, 2, 277, 1434, 277, 1464, 277, 1494],
@@ -51,8 +92,17 @@ test('resolves the published jackpot trigger and rejects malformed randomness', 
   assert.deepEqual(jackpot.grid, Array(9).fill(282));
   assert.throws(() => resolveCasinoSpin(LEGACY_CASINO_SLOT_RULES, () => 1),
     /random source returned an invalid value/);
+  assert.throws(() => validateCasinoRules({
+    ...LEGACY_CASINO_SLOT_RULES, explosiveSmallMatchMultiplier: 0
+  }), /small explosive match multiplier/);
   assert.throws(() => validateCasinoRules({ ...LEGACY_CASINO_SLOT_RULES, paylines: [] }),
     /at least one payline/);
+  assert.throws(() => validateCasinoRules({
+    ...LEGACY_CASINO_SLOT_RULES, explosiveSmallMatchMinimum: 1
+  }), /small explosive match minimum/);
+  assert.throws(() => validateCasinoRules({
+    ...LEGACY_CASINO_SLOT_RULES, explosiveSmallMatchMinimum: 5
+  }), /must stay below scatter payouts/);
 });
 
 test('stacks multiple bonus symbols into bounded free respins and pull-wide winnings', () => {
@@ -77,21 +127,19 @@ test('stacks multiple bonus symbols into bounded free respins and pull-wide winn
 });
 
 test('lets a free respin award another free respin without extending past the cap', () => {
-  const values = [
-    0.5, 0.98, ...Array(8).fill(0.01),
-    0.5, 0.98, ...Array(8).fill(0.01),
-    0.5, ...Array(9).fill(0.01)
-  ];
+  const values = Array.from(
+    { length: LEGACY_CASINO_SLOT_RULES.maximumBonusSpins + 1 },
+    () => [0.5, 0.98, ...Array(8).fill(0.01)]
+  ).flat();
   const result = resolveCasinoPull(LEGACY_CASINO_SLOT_RULES, () => {
     assert.ok(values.length, 'nested free respins must remain finite');
     return values.shift();
   });
 
   assert.equal(values.length, 0);
-  assert.equal(result.frames.length, 3);
-  assert.equal(result.bonusSpinsAwarded, 2);
-  assert.equal(result.frames[0].bonusSpinsAwarded, 1);
-  assert.equal(result.frames[1].bonusSpinsAwarded, 1,
-    'the first free respin awards the second free respin');
-  assert.equal(result.frames[2].bonusSpinsAwarded, 0);
+  assert.equal(result.frames.length, LEGACY_CASINO_SLOT_RULES.maximumBonusSpins + 1);
+  assert.equal(result.bonusSpinsAwarded, LEGACY_CASINO_SLOT_RULES.maximumBonusSpins);
+  assert.deepEqual(result.frames.map((frame) => frame.bonusSpinsAwarded), [
+    ...Array(LEGACY_CASINO_SLOT_RULES.maximumBonusSpins).fill(1), 0
+  ], 'each free respin can award the next one, but the final frame cannot exceed the cap');
 });

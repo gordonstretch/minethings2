@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Roadster</title>
+  <desc id="desc">A low open-top roadster with a long bonnet, raked windscreen, and exposed wheels.</desc>
+  <path d="M13 78 29 63h29l15-19h19l10 19 14 8v18H14z" fill="#b7473f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M63 63 75 48h13l7 15z" fill="#b9d6d9" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M17 77h92M100 65l9 10" fill="none" stroke="#799c9c" stroke-width="4" stroke-linecap="round"/>
+  <path d="M48 62h14l8 11H45z" fill="#76533b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="33" cy="91" r="15" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="95" cy="91" r="15" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="33" cy="91" r="5" fill="#9da3a0" stroke="#292d29" stroke-width="4"/>
+  <circle cx="95" cy="91" r="5" fill="#9da3a0" stroke="#292d29" stroke-width="4"/>
+  <path d="M105 73h10v8h-8" fill="#f0d09b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

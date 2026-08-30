@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Praying Mantis</title>
+  <desc id="desc">A green praying mantis with a triangular head, long neck, folded grasping forelegs, and leaflike wings.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M56 56 33 48 19 24 10 45M72 56 95 48 109 24 118 45"/>
+    <path d="M55 74 34 84 19 108M73 74 94 84 109 108M57 84 45 104 43 118M71 84 83 104 85 118"/>
+  </g>
+  <g fill="none" stroke="#7ba84b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M56 56 33 48 19 24 10 45M72 56 95 48 109 24 118 45"/>
+    <path d="M55 74 34 84 19 108M73 74 94 84 109 108M57 84 45 104 43 118M71 84 83 104 85 118"/>
+  </g>
+  <path d="M64 49c-10 10-13 40-9 63l9 8 9-8c4-23 1-53-9-63z" fill="#709944" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M64 61c-17 10-20 29-9 47l9-5 9 5c11-18 8-37-9-47z" fill="#9abe5c" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M59 57 55 33h18l-4 24z" fill="#668d42" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m64 10-21 10 12 16h18l12-16z" fill="#88b755" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="53" cy="20" r="5" fill="#f28c28" stroke="#292d29" stroke-width="3"/>
+  <circle cx="75" cy="20" r="5" fill="#f28c28" stroke="#292d29" stroke-width="3"/>
+  <path d="M55 75h18M57 91h14" fill="none" stroke="#f28c28" stroke-width="3" stroke-linecap="round"/>
+</svg>

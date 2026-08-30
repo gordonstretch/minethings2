@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wasabi</title>
+  <desc id="desc">A ridged green wasabi rhizome beside a small mound of freshly grated paste.</desc>
+  <path d="M20 24q47-16 79 5L82 97q-28 24-55 2z" fill="#779553" stroke="#292d29" stroke-width="7"/><path d="M31 31 91 42M27 46l60 11M24 62l59 11M23 78l55 10" stroke="#abc27d" stroke-width="4"/><path d="M83 111h39q-5-30-20-30-15 2-19 30z" fill="#77a65e" stroke="#292d29" stroke-width="6"/><path d="M91 101h23" stroke="#b9d99c" stroke-width="4"/>
+</svg>

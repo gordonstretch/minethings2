@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">War Canoe</title>
+  <desc id="desc">A long war canoe with high carved ends, a row of round shields, and three powerful paddles.</desc>
+  <path d="M13 63q6 17 13 20 41 12 84-3 5-4 7-18l-14 11q-39 8-76 0z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m34 24 12 70m18-73 1 76m27-71L80 95" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="m34 24 12 70m18-73 1 76m27-71L80 95" fill="none" stroke="#d8be32" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#d8be32" stroke="#292d29" stroke-width="4">
+    <circle cx="43" cy="70" r="9"/><circle cx="65" cy="74" r="9"/><circle cx="87" cy="70" r="9"/>
+  </g>
+  <path d="M21 55 12 45l12 3m83 8 10-11-2 14" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

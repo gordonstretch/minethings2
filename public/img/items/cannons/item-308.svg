@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Thunder</title>
+  <desc id="desc">Thunder, a heavy storm-grey cannon charged with a bold lightning emblem.</desc>
+  <path d="m8 51 23-20 83 13 9 22-22 17-82-12z" fill="#4e5a5a" stroke="#292d29" stroke-width="8"/><path d="m67 41-13 17 13 3-11 18 27-24-14-3 9-9z" fill="#d8be32"/><path d="M29 77h72l-7 28H36z" fill="#59615e" stroke="#292d29" stroke-width="7"/><circle cx="43" cy="99" r="16" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="87" cy="99" r="16" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="43" cy="99" r="4" fill="#d8be32"/><circle cx="87" cy="99" r="4" fill="#d8be32"/><path d="M19 28 10 14m31 13 2-18" stroke="#3d7f92" stroke-width="5"/>
+</svg>

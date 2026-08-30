@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tin Forged Wheels</title>
+  <desc id="desc">A tin vehicle modification depicting a forged road wheel with a thick tire, deep hub, and six strong spokes.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="64" cy="64" r="51" fill="#56635f"/><circle cx="64" cy="64" r="36" fill="#9aa7a3"/><circle cx="64" cy="64" r="13" fill="#56635f"/><path d="M64 28v23M64 77v23M28 64h23m26 0h23M39 39l16 16m18 18 16 16m0-50L73 55M55 73 39 89" stroke="#d9e2dc"/><circle cx="64" cy="64" r="5" fill="#d8be32"/><path d="M31 23 23 31m82-8 8 8M23 97l8 8m74 0 8-8" stroke="#d8be32"/></g>
+</svg>

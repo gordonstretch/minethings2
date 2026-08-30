@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bluefin Tuna</title>
+  <desc id="desc">A barrel-bodied bluefin tuna with a dark blue back, silver belly, short fins, and yellow finlets.</desc>
+  <path d="M7 66q25-38 79-29l35 29-35 31Q31 105 7 66z" fill="#aebfbe" stroke="#292d29" stroke-width="8"/><path d="M13 60q34-29 77-17" stroke="#284f68" stroke-width="12"/><path d="m89 39 32-22-7 49 7 46-33-20" fill="#244f65" stroke="#292d29" stroke-width="7"/><path d="M55 41 70 19l17 21M56 94l19 19 10-23" fill="#244f65" stroke="#292d29" stroke-width="5"/><circle cx="23" cy="59" r="5" fill="#292d29"/><g fill="#d8be32"><path d="m91 48 8 7-8 6z"/><path d="m96 61 8 6-8 7z"/><path d="m92 77 8 5-8 7z"/></g>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">M-80</title>
+  <desc id="desc">A glossy cherry-red M-80 firecracker with a brass cap, striped fuse, and a tiny starburst seal.</desc>
+  <path d="M72 17q24 3 31 22" fill="none" stroke="#292d29" stroke-width="8" stroke-linecap="round"/>
+  <path d="M72 17q24 3 31 22" fill="none" stroke="#f2c94c" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 7"/>
+  <path d="m101 34 5 8 10-1-6 8 5 9-11-3-7 8v-11l-10-5 11-3z" fill="#ff9b2f" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <rect x="30" y="23" width="55" height="90" rx="20" fill="#d94a36" stroke="#292d29" stroke-width="7"/>
+  <path d="M35 42h45v16H35zM35 91h45v15H35z" fill="#f4a340" stroke="#292d29" stroke-width="4"/>
+  <path d="M42 25h31v13H42z" fill="#f5cf58" stroke="#292d29" stroke-width="4"/>
+  <path d="m57 59 5 10 11 1-8 8 2 11-10-5-10 5 2-11-8-8 11-1z" fill="#ffe07a" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M42 45v34" fill="none" stroke="#fff6df" stroke-width="6" stroke-linecap="round" opacity=".72"/>
+</svg>

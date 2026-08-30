@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Chopper</title>
+  <desc id="desc">A long-fork custom chopper motorcycle with high handlebars, teardrop fuel tank, low saddle, and raked front wheel.</desc>
+  <circle cx="28" cy="94" r="17" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="101" cy="94" r="18" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <path d="m28 94 30-38 20 37H45l30-25 26 26" fill="none" stroke="#799c9c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M45 51h28l10 17-20 8-18-9z" fill="#a84b37" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M34 56h17l-5 10H31z" fill="#76533b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m75 69 17-38 9 61M90 33h19M94 32l-5-12m11 12 5-12" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 77 20 62m23 9-20-3" fill="none" stroke="#b8bebb" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="90" cy="38" r="6" fill="#f1d28a" stroke="#292d29" stroke-width="4"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tin Quick Shift</title>
+  <desc id="desc">A tin vehicle modification depicting a short gear lever moving through a precise gated shift plate.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 53h82v57H23z" fill="#9aa7a3"/><path d="M35 64h58M43 64v32m21-32v32m21-32v32M35 96h58" fill="none" stroke="#56635f"/><path d="M64 83 82 43" stroke="#d9e2dc" stroke-width="10"/><circle cx="85" cy="35" r="15" fill="#d8be32"/><circle cx="85" cy="35" r="7" fill="#d9e2dc"/></g>
+</svg>

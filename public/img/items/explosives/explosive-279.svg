@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">TNT</title>
+  <desc id="desc">A bold coral TNT charge in a blue steel carrier with a plunger, cable, and warning plate.</desc>
+  <path d="M19 37h77v71H19z" fill="#ef6548" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M19 37 35 21h77L96 37z" fill="#80b8c8" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M96 37 112 21v70l-16 17z" fill="#477b90" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 21v87M79 21v87" stroke="#2f6579" stroke-width="8"/>
+  <rect x="29" y="50" width="57" height="42" rx="7" fill="#f8e6b4" stroke="#292d29" stroke-width="5"/>
+  <path d="M39 65h37M39 77h37" stroke="#df5342" stroke-width="7" stroke-linecap="round"/>
+  <path d="M89 19V8h24v14" fill="none" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M101 8v-3" stroke="#e0ad39" stroke-width="8" stroke-linecap="round"/>
+  <path d="M27 42v58" fill="none" stroke="#fff6df" stroke-width="4" stroke-linecap="round" opacity=".72"/>
+  <path d="m103 45 8 8-8 8" fill="none" stroke="#ffc64a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  
+</svg>

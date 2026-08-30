@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Whistler</title>
+  <desc id="desc">Whistler, a slim long-barrel cannon with vent holes and curling sound marks.</desc>
+  <path d="m10 57 18-13 82 2 11 12-12 13-83 7z" fill="#8e9b97" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><g fill="#292d29"><circle cx="58" cy="55" r="4"/><circle cx="73" cy="55" r="4"/><circle cx="88" cy="55" r="4"/></g><path d="M31 76h64l-9 23H40z" fill="#3d7f92" stroke="#292d29" stroke-width="6"/><path d="M100 33q12-12 21 0m-18 8q9-8 16 0" fill="none" stroke="#f28c28" stroke-width="4" stroke-linecap="round"/><circle cx="45" cy="99" r="12" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="82" cy="99" r="12" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="45" cy="99" r="4" fill="#d8be32"/><circle cx="82" cy="99" r="4" fill="#d8be32"/>
+</svg>

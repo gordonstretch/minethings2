@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Caraway</title>
+  <desc id="desc">A small heap of narrow crescent-shaped caraway seeds with pale longitudinal ridges.</desc>
+  <g fill="#8c6d3f" stroke="#292d29" stroke-width="4"><path d="M18 45q14-24 30-7-22 0-21 28z"/><path d="M48 29q16-22 30-3-21-2-23 25z"/><path d="M78 43q20-18 30 4-20-7-28 18z"/><path d="M28 81q18-20 30 1-21-4-25 22z"/><path d="M65 74q18-22 32-2-22-3-26 24z"/><path d="M94 82q18-14 25 7-18-8-28 10z"/></g><g stroke="#f0dfbd" stroke-width="2"><path d="M25 47 42 39M55 31l18-4M84 47l19 1M34 84l19-1M72 78l20-4m7 13 15 3"/></g>
+</svg>

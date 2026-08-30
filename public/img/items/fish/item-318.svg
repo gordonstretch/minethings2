@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Barracuda</title>
+  <desc id="desc">A long silver barracuda with a pointed snout, underslung jaw, sharp teeth, and forked tail.</desc>
+  <path d="M8 66q32-25 91-12l23-18-6 25 8 23-27-14q-58 22-89-4z" fill="#aebfbe" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M8 66 27 53l16 2-9 14H12z" fill="#778a89"/><path d="M20 69q12 13 31 2" fill="none" stroke="#292d29" stroke-width="4"/><path d="m17 69 8 5 7-6 7 5" fill="none" stroke="white" stroke-width="3"/><circle cx="25" cy="59" r="4" fill="#d8be32" stroke="#292d29" stroke-width="2"/><path d="M61 53 72 36l11 18M69 72l15 15" fill="#244f65" stroke="#292d29" stroke-width="4"/>
+</svg>

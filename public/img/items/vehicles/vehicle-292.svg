@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ferry</title>
+  <desc id="desc">A broad double-ended ferry with an open vehicle deck, a central bridge, and one squat funnel.</desc>
+  <path d="M12 75h104l-13 29H25z" fill="#596563" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M20 52h88v25H20z" fill="#d7e0dd" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M45 52V36h39v16" fill="#e32121" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M53 43h9m9 0h7" fill="none" stroke="#d7e0dd" stroke-width="5" stroke-linecap="round"/>
+  <path d="M69 36V20h13v16" fill="#596563" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M30 65h68M28 89h76" fill="none" stroke="#e32121" stroke-width="5" stroke-linecap="round"/>
+</svg>

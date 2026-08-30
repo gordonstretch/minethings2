@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Leather Clutch</title>
+  <desc id="desc">A compact brown leather clutch with a gold clasp and stitched flap.</desc>
+  <path d="M17 43h94v66H17z" fill="#95613e" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M18 45 64 83l46-38" fill="#b97d52" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/><rect x="54" y="72" width="20" height="18" rx="3" fill="#d8be32" stroke="#292d29" stroke-width="4"/><path d="M24 99h80" stroke="#e0a66f" stroke-width="3" stroke-dasharray="5 5"/>
+</svg>

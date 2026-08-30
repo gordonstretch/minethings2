@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pinnace</title>
+  <desc id="desc">A narrow high-stern pinnace with a long bowsprit and two low raked gaff sails.</desc>
+  <path d="M15 68 29 55l78 16 9 13-19 19H30z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m43 72 8-51m29 56 7-45M90 59l28-15" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="m49 25-27 36 23 5zm37 11L58 65l23 7z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m49 25-9 12m46-1-10 11M30 87h70" fill="none" stroke="#799c9c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M18 68V48h16v12" fill="#799c9c" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

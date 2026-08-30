@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pill Bug</title>
+  <desc id="desc">A slate-grey pill bug seen from above, with a domed oval shell divided into overlapping armour plates.</desc>
+  <path d="M27 45 13 35m13 25-16-2m17 18-15 7m88-38 15-10m-13 25 16-2m-17 18 15 7" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M64 14q35 0 44 31v33q-9 36-44 36T20 78V45q9-31 44-31z" fill="#7d8988" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M41 21q-13 19-5 38t-1 41M53 16q-10 23-3 43t-1 50m38-88q13 19 5 38t1 41M75 16q10 23 3 43t1 50" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M64 16v96" fill="none" stroke="#4184a8" stroke-width="6" stroke-linecap="round"/>
+  <path d="M24 48h84M22 65h84M22 82h82M30 99h68" fill="none" stroke="#aab5b2" stroke-width="3" stroke-linecap="round"/>
+  <path d="M48 18 42 9m32 9 12-9" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+</svg>

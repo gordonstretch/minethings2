@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Warehouse</title>
+  <desc id="desc">Tungsten Warehouse, depicted as a fortified high-bay warehouse with a heavy shutter and pallets.</desc>
+  <path d="M9 45 27 18h74l18 27v72H9z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M17 110V47l14-21h66l14 21v63z" fill="none" stroke="#899693" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M22 48 35 29h58l13 19" fill="none" stroke="#d8be32" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M27 54h74v63H27z" fill="#4b5050" stroke="#292d29" stroke-width="6"/>
+  <path d="M36 63h56v13H36zm0 16h56v13H36zm0 16h56v13H36z" fill="#899693" stroke="#292d29" stroke-width="3"/>
+  <path d="M14 58h13m74 0h13M19 73h8m74 0h8M18 104h9m74 0h10" fill="none" stroke="#a64891" stroke-width="4"/>
+  <path d="M42 83h18v25H42zm25-14h19v39H67z" fill="#a66d3e" stroke="#292d29" stroke-width="4"/>
+</svg>

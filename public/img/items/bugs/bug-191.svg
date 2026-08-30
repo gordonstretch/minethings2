@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Scarab</title>
+  <desc id="desc">A jewel-toned scarab beetle with a stout horn, armored wing cases, and six powerful digging legs.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 48 27 38 11 46M45 65 23 68 10 81M48 83 30 98 27 115"/>
+    <path d="M80 48 101 38 117 46M83 65 105 68 118 81M80 83 98 98 101 115"/>
+  </g>
+  <g fill="none" stroke="#237d78" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 48 27 38 11 46M45 65 23 68 10 81M48 83 30 98 27 115"/>
+    <path d="M80 48 101 38 117 46M83 65 105 68 118 81M80 83 98 98 101 115"/>
+  </g>
+  <path d="M64 34c-22 0-35 19-35 46 0 25 14 39 35 39s35-14 35-39c0-27-13-46-35-46z" fill="#218d82" stroke="#292d29" stroke-width="6"/>
+  <path d="M64 58v59M35 66h58" fill="none" stroke="#292d29" stroke-width="5"/>
+  <path d="M64 31c-16 0-24 7-25 20 8 7 16 10 25 10s17-3 25-10c-1-13-9-20-25-20z" fill="#2aa39b" stroke="#292d29" stroke-width="6"/>
+  <path d="M52 35 45 20l19 8 19-8-7 15" fill="#1f7772" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m64 28 1-18 9 11" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 72h15M71 72h15M44 90h13M71 90h13" fill="none" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+</svg>

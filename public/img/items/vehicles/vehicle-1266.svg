@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Former Champ</title>
+  <desc id="desc">A stout retired armored flagship with a shortened crown-shaped sail and a bare championship pennant spar.</desc>
+  <path d="M11 78h106l-17 31H27z" fill="#596563" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M26 77V56h75v21" fill="#889594" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M62 56V17" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="m59 20-24 28h49L77 31 68 42z" fill="#f79721" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M62 18h38m0 0v12" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M28 89h75" fill="none" stroke="#f79721" stroke-width="6" stroke-linecap="round"/>
+  <path d="M92 57h15v12H92z" fill="#f1e5c8" stroke="#292d29" stroke-width="4"/>
+</svg>

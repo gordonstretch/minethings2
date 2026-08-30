@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sniper Rifle</title>
+  <desc id="desc">A long precision rifle with an oversized scope, angular stock, and folding bipod.</desc>
+  <path d="M48 54h70v13H48z" fill="#707c77" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M108 54V43h8v11" fill="none" stroke="#292d29" stroke-width="5"/>
+  <path d="M51 52 28 57 8 77l10 17 29-14 19-17z" fill="#4f5955" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M37 72h38v19H37z" fill="#a64891" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M52 40h52v14H52z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="99" cy="47" r="8" fill="#e9b7dd" stroke="#292d29" stroke-width="4"/>
+  <path d="M74 88 61 113M82 88l15 25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M69 46h18" fill="none" stroke="#c7d0cb" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Black Widow</title>
+  <desc id="desc">A glossy black widow spider with eight angular legs and a vivid hourglass marking on its abdomen.</desc>
+  <g fill="none" stroke="#68726c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M52 45 34 30 12 37M49 55 29 52 10 63M49 67 29 76 13 96M53 79 40 98 33 116"/>
+    <path d="M76 45 94 30 116 37M79 55 99 52 118 63M79 67 99 76 115 96M75 79 88 98 95 116"/>
+  </g>
+  <g fill="none" stroke="#f28c28" stroke-width="3" stroke-linecap="round">
+    <path d="m31 31 8 7M28 76l9-4M97 31l-8 7M100 76l-9-4"/>
+  </g>
+  <ellipse cx="64" cy="74" rx="25" ry="35" fill="#292e2b" stroke="#68726c" stroke-width="6"/>
+  <ellipse cx="64" cy="43" rx="17" ry="15" fill="#3d4540" stroke="#68726c" stroke-width="6"/>
+  <circle cx="64" cy="26" r="10" fill="#292e2b" stroke="#68726c" stroke-width="6"/>
+  <path d="m64 70-9 12 9 12 9-12z" fill="#df4938" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m58 78 6 4 6-4-6-8z" fill="#f28c28"/>
+  <circle cx="60" cy="24" r="2.5" fill="#f28c28"/>
+  <circle cx="68" cy="24" r="2.5" fill="#f28c28"/>
+</svg>

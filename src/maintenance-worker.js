@@ -31,7 +31,9 @@ parentPort.on('message', (message) => {
     results.dwarf = store.runDwarfUpdate(message.now, Math.random);
     results.vehicles = store.settleVehicles(message.now);
     results.factories = store.settleFactories(message.now);
-    results.oil = store.settleOilField(message.now);
+    // Field views project continuous rates and mutating actions settle exactly.
+    // Persisting the background snapshot once a minute avoids five-second write churn.
+    results.oil = store.settleOilField(message.now, { minimumIntervalMs: 60000 });
   } catch (error) {
     failure = error;
   }

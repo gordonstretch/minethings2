@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Triangle</title>
+  <desc id="desc">A suspended orchestral triangle with a deliberately open corner and a separate metal beater with orange grip.</desc>
+  <path d="M61 19 15 104h82M69 22l44 82" fill="none" stroke="#292d29" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M61 19 15 104h82M69 22l44 82" fill="none" stroke="#bfc7c3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M64 18V8" fill="none" stroke="#f28c28" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="64" cy="18" r="6" fill="#f28c28" stroke="#292d29" stroke-width="4"/>
+  <path d="m72 86 40-50" fill="none" stroke="#292d29" stroke-width="9" stroke-linecap="round"/>
+  <path d="m72 86 40-50" fill="none" stroke="#d4dad6" stroke-width="4" stroke-linecap="round"/>
+  <path d="m72 86-8 11" fill="none" stroke="#f28c28" stroke-width="10" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Remote Control</title>
+  <desc id="desc">Tungsten Remote Control, depicted as a command console linking four illuminated mine nodes.</desc>
+  <path d="M9 41 29 15h70l20 26-9 73H18z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m16 108 8-63 9-22h62l16 22-7 63z" fill="none" stroke="#899693" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M28 49h72v48H28z" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
+  <path d="M64 49V26m0 0 16-11" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="64" cy="72" r="10" fill="#f28c28" stroke="#292d29" stroke-width="4"/>
+  <path d="M64 72 40 60m24 12 24-12M64 72 40 86m24-14 24 14" stroke="#899693" stroke-width="4"/>
+  <g fill="#a64891" stroke="#292d29" stroke-width="3"><circle cx="39" cy="59" r="7"/><circle cx="89" cy="59" r="7"/><circle cx="39" cy="87" r="7"/><circle cx="89" cy="87" r="7"/></g>
+  <path d="M83 19q20 7 27 25m-19-34q25 8 34 29" fill="none" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+</svg>

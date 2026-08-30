@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Corvette</title>
+  <desc id="desc">A low flush-deck corvette with two short masts, a forward gun, and a single compact gun deck.</desc>
+  <path d="M11 79h106l-18 28H27z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M42 79V27m37 51V31" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M18 33h22v28H16zm63 4h26v25H81z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 70h17v10H90z" fill="#799c9c" stroke="#292d29" stroke-width="4"/>
+  <path d="M104 75h16" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#292d29"><circle cx="38" cy="91" r="3"/><circle cx="55" cy="91" r="3"/><circle cx="72" cy="91" r="3"/><circle cx="89" cy="91" r="3"/></g>
+  <path d="M26 84h75" fill="none" stroke="#799c9c" stroke-width="4"/>
+</svg>

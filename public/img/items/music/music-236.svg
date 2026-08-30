@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Trumpet</title>
+  <desc id="desc">A compact brass trumpet pointing right, with three piston valves, tightly looped tubing, a red brace, and a wide bell.</desc>
+  <path d="M28 58h55q13 0 13 13T83 84H42q-15 0-15-13" fill="none" stroke="#292d29" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28 58h55q13 0 13 13T83 84H42q-15 0-15-13" fill="none" stroke="#d7a82f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M82 51h15l18-14q8 34 0 68L97 91H82z" fill="#e2b23a" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M10 55h20v9H10l-5-4z" fill="#e0b446" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <g stroke="#292d29" stroke-width="5" stroke-linejoin="round">
+    <path d="M44 39h12v38H44z" fill="#d8aa35"/><path d="M58 36h12v41H58z" fill="#d8aa35"/><path d="M72 39h12v38H72z" fill="#d8aa35"/>
+  </g>
+  <path d="M44 36h12m2-3h12m2 3h12" fill="none" stroke="#d94a36" stroke-width="6" stroke-linecap="round"/>
+  <path d="M36 70h53" fill="none" stroke="#d94a36" stroke-width="5" stroke-linecap="round"/>
+  <path d="M102 55q6 16 0 32" fill="none" stroke="#f4d878" stroke-width="4" stroke-linecap="round"/>
+</svg>

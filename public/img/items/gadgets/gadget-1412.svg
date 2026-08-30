@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Turbo Engine</title>
+  <desc id="desc">Tungsten Turbo Engine, depicted as a dense twin-turbine booster with hot exhaust and speed streaks.</desc>
+  <path d="M17 43 38 17h48l18 18h16v31h-13v35l-20 17H35L11 95V52z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="51" cy="64" r="29" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
+  <circle cx="82" cy="83" r="20" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
+  <path d="m51 64 3-18 13 10-7 15-16 8-8-14 12-10zm31 19 2-12 9 6-5 11-11 5-6-9 8-7z" fill="#a64891" stroke="#292d29" stroke-width="3"/>
+  <circle cx="51" cy="64" r="6" fill="#f28c28"/><circle cx="82" cy="83" r="5" fill="#f28c28"/>
+  <path d="M104 43h16v23h-13" fill="none" stroke="#899693" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M11 29h34M7 18h54M10 112h17" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+</svg>

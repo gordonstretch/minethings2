@@ -11,7 +11,9 @@ import {
   unassignRobot, unequipMine
 } from './game.js';
 import { loadLegacyCatalog } from './legacy-catalog.js';
+import { THING_O_MATIC_KEY } from './casino-machines.js';
 import { machineIconSvg } from './item-icons.js';
+import { mineMapIconPath, OIL_FIELD_MAP_ICON_PATH } from './mine-icons.js';
 import { SqliteStore, hashPasswordAsync, verifyPasswordAsync } from './store.js';
 import { specialisationMultiplier } from './specialisations.js';
 import { cryptoType, cryptoTypesForMap } from './crypto.js';
@@ -435,7 +437,7 @@ function meldRevealHtml(melds) {
       <div class="meld-occasion-copy">
         <div class="meld-badges"><span class="meld-created-badge"><span aria-hidden="true">⚒</span> Meld forged</span><span class="meld-rarity-badge">${escapeHtml(meld.rarityName)}</span></div>
         <p class="meld-kicker">The components have become something greater</p>
-        <h3><a href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></h3>
+        <h3><a class="text-link" href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></h3>
         <p class="meld-description">A permanent new Meld has joined your collection. Its recipe is complete and its power is now yours.</p>
         <dl class="meld-facts"><div><dt><span aria-hidden="true">◆</span> Rarity</dt><dd>${escapeHtml(meld.rarityName)}</dd></div><div><dt><span aria-hidden="true">⛏</span> Mine family</dt><dd>${escapeHtml(meld.mineTypeName)}</dd></div><div><dt><span aria-hidden="true">◈</span> Components</dt><dd>${meld.componentCount.toLocaleString('en-GB')} things fused</dd></div><div><dt><span aria-hidden="true">✦</span> Recipe</dt><dd>${meld.requirements.length.toLocaleString('en-GB')} distinct things</dd></div></dl>
         <div class="meld-reveal-recipe"><h4><span aria-hidden="true">⚙</span> The completed recipe</h4><ul>${recipe}</ul></div>
@@ -555,30 +557,30 @@ function layout(title, content, player, flash) {
     ['messages', '/messages', `Messages${player?.unreadMessages ? ` (${player.unreadMessages})` : ''}`, ['/messages'], false]
   ];
   const playerNavigation = primaryLinks.map(([className, href, label, prefixes, exact], index) =>
-    `<li class="${className}"><a href="${href}"${currentAttribute(prefixes, exact)}><span aria-hidden="true">${String(index + 1).padStart(2, '0')}</span>${label}</a></li>`
+    `<li class="${className}"><a class="text-link" href="${href}"${currentAttribute(prefixes, exact)}><span aria-hidden="true">${String(index + 1).padStart(2, '0')}</span>${label}</a></li>`
   ).join('');
   const guestCurrent = (pageTitle) => title === pageTitle ? ' aria-current="page"' : '';
   const topNavigation = player
     ? `<nav id="navcontainer" aria-label="Primary"><ul id="nav">${playerNavigation}</ul></nav>`
-    : `<nav id="navcontainer" class="guest-primary-nav" aria-label="Public"><ul id="nav"><li class="city-name"><span>Archive status</span><strong>World online</strong></li><li><a href="/history"${guestCurrent('History')}><span aria-hidden="true">01</span>History</a></li><li><a href="/legal"${guestCurrent('Legal')}><span aria-hidden="true">02</span>Legal</a></li><li><a href="/#returning-miner"><span aria-hidden="true">03</span>Log in</a></li><li><a href="/#join"><span aria-hidden="true">04</span>Stake a claim</a></li></ul></nav>`;
+    : `<nav id="navcontainer" class="guest-primary-nav" aria-label="Public"><ul id="nav"><li class="city-name"><span>Archive status</span><strong>World online</strong></li><li><a class="text-link" href="/history"${guestCurrent('History')}><span aria-hidden="true">01</span>History</a></li><li><a class="text-link" href="/legal"${guestCurrent('Legal')}><span aria-hidden="true">02</span>Legal</a></li><li><a class="text-link" href="/#returning-miner"><span aria-hidden="true">03</span>Log in</a></li><li><a class="text-link" href="/#join"><span aria-hidden="true">04</span>Stake a claim</a></li></ul></nav>`;
   const playerMeldCount = Number(player?.meldCount ?? player?.meldIds?.length ?? 0);
   const playerChatColor = /^[0-9a-f]{6}$/i.test(String(player?.effectiveChatColor ?? ''))
     ? String(player.effectiveChatColor).toLowerCase() : '55666b';
   const login = player ? `<div id="login" class="player-status"><a class="player-identity" href="/miners/${encodeURIComponent(player.name)}"><span>Miner</span><strong>${escapeHtml(player.name)}</strong></a><dl class="player-vitals"><div class="player-meld-vital" style="--miner-chat-color:#${playerChatColor}"><dt>Melds</dt><dd>${playerMeldCount.toLocaleString('en-GB')}</dd></div><div><dt>Gold</dt><dd>${formatGold(player.gold)}g</dd></div><div><dt>Credits</dt><dd>${player.credits}c</dd></div><div><dt>Battery</dt><dd>${formatDuration(player.batteryRemaining ?? 0)}</dd></div></dl><form method="post" action="/logout"><button class="logout-button">Log out <span aria-hidden="true">↗</span></button></form></div>`
-    : '<div id="login" class="guest-actions"><a href="/#returning-miner">Log in</a><a class="button" href="/#join">Stake your claim</a></div>';
+    : '<div id="login" class="guest-actions"><a class="text-link" href="/#returning-miner">Log in</a><a class="button" href="/#join">Stake your claim</a></div>';
   const sideLink = (href, label, prefixes = [href], exact = false) => {
     const active = isCurrent(prefixes, exact);
-    return `<li${active ? ' class="current"' : ''}><a href="${href}"${active ? ' aria-current="page"' : ''}>${label}</a></li>`;
+    return `<li${active ? ' class="current"' : ''}><a class="text-link" href="${href}"${active ? ' aria-current="page"' : ''}>${label}</a></li>`;
   };
   const sideGroup = (label, links) => `<section class="side-nav-group"><h2>${label}</h2><ul>${links.join('')}</ul></section>`;
   const [weatherIcon, weatherLabel] = weatherPresentation(player?.weather?.condition);
   const sidebarWeather = player?.weather
-    ? `<div class="sidebar-location-value sidebar-weather"><span>Weather</span> <a href="/events" aria-label="Weather: ${escapeHtml(weatherLabel)}"><span class="sidebar-weather-icon" aria-hidden="true">${weatherIcon}</span><span>${escapeHtml(weatherLabel)}</span></a></div>`
+    ? `<div class="sidebar-location-value sidebar-weather"><span>Weather</span> <a class="text-link" href="/events" aria-label="Weather: ${escapeHtml(weatherLabel)}"><span class="sidebar-weather-icon" aria-hidden="true">${weatherIcon}</span><span>${escapeHtml(weatherLabel)}</span></a></div>`
     : '';
   const sidebarCapitalIcon = player
     && Number(player.cityId) === Number(player.currentRegionCapitalCityId)
     ? `<span class="capital-city-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>` : '';
-  const sideNavigation = player ? `<aside id="left" aria-label="Player navigation"><button id="player-nav-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="player-nav-panel"><span>Game menu</span><strong>All operations</strong><b aria-hidden="true">+</b></button><div id="player-nav-panel"><div class="sidebar-context"><p class="sidebar-location-heading">You are here:</p><div class="sidebar-location-value"><span>Region</span> <a href="/map?world=${encodeURIComponent(player.mapSlug)}">${escapeHtml(player.mapName)}</a></div><div class="sidebar-location-value"><span>City</span> <a href="/map?world=${encodeURIComponent(player.mapSlug)}#city-${player.cityId}">${sidebarCapitalIcon}${escapeHtml(player.cityName)}</a></div>${sidebarWeather}<a class="sidebar-map-link" href="/map">Open world map <span aria-hidden="true">→</span></a></div><nav id="navlist" aria-label="Game sections">
+  const sideNavigation = player ? `<aside id="left" aria-label="Player navigation"><button id="player-nav-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="player-nav-panel"><span>Game menu</span><strong>All operations</strong><b aria-hidden="true">+</b></button><div id="player-nav-panel"><div class="sidebar-context"><p class="sidebar-location-heading">You are here:</p><div class="sidebar-location-value"><span>Region</span> <a class="text-link" href="/map?world=${encodeURIComponent(player.mapSlug)}">${escapeHtml(player.mapName)}</a></div><div class="sidebar-location-value"><span>City</span> <a class="text-link" href="/map?world=${encodeURIComponent(player.mapSlug)}#city-${player.cityId}">${sidebarCapitalIcon}${escapeHtml(player.cityName)}</a></div>${sidebarWeather}<a class="sidebar-map-link" href="/map">Open world map <span aria-hidden="true">→</span></a></div><nav id="navlist" aria-label="Game sections">
     ${sideGroup('Extraction', [sideLink('/', 'Mines', ['/'], true), sideLink('/inventory', 'Things', ['/inventory', '/items']), sideLink('/dwarves', 'Dwarves'), sideLink('/gadgets', 'Gadgets'), sideLink('/melds', 'Melds')])}
     ${sideGroup('Industry', [sideLink('/vehicles', 'Fleet'), sideLink('/factories', 'Factories'), sideLink('/mills', 'Mills'), sideLink('/oil-field', 'Oil Field'), sideLink('/containers', 'Containers'), sideLink('/market', 'Mine shop', ['/market'], true)])}
     ${sideGroup('World', [sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/mines', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events')])}
@@ -596,16 +598,20 @@ function layout(title, content, player, flash) {
   const flashDialog = `<aside id="flash-dialog" class="flash-notice" hidden aria-labelledby="flash-dialog-title" data-notice-key="${escapeHtml(noticeKey)}"><header><span class="flash-notice-mark" aria-hidden="true">${foundItems.length ? '✦' : '✓'}</span><strong id="flash-dialog-title">${foundItems.length ? 'Things found' : 'Update'}</strong><button type="button" aria-label="Dismiss notification">×</button></header><p id="flash-dialog-message" role="status" aria-live="polite">${escapeHtml(noticeMessage)}</p><ul id="flash-dialog-items" class="flash-item-list" aria-label="${foundItems.length ? 'Items found' : 'Notification details'}">${findingNoticeListHtml(foundItems)}</ul></aside><script src="/node/flash-modal.js?v=20260824a" defer></script>`;
   const quietNotice = player?.quietNotice
     ? `<p class="quiet-notice" role="status"><span aria-hidden="true">✓</span> ${escapeHtml(player.quietNotice)}</p>` : '';
+  const welcomeMail = player?.registrationWelcomeMail;
+  const welcomeMailPrompt = welcomeMail
+    ? `<aside class="starter-mail-prompt" role="dialog" aria-labelledby="starter-mail-title" aria-describedby="starter-mail-summary"><div class="starter-mail-seal" aria-hidden="true"><span>✉</span></div><div><p class="eyebrow">Incoming Council transmission</p><h2 id="starter-mail-title">You've got mail</h2><p id="starter-mail-summary">An official notice from <strong>${escapeHtml(welcomeMail.senderName)}</strong> is waiting. It concerns your sentence, dissolved estate, and new equipment.</p><div class="starter-mail-actions"><form method="post" action="/messages/welcome/ignore"><input type="hidden" name="messageId" value="${welcomeMail.id}"><button class="secondary">Ignore</button></form><a class="button" href="/messages/view/${welcomeMail.id}">Read message</a></div></div></aside>`
+    : '';
   const meldDialog = meldRevealHtml(player?.meldReveal);
   const liveRevision = typeof player?.liveUpdateRevision === 'function'
     ? player.liveUpdateRevision() : Number(player?.liveUpdateRevision ?? 0);
   const liveUpdates = player
-    ? `<script src="/node/live-updates.js?v=20260824a" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
+    ? `<script src="/node/live-updates.js?v=20260830a" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
   const shellClass = isLandingPage ? 'landing-shell' : `game-shell${player ? ' authenticated-shell' : ' public-shell'}`;
   const bodyClass = isLandingPage ? 'landing-body' : `game-body${player ? ' authenticated-body' : ' public-body'}`;
   const wordmark = `<a id="logo" class="site-wordmark" href="/" aria-label="MineThings 2 home"><span class="site-mark" aria-hidden="true"></span><span><strong>Mine Things</strong><small>The world digs back</small></span><b aria-hidden="true">2</b></a>`;
-  const footer = `<footer class="site-footer"><div class="footer-brand"><span class="site-mark" aria-hidden="true"></span><div><strong>MineThings 2</strong><span>Persistent since 2009. Reborn in 2026.</span></div></div><p>The patient economic and social experiment, alive again.</p><nav aria-label="Footer"><a href="/history">History</a><a href="/legal">Legal</a><a href="/guide">Field guide</a></nav></footer>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${description}"><meta name="theme-color" content="#0b0d0c"><title>${documentTitle}</title><link rel="icon" href="/node/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/app.css?v=${APP_CSS_VERSION}"></head><body class="${bodyClass}"><a class="skip-link" href="#content">Skip to main content</a><div id="wrapper" class="node-wrapper ${shellClass}"><header class="game-header">${wordmark}${login}</header>${topNavigation}<div id="divwrapper" class="node-content-wrap${player ? '' : ' guest-content'}">${sideNavigation}<main id="content" tabindex="-1">${quietNotice}${content}</main></div>${footer}</div>${flashDialog}${meldDialog}${liveUpdates}${player ? '<script src="/node/navigation.js?v=20260823a" defer></script>' : ''}</body></html>`;
+  const footer = `<footer class="site-footer"><div class="footer-brand"><span class="site-mark" aria-hidden="true"></span><div><strong>MineThings 2</strong><span>Persistent since 2009. Reborn in 2026.</span></div></div><p>The patient economic and social experiment, alive again.</p><nav aria-label="Footer"><a class="text-link" href="/history">History</a><a class="text-link" href="/legal">Legal</a><a class="text-link" href="/guide">Field guide</a></nav></footer>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${description}"><meta name="theme-color" content="#0b0d0c"><title>${documentTitle}</title><link rel="icon" href="/node/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/app.css?v=${APP_CSS_VERSION}"></head><body class="${bodyClass}"><a class="skip-link" href="#content">Skip to main content</a><div id="wrapper" class="node-wrapper ${shellClass}"><header class="game-header">${wordmark}${login}</header>${topNavigation}<div id="divwrapper" class="node-content-wrap${player ? '' : ' guest-content'}">${sideNavigation}<main id="content" tabindex="-1">${quietNotice}${content}</main></div>${footer}</div>${flashDialog}${meldDialog}${welcomeMailPrompt}${liveUpdates}${player ? '<script src="/node/navigation.js?v=20260823a" defer></script>' : ''}</body></html>`;
 }
 
 function itemCard(item, countOrOptions = null, legacyAction = '') {
@@ -945,7 +951,7 @@ function landingPage(catalog, googleLoginEnabled = false) {
   return `<div class="rebirth-landing">
     <header class="landing-masthead">
       <a class="landing-wordmark" href="/" aria-label="MineThings 2 home"><span class="landing-mark" aria-hidden="true"></span><span><strong>Mine Things</strong><small>Second life · same strange world</small></span><b aria-hidden="true">2</b></a>
-      <nav class="landing-nav" aria-label="Welcome"><a href="/history">Our history</a><a href="#returning-miner">Log in</a><a class="landing-nav-cta" href="#join">Stake your claim</a></nav>
+      <nav class="landing-nav" aria-label="Welcome"><a class="text-link" href="/history">Our history</a><a class="text-link" href="#returning-miner">Log in</a><a class="landing-nav-cta" href="#join">Stake your claim</a></nav>
     </header>
 
     <section class="landing-hero" aria-labelledby="landing-title">
@@ -988,14 +994,14 @@ function landingPage(catalog, googleLoginEnabled = false) {
     </section>
 
     <section id="join" class="landing-join" aria-labelledby="landing-join-title">
-      <header class="landing-join-intro"><p class="landing-section-label">The next chapter needs miners</p><h2 id="landing-join-title">Stake a claim in internet history.</h2><p>Choose a name, verify your email and start digging. Your welcome pack includes a ${escapeHtml(welcomePack.color)} ${escapeHtml(welcomePack.vehicle.name)} for exploring and ${welcomePack.cryptoQuantity} ${escapeHtml(welcomePack.currency.symbol)} coins.</p><ul><li>Persistent mining</li><li>Player-run markets</li><li>Connected worlds</li><li>Live events</li></ul></header>
+      <header class="landing-join-intro"><p class="landing-section-label">The next chapter needs miners</p><h2 id="landing-join-title">Stake a claim in internet history.</h2><p>Choose a name, verify your email and start digging. Your welcome pack includes a ${escapeHtml(welcomePack.color)} ${escapeHtml(welcomePack.vehicle.name)}, a ${escapeHtml(welcomePack.dwarf.name)}, ${welcomePack.gadgets.map((gadget) => escapeHtml(gadget.name)).join(', ')}, complimentary ${welcomePack.rentalMineTypes.map((mineType) => `${escapeHtml(mineType.name)} Mine`).join(' and ')} rentals, ${welcomePack.cryptoQuantity} ${escapeHtml(welcomePack.currency.symbol)} and a ${welcomePack.casinoVoucherQuantity} ${escapeHtml(welcomePack.voucherCurrency.symbol)} casino voucher.</p><ul><li>Persistent mining</li><li>Player-run markets</li><li>Connected worlds</li><li>Live events</li></ul></header>
       <div class="landing-auth-grid">
         <form class="landing-auth-card landing-register-card" method="post" action="/register" aria-labelledby="landing-register-title">
           <p class="landing-card-label"><span>01</span> New miner</p><h3 id="landing-register-title">Enter the world</h3><p>Your name will be part of the economy—and perhaps its history.</p>
           <label><span>Miner name</span><input name="name" minlength="${nameMinimum}" maxlength="${nameMaximum}" pattern="[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S} ]+" autocomplete="username" aria-describedby="miner-name-help" required></label><small id="miner-name-help">${nameMinimum}–${nameMaximum} characters. Unicode names are welcome.</small>
           <label><span>Email</span><input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" autocomplete="email" aria-describedby="miner-email-help" required></label><small id="miner-email-help">Verification is mandatory. Your mine remains locked until you confirm this address.</small>
           <label><span>Password</span><input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label>
-          <label class="check-row"><input type="checkbox" name="acceptTerms" value="1" required><span>I accept the <a href="/legal" target="_blank" rel="noopener">Terms and Privacy Notice</a> (version ${LEGAL_VERSION}).</span></label>
+          <label class="check-row"><input type="checkbox" name="acceptTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">Terms and Privacy Notice</a> (version ${LEGAL_VERSION}).</span></label>
           <button class="landing-submit">Create my miner <span aria-hidden="true">→</span></button>
         </form>
         <form id="returning-miner" class="landing-auth-card landing-login-card" method="post" action="/login" aria-labelledby="landing-login-title">
@@ -1014,14 +1020,18 @@ function landingPage(catalog, googleLoginEnabled = false) {
 function starterWelcomePackDetails(catalog) {
   const pack = catalog.settings.starter_welcome_pack;
   const vehicle = catalog.byId.get(Number(pack.vehicleItemId));
+  const dwarf = catalog.byId.get(Number(pack.dwarfItemId));
+  const gadgets = pack.gadgetItemIds.map((itemId) => catalog.byId.get(Number(itemId)));
+  const rentalMineTypes = pack.rentalMineTypeIds.map((mineTypeId) =>
+    catalog.mineTypes.find((mineType) => mineType.id === Number(mineTypeId)));
   const currency = cryptoType(pack.cryptoTypeId);
+  const voucherCurrency = cryptoType(pack.casinoVoucherCryptoTypeId);
   const color = catalog.settings.rarity_color_names[vehicle.rarity].toLowerCase();
-  return { vehicle, currency, color, cryptoQuantity: Number(pack.cryptoQuantity) };
-}
-
-function starterWelcomePackMessage(catalog) {
-  const { vehicle, currency, color, cryptoQuantity } = starterWelcomePackDetails(catalog);
-  return `Your welcome pack is ready: a ${color} ${vehicle.name} and ${cryptoQuantity} ${currency.symbol}. Open Fleet to activate the ${vehicle.name} and start exploring.`;
+  return {
+    vehicle, dwarf, gadgets, rentalMineTypes, currency, voucherCurrency, color,
+    cryptoQuantity: Number(pack.cryptoQuantity),
+    casinoVoucherQuantity: Number(pack.casinoVoucherQuantity)
+  };
 }
 
 function googleRegistrationPage(profile, catalog) {
@@ -1037,7 +1047,7 @@ function googleRegistrationPage(profile, catalog) {
     <small>${nameMinimum}–${nameMaximum} visible characters. This is the name other miners will see.</small>
     <label><span>Backup password</span><input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label>
     <small>You can normally use Google; this password also keeps local sign-in available.</small>
-    <label class="check-row"><input type="checkbox" name="acceptTerms" value="1" required><span>I accept the <a href="/legal" target="_blank" rel="noopener">Terms and Privacy Notice</a> (version ${LEGAL_VERSION}).</span></label>
+    <label class="check-row"><input type="checkbox" name="acceptTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">Terms and Privacy Notice</a> (version ${LEGAL_VERSION}).</span></label>
     <button class="landing-submit">Create my miner <span aria-hidden="true">→</span></button>
     <a class="oauth-cancel-link" href="/">Cancel and return home</a>
   </form></div>`;
@@ -1102,10 +1112,10 @@ function dashboardPage(player, catalog, now) {
     const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
     const oilOwned = player.inventoryByCity[mine.cityId]?.[oilItem.id] ?? 0;
     const permanentCount = player.mines.filter((candidate) => !candidate.rentalUntil).length;
-  return `<article class="mine${mine.active ? '' : ' inactive'}">${equipmentBot(mine, catalog, true)}<div><h3><span class="mine-priority">${mine.priority}</span> ${escapeHtml(type.name)} Mine</h3><p>${mine.active ? miningStatus : '<strong>Paused by the active-mine limit.</strong>'}${mine.oilExpiresAt > now ? ` · oiled for ${formatDuration(mine.oilExpiresAt - now)}` : ''}${mine.rentalUntil ? ` · rental expires in ${formatDuration(mine.rentalUntil - now)}` : ''}</p>${mine.active ? `<a href="/mines/${mine.id}/equipment">Equipment &amp; explosives</a>` : ''}</div><div class="mine-actions"><form method="post" action="/mines/${mine.id}/prioritize"><button class="secondary" ${mine.priority === 1 ? 'disabled' : ''}>Make top</button></form>${mine.active ? `<form method="post" action="/mines/${mine.id}/mode"><label>Mine for<select name="mode">${modeOptions}</select></label><button class="secondary">Set mode</button></form><form method="post" action="/mines/${mine.id}/oil"><button class="secondary" ${oilOwned < 1 ? 'disabled' : ''}>Oil bot</button></form>` : ''}${!mine.rentalUntil && type.refundable ? `<form method="post" action="/mines/${mine.id}/sell"><button class="secondary" ${permanentCount <= Number(catalog.settings.minimum_permanent_mines) ? 'disabled' : ''}>Resell for ${mineRefundCredits(catalog, type)}c</button></form>` : ''}</div></article>`;
+  return `<article class="mine${mine.active ? '' : ' inactive'}">${equipmentBot(mine, catalog, true)}<div><h3><span class="mine-priority">${mine.priority}</span> ${escapeHtml(type.name)} Mine</h3><p>${mine.active ? miningStatus : '<strong>Paused by the active-mine limit.</strong>'}${mine.oilExpiresAt > now ? ` · oiled for ${formatDuration(mine.oilExpiresAt - now)}` : ''}${mine.rentalUntil ? ` · rental expires in ${formatDuration(mine.rentalUntil - now)}` : ''}</p>${mine.active ? `<a class="text-link" href="/mines/${mine.id}/equipment">Equipment &amp; explosives</a>` : ''}</div><div class="mine-actions"><form method="post" action="/mines/${mine.id}/prioritize"><button class="secondary" ${mine.priority === 1 ? 'disabled' : ''}>Make top</button></form>${mine.active ? `<form method="post" action="/mines/${mine.id}/mode"><label>Mine for<select name="mode">${modeOptions}</select></label><button class="secondary">Set mode</button></form><form method="post" action="/mines/${mine.id}/oil"><button class="secondary" ${oilOwned < 1 ? 'disabled' : ''}>Oil bot</button></form>` : ''}${!mine.rentalUntil && type.refundable ? `<form method="post" action="/mines/${mine.id}/sell"><button class="secondary" ${permanentCount <= Number(catalog.settings.minimum_permanent_mines) ? 'disabled' : ''}>Resell for ${mineRefundCredits(catalog, type)}c</button></form>` : ''}</div></article>`;
   }).join('');
   const capacityWarning = player.itemCount > player.itemLimit
-    ? `<p class="capacity-warning">You are ${player.itemCount - player.itemLimit} things over your ${player.itemLimit}-thing limit. <a href="/mines/auto-recycle">Open Auto-Recycle</a>.</p>` : '';
+    ? `<p class="capacity-warning">You are ${player.itemCount - player.itemLimit} things over your ${player.itemLimit}-thing limit. <a class="text-link" href="/mines/auto-recycle">Open Auto-Recycle</a>.</p>` : '';
   const ownedParts = new Set(player.botPartIds);
   const partImage = `/img/equipment/botparts/bot${catalog.botParts.filter((part) => ownedParts.has(part.id)).map((part) => part.name).join('')}.png`;
   const partRows = catalog.botParts.map((part) => {
@@ -1118,7 +1128,7 @@ function dashboardPage(player, catalog, now) {
   const nextStones = catalogCollection(catalog, 'stones').filter((stone) => !ownedStones.has(stone.id))
     .slice(0, Number(catalog.settings.home_next_stone_limit))
     .map((stone) => `<img src="/img/icons/stone${stone.rarity}.png" alt="${escapeHtml(stone.name)}" title="${escapeHtml(`${stone.name}: ${stone.description}. ${formatGold(catalog.settings.stone_buckets_per_hour)} bph.`)}">`).join('');
-  const stones = `<section class="stone-progress"><div><h2>Clear stones</h2><p>${player.stoneCount} cleared · +${formatGold(player.stoneCount * Number(catalog.settings.stone_buckets_per_hour))} buckets/hr on the top mine in your home city.</p></div><div class="stone-icons">${nextStones || '<strong>Every stone cleared.</strong>'}</div><a href="/stones">View all</a></section>`;
+  const stones = `<section class="stone-progress"><div><h2>Clear stones</h2><p>${player.stoneCount} cleared · +${formatGold(player.stoneCount * Number(catalog.settings.stone_buckets_per_hour))} buckets/hr on the top mine in your home city.</p></div><div class="stone-icons">${nextStones || '<strong>Every stone cleared.</strong>'}</div><a class="text-link" href="/stones">View all</a></section>`;
   return `<section class="page-title"><div><p class="eyebrow">Welcome back</p><h1>${escapeHtml(player.name)}’s mines</h1></div><p>Showing mines in ${escapeHtml(player.cityName)}. Your discovered regions currently support ${maximumActiveMines.toLocaleString('en-GB')} active mines.</p></section>${capacityWarning}${botBuilder}${stones}<section><h2>Mines in ${escapeHtml(player.cityName)}</h2><div class="mine-list">${mines || '<p>No mines are based in this city.</p>'}</div></section><section><h2>Recent discoveries</h2><div class="item-grid">${recent || '<p>Your first discovery is still beneath the soil.</p>'}</div></section>`;
 }
 
@@ -1126,7 +1136,7 @@ function stonesPage(player, catalog) {
   const owned = new Set(player.stoneIds);
   const stoneBph = Number(catalog.settings.stone_buckets_per_hour);
   const rows = catalogCollection(catalog, 'stones').map((stone) => `<article class="stone-card${owned.has(stone.id) ? ' earned' : ''}"><img src="/img/icons/stone${stone.rarity}.png" alt=""><div><h3>${escapeHtml(stone.name)}</h3><p>${escapeHtml(stone.description)}</p><small>Rank ${stone.rank} · ${owned.has(stone.id) ? 'Cleared' : 'Not yet cleared'} · +${formatGold(stoneBph)} bph</small></div></article>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Mine achievements</p><h1>Stones</h1></div><a href="/">Back to mines</a></section><p>Each cleared stone permanently adds ${formatGold(stoneBph)} bucket per hour to the top mine in your home city.</p><div class="stone-grid">${rows}</div>`;
+  return `<section class="page-title"><div><p class="eyebrow">Mine achievements</p><h1>Stones</h1></div><a class="text-link" href="/">Back to mines</a></section><p>Each cleared stone permanently adds ${formatGold(stoneBph)} bucket per hour to the top mine in your home city.</p><div class="stone-grid">${rows}</div>`;
 }
 
 function mineEquipmentPage(player, catalog, mine, currentTime, detonated = false) {
@@ -1178,7 +1188,7 @@ function mineEquipmentPage(player, catalog, mine, currentTime, detonated = false
     <section><h2>Equipment in this city</h2><div class="loadout-list">${availableEquipment || '<p>No spare equipment is stored in this city.</p>'}</div></section>
     <section><h2>Miner robots in this city</h2><p>Assigned robots can uncover damaged things, using ${formatGold(Number(catalog.settings.robot_damaged_chance_per_model) * 100)}% × model probability.</p><div class="loadout-list">${availableRobots || '<p>No spare miner robots are stored in this city.</p>'}</div></section>
     <section><h2>Detonate explosives</h2><p>Explosives consume local inventory and mine instantly at ±${formatGold(Number(catalog.settings.explosive_power_variation) * 100)}% of their original bucket power. Equipment does not affect detonations.</p><div class="detonator-grid">${explosives}</div></section>
-    <p><a href="/">Back to mines</a></p>`;
+    <p><a class="text-link" href="/">Back to mines</a></p>`;
 }
 
 function gadgetsPage(player, catalog, currentTime) {
@@ -1230,7 +1240,7 @@ function ledgerPage(report, catalog) {
     if (!item) throw new Error(`Missing catalog item: ${sale.itemId}.`);
     return `<tr><td>${sale.action}</td><td>${itemCard(item, { compact: true })}</td><td>${sale.quantity} × ${formatGold(sale.price)}g</td><td>${new Date(sale.createdAt).toLocaleDateString('en-CA')}</td></tr>`;
   }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Purchases and sales</h1></div><a href="/gadgets">Back to gadgets</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Purchases and sales</h1></div><a class="text-link" href="/gadgets">Back to gadgets</a></section>
     <form class="market-search" method="get"><label>Month<select name="month">${months}</select></label><button>Go</button></form>
     <table><tbody><tr><th>Total purchases</th><td>${formatGold(report.totalPurchases)}g</td></tr><tr><th>Total sales</th><td>${formatGold(report.totalSales)}g</td></tr><tr><th>Profit from sales</th><td>${formatGold(report.profit)}g</td></tr></tbody></table>
     <table><thead><tr><th>Action</th><th>Thing</th><th>Quantity and price</th><th>Date</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No transactions in this month.</td></tr>'}</tbody></table>`;
@@ -1238,8 +1248,8 @@ function ledgerPage(report, catalog) {
 
 function medalDetectorPage(melds, catalog) {
   const gadgetName = catalogGadgetForBehavior(catalog, 'medal_detector').displayName;
-  const rows = melds.map((meld) => `<tr><td><a href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></td><td>${formatGold(meld.price)}g</td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Cheapest incomplete melds</h1></div><a href="/gadgets">Back to gadgets</a></section>
+  const rows = melds.map((meld) => `<tr><td><a class="text-link" href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></td><td>${formatGold(meld.price)}g</td></tr>`).join('');
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Cheapest incomplete melds</h1></div><a class="text-link" href="/gadgets">Back to gadgets</a></section>
     <p>Prices account for all things you own and the cheapest listings in your current city, matching the original detector.</p>
     <table><thead><tr><th>Meld</th><th>Price</th></tr></thead><tbody>${rows || '<tr><td colspan="2">Not enough local listing data to price a meld.</td></tr>'}</tbody></table>`;
 }
@@ -1258,7 +1268,7 @@ function spreadsheetPage(report, selectedCities, selectedRarities, sort, catalog
     if (!item) throw new Error(`Missing catalog item: ${trade.itemId}.`);
     return `<tr><td>${itemCard(item, { compact: true })}</td><td>${escapeHtml(trade.buyCity)}</td><td>${formatGold(trade.buyPrice)}g</td><td>${escapeHtml(trade.sellCity)}</td><td>${formatGold(trade.sellPrice)}g</td><td>${formatGold(trade.profit)}g</td><td>${trade.percent}%</td></tr>`;
   }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Profitable intercity trades</h1></div><a href="/gadgets">Back to gadgets</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Profitable intercity trades</h1></div><a class="text-link" href="/gadgets">Back to gadgets</a></section>
     <p>Things available to buy immediately in one known city and sell immediately in another are listed below.</p>
     <form class="report-filter" method="get"><fieldset><legend>Sort</legend><label><input type="radio" name="sort" value="profit"${sort !== 'percent' ? ' checked' : ''}>Profit</label><label><input type="radio" name="sort" value="percent"${sort === 'percent' ? ' checked' : ''}>Percent</label></fieldset><fieldset><legend>Cities</legend>${cityInputs}</fieldset><fieldset><legend>Rarities</legend>${rarityInputs}</fieldset><button>Apply filter</button></form>
     <table><thead><tr><th>Thing</th><th>Buy city</th><th>Listing</th><th>Sell city</th><th>Bid</th><th>Profit</th><th>Percent</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No profitable immediate trades match this filter.</td></tr>'}</tbody></table>`;
@@ -1267,7 +1277,7 @@ function spreadsheetPage(report, selectedCities, selectedRarities, sort, catalog
 function calculatorPage(categories, catalog) {
   const gadgetName = catalogGadgetForBehavior(catalog, 'calculator').displayName;
   const sections = categories.map((category) => `<section><h2>${escapeHtml(category.name)}</h2><table><thead><tr><th>Description</th><th>Value</th></tr></thead><tbody>${category.stats.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${typeof value === 'number' ? value.toLocaleString('en-GB') : escapeHtml(value)}</td></tr>`).join('')}</tbody></table></section>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Miner statistics</h1></div><a href="/gadgets">Back to gadgets</a></section>${sections}`;
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(gadgetName)} gadget</p><h1>Miner statistics</h1></div><a class="text-link" href="/gadgets">Back to gadgets</a></section>${sections}`;
 }
 
 function meldRequirements(meld, player, catalog) {
@@ -1291,7 +1301,7 @@ function meldsPage(player, catalog, query = '', leaders = []) {
   const matching = catalog.melds.filter((meld) => meld.public && (!needle || meld.name.toLocaleLowerCase('en').includes(needle)))
     .sort(compareItemsByRarity);
   const resultLimit = Number(catalog.settings.meld_search_result_limit);
-  const cards = matching.slice(0, resultLimit).map((meld) => `<article class="meld-card rarity-${meld.rarity}"><div><h3><a href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></h3><small>${escapeHtml(catalogRarityName(catalog, meld.rarity))} · ${meld.requirements.reduce((sum, requirement) => sum + requirement.count, 0)} things</small></div>${owned.has(meld.id) ? '<strong class="active-state">Owned</strong>' : broken.has(meld.id) ? '<strong class="capacity-warning">Broken · dismantle</strong>' : '<a class="button secondary" href="/melds/' + meld.id + '">View recipe</a>'}</article>`).join('');
+  const cards = matching.slice(0, resultLimit).map((meld) => `<article class="meld-card rarity-${meld.rarity}"><div><h3><a class="text-link" href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></h3><small>${escapeHtml(catalogRarityName(catalog, meld.rarity))} · ${meld.requirements.reduce((sum, requirement) => sum + requirement.count, 0)} things</small></div>${owned.has(meld.id) ? '<strong class="active-state">Owned</strong>' : broken.has(meld.id) ? '<strong class="capacity-warning">Broken · dismantle</strong>' : '<a class="button secondary" href="/melds/' + meld.id + '">View recipe</a>'}</article>`).join('');
   const storedCards = Object.entries(player.meldStash ?? {})
     .map(([itemId, quantity]) => {
       const item = catalog.byId.get(Number(itemId));
@@ -1302,7 +1312,7 @@ function meldsPage(player, catalog, query = '', leaders = []) {
     .map(([item, quantity]) => itemCard(item, {
       count: quantity, meta: 'Stored outside inventory capacity'
     })).join('');
-  const leaderCards = leaders.map((miner) => `<li style="--miner-chat-color:#${miner.chatColor}"><span>#${miner.meldRank}</span><a href="/miners/${encodeURIComponent(miner.name)}">${escapeHtml(miner.name)}</a><strong>${miner.meldCount.toLocaleString('en-GB')} Melds</strong></li>`).join('');
+  const leaderCards = leaders.map((miner) => `<li style="--miner-chat-color:#${miner.chatColor}"><span>#${miner.meldRank}</span><a class="text-link" href="/miners/${encodeURIComponent(miner.name)}">${escapeHtml(miner.name)}</a><strong>${miner.meldCount.toLocaleString('en-GB')} Melds</strong></li>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">Collections</p><h1>Melds</h1></div><p>You own <strong>${owned.size}</strong> melds${broken.size ? ` and have <strong>${broken.size}</strong> broken melds` : ''}. Use the Meld button in Your Things to stage recipe items. Completed melds are created automatically.</p></section>
     <section class="meld-reputation"><div><p class="eyebrow">Reputation is forged</p><h2>If you want to be respected around here, you are going to need Melds.</h2><p>Lots of Melds. Make them, climb the ranks, and become famous.</p></div><aside><h3>Glowing examples</h3><p>The five most prolific Meld makers.</p><ol>${leaderCards || '<li>Nobody has made a Meld yet. The first legend could be you.</li>'}</ol></aside></section>
     <section class="meld-storage"><h2>Meld storage</h2><p>These things do not count toward inventory capacity.</p><div class="item-grid">${storedCards || '<p>No things are staged for melds.</p>'}</div></section>
@@ -1328,7 +1338,7 @@ function meldDetailPage(player, catalog, meld) {
       ? `<div class="broken-meld"><p>Moving nullified this meld in ${escapeHtml(previousHomeName)}. Dismantle it to return every recipe thing to that city.</p><form method="post" action="/melds/${meld.id}/deconstruct"><button>Dismantle meld</button></form></div>`
       : owned
       ? '<p class="active-state">You own this meld.</p>'
-      : createAction}</section><p><a href="/melds">Back to melds</a></p>`;
+      : createAction}</section><p><a class="text-link" href="/melds">Back to melds</a></p>`;
 }
 
 function professionsPage(player, catalog) {
@@ -1381,7 +1391,7 @@ function factoriesPage(player, catalog, factoryState, employees, availableWorker
     const progress = factory.components ? Math.min(100, factory.componentsDone / factory.components * 100) : 0;
     const workers = factory.workers.map((worker) => worker.isBot
       ? `<li><strong>🤖 ${escapeHtml(worker.name)}</strong> · ${worker.cph} cph · contract ${formatDuration(worker.expiresAt - currentTime)} left</li>`
-      : `<li><a href="/miners/${encodeURIComponent(worker.name)}">${escapeHtml(worker.name)}</a> · ${worker.cph} cph${worker.oiled ? ' · oiled' : ''}${canControl ? `<div><form method="post" action="/workers/${worker.playerId}/idle"><button class="link">idle</button></form>${worker.oiled ? '' : `<form method="post" action="/workers/${worker.playerId}/oil"><button class="link" ${oil < 1 ? 'disabled' : ''}>oil</button></form>`}</div>` : ''}</li>`).join('');
+      : `<li><a class="text-link" href="/miners/${encodeURIComponent(worker.name)}">${escapeHtml(worker.name)}</a> · ${worker.cph} cph${worker.oiled ? ' · oiled' : ''}${canControl ? `<div><form method="post" action="/workers/${worker.playerId}/idle"><button class="link">idle</button></form>${worker.oiled ? '' : `<form method="post" action="/workers/${worker.playerId}/oil"><button class="link" ${oil < 1 ? 'disabled' : ''}>oil</button></form>`}</div>` : ''}</li>`).join('');
     const assign = canControl && idleEmployees.length
       && factory.workers.length < Number(catalog.settings.factory_max_workers)
       ? `<form class="factory-assign" method="post" action="/factories/${factory.id}/assign"><label>Assign worker<select name="workerId">${idleEmployees.map((worker) => `<option value="${worker.playerId}">${escapeHtml(worker.name)} · ${worker.cph} cph</option>`).join('')}</select></label><button>Assign</button></form>` : '';
@@ -1406,8 +1416,8 @@ function factoriesPage(player, catalog, factoryState, employees, availableWorker
       : '';
     const controls = `${progressDetails}${activeCancel}${queue}${production}${demolish}`;
     const rentalStatus = rented ? (canControl
-      ? `<p>Rented from <a href="/miners/${encodeURIComponent(factory.ownerName)}">${escapeHtml(factory.ownerName)}</a> · ${formatDuration(factory.rentalExpires - currentTime)} left · repair only.</p>`
-      : `<p>Rented to <a href="/miners/${encodeURIComponent(factory.operatorName)}">${escapeHtml(factory.operatorName)}</a> · ${formatDuration(factory.rentalExpires - currentTime)} left.</p>`) : '';
+      ? `<p>Rented from <a class="text-link" href="/miners/${encodeURIComponent(factory.ownerName)}">${escapeHtml(factory.ownerName)}</a> · ${formatDuration(factory.rentalExpires - currentTime)} left · repair only.</p>`
+      : `<p>Rented to <a class="text-link" href="/miners/${encodeURIComponent(factory.operatorName)}">${escapeHtml(factory.operatorName)}</a> · ${formatDuration(factory.rentalExpires - currentTime)} left.</p>`) : '';
     const botHire = canControl && factory.workers.length < Number(catalog.settings.factory_max_workers)
       ? `<div class="factory-bot-market"><h4>Hire a Factory Worker bot</h4><p>Premium automation contracts last ${formatDuration(Number(catalog.settings.factory_worker_bot_contract_duration_ms))}.</p>${catalog.settings.factory_worker_bot_tiers.map((tier) => `<form method="post" action="/factories/${factory.id}/hire-bot"><input type="hidden" name="tierId" value="${tier.id}"><span><strong>🤖 ${escapeHtml(tier.name)}</strong> · ${tier.cph} cph</span><button${player.gold < tier.costGold ? ' disabled' : ''}>Hire · ${formatGold(tier.costGold)}g</button></form>`).join('')}</div>` : '';
     return `<article class="factory-card"><header><h3>Factory ${factory.id}</h3><span>${factory.built ? 'Built' : 'Under construction'}${factory.actionName ? ` · ${escapeHtml(factory.actionName)}` : ' · Idle'}</span></header>${rentalStatus}${controls}<h4>Workers</h4><ul>${workers || '<li class="muted">No workers assigned.</li>'}</ul>${assign}${botHire}</article>`;
@@ -1423,7 +1433,7 @@ function factoriesPage(player, catalog, factoryState, employees, availableWorker
     })).join('');
   const selfWorker = player.worker ? `<section class="worker-self"><h2>Your worker</h2><p>${player.worker.cph} components per hour${player.worker.oiled ? ' · oiled' : ''}${player.worker.employerId !== player.id ? ' · currently employed' : ' · available for hire'}</p>${!player.worker.oiled && player.worker.employerId === player.id ? `<form method="post" action="/workers/${player.id}/oil"><button ${homeOil < 1 ? 'disabled' : ''}>Oil yourself for +${formatGold(Number(catalog.settings.worker_oil_cph_bonus))} cph</button></form>` : ''}</section>` : '';
   const buildNotice = atRegionalCapital ? '' : regionalCapital
-    ? `<p class="capacity-warning">Factories can only be built in a regional capital. Travel to <a href="/map#city-${regionalCapital.id}">${escapeHtml(regionalCapital.name)}</a>, your home city in this region, to build one.</p>`
+    ? `<p class="capacity-warning">Factories can only be built in a regional capital. Travel to <a class="text-link" href="/map#city-${regionalCapital.id}">${escapeHtml(regionalCapital.name)}</a>, your home city in this region, to build one.</p>`
     : '<p class="capacity-warning">This region does not have an available capital.</p>';
   return `<section class="page-title"><div><p class="eyebrow">Manufacturing</p><h1>Factories</h1></div><p>Production resources are stored per city. Every regional capital is one of your home cities.</p></section>
     <div class="item-grid factory-resources">${resourceCards}</div>
@@ -1431,25 +1441,31 @@ function factoriesPage(player, catalog, factoryState, employees, availableWorker
     <section><h2>Your workforce</h2><ul>${workerRows || '<li>No employees under contract.</li>'}</ul><div class="worker-market">${candidates || '<p>No free workers are based in this city.</p>'}</div></section>
     <section><h2>Local factories</h2><div class="factory-list">${cards || '<p>No factories here.</p>'}</div></section>
     <form method="post" action="/factories/build"><button ${!atRegionalCapital || ore < build.ore || factoryState.activeCount >= factoryState.maximumActive ? 'disabled' : ''}>Build factory · ${build.ore} ore</button></form>${buildNotice}
-    <p><a href="/market/factories/rental">Rent Factory</a> · <a href="/market/factories/sale">Buy/Sell Factory</a></p>`;
+    <p><a class="text-link" href="/market/factories/rental">Rent Factory</a> · <a class="text-link" href="/market/factories/sale">Buy/Sell Factory</a></p>`;
 }
 
 function millsPage(player, catalog, millState, employees, currentTime) {
   const oreItem = catalogItemForSetting(catalog, 'ore_item_id');
   const ore = player.inventory[oreItem.id] ?? 0;
   const build = catalog.factoryActions.find((action) => action.actionKind === 'build');
+  const screwItem = catalog.byId.get(millState.screwItemId);
+  const requiredScrews = millState.requiredScrews;
+  const hasRequiredScrews = millState.screwQuantity >= requiredScrews;
   const localEmployees = employees.filter((employee) =>
     employee.homeCityIds.includes(player.cityId));
   const idleEmployees = localEmployees.filter((employee) => !employee.factoryId);
   const vehicleOptions = millState.vehicles.map((vehicle) =>
     `<option value="${vehicle.id}">${escapeHtml(vehicle.name)} · ${
       vehicle.type === 'sea' ? 'ship' : 'land vehicle'}</option>`).join('');
-  const woodOptions = millState.wood.map((wood) =>
+  const availableWood = millState.wood.filter((wood) =>
+    wood.quantity >= 1 + (wood.id === millState.screwItemId ? requiredScrews : 0));
+  const woodOptions = availableWood.map((wood) =>
     `<option value="${wood.id}">${escapeHtml(wood.name)} · rarity ${wood.rarity} · ${
       wood.strength} damage · ${wood.quantity} owned</option>`).join('');
   const woodCards = millState.wood.map((wood) => itemCard(catalog.byId.get(wood.id), {
     count: wood.quantity, compact: true,
-    meta: `${wood.strength} reinforcement strength · In this city`
+    meta: `${wood.strength} reinforcement strength${wood.id === millState.screwItemId
+      ? ` · ${requiredScrews} required per job` : ''} · In this city`
   })).join('');
   const cards = millState.mills.map((mill) => {
     const progress = mill.components
@@ -1463,24 +1479,31 @@ function millsPage(player, catalog, millState, employees, currentTime) {
         escapeHtml(mill.itemName)}.</p>` : '';
     const workers = mill.workers.map((worker) => worker.isBot
       ? `<li><strong>🤖 ${escapeHtml(worker.name)}</strong> · ${worker.cph} cph · contract ${formatDuration(worker.expiresAt - currentTime)} left</li>`
-      : `<li><a href="/miners/${encodeURIComponent(worker.name)}">${escapeHtml(worker.name)}</a> · ${worker.cph} cph<form method="post" action="/mills/workers/${worker.playerId}/idle"><button class="link">idle</button></form></li>`).join('');
+      : `<li><a class="text-link" href="/miners/${encodeURIComponent(worker.name)}">${escapeHtml(worker.name)}</a> · ${worker.cph} cph<form method="post" action="/mills/workers/${worker.playerId}/idle"><button class="link">idle</button></form></li>`).join('');
     const assign = idleEmployees.length
       && mill.workers.length < Number(catalog.settings.factory_max_workers)
       ? `<form class="factory-assign" method="post" action="/mills/${mill.id}/assign"><label>Assign worker<select name="workerId">${idleEmployees.map((worker) =>
         `<option value="${worker.playerId}">${escapeHtml(worker.name)} · ${worker.cph} cph</option>`).join('')}</select></label><button>Assign</button></form>` : '';
     const botHire = mill.workers.length < Number(catalog.settings.factory_max_workers)
       ? `<div class="factory-bot-market"><h4>Hire a robot worker</h4><p>Automation contracts last ${formatDuration(Number(catalog.settings.factory_worker_bot_contract_duration_ms))} and contribute to construction or reinforcement work.</p>${catalog.settings.factory_worker_bot_tiers.map((tier) => `<form method="post" action="/mills/${mill.id}/hire-bot"><input type="hidden" name="tierId" value="${tier.id}"><span><strong>🤖 ${escapeHtml(tier.name)}</strong> · ${tier.cph} cph</span><button${player.gold < tier.costGold ? ' disabled' : ''}>Hire · ${formatGold(tier.costGold)}g</button></form>`).join('')}</div>` : '';
-    const reinforce = mill.built && !mill.actionId
-      ? `<form class="factory-action" method="post" action="/mills/${mill.id}/reinforce"><label>Vehicle<select name="vehicleId" required><option value="">Choose vehicle</option>${vehicleOptions}</select></label><label>Wood<select name="woodItemId" required><option value="">Choose Wood</option>${woodOptions}</select></label><button${!vehicleOptions || !woodOptions ? ' disabled' : ''}>Reinforce vehicle</button></form>${!vehicleOptions
+    const queueRows = mill.queue.map((queuedJob, index) => `<li><div><strong>${index + 1}. ${escapeHtml(queuedJob.targetVehicleName ?? 'Vehicle')}</strong><small>${escapeHtml(queuedJob.itemName)} · ${queuedJob.screwsReserved} ${escapeHtml(screwItem.name)} reserved · ${Number(queuedJob.components).toLocaleString('en')} components</small></div><div class="factory-queue-actions"><form method="post" action="/mills/${mill.id}/queue/${queuedJob.id}/up"><button class="link" aria-label="Move ${escapeHtml(queuedJob.targetVehicleName ?? 'vehicle')} up"${index === 0 ? ' disabled' : ''}>↑</button></form><form method="post" action="/mills/${mill.id}/queue/${queuedJob.id}/down"><button class="link" aria-label="Move ${escapeHtml(queuedJob.targetVehicleName ?? 'vehicle')} down"${index === mill.queue.length - 1 ? ' disabled' : ''}>↓</button></form><form method="post" action="/mills/${mill.id}/queue/${queuedJob.id}/cancel"><button class="link">Cancel</button></form></div></li>`).join('');
+    const queue = mill.built
+      ? `<section class="factory-queue"><h4>Reinforcement queue <span>${mill.queue.length}/${mill.queueLimit}</span></h4><p>Wood and screws are reserved as soon as a job is queued.</p><ol>${queueRows || '<li class="muted">No jobs waiting.</li>'}</ol></section>`
+      : '';
+    const queueFull = mill.queue.length >= mill.queueLimit;
+    const reinforce = mill.built
+      ? `<form class="factory-action" method="post" action="/mills/${mill.id}/reinforce"><label>Vehicle<select name="vehicleId" required><option value="">Choose vehicle</option>${vehicleOptions}</select></label><label>Wood<select name="woodItemId" required><option value="">Choose Wood</option>${woodOptions}</select></label><button${queueFull || !vehicleOptions || !woodOptions || !hasRequiredScrews ? ' disabled' : ''}>${mill.actionId || mill.queue.length ? 'Add to queue' : 'Start reinforcement'}</button></form>${!vehicleOptions
         ? '<p class="muted">No undamaged, unreinforced land vehicle or ship is available here.</p>' : ''}${!woodOptions
-        ? '<p class="muted">No Wood is stored in this city.</p>' : ''}` : '';
+        ? '<p class="muted">No usable Wood is stored in this city.</p>' : ''}${!hasRequiredScrews
+        ? `<p class="capacity-warning">Each reinforcement needs ${requiredScrews} ${escapeHtml(screwItem.name)}; ${millState.screwQuantity} available.</p>` : ''}${queueFull
+        ? '<p class="capacity-warning">The reinforcement queue is full.</p>' : ''}` : '';
     const cancel = mill.actionId
       ? `<form method="post" action="/mills/${mill.id}/cancel"><button class="secondary">Cancel and refund inputs</button></form>` : '';
-    const demolish = mill.built && !mill.actionId
+    const demolish = mill.built && !mill.actionId && !mill.queue.length
       ? `<form method="post" action="/mills/${mill.id}/demolish"><button class="secondary">Demolish for ore refund</button></form>` : '';
     return `<article class="factory-card"><header><h3>Mill ${mill.id}</h3><span>${mill.built
       ? mill.actionName ? escapeHtml(mill.actionName) : 'Idle'
-      : 'Under construction'}</span></header>${job}${progressDetails}${cancel}${reinforce}${demolish}<h4>Workers</h4><ul>${workers || '<li class="muted">No workers assigned.</li>'}</ul>${assign}${botHire}</article>`;
+      : 'Under construction'}</span></header>${job}${progressDetails}${cancel}${queue}${reinforce}${demolish}<h4>Workers</h4><ul>${workers || '<li class="muted">No workers assigned.</li>'}</ul>${assign}${botHire}</article>`;
   }).join('');
   const buildAllowed = millState.unlocked && millState.atRegionalCapital
     && !millState.mills.length && ore >= build.ore;
@@ -1489,7 +1512,7 @@ function millsPage(player, catalog, millState, employees, currentTime) {
     : !millState.atRegionalCapital
       ? '<p class="capacity-warning">Mills can only be built and operated in this region’s capital city.</p>'
       : millState.mills.length ? '<p>You may own one mill in each eligible regional capital.</p>' : '';
-  return `<section class="page-title"><div><p class="eyebrow">Woodworking</p><h1>Mills</h1></div><p>Turn one Wood thing into a reinforcement layer for a land vehicle or ship. The layer absorbs structural damage first and is destroyed at zero strength.</p></section>
+  return `<section class="page-title"><div><p class="eyebrow">Woodworking</p><h1>Mills</h1></div><p>Turn one Wood thing and ${requiredScrews} ${escapeHtml(screwItem.name)} into a reinforcement layer for a land vehicle or ship. The layer absorbs structural damage first and is destroyed at zero strength.</p></section>
     <div class="item-grid factory-resources">${itemCard(oreItem, { count: ore, compact: true, meta: 'Construction · In this city' })}${woodCards}</div>
     ${notice}<section><h2>Local mills</h2><div class="factory-list">${cards || '<p>No mills here.</p>'}</div></section>
     <form method="post" action="/mills/build"><button${buildAllowed ? '' : ' disabled'}>Build mill · ${build.ore} ore</button></form>
@@ -1537,7 +1560,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
       : `<form method="post" action="/chat/ignores/${chat.playerId}"><input type="hidden" name="ignored" value="1"><button class="link chat-ignore-action" aria-label="Ignore ${speaker} in public chat">Ignore</button></form>`;
     return `<article id="${rowId}" class="chat-row chat-row-player" style="--chat-color:#${color}" data-chat-created-at="${Number(chat.createdAt)}"${rowMetadata}><span class="chat-identity"><i aria-hidden="true"></i><a class="chat-speaker" href="/miners/${encodeURIComponent(chat.playerName)}">${speaker}</a></span><span class="chat-message">${escapeHtml(chat.body)}</span>${timestamp}${rowAction}</article>`;
   }).join('');
-  const ignoredRows = ignores.map((ignored) => `<li><a href="/miners/${encodeURIComponent(ignored.name)}">${escapeHtml(ignored.name)}</a><form method="post" action="/chat/ignores/${ignored.id}"><input type="hidden" name="ignored" value="0"><button class="link">Unignore</button></form></li>`).join('');
+  const ignoredRows = ignores.map((ignored) => `<li><a class="text-link" href="/miners/${encodeURIComponent(ignored.name)}">${escapeHtml(ignored.name)}</a><form method="post" action="/chat/ignores/${ignored.id}"><input type="hidden" name="ignored" value="0"><button class="link">Unignore</button></form></li>`).join('');
   const colorPicker = appearance.canChooseColor
     ? `<div class="chat-color-control" style="--chat-preview:#${appearanceColor}"><span class="chat-control-label">Signal colour</span><label class="chat-color-picker" for="chat-color"><input id="chat-color" type="color" name="color" value="#${appearanceColor}" aria-describedby="chat-color-help"><span>Choose colour</span></label><small id="chat-color-help">Saved when you transmit.</small></div>`
     : `<div class="chat-color-control" style="--chat-preview:#${appearanceColor}"><span class="chat-control-label">Signal colour</span><p><i aria-hidden="true"></i>Meld colour</p><small>Your signal advances with melds (${appearance.meldCount}/${appearance.customMinimumMelds} for a custom colour).</small></div>`;
@@ -1565,7 +1588,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
   </article><script src="/node/chat-filters.js?v=20260826a" defer></script>`;
 }
 
-export function casinoPage(state) {
+function legacyCasinoPage(state) {
   const { rules, symbols, selectedSpin } = state;
   const symbolById = new Map([...symbols, ...rules.bonusSymbols]
     .map((symbol) => [String(symbol.id), symbol]));
@@ -1633,20 +1656,29 @@ export function casinoPage(state) {
   const selectedCurrency = rememberedCrypto ? `crypto:${rememberedCrypto.id}` : 'gold';
   const rememberedWager = Number.isSafeInteger(Number(state.lastBet?.wager))
     && Number(state.lastBet.wager) > 0 ? Number(state.lastBet.wager) : 1;
+  const cryptoBalanceText = (currency) => `${currency.quantity.toLocaleString('en-GB')} ${
+    escapeHtml(currency.symbol)} available${currency.voucherQuantity > 0
+    ? `, including ${currency.voucherQuantity.toLocaleString('en-GB')} voucher` : ''}`;
   const initialMaximum = rememberedCrypto
     ? Math.min(rules.maximumCryptoWager, rememberedCrypto.quantity) : goldMaximum;
   const initialBalance = rememberedCrypto
-    ? `${rememberedCrypto.quantity.toLocaleString('en-GB')} ${escapeHtml(rememberedCrypto.symbol)} available`
+    ? cryptoBalanceText(rememberedCrypto)
     : `${formatGold(state.gold)}g available`;
   const currencyOptions = [
     `<option value="gold"${selectedCurrency === 'gold' ? ' selected' : ''} data-balance="${formatGold(state.gold)}" data-max="${goldMaximum}" data-unit="gold">Gold &middot; ${formatGold(state.gold)}g available</option>`,
-    ...state.currencies.map((currency) => `<option value="crypto:${currency.id}"${selectedCurrency === `crypto:${currency.id}` ? ' selected' : ''} data-balance="${currency.quantity}" data-max="${Math.min(rules.maximumCryptoWager, currency.quantity)}" data-unit="${escapeHtml(currency.symbol)}">${escapeHtml(currency.name)} (${escapeHtml(currency.symbol)}) &middot; ${currency.quantity.toLocaleString('en-GB')} available</option>`)
+    ...state.currencies.map((currency) => `<option value="crypto:${currency.id}"${selectedCurrency === `crypto:${currency.id}` ? ' selected' : ''} data-balance="${currency.quantity}" data-voucher="${Number(currency.voucherQuantity ?? 0)}" data-max="${Math.min(rules.maximumCryptoWager, currency.quantity)}" data-unit="${escapeHtml(currency.symbol)}">${escapeHtml(currency.name)} (${escapeHtml(currency.symbol)}) &middot; ${cryptoBalanceText(currency)}</option>`)
   ].join('');
   const paytable = symbols.map((symbol) => {
     const multiplier = rules.payoutMultipliersByItemId[symbol.id] ?? rules.ordinaryMultiplier;
     const explosive = Object.hasOwn(rules.payoutMultipliersByItemId, symbol.id);
-    return `<li class="rarity-${symbol.rarity}${symbol.id === rules.jackpotItemId ? ' is-top-symbol' : ''}"><img src="${escapeHtml(symbol.icon)}" alt=""><span><strong>${escapeHtml(symbol.name)}</strong><small>${explosive ? 'Explosive match' : 'Mine Thing match'}</small></span><b>${multiplier}&times;</b></li>`;
+    return `<li class="rarity-${symbol.rarity}${symbol.id === rules.jackpotItemId ? ' is-top-symbol' : ''}"><img src="${escapeHtml(symbol.icon)}" alt=""><span><strong>${escapeHtml(symbol.name)}</strong><small>${explosive ? '3 on a line' : 'Mine Thing · 3 on a line'}</small></span><b>${multiplier}&times;</b></li>`;
   }).join('');
+  const shortMatchAwards = Array.from(
+    { length: 5 - rules.explosiveSmallMatchMinimum },
+    (_, index) => rules.explosiveSmallMatchMinimum + index
+  )
+    .map((count) => `<li><strong>${count} matching</strong><span>Flat ${rules.explosiveSmallMatchMultiplier}&times; payout</span></li>`)
+    .join('');
   const scatterAwards = Object.entries(rules.explosiveScatterCountFactors)
     .map(([count, factor]) => `<li><strong>${count} matching</strong><span>${factor}&times; that explosive&rsquo;s line payout</span></li>`).join('');
   const bonusPaytable = rules.bonusSymbols.map((symbol) => `<li class="casino-bonus-${escapeHtml(symbol.id)}"><span class="casino-bonus-glyph" aria-hidden="true">${escapeHtml(symbol.glyph)}</span><span><strong>${escapeHtml(symbol.name)}</strong><small>${escapeHtml(symbol.description)}</small></span></li>`).join('');
@@ -1658,11 +1690,12 @@ export function casinoPage(state) {
     const current = spin.id === selectedSpin?.id;
     const finalResult = spin.jackpot
       ? '<strong>JACKPOT</strong>' : spin.multiplier ? `${spin.multiplier}&times;` : '&mdash;';
-    return `<tr${current ? ' class="is-current"' : ''}><td><a href="/casino?spin=${spin.id}">#${spin.id}</a></td><td>${new Date(spin.createdAt).toLocaleString('en-GB')}</td><td>${amount(spin.wager, spin)}</td><td>${current ? concealDuringReplay(finalResult, 'Free spins in play') : finalResult}</td><td>${current ? concealDuringReplay(amount(spin.payout, spin)) : amount(spin.payout, spin)}</td></tr>`;
+    return `<tr${current ? ' class="is-current"' : ''}><td><a class="text-link" href="/casino?spin=${spin.id}">#${spin.id}</a></td><td>${new Date(spin.createdAt).toLocaleString('en-GB')}</td><td>${amount(spin.wager, spin)}</td><td>${current ? concealDuringReplay(finalResult, 'Free spins in play') : finalResult}</td><td>${current ? concealDuringReplay(amount(spin.payout, spin)) : amount(spin.payout, spin)}</td></tr>`;
   }).join('');
 
   return `<div class="casino-page">
-    <section class="casino-hero"><div><p class="eyebrow">When the tunnels fall quiet</p><h1>The Quiet Shift Casino</h1><p>One machine, nine Things, and enough explosives to make probability nervous.</p></div><dl><div><dt>Your pulls</dt><dd>${state.stats.spinCount.toLocaleString('en-GB')}</dd></div><div><dt>Best return</dt><dd>${concealDuringReplay(`${state.stats.bestMultiplier}&times;`, '?')}</dd></div><div><dt>Jackpots</dt><dd>${concealDuringReplay(state.stats.jackpotCount, '?')}</dd></div></dl></section>
+    <section class="page-title"><div><p class="eyebrow">When the tunnels fall quiet</p><h1>The Quiet Shift Casino</h1></div><p>One machine, nine Things, and enough explosives to make probability nervous.</p></section>
+    <dl class="casino-stats"><div><dt>Your pulls</dt><dd>${state.stats.spinCount.toLocaleString('en-GB')}</dd></div><div><dt>Best return</dt><dd>${concealDuringReplay(`${state.stats.bestMultiplier}&times;`, '?')}</dd></div><div><dt>Jackpots</dt><dd>${concealDuringReplay(state.stats.jackpotCount, '?')}</dd></div></dl>
     <article class="casino-machine${selectedSpin?.jackpot && !replayActive ? ' has-jackpot' : ''}" id="casino-machine"${replayData}${replayActive ? ' aria-busy="true"' : ''}>
       <div class="casino-marquee"><span aria-hidden="true"></span><p>THE THING-O-MATIC</p><strong>Lines · scatters · stacking respins</strong></div>
       <div class="casino-machine-body">
@@ -1677,9 +1710,286 @@ export function casinoPage(state) {
       <footer><span>MINIMUM 1</span><strong>PAYOUTS INCLUDE YOUR STAKE</strong><span>MAXIMUM 1,000</span></footer>
     </article>
     <section class="casino-bonus-rules"><div><p class="eyebrow">Special symbols</p><h2>The shift can keep going</h2><p>Every special symbol awards its effect independently. Multiple copies and different specials can land together; up to ${rules.maximumBonusSpins} free respins can be added to one paid pull.</p></div><ul>${bonusPaytable}</ul></section>
-    <section class="casino-rules"><div><p class="eyebrow">Paytable</p><h2>Lines and explosive scatters</h2><p>Every completed row, column, and diagonal pays. Five or more copies of one explosive anywhere on the reels earn an extra scatter award. All awards across the paid spin and its respins stack.</p><ul class="casino-paytable">${paytable}</ul><h3 class="casino-scatter-title">Explosive scatter awards</h3><ul class="casino-scatter-paytable">${scatterAwards}</ul></div><aside><p class="eyebrow">Grand prize</p><h2>Nine BLU-82s</h2><p>Fill every window with the legendary explosive for a ${rules.jackpotBonusMultiplier.toLocaleString('en-GB')}&times; jackpot bonus, plus its eight line payouts and nine-symbol scatter award.</p><div class="casino-jackpot-odds"><span>Jackpot trigger</span><strong>1 in ${rules.jackpotChanceDenominator.toLocaleString('en-GB')}</strong><small>Every paid spin and free respin is independently resolved by the server.</small></div><ol class="casino-paylines">${paylines}</ol></aside></section>
+    <section class="casino-rules"><div><p class="eyebrow">Paytable</p><h2>Lines, explosive matches, and scatters</h2><p>Three matching symbols on any completed row, column, or diagonal pay the listed amount. Three or four copies of the same explosive anywhere on the reels also pay a flat ${rules.explosiveSmallMatchMultiplier}&times; award. Five or more pay a rarity-scaled scatter award. Line, match, scatter, jackpot, and respin awards all stack.</p><ul class="casino-paytable">${paytable}</ul><h3 class="casino-scatter-title">Explosive matches and scatters</h3><ul class="casino-scatter-paytable">${shortMatchAwards}${scatterAwards}</ul></div><aside><p class="eyebrow">Grand prize</p><h2>Nine BLU-82s</h2><p>Fill every window with the legendary explosive for a ${rules.jackpotBonusMultiplier.toLocaleString('en-GB')}&times; jackpot bonus, plus its eight line payouts and nine-symbol scatter award.</p><div class="casino-jackpot-odds"><span>Jackpot trigger</span><strong>1 in ${rules.jackpotChanceDenominator.toLocaleString('en-GB')}</strong><small>Every paid spin and free respin is independently resolved by the server.</small></div><ol class="casino-paylines">${paylines}</ol></aside></section>
     <section class="casino-history"><div class="section-heading"><div><p class="eyebrow">Machine ledger</p><h2>Recent pulls</h2></div></div><div class="table-scroll"><table><thead><tr><th>Pull</th><th>When</th><th>Bet</th><th>Result</th><th>Returned</th></tr></thead><tbody>${history || '<tr><td colspan="5">The reels are waiting for their first pull.</td></tr>'}</tbody></table></div></section>
   </div><script src="/node/casino.js?v=20260829f" defer></script>`;
+}
+
+const CASINO_PRESENTATIONS = Object.freeze({
+  'thing-o-matic': Object.freeze({
+    theme: 'thing-o-matic', pickerCopy: 'The original: eight lines, explosive matches, and stacking free respins.',
+    pageCopy: 'Three machines, nine windows apiece, and several dubious interpretations of probability.',
+    previewIds: [277, 'shift-bell', 278, 'twin-drill', 282, 'golden-fuse', 279, 1524, 280],
+    marquee: 'THE THING-O-MATIC', tagline: 'Lines · scatters · stacking respins',
+    cabinetBadge: 'Original house machine',
+    ready: 'Nine windows. Eight lines. One pull.', pullLabel: 'Pull the lever',
+    replayStart: 'Free spins starting&hellip;', replayRunning: 'Free spins running',
+    replayWaiting: 'Free spins in play', frameNoun: 'spin', jackpotResult: 'THE MOUNTAIN MOVED',
+    featureEyebrow: 'Special symbols', featureTitle: 'The shift can keep going',
+    rulesTitle: 'Lines, explosive matches, and scatters', jackpotTitle: 'Nine BLU-82s',
+    topSymbolId: 282
+  }),
+  'bromo-sporefall': Object.freeze({
+    theme: 'bromo-sporefall', pickerCopy: 'Connect shrooms, compost the cluster, and cascade again.',
+    pageCopy: 'Three machines, nine windows apiece, and several dubious interpretations of probability.',
+    previewIds: [1434, 1435, 1434, 1436, 1437, 1438, 1439, 1435, 1436],
+    marquee: 'BROMO SPOREFALL', tagline: 'Connect · compost · cascade',
+    ready: 'Connect three matching shrooms. Fresh caps fall into their places.',
+    pullLabel: 'Start the drop', replayStart: 'The spores are still falling&hellip;',
+    replayRunning: 'Cascades resolving', replayWaiting: 'Cascade in play',
+    frameNoun: 'drop', jackpotResult: 'THE CAVE BLOOMS',
+    featureEyebrow: 'Cascade rules', featureTitle: 'Every match feeds the next fall',
+    rulesTitle: 'Build connected shroom clusters', jackpotTitle: 'Nine Crowns of Bromo',
+    topSymbolId: 1439
+  }),
+  'kings-lockbox': Object.freeze({
+    theme: 'kings-lockbox', pickerCopy: 'Reveal relics, lock them in place, and respin the soot.',
+    pageCopy: 'Three machines, nine windows apiece, and several dubious interpretations of probability.',
+    previewIds: [1555, 1554, 1560, 1554, 1554, 1554, 1566, 1554, 1554],
+    marquee: "THE KING'S LOCKBOX", tagline: 'Three relics · hold · respin',
+    ready: 'Reveal three relics to wake the lockbox. Soot-Clogged Coins are duds.',
+    pullLabel: 'Open the lockbox', replayStart: 'The lockbox is opening&hellip;',
+    replayRunning: 'Lockbox respins running', replayWaiting: 'Lockbox in play',
+    frameNoun: 'reveal', jackpotResult: 'THE LOCKBOX OPENS',
+    featureEyebrow: 'Lockbox rules', featureTitle: 'New relics reset the counter',
+    rulesTitle: 'Every locked relic pays', jackpotTitle: 'Fill all nine locks',
+    topSymbolId: 1582
+  })
+});
+
+export function casinoPage(state) {
+  if (!state?.machine) return legacyCasinoPage(state);
+  const { machine, rules, symbols, selectedSpin } = state;
+  const presentation = CASINO_PRESENTATIONS[machine?.key]
+    ?? CASINO_PRESENTATIONS[THING_O_MATIC_KEY];
+  const isThingOMatic = machine.key === THING_O_MATIC_KEY;
+  const isSporefall = machine.key === 'bromo-sporefall';
+  const isLockbox = machine.key === 'kings-lockbox';
+  const bonusSymbols = Array.isArray(rules.bonusSymbols) ? rules.bonusSymbols : [];
+  const symbolById = new Map([...symbols, ...bonusSymbols]
+    .map((symbol) => [String(symbol.id), symbol]));
+  const replaySourceFrames = selectedSpin?.frames?.length > 1 ? selectedSpin.frames : [];
+  const initialFrame = replaySourceFrames[0] ?? selectedSpin;
+  const grid = initialFrame?.grid?.length === 9
+    ? initialFrame.grid : presentation.previewIds.map((symbolId) =>
+      symbolById.get(String(symbolId)) ?? symbols[0]);
+  const initialWinningCells = Array.isArray(initialFrame?.winningCells)
+    ? initialFrame.winningCells
+    : replaySourceFrames.length
+      ? (initialFrame.wins ?? []).flatMap((win) => win.cells ?? [])
+      : selectedSpin?.winningCells ?? [];
+  const winningCells = new Set(initialWinningCells);
+  const lockedCells = new Set(initialFrame?.lockedCells ?? []);
+  const cells = grid.map((symbol, index) => {
+    const item = symbolById.get(String(symbol.id)) ?? symbol;
+    const bonus = item.kind === 'bonus';
+    const winning = winningCells.has(index);
+    const locked = lockedCells.has(index);
+    const classes = [
+      'casino-reel-cell',
+      bonus ? 'casino-bonus-cell' : `rarity-${Number(item.rarity)}`,
+      bonus ? `casino-bonus-${escapeHtml(item.id)}` : '',
+      winning ? 'is-winning' : '', locked ? 'is-locked' : ''
+    ].filter(Boolean).join(' ');
+    const aria = [item.name, bonus ? 'Bonus symbol' : item.rarityName,
+      winning ? 'Winning' : '', locked ? 'Locked' : ''].filter(Boolean).join(', ');
+    return `<div class="${classes}" data-casino-cell="${index}"${bonus ? ` data-casino-bonus="${escapeHtml(item.id)}"` : ''}${winning ? ' data-winning="true"' : ''}${locked ? ' data-locked="true"' : ''} aria-label="${escapeHtml(aria)}">
+      <span class="casino-symbol-halo" aria-hidden="true"></span>
+      ${bonus ? `<span class="casino-bonus-glyph" aria-hidden="true">${escapeHtml(item.glyph)}</span>` : `<img src="${escapeHtml(item.icon)}" alt="">`}
+      <strong>${escapeHtml(item.name)}</strong><small>${bonus ? 'Bonus symbol' : escapeHtml(item.rarityName)}</small>
+    </div>`;
+  }).join('');
+
+  const amount = (value, spin = selectedSpin) => spin?.currencyKind === 'gold'
+    ? `${formatGold(value)}g`
+    : `${Number(value).toLocaleString('en-GB')} ${escapeHtml(spin?.currencySymbol ?? '')}`;
+  const frameCount = selectedSpin?.frames?.length || (selectedSpin ? 1 : 0);
+  const replayFrames = replaySourceFrames.map((frame) => ({
+    grid: frame.grid.map((symbol) => ({
+      id: symbol.id, name: symbol.name, icon: symbol.icon,
+      rarity: symbol.rarity, rarityName: symbol.rarityName,
+      kind: symbol.kind, glyph: symbol.glyph
+    })),
+    wins: frame.wins ?? [],
+    winningCells: Array.isArray(frame.winningCells)
+      ? frame.winningCells : [...new Set((frame.wins ?? []).flatMap((win) => win.cells ?? []))],
+    multiplier: frame.multiplier, jackpot: frame.jackpot,
+    bonusSpinsAwarded: frame.bonusSpinsAwarded,
+    replayKind: frame.replayKind, label: frame.label, holdMs: frame.holdMs,
+    lockedCells: frame.lockedCells, newlyLockedCells: frame.newlyLockedCells,
+    refilledCells: frame.refilledCells, clearedCells: frame.clearedCells,
+    remainingAttempts: frame.remainingAttempts
+  }));
+  const replayActive = replayFrames.length > 1;
+  const replayData = replayFrames.length
+    ? ` data-casino-frames="${escapeHtml(JSON.stringify(replayFrames))}"` : '';
+
+  let outcomeSummary = '';
+  if (isThingOMatic && selectedSpin?.bonusSpinsAwarded) {
+    outcomeSummary = `<div class="casino-bonus-summary"><strong>${selectedSpin.bonusSpinsAwarded} free respin${selectedSpin.bonusSpinsAwarded === 1 ? '' : 's'}</strong><span>${selectedSpin.bonusWinMultiplier > 1 ? `Golden Fuse raised all winnings to ${selectedSpin.bonusWinMultiplier}&times;` : 'Every bonus spin was included in this return.'}</span></div>`;
+  } else if (isSporefall && frameCount > 1) {
+    outcomeSummary = `<div class="casino-bonus-summary"><strong>${frameCount - 1} cascade${frameCount === 2 ? '' : 's'}</strong><span>Only matching shrooms were composted; every survivor stayed put.</span></div>`;
+  } else if (isLockbox && selectedSpin) {
+    const lastFrame = selectedSpin.frames?.at(-1);
+    const lockedCount = lastFrame?.lockedCells?.length ?? 0;
+    if (lockedCount) outcomeSummary = `<div class="casino-bonus-summary"><strong>${lockedCount} relic${lockedCount === 1 ? '' : 's'} locked</strong><span>${lastFrame.remainingAttempts > 0 ? `${lastFrame.remainingAttempts} attempt${lastFrame.remainingAttempts === 1 ? '' : 's'} remained.` : 'The lockbox run is settled.'}</span></div>`;
+  }
+
+  const frameTrail = selectedSpin?.frames?.length > 1
+    ? `<details class="casino-result-details"><summary>View ${selectedSpin.frames.length}-${escapeHtml(presentation.frameNoun)} trail</summary><div class="casino-respin-trail">${selectedSpin.frames.map((frame, index) => {
+      const bonuses = (frame.bonusSymbols ?? []).map((symbol) => symbol.name).join(' + ');
+      const label = frame.label ?? (index ? `${presentation.frameNoun} ${index + 1}` : `Initial ${presentation.frameNoun}`);
+      const detail = isThingOMatic
+        ? (bonuses ? `${escapeHtml(bonuses)}${frame.bonusSpinsAwarded ? ` · +${frame.bonusSpinsAwarded}` : ''}` : 'No bonus symbol')
+        : isLockbox
+          ? `${frame.lockedCells?.length ?? 0} locked · ${frame.remainingAttempts ?? 0} attempts left`
+          : `${frame.clearedCells?.length ?? 0} composted`;
+      return `<div${bonuses || frame.winningCells?.length ? ' class="has-bonus"' : ''}><small>${escapeHtml(label)}</small><strong>${Number(frame.multiplier)}&times;</strong><span>${detail}</span></div>`;
+    }).join('')}</div></details>` : '';
+  const resultOutcome = selectedSpin?.jackpot
+    ? 'is-jackpot' : selectedSpin?.multiplier ? 'is-win' : 'is-loss';
+  const resultKicker = selectedSpin?.jackpot
+    ? 'Grand jackpot'
+    : selectedSpin?.multiplier
+      ? `${selectedSpin.wins.length} winning award${selectedSpin.wins.length === 1 ? '' : 's'} across ${frameCount} ${presentation.frameNoun}${frameCount === 1 ? '' : 's'}`
+      : isThingOMatic && selectedSpin?.bonusSpinsAwarded
+        ? `No win after ${selectedSpin.bonusSpinsAwarded} free respin${selectedSpin.bonusSpinsAwarded === 1 ? '' : 's'}`
+        : 'No winning awards';
+  const result = selectedSpin ? `<section class="casino-result ${replayActive ? 'is-replaying' : resultOutcome}" data-casino-outcome="${resultOutcome}" aria-live="polite">
+    <p class="casino-replay-status" id="casino-replay-status"${replayActive ? `>${presentation.replayStart}` : ' hidden>'}</p>
+    <p class="casino-result-kicker">${resultKicker}</p>
+    <strong>${selectedSpin.jackpot ? presentation.jackpotResult : selectedSpin.multiplier ? `${selectedSpin.multiplier}&times; payout` : 'The house keeps this one'}</strong>
+    <span>Bet ${amount(selectedSpin.wager)} &middot; Returned ${amount(selectedSpin.payout)} &middot; ${selectedSpin.net >= 0 ? '+' : ''}${amount(selectedSpin.net)}</span>
+    ${outcomeSummary}${frameTrail}
+    ${selectedSpin.wins.length ? `<details class="casino-result-details"><summary>View ${selectedSpin.wins.length} award detail${selectedSpin.wins.length === 1 ? '' : 's'}</summary><ul>${selectedSpin.wins.map((win) => `<li><b>${escapeHtml(win.name)}${frameCount > 1 ? ` <small>${escapeHtml(presentation.frameNoun)} ${Number(win.spinIndex ?? win.frameIndex ?? 0) + 1}</small>` : ''}</b><span>${escapeHtml(win.itemName)} &middot; ${Number(win.multiplier)}&times;</span></li>`).join('')}</ul></details>` : ''}
+  </section>` : `<p class="casino-ready" id="casino-status" role="status">${escapeHtml(presentation.ready)}</p>`;
+
+  const goldMaximum = Math.max(0, Math.min(rules.maximumGoldWager, Math.floor(state.gold)));
+  const rememberedCurrency = String(state.lastBet?.currency ?? 'gold');
+  const rememberedCryptoId = Number(/^crypto:(\d+)$/.exec(rememberedCurrency)?.[1]);
+  const rememberedCrypto = state.currencies.find((currency) => currency.id === rememberedCryptoId);
+  const selectedCurrency = rememberedCrypto ? `crypto:${rememberedCrypto.id}` : 'gold';
+  const rememberedWager = Number.isSafeInteger(Number(state.lastBet?.wager))
+    && Number(state.lastBet.wager) > 0 ? Number(state.lastBet.wager) : 1;
+  const cryptoBalanceText = (currency) => `${currency.quantity.toLocaleString('en-GB')} ${
+    escapeHtml(currency.symbol)} available${currency.voucherQuantity > 0
+    ? `, including ${currency.voucherQuantity.toLocaleString('en-GB')} voucher` : ''}`;
+  const initialMaximum = rememberedCrypto
+    ? Math.min(rules.maximumCryptoWager, rememberedCrypto.quantity) : goldMaximum;
+  const initialBalance = rememberedCrypto
+    ? cryptoBalanceText(rememberedCrypto)
+    : `${formatGold(state.gold)}g available`;
+  const currencyOptions = [
+    `<option value="gold"${selectedCurrency === 'gold' ? ' selected' : ''} data-balance="${formatGold(state.gold)}" data-max="${goldMaximum}" data-unit="gold">Gold &middot; ${formatGold(state.gold)}g available</option>`,
+    ...state.currencies.map((currency) => `<option value="crypto:${currency.id}"${selectedCurrency === `crypto:${currency.id}` ? ' selected' : ''} data-balance="${currency.quantity}" data-voucher="${Number(currency.voucherQuantity ?? 0)}" data-max="${Math.min(rules.maximumCryptoWager, currency.quantity)}" data-unit="${escapeHtml(currency.symbol)}">${escapeHtml(currency.name)} (${escapeHtml(currency.symbol)}) &middot; ${cryptoBalanceText(currency)}</option>`)
+  ].join('');
+
+  const paytable = symbols.map((symbol) => {
+    const multiplier = rules.payoutMultipliersByItemId?.[symbol.id];
+    const thingExplosive = isThingOMatic
+      && Object.hasOwn(rules.payoutMultipliersByItemId, symbol.id);
+    const isDud = isLockbox && symbol.id === rules.dudItemId;
+    const note = isThingOMatic
+      ? (thingExplosive ? '3 on a line' : 'Mine Thing · 3 on a line')
+      : isSporefall ? '3+ orthogonally connected' : isDud ? 'Soot seal · no award' : 'Awarded when locked';
+    const displayPayout = isDud ? 'DUD' : `${multiplier ?? rules.ordinaryMultiplier}&times;`;
+    return `<li class="rarity-${symbol.rarity}${symbol.id === presentation.topSymbolId ? ' is-top-symbol' : ''}"><img src="${escapeHtml(symbol.icon)}" alt=""><span><strong>${escapeHtml(symbol.name)}</strong><small>${note}</small></span><b>${displayPayout}</b></li>`;
+  }).join('');
+
+  let secondaryPaytable = '';
+  if (isThingOMatic) {
+    const shortMatchAwards = Array.from(
+      { length: 5 - rules.explosiveSmallMatchMinimum },
+      (_, index) => rules.explosiveSmallMatchMinimum + index
+    ).map((count) => `<li><strong>${count} matching</strong><span>Flat ${rules.explosiveSmallMatchMultiplier}&times; payout</span></li>`).join('');
+    const scatterAwards = Object.entries(rules.explosiveScatterCountFactors)
+      .map(([count, factor]) => `<li><strong>${count} matching</strong><span>${factor}&times; that explosive&rsquo;s line payout</span></li>`).join('');
+    secondaryPaytable = `<h3 class="casino-scatter-title">Explosive matches and scatters</h3><ul class="casino-scatter-paytable">${shortMatchAwards}${scatterAwards}</ul>`;
+  } else if (isSporefall) {
+    secondaryPaytable = `<h3 class="casino-scatter-title">Match size</h3><ul class="casino-scatter-paytable">${Object.entries(rules.matchCountFactors).map(([count, factor]) => `<li><strong>${count} matching</strong><span>${factor}&times; the shroom&rsquo;s base award</span></li>`).join('')}</ul>`;
+  }
+
+  let featureDescription;
+  let featureCards;
+  if (isThingOMatic) {
+    featureDescription = `Every special symbol awards its effect independently. Multiple copies and different specials can land together; up to ${rules.maximumBonusSpins} free respins can be added to one paid pull.`;
+    featureCards = bonusSymbols.map((symbol) => `<li class="casino-bonus-${escapeHtml(symbol.id)}"><span class="casino-bonus-glyph" aria-hidden="true">${escapeHtml(symbol.glyph)}</span><span><strong>${escapeHtml(symbol.name)}</strong><small>${escapeHtml(symbol.description)}</small></span></li>`).join('');
+  } else if (isSporefall) {
+    featureDescription = `Three or more identical shrooms joined across an edge are composted and replaced. Surviving cells never move. A chain can continue for up to ${rules.maximumCascades} cascades.`;
+    featureCards = [
+      ['3+', 'Connect a cluster', 'Three or more identical shrooms must share an edge.'],
+      ['↻', 'Compost winners', 'Only winning cells refill; every other cap survives.'],
+      ['×', 'Rising chain', `Each cascade adds ${rules.cascadeMultiplierStep}&times; to its match factor.`]
+    ].map(([glyph, name, description]) => `<li><span class="casino-bonus-glyph" aria-hidden="true">${glyph}</span><span><strong>${name}</strong><small>${description}</small></span></li>`).join('');
+  } else {
+    featureDescription = `Reveal at least ${rules.triggerMinimum} relics to begin. Relics lock while soot cells reroll; every new relic restores all ${rules.respinAttempts} attempts, up to ${rules.maximumRespins} respins.`;
+    featureCards = [
+      ['3', 'Wake the vault', 'Three relics on the first reveal start the feature.'],
+      ['▣', 'Hold every relic', 'Locked relics stay while only soot cells turn again.'],
+      ['↻', 'Reset to three', 'Any newly locked relic restores all three attempts.']
+    ].map(([glyph, name, description]) => `<li><span class="casino-bonus-glyph" aria-hidden="true">${glyph}</span><span><strong>${name}</strong><small>${description}</small></span></li>`).join('');
+  }
+
+  const rulesDescription = isThingOMatic
+    ? `Three matching symbols on any completed row, column, or diagonal pay the listed amount. Three or four copies of the same explosive anywhere on the reels also pay a flat ${rules.explosiveSmallMatchMultiplier}&times; award. Five or more pay a rarity-scaled scatter award. Line, match, scatter, jackpot, and respin awards all stack.`
+    : isSporefall
+      ? 'Connected clusters of three or more identical shrooms pay their base award multiplied by cluster size and cascade depth. Separate clusters stack in the same drop.'
+      : 'The initial reveal pays only if three relics wake the feature. Each relic pays once, when it locks; Soot-Clogged Coins never pay.';
+  const jackpotDescription = isThingOMatic
+    ? `Fill every window with the legendary explosive for a ${rules.jackpotBonusMultiplier.toLocaleString('en-GB')}&times; jackpot bonus, plus its eight line payouts and nine-symbol scatter award.`
+    : isSporefall
+      ? `Fill the first drop or a cascade with Crown of Bromo for a ${rules.jackpotBonusMultiplier.toLocaleString('en-GB')}&times; jackpot bonus, plus the nine-cap match.`
+      : `Lock a relic in every compartment before the attempts run out to add a ${rules.jackpotBonusMultiplier.toLocaleString('en-GB')}&times; vault bonus.`;
+  const jackpotOdds = isLockbox
+    ? `<div class="casino-jackpot-odds"><span>Jackpot trigger</span><strong>All nine locks</strong><small>Only newly revealed relics reset the three-attempt counter.</small></div>`
+    : `<div class="casino-jackpot-odds"><span>Jackpot trigger</span><strong>1 in ${rules.jackpotChanceDenominator.toLocaleString('en-GB')}</strong><small>${isThingOMatic ? 'Every paid spin and free respin' : 'Every paid drop'} is independently resolved by the server.</small></div>`;
+  const paylines = isThingOMatic
+    ? `<ol class="casino-paylines">${rules.paylines.map((line, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span><strong>${escapeHtml(line.name)}</strong><small>${line.cells.map((cell) => cell + 1).join(' - ')}</small></li>`).join('')}</ol>` : '';
+  const cabinetLineBank = isThingOMatic
+    ? '<div class="casino-line-bank" aria-label="Eight active paylines"><strong>8 active lines</strong><span>3 rows</span><span>3 columns</span><span>2 diagonals</span></div>'
+    : '';
+
+  const concealDuringReplay = (finalMarkup, waitingMarkup = '&mdash;') => replayActive
+    ? `<span data-casino-concealed>${waitingMarkup}</span><span data-casino-reveal hidden>${finalMarkup}</span>`
+    : finalMarkup;
+  const spinHref = (spin) => machine.key === THING_O_MATIC_KEY
+    ? `/casino?spin=${spin.id}`
+    : `/casino?machine=${encodeURIComponent(machine.key)}&amp;spin=${spin.id}`;
+  const history = state.recentSpins.map((spin) => {
+    const current = spin.id === selectedSpin?.id;
+    const finalResult = spin.jackpot
+      ? '<strong>JACKPOT</strong>' : spin.multiplier ? `${spin.multiplier}&times;` : '&mdash;';
+    return `<tr${current ? ' class="is-current"' : ''}><td><a class="text-link" href="${spinHref(spin)}">#${spin.id}</a></td><td>${new Date(spin.createdAt).toLocaleString('en-GB')}</td><td>${amount(spin.wager, spin)}</td><td>${current ? concealDuringReplay(finalResult, presentation.replayWaiting) : finalResult}</td><td>${current ? concealDuringReplay(amount(spin.payout, spin)) : amount(spin.payout, spin)}</td></tr>`;
+  }).join('');
+  const floor = state.machines.map((candidate) => {
+    const card = CASINO_PRESENTATIONS[candidate.key];
+    const href = candidate.key === THING_O_MATIC_KEY
+      ? '/casino' : `/casino?machine=${encodeURIComponent(candidate.key)}`;
+    return `<a class="casino-floor-card${candidate.active ? ' is-current' : ''}" href="${href}"${candidate.active ? ' aria-current="page"' : ''}><small>${candidate.spinCount.toLocaleString('en-GB')} pull${candidate.spinCount === 1 ? '' : 's'} recorded</small><strong>${escapeHtml(candidate.name)}</strong><span>${escapeHtml(card.pickerCopy)}</span></a>`;
+  }).join('');
+
+  return `<div class="casino-page casino-theme-${escapeHtml(presentation.theme)}">
+    <section class="page-title"><div><p class="eyebrow">When the tunnels fall quiet</p><h1>The Quiet Shift Casino</h1></div><p>${escapeHtml(presentation.pageCopy)}</p></section>
+    <nav class="casino-floor" aria-label="Choose a casino machine">${floor}</nav>
+    <dl class="casino-stats"><div><dt>Your pulls</dt><dd>${state.stats.spinCount.toLocaleString('en-GB')}</dd></div><div><dt>Best return</dt><dd>${concealDuringReplay(`${state.stats.bestMultiplier}&times;`, '?')}</dd></div><div><dt>Jackpots</dt><dd>${concealDuringReplay(state.stats.jackpotCount, '?')}</dd></div></dl>
+    <article class="casino-machine${selectedSpin?.jackpot && !replayActive ? ' has-jackpot' : ''}" id="casino-machine" data-casino-machine="${escapeHtml(machine.key)}"${replayData}${replayActive ? ' aria-busy="true"' : ''}>
+      <div class="casino-marquee"><p>${presentation.cabinetBadge ? `<small>${escapeHtml(presentation.cabinetBadge)}</small>` : ''}${escapeHtml(presentation.marquee)}</p><strong>${escapeHtml(presentation.tagline)}</strong></div>
+      <div class="casino-machine-body">
+        <div class="casino-screen-frame"><div class="casino-reel-grid" aria-label="${replayActive ? `Initial ${escapeHtml(presentation.frameNoun)} before replay` : selectedSpin ? 'Final machine result' : 'Machine preview'}">${cells}</div>${isThingOMatic ? '<i class="casino-payline casino-payline-a" aria-hidden="true"></i><i class="casino-payline casino-payline-b" aria-hidden="true"></i>' : ''}${cabinetLineBank}</div>
+        <form class="casino-controls" id="casino-spin-form" method="post" action="/casino/spin">
+          <input type="hidden" name="machine" value="${escapeHtml(machine.key)}">
+          <label><span>Stake currency</span><select id="casino-currency" name="currency">${currencyOptions}</select></label>
+          <label><span>Bet</span><input id="casino-wager" type="number" name="wager" min="1" max="${Math.max(1, initialMaximum)}" step="1" value="${rememberedWager}" required inputmode="numeric"><small id="casino-balance">${initialBalance}</small></label>
+          <button class="casino-pull" id="casino-pull"${initialMaximum < 1 || replayActive ? ' disabled' : ''}><span>${replayActive ? presentation.replayRunning : presentation.pullLabel}</span><i aria-hidden="true"></i></button>
+        </form>
+        ${result}
+      </div>
+      <footer><span>MINIMUM ${rules.minimumGoldWager.toLocaleString('en-GB')}</span><strong>PAYOUTS INCLUDE YOUR STAKE</strong><span>MAXIMUM ${rules.maximumGoldWager.toLocaleString('en-GB')}</span></footer>
+    </article>
+    <section class="casino-bonus-rules"><div><p class="eyebrow">${escapeHtml(presentation.featureEyebrow)}</p><h2>${escapeHtml(presentation.featureTitle)}</h2><p>${featureDescription}</p></div><ul>${featureCards}</ul></section>
+    <section class="casino-rules"><div><p class="eyebrow">Paytable</p><h2>${escapeHtml(presentation.rulesTitle)}</h2><p>${rulesDescription}</p><ul class="casino-paytable">${paytable}</ul>${secondaryPaytable}</div><aside><p class="eyebrow">Grand prize</p><h2>${escapeHtml(presentation.jackpotTitle)}</h2><p>${jackpotDescription}</p>${jackpotOdds}${paylines}</aside></section>
+    <section class="casino-history"><div class="section-heading"><div><p class="eyebrow">Machine ledger</p><h2>Recent pulls</h2></div></div><div class="table-scroll"><table><thead><tr><th>Pull</th><th>When</th><th>Bet</th><th>Result</th><th>Returned</th></tr></thead><tbody>${history || '<tr><td colspan="5">This machine is waiting for its first pull.</td></tr>'}</tbody></table></div></section>
+  </div><script src="/node/casino.js?v=20260830b" defer></script>`;
 }
 
 function guildPageTitle(title, description) {
@@ -1697,7 +2007,7 @@ function guildDirectoryPage(player, directory, guild = null) {
         : `<form method="post" action="/guilds/${entry.id}/join"><button>Join guild</button></form>`;
     return `<article class="guild-directory-card${joined ? ' current' : ''}"><div><p class="eyebrow">Open membership</p><h3>${escapeHtml(entry.name)}</h3><p>${entry.memberCount.toLocaleString('en-GB')} member${entry.memberCount === 1 ? '' : 's'} &middot; ${entry.itemCount.toLocaleString('en-GB')}/${entry.bankCapacity.toLocaleString('en-GB')} things banked</p></div>${action}</article>`;
   }).join('');
-  const membership = guild ? `<section class="guild-command"><header><div><p class="eyebrow">Your guild</p><h2>${escapeHtml(guild.name)}</h2></div><span>${guild.memberCount.toLocaleString('en-GB')} equal member${guild.memberCount === 1 ? '' : 's'}</span></header><p>There are no official leaders or privileged ranks. Every member can use the private channel and draw from the shared bank.</p><nav aria-label="Guild operations"><a class="button" href="/guilds/chat">Enter guild chat</a><a class="button secondary" href="/guilds/bank">Open guild bank</a></nav><div class="guild-members"><h3>Members</h3><ul>${guild.members.map((member) => `<li><a href="/miners/${encodeURIComponent(member.name)}">${escapeHtml(member.name)}</a>${member.id === player.id ? '<span>You</span>' : ''}</li>`).join('')}</ul></div><form class="guild-leave" method="post" action="/guilds/leave"><button class="secondary">Leave guild</button></form></section>` : '';
+  const membership = guild ? `<section class="guild-command"><header><div><p class="eyebrow">Your guild</p><h2>${escapeHtml(guild.name)}</h2></div><span>${guild.memberCount.toLocaleString('en-GB')} equal member${guild.memberCount === 1 ? '' : 's'}</span></header><p>There are no official leaders or privileged ranks. Every member can use the private channel and draw from the shared bank.</p><nav aria-label="Guild operations"><a class="button" href="/guilds/chat">Enter guild chat</a><a class="button secondary" href="/guilds/bank">Open guild bank</a></nav><div class="guild-members"><h3>Members</h3><ul>${guild.members.map((member) => `<li><a class="text-link" href="/miners/${encodeURIComponent(member.name)}">${escapeHtml(member.name)}</a>${member.id === player.id ? '<span>You</span>' : ''}</li>`).join('')}</ul></div><form class="guild-leave" method="post" action="/guilds/leave"><button class="secondary">Leave guild</button></form></section>` : '';
   const create = currentGuildId ? '' : `<section class="guild-create"><div><p class="eyebrow">Found a guild</p><h2>Start something</h2><p>A new guild costs ${formatGold(directory.creationCostGold)}g. It belongs equally to everyone who joins.</p></div><form method="post" action="/guilds/create"><label>Guild name <span>3-40 characters</span><input name="name" minlength="3" maxlength="40" autocomplete="off" required></label><button${player.gold < directory.creationCostGold ? ' disabled' : ''}>Start guild &middot; ${formatGold(directory.creationCostGold)}g</button></form></section>`;
   return `${guildPageTitle('Guilds', 'Leaderless groups with private chat and a shared 1,000-thing bank. Membership and bank access are open to every member.')}${membership}${create}<section class="guild-directory"><header><div><p class="eyebrow">Guild register</p><h2>All guilds</h2></div><span>${directory.guilds.length.toLocaleString('en-GB')} active</span></header><div>${guildRows || '<p class="guild-empty">No guilds yet. You can found the first one.</p>'}</div></section>`;
 }
@@ -1717,7 +2027,7 @@ function guildChatPage(player, state, catalog, historyWindowMs) {
   const composer = player.chatBanned
     ? '<div class="chat-compose chat-compose-locked" role="note"><strong>Your account is not permitted to use chat.</strong></div>'
     : `<form id="chat-compose-form" class="chat-compose guild-chat-compose" method="post" action="/guilds/chat"><label class="chat-message-control" for="guild-chat-message"><span>Message your guild</span><input id="guild-chat-message" name="body" maxlength="${Number(catalog.settings.chat_message_max_length)}" placeholder="Talk to your guild..." autocomplete="off" required></label><button class="chat-send"><span>Send</span><b aria-hidden="true">&nearr;</b></button></form>`;
-  return `<article class="chat-page guild-chat-page">${guildPageTitle('Guild chat', `${state.guild.name} has a private channel that only current members can read or use.`)}<dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Members</dt><dd>${state.guild.memberCount.toLocaleString('en-GB')}</dd></div></dl><nav class="guild-subnav" aria-label="Guild"><a href="/guilds">Guild overview</a><a aria-current="page" href="/guilds/chat">Guild chat</a><a href="/guilds/bank">Guild bank</a></nav><section class="chat-console" aria-labelledby="guild-chat-title"><header class="chat-console-header"><div><p>MT2 // Guildwire</p><h2 id="guild-chat-title">Members only</h2></div><p>New messages arrive live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Guild chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty"><span aria-hidden="true">&#9671;</span><h3>Your channel is quiet.</h3><p>Break the silence.</p></div>'}</div>${composer}</section></article>`;
+  return `<article class="chat-page guild-chat-page">${guildPageTitle('Guild chat', `${state.guild.name} has a private channel that only current members can read or use.`)}<dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Members</dt><dd>${state.guild.memberCount.toLocaleString('en-GB')}</dd></div></dl><nav class="guild-subnav" aria-label="Guild"><a class="text-link" href="/guilds">Guild overview</a><a class="text-link" aria-current="page" href="/guilds/chat">Guild chat</a><a class="text-link" href="/guilds/bank">Guild bank</a></nav><section class="chat-console" aria-labelledby="guild-chat-title"><header class="chat-console-header"><div><p>MT2 // Guildwire</p><h2 id="guild-chat-title">Members only</h2></div><p>New messages arrive live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Guild chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty"><span aria-hidden="true">&#9671;</span><h3>Your channel is quiet.</h3><p>Break the silence.</p></div>'}</div>${composer}</section></article>`;
 }
 
 function guildBankPage(bank, catalog) {
@@ -1741,9 +2051,9 @@ function guildBankPage(bank, catalog) {
   const city = catalogCityForId(catalog, bank.cityId);
   const capital = catalogCityForId(catalog, bank.capitalCityId);
   const locationNotice = transferLocked
-    ? `<aside class="guild-bank-location-warning"><strong>Transfers locked in ${escapeHtml(city.name)}</strong><p>Travel to this region's capital, <a href="/map#city-${capital.id}">${escapeHtml(capital.name)}</a>, to deposit or withdraw things.</p></aside>`
+    ? `<aside class="guild-bank-location-warning"><strong>Transfers locked in ${escapeHtml(city.name)}</strong><p>Travel to this region's capital, <a class="text-link" href="/map#city-${capital.id}">${escapeHtml(capital.name)}</a>, to deposit or withdraw things.</p></aside>`
     : `<p class="guild-bank-location-ready">You are in ${escapeHtml(capital.name)}, this region's capital. Guild bank transfers are available.</p>`;
-  return `${guildPageTitle('Guild bank', `${bank.guild.name} shares a 1,000-thing bank with equal access for every member. Transfers are available only from a region's capital.`)}<nav class="guild-subnav" aria-label="Guild"><a href="/guilds">Guild overview</a><a href="/guilds/chat">Guild chat</a><a aria-current="page" href="/guilds/bank">Guild bank</a></nav>${locationNotice}<section class="guild-bank-meter"><div><p class="eyebrow">Shared capacity</p><strong>${bank.guild.itemCount.toLocaleString('en-GB')} / ${bank.guild.bankCapacity.toLocaleString('en-GB')}</strong><span>${free.toLocaleString('en-GB')} free</span></div><progress max="${bank.guild.bankCapacity}" value="${bank.guild.itemCount}">${bank.guild.itemCount}/${bank.guild.bankCapacity}</progress></section><section class="guild-bank-section"><header><div><p class="eyebrow">Shared stock</p><h2>Available to all members</h2></div><span>${bank.items.length.toLocaleString('en-GB')} type${bank.items.length === 1 ? '' : 's'}</span></header><div class="item-grid">${bankCards || '<p class="guild-empty">The guild bank is empty.</p>'}</div></section><section class="guild-bank-section"><header><div><p class="eyebrow">Your local inventory</p><h2>${transferLocked ? `Stored in ${escapeHtml(city.name)}` : `Deposit from ${escapeHtml(city.name)}`}</h2></div><span>${free.toLocaleString('en-GB')} bank spaces free</span></header><div class="item-grid">${localCards || '<p class="guild-empty">You have nothing in this city to deposit.</p>'}</div></section>`;
+  return `${guildPageTitle('Guild bank', `${bank.guild.name} shares a 1,000-thing bank with equal access for every member. Transfers are available only from a region's capital.`)}<nav class="guild-subnav" aria-label="Guild"><a class="text-link" href="/guilds">Guild overview</a><a class="text-link" href="/guilds/chat">Guild chat</a><a class="text-link" aria-current="page" href="/guilds/bank">Guild bank</a></nav>${locationNotice}<section class="guild-bank-meter"><div><p class="eyebrow">Shared capacity</p><strong>${bank.guild.itemCount.toLocaleString('en-GB')} / ${bank.guild.bankCapacity.toLocaleString('en-GB')}</strong><span>${free.toLocaleString('en-GB')} free</span></div><progress max="${bank.guild.bankCapacity}" value="${bank.guild.itemCount}">${bank.guild.itemCount}/${bank.guild.bankCapacity}</progress></section><section class="guild-bank-section"><header><div><p class="eyebrow">Shared stock</p><h2>Available to all members</h2></div><span>${bank.items.length.toLocaleString('en-GB')} type${bank.items.length === 1 ? '' : 's'}</span></header><div class="item-grid">${bankCards || '<p class="guild-empty">The guild bank is empty.</p>'}</div></section><section class="guild-bank-section"><header><div><p class="eyebrow">Your local inventory</p><h2>${transferLocked ? `Stored in ${escapeHtml(city.name)}` : `Deposit from ${escapeHtml(city.name)}`}</h2></div><span>${free.toLocaleString('en-GB')} bank spaces free</span></header><div class="item-grid">${localCards || '<p class="guild-empty">You have nothing in this city to deposit.</p>'}</div></section>`;
 }
 
 function localItemGoldValue(item, catalog, cityId) {
@@ -1831,9 +2141,13 @@ function inventoryPage(player, catalog, meldItemNeeds = {}) {
     const regionQuantity = cities.reduce((sum, city) => sum + city.quantity, 0);
     const citySections = cities.map((location) => {
       const current = location.city.id === player.cityId;
+      const regionalCapital = isRegionalCapital(catalog, location.city.id);
+      const capitalIcon = regionalCapital
+        ? `<span class="capital-city-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>`
+        : '';
       const switchCity = current ? '<strong class="active-state">Selected city</strong>'
         : `<form method="post" action="/cities/${location.city.id}/select"><button class="secondary">Switch to manage</button></form>`;
-      return `<section class="inventory-city${current ? ' current' : ''}" data-city-id="${location.city.id}"><header><div><p class="eyebrow">City</p><h3>${escapeHtml(location.city.name)}</h3></div><p>${location.quantity.toLocaleString('en-GB')} thing${location.quantity === 1 ? '' : 's'} · ${location.entries.length.toLocaleString('en-GB')} type${location.entries.length === 1 ? '' : 's'}</p>${switchCity}</header><div class="item-grid">${cardsForLocation(location)}</div></section>`;
+      return `<section class="inventory-city${current ? ' current' : ''}" data-city-id="${location.city.id}"><header><div><p class="eyebrow">${regionalCapital ? 'Regional capital' : 'City'}</p><h3>${capitalIcon}${escapeHtml(location.city.name)}</h3></div><p>${location.quantity.toLocaleString('en-GB')} thing${location.quantity === 1 ? '' : 's'} · ${location.entries.length.toLocaleString('en-GB')} type${location.entries.length === 1 ? '' : 's'}</p>${switchCity}</header><div class="item-grid">${cardsForLocation(location)}</div></section>`;
     }).join('');
     return `<section class="inventory-region" data-region-id="${region.id}"><header><div><p class="eyebrow">Region</p><h2>${escapeHtml(region.name)}</h2></div><p>${regionQuantity.toLocaleString('en-GB')} thing${regionQuantity === 1 ? '' : 's'} across ${cities.length.toLocaleString('en-GB')} cit${cities.length === 1 ? 'y' : 'ies'}</p></header>${citySections}</section>`;
   }).join('');
@@ -1869,7 +2183,7 @@ function dwarvesPage(report, catalog, currentTime) {
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">${catalog.dwarfTiers.length} rarity tiers</p><h1>Dwarves</h1></div><p>Every stored Dwarf finds one thing in its database-configured rarity range, using only mine types sold in its city, after a random delay within ${maximumDelay}.</p></section>
     <section class="dwarf-rules"><h2>Your working Dwarves</h2><div class="item-grid">${dwarfRows || '<p>You do not have a Dwarf stored in a city.</p>'}</div><p>${riskCopy} ${escapeHtml(tierRules)}.</p></section>
-    <section><h2>Stowaways</h2><p>Dwarves of every rarity may stow away on a departing land or sea vehicle with free cargo space and a matching combat class. Higher-rarity stowaways are progressively rarer. An uncaptured Dwarf leaves at arrival; one pillaged by an opponent stays with its captor. Dwarves drown with a sinking ship.</p></section>`;
+    <section><h2>Stowaways</h2><p>Dwarves of every rarity may stow away on a departing land or sea vehicle with free cargo space and a matching combat class. Higher-rarity stowaways are progressively rarer. An uncaptured Dwarf leaves at arrival or escapes if its road vehicle is destroyed; one pillaged by an opponent stays with its captor. Dwarves drown with a sinking ship.</p></section>`;
 }
 
 function autoRecyclePage(report, catalog) {
@@ -1888,7 +2202,7 @@ function autoRecyclePage(report, catalog) {
   const hasSuggested = report.candidates.some((candidate) => candidate.suggested > 0);
   const lockedDetails = [report.protectedStored ? `${report.protectedStored} factory-made stored` : '',
     report.fittedOrCargo ? `${report.fittedOrCargo} fitted to mines or carried by vehicles` : ''].filter(Boolean).join(' and ');
-  return `<section class="page-title"><div><p class="eyebrow">Inventory control</p><h1>Auto-Recycle</h1></div><a href="/inventory">Back to things</a></section><p>${status}</p>
+  return `<section class="page-title"><div><p class="eyebrow">Inventory control</p><h1>Auto-Recycle</h1></div><a class="text-link" href="/inventory">Back to things</a></section><p>${status}</p>
     ${rows ? `<form class="auto-recycle-form" method="post" action="/mines/auto-recycle"><div class="auto-recycle-list">${rows}</div><button id="auto-recycle-submit"${hasSuggested ? '' : ' disabled'}>Recycle selected into Ore scraps</button></form><script src="/node/auto-recycle.js" defer></script>` : '<p>No recyclable things are stored in any city.</p>'}
     ${report.unresolved ? `<p class="capacity-warning">Even after recycling every available stored thing, you would remain ${report.unresolved} over the limit${lockedDetails ? ` because ${escapeHtml(lockedDetails)} things cannot be recycled here` : ''}.</p>` : ''}`;
 }
@@ -2116,7 +2430,7 @@ function factoryMarketPage(player, market, cityName, catalog) {
     <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.listings, 'buy', rental ? 'Rent' : 'Buy') || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
     <section><h2>Bids</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.bids, 'sell', rental ? 'Rent out' : 'Sell') || '<tr><td colspan="4">No bids.</td></tr>'}</tbody></table></div></section>
     <section><h2>Recent contracts</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Seller</th><th>Quantity</th><th>Each</th></tr></thead><tbody>${sales || '<tr><td colspan="4">No contracts yet.</td></tr>'}</tbody></table></div></section>
-    <p><a href="/factories">Back to factories</a></p>`;
+    <p><a class="text-link" href="/factories">Back to factories</a></p>`;
 }
 
 function playerMarketPage(market, cityName, catalog) {
@@ -2133,14 +2447,14 @@ function playerMarketPage(market, cityName, catalog) {
         : `${formatGold(order.price)}g`;
       return `<tr><td>${subject}</td><td>${order.quantity}</td><td>${payment}</td></tr>`;
     }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} market</p><h1>${escapeHtml(market.ownerName)}'s Listings and Bids</h1></div><a href="/miners/${encodeURIComponent(market.ownerName)}">Back to profile</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} market</p><h1>${escapeHtml(market.ownerName)}'s Listings and Bids</h1></div><a class="text-link" href="/miners/${encodeURIComponent(market.ownerName)}">Back to profile</a></section>
     <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Market</th><th>Quantity</th><th>Each</th></tr></thead><tbody>${rows('sell') || '<tr><td colspan="3">No listings in this city.</td></tr>'}</tbody></table></div></section>
     <section><h2>Bids</h2><div class="table-scroll"><table><thead><tr><th>Market</th><th>Quantity</th><th>Each</th></tr></thead><tbody>${rows('buy') || '<tr><td colspan="3">No bids in this city.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function minersPage(player, miners, catalog, query = '', ignores = []) {
   const ignoredIds = new Set(ignores.map((ignored) => ignored.id));
-  const cards = miners.map((miner) => `<article class="miner-card"><strong class="miner-meld-rank" style="--miner-chat-color:#${miner.chatColor}" aria-label="Meld rank ${miner.meldRank}, ${miner.meldCount} melds"><span>#${miner.meldRank}</span><b>${miner.meldCount.toLocaleString('en-GB')} melds</b></strong><div class="miner-card-copy"><h3><a href="/miners/${encodeURIComponent(miner.name)}">${escapeHtml(miner.name)}</a></h3><p>${escapeHtml(catalogCityForId(catalog, miner.cityId).name)} · ${miner.mineCount} mines · ${miner.itemCount} things</p></div><div class="miner-actions"><a class="button secondary" href="/messages/${encodeURIComponent(miner.name)}">Message</a>${miner.id === player.id ? '' : `<form method="post" action="/chat/ignores/${miner.id}"><input type="hidden" name="ignored" value="${ignoredIds.has(miner.id) ? '0' : '1'}"><button class="secondary">${ignoredIds.has(miner.id) ? 'Unignore chat' : 'Ignore chat'}</button></form>`}</div></article>`).join('');
+  const cards = miners.map((miner) => `<article class="miner-card"><strong class="miner-meld-rank" style="--miner-chat-color:#${miner.chatColor}" aria-label="Meld rank ${miner.meldRank}, ${miner.meldCount} melds"><span>#${miner.meldRank}</span><b>${miner.meldCount.toLocaleString('en-GB')} melds</b></strong><div class="miner-card-copy"><h3><a class="text-link" href="/miners/${encodeURIComponent(miner.name)}">${escapeHtml(miner.name)}</a></h3><p>${escapeHtml(catalogCityForId(catalog, miner.cityId).name)} · ${miner.mineCount} mines · ${miner.itemCount} things</p></div><div class="miner-actions"><a class="button secondary" href="/messages/${encodeURIComponent(miner.name)}">Message</a>${miner.id === player.id ? '' : `<form method="post" action="/chat/ignores/${miner.id}"><input type="hidden" name="ignored" value="${ignoredIds.has(miner.id) ? '0' : '1'}"><button class="secondary">${ignoredIds.has(miner.id) ? 'Unignore chat' : 'Ignore chat'}</button></form>`}</div></article>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">Community · ranked by Melds</p><h1>Miners</h1></div><p>Find other miners, inspect their discoveries, and start a private conversation.</p></section>
     <form class="market-search" method="get" action="/miners"><label>Find a miner<input name="q" value="${escapeHtml(query)}" placeholder="Miner name"></label><button>Search</button></form>
     <div class="miner-list">${cards || '<p>No matching miners.</p>'}</div>`;
@@ -2159,7 +2473,7 @@ function adminTabs(active = 'dashboard') {
     ['audit', '/admin/audit', 'Audit log']
   ];
   return `<nav class="rating-tabs admin-tabs" aria-label="Administration">${links.map(([key, href, label]) =>
-    `<a href="${href}"${active === key ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
+    `<a class="text-link" href="${href}"${active === key ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
 }
 
 function adminDashboardPage(data) {
@@ -2173,14 +2487,14 @@ function adminDashboardPage(data) {
 }
 
 function adminPlayersPage(players, query = '') {
-  const rows = players.map((subject) => `<tr><td><a href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a>${subject.authority > 0 ? ' <strong>Admin</strong>' : ''}</td><td>${escapeHtml(subject.email || 'Not supplied')}<br><small>${subject.email_verified_at === null ? 'Verification pending' : 'Verified'}</small></td><td>${subject.mine_count}</td><td>${subject.item_count}</td><td>${subject.credits}c / ${formatGold(subject.gold)}g</td><td>${subject.suspended ? 'Suspended' : subject.chatBanned || subject.pmBanned ? 'Restricted' : subject.email_verified_at === null ? 'Email locked' : 'Active'}</td></tr>`).join('');
+  const rows = players.map((subject) => `<tr><td><a class="text-link" href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a>${subject.authority > 0 ? ' <strong>Admin</strong>' : ''}</td><td>${escapeHtml(subject.email || 'Not supplied')}<br><small>${subject.email_verified_at === null ? 'Verification pending' : 'Verified'}</small></td><td>${subject.mine_count}</td><td>${subject.item_count}</td><td>${subject.credits}c / ${formatGold(subject.gold)}g</td><td>${subject.suspended ? 'Suspended' : subject.chatBanned || subject.pmBanned ? 'Restricted' : subject.email_verified_at === null ? 'Email locked' : 'Active'}</td></tr>`).join('');
   return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Moderation</p><h1>Miners</h1></div></section><form class="market-search" method="get"><label>Search<input name="q" value="${escapeHtml(query)}" placeholder="Name or email"></label><button>Search</button></form><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Email</th><th>Mines</th><th>Things</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No matching miners.</td></tr>'}</tbody></table></div>`;
 }
 
 function adminPlayerPage(subject, catalog) {
   const moderation = (field, active, label) => `<form method="post" action="/admin/players/${subject.id}/moderation"><input type="hidden" name="field" value="${field}"><input type="hidden" name="enabled" value="${active ? 0 : 1}"><button class="${active ? 'secondary' : ''}">${active ? `Lift ${label}` : label}</button></form>`;
   const itemOptions = catalog.items.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
-  return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Miner administration</p><h1>${escapeHtml(subject.name)}</h1></div><a href="/miners/${encodeURIComponent(subject.name)}">Public profile</a></section><div class="admin-metrics"><article><strong>${subject.credits}</strong><span>Credits</span></article><article><strong>${formatGold(subject.gold)}g</strong><span>Gold</span></article><article><strong>${subject.mine_count}</strong><span>Mines</span></article><article><strong>${subject.item_count}</strong><span>Things</span></article></div><section><h2>Email access</h2><p>${escapeHtml(subject.email || 'No address supplied')} · <strong>${subject.email_verified_at === null ? 'Verification pending — game locked' : `Verified ${new Date(subject.email_verified_at).toLocaleString('en-GB')}`}</strong></p></section><section><h2>Moderation</h2><div class="admin-actions">${moderation('suspended', Boolean(subject.suspended), 'Suspend account')}${moderation('chat', Boolean(subject.chat_banned), 'Ban public chat')}${moderation('pm', Boolean(subject.pm_banned), 'Ban private messages')}</div></section><section><h2>Grants</h2><div class="trade-forms"><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="credits"><label>Credits<input type="number" name="amount" min="1" required></label><button>Grant credits</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="gold"><label>Gold (whole units)<input type="number" name="amount" min="1" required></label><button>Grant gold</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="item"><label>Thing<select name="itemId">${itemOptions}</select></label><label>Quantity<input type="number" name="amount" min="1" required></label><button>Grant thing</button></form></div></section>`;
+  return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Miner administration</p><h1>${escapeHtml(subject.name)}</h1></div><a class="text-link" href="/miners/${encodeURIComponent(subject.name)}">Public profile</a></section><div class="admin-metrics"><article><strong>${subject.credits}</strong><span>Credits</span></article><article><strong>${formatGold(subject.gold)}g</strong><span>Gold</span></article><article><strong>${subject.mine_count}</strong><span>Mines</span></article><article><strong>${subject.item_count}</strong><span>Things</span></article></div><section><h2>Email access</h2><p>${escapeHtml(subject.email || 'No address supplied')} · <strong>${subject.email_verified_at === null ? 'Verification pending — game locked' : `Verified ${new Date(subject.email_verified_at).toLocaleString('en-GB')}`}</strong></p></section><section><h2>Moderation</h2><div class="admin-actions">${moderation('suspended', Boolean(subject.suspended), 'Suspend account')}${moderation('chat', Boolean(subject.chat_banned), 'Ban public chat')}${moderation('pm', Boolean(subject.pm_banned), 'Ban private messages')}</div></section><section><h2>Grants</h2><div class="trade-forms"><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="credits"><label>Credits<input type="number" name="amount" min="1" required></label><button>Grant credits</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="gold"><label>Gold (whole units)<input type="number" name="amount" min="1" required></label><button>Grant gold</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="item"><label>Thing<select name="itemId">${itemOptions}</select></label><label>Quantity<input type="number" name="amount" min="1" required></label><button>Grant thing</button></form></div></section>`;
 }
 
 function adminAnnouncementPage() {
@@ -2257,7 +2571,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
       return `<li><a class="thing-link rarity-${catalogItem?.rarity ?? 0}" href="/items/${item.itemId}">${item.quantity > 1 ? `${item.quantity}× ` : ''}${escapeHtml(item.name)}</a></li>`;
     }).join('');
     const owner = transport.npc ? `<strong>${escapeHtml(transport.playerName)}</strong>`
-      : `<a href="/admin/players/${transport.playerId}">${escapeHtml(transport.playerName)}</a>`;
+      : `<a class="text-link" href="/admin/players/${transport.playerId}">${escapeHtml(transport.playerName)}</a>`;
     const flags = [transport.ghostId ? (transport.ghostKind === 'ship' ? 'Ghost Ship' : 'Ghost Rider') : '',
       transport.creatureId ? `Pursuing ${transport.creatureName}` : '',
       transport.interMap ? 'Inter-map' : '', transport.damaged ? 'Damaged' : '',
@@ -2280,7 +2594,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
   }).join('');
   const activeTransportCount = state.transports.length + state.creatures.length;
   const allTrafficRows = `${trafficRows}${creatureTrafficRows}`;
-  return `${adminTabs('world')}<section class="page-title"><div><p class="eyebrow">Live world control</p><h1>World control</h1></div><a href="/events">Player view</a></section>
+  return `${adminTabs('world')}<section class="page-title"><div><p class="eyebrow">Live world control</p><h1>World control</h1></div><a class="text-link" href="/events">Player view</a></section>
     <section><h2>The restless dead</h2><p>Ghosts normally rise from vehicles destroyed in combat, storms, or creature attacks. Administrative ghosts use the same route movement, combat classes, patrol orders, and spectral bounty.</p><div class="trade-forms">${ghostForm('rider', 'Ghost Rider', 'land')}${ghostForm('ship', 'Ghost Ship', 'sea')}</div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Tier</th><th>Route</th><th>Risen</th></tr></thead><tbody>${ghostRows || '<tr><td colspan="5">No ghosts currently haunt the routes.</td></tr>'}</tbody></table></div></section>
     <section><div class="section-heading"><div><h2>Ghost-hunter test fleet</h2><p>${Number(state.hunterFleets.players)} miners currently hold ${Number(state.hunterFleets.vehicles)} provisioned craft.</p></div></div><p>Give every real account one fully armed land vehicle and ship at each of the six tiers, distributed among random compatible cities. The operation is idempotent.</p><form method="post" action="/admin/world/ghost-fleets"><button>Provision all hunter fleets</button></form></section>
     <section id="traffic"><div class="section-heading"><div><p class="eyebrow">Administrator only</p><h2>Transports in transit</h2><p>${activeTransportCount} active journey${activeTransportCount === 1 ? '' : 's'}, including player, ghost, and creature route actors. This board updates when transport state changes.</p></div></div><div class="table-scroll"><table class="admin-traffic-table"><thead><tr><th>Owner</th><th>Transport and loadout</th><th>Journey</th><th>Progress</th><th>Orders</th></tr></thead><tbody>${allTrafficRows || '<tr><td colspan="5">No transports are currently in transit.</td></tr>'}</tbody></table></div></section>
@@ -2360,9 +2674,9 @@ function profilePage(subject, catalog, ownProfile, currentTime, filters = {}, kn
     return `<li><img class="table-icon" src="${escapeHtml(type.icon)}" alt=""> ${escapeHtml(type.name)} Mine · ${escapeHtml(catalogCityForId(catalog, mine.cityId).name)}</li>`;
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">Miner profile</p><h1>${escapeHtml(subject.name)}</h1></div>${editor}</section>
-    <section class="profile-about">${avatarStack(subject.avatarLayers, `${subject.name} avatar`)}<div><h2>About</h2><p><strong>${escapeHtml(subject.professionTitle)} ${escapeHtml(profession.name)}</strong> · ${subject.meldIds.length} melds · <a href="/melds/compare/${encodeURIComponent(subject.name)}">Compare melds</a></p>${description}${ownProfile ? '<p><a class="button secondary" href="/avatar">Edit avatar</a></p>' : ''}</div></section>
+    <section class="profile-about">${avatarStack(subject.avatarLayers, `${subject.name} avatar`)}<div><h2>About</h2><p><strong>${escapeHtml(subject.professionTitle)} ${escapeHtml(profession.name)}</strong> · ${subject.meldIds.length} melds · <a class="text-link" href="/melds/compare/${encodeURIComponent(subject.name)}">Compare melds</a></p>${description}${ownProfile ? '<p><a class="button secondary" href="/avatar">Edit avatar</a></p>' : ''}</div></section>
     ${subject.showMines === false ? '' : `<section><h2>Mines</h2><ul>${mines || '<li>No mines.</li>'}</ul></section>`}
-    <section><h2>Inventory</h2><p>${filteredCount} matching things · ${globalCount} globally.</p>${inventoryFilters}${armory ? `<p class="muted">An active ${escapeHtml(armoryGadget.displayName)} conceals this miner’s weapons and fittings.</p>` : ''}<div class="item-grid">${things || '<p>No matching things.</p>'}</div>${!filters.loadAll && inventory.length > visibleInventory.length ? `<p><a href="?function=${encodeURIComponent(selectedFunction)}&mineType=${selectedMineTypeId ?? ''}&city=${selectedCityId ?? ''}&all=1">Show ${inventory.length - visibleInventory.length} more item types</a></p>` : ''}</section>`;
+    <section><h2>Inventory</h2><p>${filteredCount} matching things · ${globalCount} globally.</p>${inventoryFilters}${armory ? `<p class="muted">An active ${escapeHtml(armoryGadget.displayName)} conceals this miner’s weapons and fittings.</p>` : ''}<div class="item-grid">${things || '<p>No matching things.</p>'}</div>${!filters.loadAll && inventory.length > visibleInventory.length ? `<p><a class="text-link" href="?function=${encodeURIComponent(selectedFunction)}&mineType=${selectedMineTypeId ?? ''}&city=${selectedCityId ?? ''}&all=1">Show ${inventory.length - visibleInventory.length} more item types</a></p>` : ''}</section>`;
 }
 
 function accountPage(player, catalog, googleLogin = null) {
@@ -2372,7 +2686,7 @@ function accountPage(player, catalog, googleLogin = null) {
       ? `<p><strong class="verified-state">Linked</strong> ${escapeHtml(googleLogin.identity.email)}</p><p>You can use Google or your miner name and password to sign in.</p>`
       : '<p>Link a Google account for one-click login. This does not remove your password.</p><a class="button secondary" href="/auth/google">Link Google account</a>'}</section>`
     : '';
-  return `<section class="page-title"><div><p class="eyebrow">Miner settings</p><h1>Account</h1></div><a href="/miners/${encodeURIComponent(player.name)}">View profile</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">Miner settings</p><h1>Account</h1></div><a class="text-link" href="/miners/${encodeURIComponent(player.name)}">View profile</a></section>
     <section class="account-grid">
       <form method="post" action="/account/password"><h2>Change password</h2><label>Old password<input type="password" name="oldPassword" autocomplete="current-password" required></label><label>New password<input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label><label>Confirm new password<input type="password" name="confirmPassword" minlength="${passwordMinimum}" autocomplete="new-password" required></label><button>Change password</button></form>
       <form method="post" action="/account/email"><h2>Verified email</h2><p><strong class="verified-state">Verified</strong> ${escapeHtml(player.email)}</p><p>Changing this address locks the account until the replacement address is verified.</p><label>New email<input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" value="${escapeHtml(player.email)}" autocomplete="email" required></label><label>Current password<input type="password" name="password" autocomplete="current-password" required></label><button>Change and verify email</button></form>
@@ -2400,7 +2714,7 @@ function avatarEditorPage(player, catalog) {
     const none = required ? '' : `<label class="item-picker-none"><input type="radio" name="type_${type.id}" value=""${selected.has(type.id) ? '' : ' checked'}> No ${escapeHtml(type.name.toLowerCase())}</label>`;
     return `<fieldset class="item-picker avatar-item-picker"><legend>${escapeHtml(type.name)}</legend>${none}<div class="item-picker-grid">${options || '<p>No matching avatar items in your home city.</p>'}</div></fieldset>`;
   }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Profile</p><h1>Avatar Editor</h1></div><a href="/miners/${encodeURIComponent(player.name)}">Back to profile</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">Profile</p><h1>Avatar Editor</h1></div><a class="text-link" href="/miners/${encodeURIComponent(player.name)}">Back to profile</a></section>
     <section class="avatar-editor">${avatarStack(player.avatarLayers, 'Current avatar')}<form method="post" action="/avatar"><p>Avatar things must be stored in your home city. A border, background, and model are required; gendered layers must match.</p>${groups}<button>Save avatar</button></form></section>`;
 }
 
@@ -2408,8 +2722,8 @@ function meldComparisonPage(player, other, catalog) {
   const own = new Set(player.meldIds);
   const theirs = new Set(other.meldIds);
   const rows = catalog.melds.filter((meld) => meld.public && (own.has(meld.id) || theirs.has(meld.id)))
-    .map((meld) => `<tr><td><a href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></td><td>${own.has(meld.id) ? 'Yes' : '—'}</td><td>${theirs.has(meld.id) ? 'Yes' : '—'}</td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Meld comparison</p><h1>${escapeHtml(player.name)} and ${escapeHtml(other.name)}</h1></div><a href="/miners/${encodeURIComponent(other.name)}">Back to profile</a></section><table><thead><tr><th>Meld</th><th>You</th><th>${escapeHtml(other.name)}</th></tr></thead><tbody>${rows || '<tr><td colspan="3">Neither miner has a public meld yet.</td></tr>'}</tbody></table>`;
+    .map((meld) => `<tr><td><a class="text-link" href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></td><td>${own.has(meld.id) ? 'Yes' : '—'}</td><td>${theirs.has(meld.id) ? 'Yes' : '—'}</td></tr>`).join('');
+  return `<section class="page-title"><div><p class="eyebrow">Meld comparison</p><h1>${escapeHtml(player.name)} and ${escapeHtml(other.name)}</h1></div><a class="text-link" href="/miners/${encodeURIComponent(other.name)}">Back to profile</a></section><table><thead><tr><th>Meld</th><th>You</th><th>${escapeHtml(other.name)}</th></tr></thead><tbody>${rows || '<tr><td colspan="3">Neither miner has a public meld yet.</td></tr>'}</tbody></table>`;
 }
 
 const MESSAGE_TYPE_FILTERS = [
@@ -2440,7 +2754,7 @@ function messagesPage(player, messages, catalog, filter = 'all', type = 'all') {
     const other = message.senderName || 'MineThings';
     const privateMessage = !message.system && message.messageType === 'PM';
     const sender = privateMessage
-      ? `<a href="/messages/${encodeURIComponent(other)}">${escapeHtml(other)}</a>`
+      ? `<a class="text-link" href="/messages/${encodeURIComponent(other)}">${escapeHtml(other)}</a>`
       : escapeHtml(other);
     const subject = message.subject || `${message.messageType} message`;
     const heading = privateMessage
@@ -2503,7 +2817,7 @@ function messageBodyHtml(body) {
     html += escapeHtml(text.slice(offset, match.index));
     const path = safeInternalMessagePath(match[1], true);
     html += path
-      ? `<a href="${escapeHtml(path)}">${escapeHtml(match[2])}</a>`
+      ? `<a class="text-link" href="${escapeHtml(path)}">${escapeHtml(match[2])}</a>`
       : escapeHtml(match[2]);
     offset = match.index + match[0].length;
   }
@@ -2789,7 +3103,7 @@ function messageItemGroupsHtml(message, catalog) {
     return `<section class="message-item-group" aria-labelledby="message-items-${message.id}-${groupIndex}"><header><h2 id="message-items-${message.id}-${groupIndex}">${escapeHtml(group.label)}</h2><span>${total.toLocaleString('en-GB')} ${noun}${total === 1 ? '' : 's'}</span></header><ul>${group.items.map(({ item, quantity }) => {
       const displayQuantity = quantity.toLocaleString('en-GB');
       const path = item.path ?? `/items/${item.id}`;
-      return `<li class="message-item rarity-${item.rarity}${group.kind === 'crypto' ? ' message-item-crypto' : ''}"><a href="${escapeHtml(path)}"><img src="${escapeHtml(item.icon)}" alt=""><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.rarityName)}</small></span><b aria-label="Quantity ${displayQuantity}">${displayQuantity}×</b></a></li>`;
+      return `<li class="message-item rarity-${item.rarity}${group.kind === 'crypto' ? ' message-item-crypto' : ''}"><a class="text-link" href="${escapeHtml(path)}"><img src="${escapeHtml(item.icon)}" alt=""><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.rarityName)}</small></span><b aria-label="Quantity ${displayQuantity}">${displayQuantity}×</b></a></li>`;
     }).join('')}</ul></section>`;
   }).join('')}</div>`;
 }
@@ -2868,7 +3182,7 @@ function messageDetailPage(message, catalog) {
   const retention = message.kept
     ? '<strong class="message-kept">Kept: this message will not expire.</strong>'
     : `<span class="message-expiry">Permanently deletes on ${new Date(message.createdAt + retentionMs).toLocaleString('en-GB')}.</span>`;
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(type)}</p><h1>${escapeHtml(subject)}</h1></div><a href="/messages">Back to messages</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(type)}</p><h1>${escapeHtml(subject)}</h1></div><a class="text-link" href="/messages">Back to messages</a></section>
     <article class="message-detail">
       <dl class="message-detail-meta"><div><dt>From</dt><dd>${escapeHtml(sender)}</dd></div><div><dt>Sent</dt><dd><time datetime="${new Date(message.createdAt).toISOString()}">${new Date(message.createdAt).toLocaleString('en-GB')}</time></dd></div><div><dt>Retention</dt><dd>${retention}</dd></div></dl>
       <div class="message-detail-body">${messageBodyHtml(conciseMessageBody(message))}</div>
@@ -2890,8 +3204,8 @@ function conversationPage(conversation, catalog) {
     : conversation.blockedOther
       ? '<p>Unblock this miner before sending another message.</p>'
       : `<form class="message-compose" method="post" action="/messages/${encodeURIComponent(conversation.other.name)}"><label>Message<textarea name="body" maxlength="${Number(catalog.settings.private_message_max_length)}" rows="5" required></textarea></label><button>Send message</button></form>`;
-  return `<section class="page-title"><div><p class="eyebrow">Conversation</p><h1>${escapeHtml(conversation.other.name)}</h1></div><div><a href="/miners/${encodeURIComponent(conversation.other.name)}">View profile</a>${block}</div></section>
-    <p class="message-retention-notice">Private messages also expire after ${retentionDays} days. Received messages can be protected from your <a href="/messages?type=PM">Inbox</a>.</p>
+  return `<section class="page-title"><div><p class="eyebrow">Conversation</p><h1>${escapeHtml(conversation.other.name)}</h1></div><div><a class="text-link" href="/miners/${encodeURIComponent(conversation.other.name)}">View profile</a>${block}</div></section>
+    <p class="message-retention-notice">Private messages also expire after ${retentionDays} days. Received messages can be protected from your <a class="text-link" href="/messages?type=PM">Inbox</a>.</p>
     <div class="conversation">${messages || '<p>No messages in this conversation yet.</p>'}</div>
     ${compose}`;
 }
@@ -2909,6 +3223,15 @@ function radarText(route, catalog) {
   if (!route.radar) return '';
   return ` · ${catalogGadgetForBehavior(catalog, 'radar').displayName}: ${
     route.radar.map((entry) => `${entry.label} ${entry.count}`).join(', ')}`;
+}
+
+function selectableShuttleMineTypes(catalog) {
+  const hiddenMineTypeIds = new Set(
+    (catalog.settings.profile_hidden_mine_type_ids ?? []).map(Number)
+  );
+  return catalog.mineTypes.filter((mineType) => !hiddenMineTypeIds.has(Number(mineType.id)))
+    .sort((first, second) => first.name.localeCompare(second.name, 'en')
+      || Number(first.id) - Number(second.id));
 }
 
 function vehicleShuttleSummary(player, catalog, vehicle) {
@@ -2930,8 +3253,17 @@ function vehicleShuttleSummary(player, catalog, vehicle) {
     : returning
       ? `Returning to ${originLabel}`
       : `Outbound to ${destinationLabel} with ${loadedThings} thing${loadedThings === 1 ? '' : 's'}`;
+  const categoryNames = shuttle.mineTypeIds === null
+    ? []
+    : shuttle.mineTypeIds.map((mineTypeId) =>
+      catalogMineTypeForId(catalog, mineTypeId).name);
+  const cargoCategories = shuttle.mineTypeIds === null
+    ? 'All mine categories'
+    : new Intl.ListFormat('en-GB', { style: 'long', type: 'conjunction' })
+      .format(categoryNames);
   return {
     originLabel, destinationLabel, phase, phaseDetail, loadedThings,
+    cargoCategories,
     deliveries: Number(shuttle.deliveries ?? 0),
     deliveredThings: Number(shuttle.deliveredThings ?? 0),
     lastLoadedThings: Number(shuttle.lastLoadedThings ?? 0)
@@ -2953,7 +3285,7 @@ function vehicleShuttlePanel(player, catalog, vehicle) {
   return `<section class="vehicle-itinerary-status vehicle-shuttle-status" aria-labelledby="vehicle-shuttle-heading">
     <header><p class="eyebrow">SHUTTLE · ${escapeHtml(summary.phase)}</p><h2 id="vehicle-shuttle-heading">${escapeHtml(summary.originLabel)} ⇄ ${escapeHtml(summary.destinationLabel)}</h2></header>
     <p><strong>${escapeHtml(summary.phaseDetail)}</strong></p>
-    <dl><div><dt>Deliveries</dt><dd>${summary.deliveries}</dd></div><div><dt>Things delivered</dt><dd>${summary.deliveredThings}</dd></div><div><dt>Last load</dt><dd>${summary.lastLoadedThings} thing${summary.lastLoadedThings === 1 ? '' : 's'}</dd></div></dl>
+    <dl><div><dt>Deliveries</dt><dd>${summary.deliveries}</dd></div><div><dt>Things delivered</dt><dd>${summary.deliveredThings}</dd></div><div><dt>Last load</dt><dd>${summary.lastLoadedThings} thing${summary.lastLoadedThings === 1 ? '' : 's'}</dd></div><div><dt>Cargo categories</dt><dd>${escapeHtml(summary.cargoCategories)}</dd></div></dl>
     ${stopNotice}${vehicleShuttleCancelForm(vehicle)}
   </section>`;
 }
@@ -3033,9 +3365,11 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null,
     elsewhereByCity.get(vehicle.cityId).push(vehicle);
   }
   const elsewhere = [...elsewhereByCity].map(([cityId, entries]) => ({
-    city: catalogCityForId(catalog, cityId), count: entries.length
+    city: catalogCityForId(catalog, cityId), count: entries.length,
+    storedThings: Object.values(player.inventoryByCity?.[cityId] ?? {})
+      .reduce((sum, quantity) => sum + Number(quantity), 0)
   })).sort((first, second) => first.city.name.localeCompare(second.city.name))
-    .map(({ city, count }) => `<li><strong>${escapeHtml(cityChoiceLabel(catalog, city.id))}</strong><span>${count} idle vehicle${count === 1 ? '' : 's'}</span><form method="post" action="/cities/${city.id}/select"><button>Switch to ${escapeHtml(cityChoiceLabel(catalog, city.id))}</button></form></li>`).join('');
+    .map(({ city, count, storedThings }) => `<li><strong>${escapeHtml(cityChoiceLabel(catalog, city.id))}</strong><span>${count} idle vehicle${count === 1 ? '' : 's'} &middot; ${storedThings.toLocaleString('en-GB')} thing${storedThings === 1 ? '' : 's'} stored</span><form method="post" action="/cities/${city.id}/select"><button>Switch to ${escapeHtml(cityChoiceLabel(catalog, city.id))}</button></form></li>`).join('');
   const missionStatus = !thiefBase ? '' : thiefBase.discovered
     ? `<section class="mission-status"><h2>Ore-thief base</h2><p>${thiefBase.destroyed
       ? `Destroyed · ${thiefBase.ore} ore crates remain for ${escapeHtml(helicopterName)} aircraft.`
@@ -3052,7 +3386,7 @@ function vehiclesPage(player, catalog, vehicles, now, thiefBase = null,
 function remoteVehiclePage(player, catalog, vehicle) {
   const selectedCity = catalogCityForId(catalog, player.cityId);
   const vehicleCity = catalogCityForId(catalog, vehicle.cityId);
-  return `<section class="page-title"><div><p class="eyebrow">Vehicle in ${escapeHtml(vehicleCity.name)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a href="/vehicles">Back to ${escapeHtml(selectedCity.name)} vehicles</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">Vehicle in ${escapeHtml(vehicleCity.name)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to ${escapeHtml(selectedCity.name)} vehicles</a></section>
     ${vehicleShuttlePanel(player, catalog, vehicle)}
     <section class="city-scope-warning"><h2>Switch city to manage this vehicle</h2><p>You are viewing ${escapeHtml(selectedCity.name)}, but ${escapeHtml(vehicle.name)} and its loadout are in ${escapeHtml(vehicleCity.name)}. Only things stored in the vehicle's city can be loaded.</p><form method="post" action="/cities/${vehicleCity.id}/select"><button>Switch to ${escapeHtml(vehicleCity.name)}</button></form></section>`;
 }
@@ -3089,7 +3423,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const local = player.inventoryByCity[vehicle.cityId] ?? {};
   const vehicleItem = catalog.byId.get(vehicle.itemId);
   if (!vehicleItem) throw new Error(`Missing catalog item for vehicle: ${vehicle.itemId}.`);
-  const events = vehicle.events.map((event) => `<tr><td>${new Date(event.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(event.type)}</td><td>${event.otherPlayerName ? `${escapeHtml(event.otherPlayerName)} · ${escapeHtml(event.otherVehicleName)}` : ''}</td><td>${event.battleId ? `<a href="/battles/${event.battleId}">Battle report</a>` : ''}</td></tr>`).join('');
+  const events = vehicle.events.map((event) => `<tr><td>${new Date(event.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(event.type)}</td><td>${event.otherPlayerName ? `${escapeHtml(event.otherPlayerName)} · ${escapeHtml(event.otherVehicleName)}` : ''}</td><td>${event.battleId ? `<a class="text-link" href="/battles/${event.battleId}">Battle report</a>` : ''}</td></tr>`).join('');
   if (vehicle.status === 'traveling') {
     const freeCapacity = Math.max(0, vehicle.capacity - vehicle.cargoSize);
     const loadedCargoThings = vehicle.cargo.reduce((sum, entry) => sum + entry.quantity, 0);
@@ -3136,7 +3470,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     const onwardJourney = vehicle.queuedJourneyLegs.length
       ? `<section class="vehicle-itinerary-status"><h2>Onward itinerary</h2><p>Each leg departs immediately when the previous one arrives.</p><ol>${vehicle.queuedJourneyLegs.map((leg) => `<li>${escapeHtml(vehicleRouteDestinationLabel(player, catalog, leg.originCityId, leg.destinationCityId))} <small>${Number(leg.length).toLocaleString('en-GB')} km</small></li>`).join('')}</ol></section>`
       : '';
-    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></section>${vehicleShuttlePanel(player, catalog, vehicle)}${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
+    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></section>${vehicleShuttlePanel(player, catalog, vehicle)}${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
   }
   const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
   const boltItem = catalogItemForSetting(catalog, 'bolt_item_id');
@@ -3347,6 +3681,9 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     );
     return `<option value="${route.id}">${escapeHtml(label)} · ${Number(route.length).toLocaleString('en-GB')} km</option>`;
   }).join('');
+  const shuttleMineTypeOptions = selectableShuttleMineTypes(catalog).map((mineType) =>
+    `<label><input type="checkbox" name="category_${mineType.id}" value="1" checked${vehicle.damaged ? ' disabled' : ''}> ${escapeHtml(mineType.name)}</label>`
+  ).join('');
   const travelOrderNames = catalog.settings.travel_order_names;
   if (!travelOrderNames || typeof travelOrderNames !== 'object' || Array.isArray(travelOrderNames)) {
     throw new Error('Invalid catalog setting: travel_order_names.');
@@ -3357,7 +3694,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     return `<option value="${order}"${vehicle.travelOrder === order ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   }).join('');
   if (vehicle.aircraftDestroyed) {
-    return `<section class="page-title"><div><p class="eyebrow">Aircraft lost</p><h1>${escapeHtml(vehicle.name)}</h1></div><a href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p class="capacity-warning">This aircraft was shot down by the ore thieves. Its cargo was lost.</p></section>${loadoutOverview}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No mission history.</td></tr>'}</tbody></table>`;
+    return `<section class="page-title"><div><p class="eyebrow">Aircraft lost</p><h1>${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p class="capacity-warning">This aircraft was shot down by the ore thieves. Its cargo was lost.</p></section>${loadoutOverview}<table><thead><tr><th>When</th><th>Event</th><th>Encounter</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No mission history.</td></tr>'}</tbody></table>`;
   }
   const city = catalogCityForId(catalog, vehicle.cityId);
   const previewBindingInput = previewToken
@@ -3368,13 +3705,13 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const fullAmmoCrates = (totalLoadedShots - totalLooseShots) / shotsPerCrate;
   const unloadWarning = totalLooseShots
     ? `<label class="danger-confirm"><input type="checkbox" name="confirmLoss" value="yes" required> Discard ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} that cannot make a complete crate.</label>` : '';
-  const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete cannon set you want fitted. Existing cannons can be kept, returned or replaced in one preview. Any removal consumes one ${escapeHtml(blockAndTackleItem.name)}; ammunition remains aboard. Commit cannon changes before loading ammunition.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached. Choose a proposed quantity below, preview the cannon loadout, then commit it to unlock ammunition loading. The commit button appears after a valid preview.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview cannon loadout</button>${commitButton}</div></form></div><div id="ammunition"><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p>Cannons draw from this ship's shared ammunition hold; shots do not need to be assigned to individual cannon portals. <a href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></div></section>` : '';
+  const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete cannon set you want fitted. Existing cannons can be kept, returned or replaced in one preview. Any removal consumes one ${escapeHtml(blockAndTackleItem.name)}; ammunition remains aboard. Commit cannon changes before loading ammunition.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached. Choose a proposed quantity below, preview the cannon loadout, then commit it to unlock ammunition loading. The commit button appears after a valid preview.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview cannon loadout</button>${commitButton}</div></form></div><div id="ammunition"><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p>Cannons draw from this ship's shared ammunition hold; shots do not need to be assigned to individual cannon portals. <a class="text-link" href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></div></section>` : '';
   const hasStoredLoadout = vehicle.reinforcement > 0 || vehicle.cargoSize > 0 || vehicle.mods.length > 0
     || vehicle.weapons.length > 0 || vehicle.cannons.length > 0 || totalLoadedShots > 0;
   const storeWarning = vehicle.reinforcement > 0
     ? `This vehicle still has ${vehicle.reinforcement}/${vehicle.reinforcementMax} reinforcement. It remains fitted until it absorbs that damage.`
     : 'Unload cargo and remove every fitting, cannon, and ammunition shot before storing this vehicle as a thing.';
-  const pageTitle = `<section class="page-title"><div><p class="eyebrow">${escapeHtml(vehicle.type)} in ${escapeHtml(city.name)} ${rankBadge(vehicle.rank, 1, catalog)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a href="${view === 'status' ? '/vehicles' : `/vehicles/${vehicle.id}`}">${view === 'status' ? 'Back to vehicles' : 'Back to vehicle status'}</a></section>`;
+  const pageTitle = `<section class="page-title"><div><p class="eyebrow">${escapeHtml(vehicle.type)} in ${escapeHtml(city.name)} ${rankBadge(vehicle.rank, 1, catalog)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="${view === 'status' ? '/vehicles' : `/vehicles/${vehicle.id}`}">${view === 'status' ? 'Back to vehicles' : 'Back to vehicle status'}</a></section>`;
   const hero = `<section class="vehicle-hero vehicle-hero-compact">${itemCard(vehicleItem, { compact: true, meta: vehicle.name })}<div><p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p></div></section>`;
   const journeyRouteData = JSON.stringify(
     vehicleJourneyRouteGraph(player, catalog, vehicle)
@@ -3394,7 +3731,12 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
           <div class="vehicle-tier-targeting"><p>Combat targets are limited automatically to this vehicle's tier.</p><label><input type="checkbox" name="attackSentry"${vehicle.aggressiveVsSentry ? ' checked' : ''}${vehicle.damaged ? ' disabled' : ''}>Also engage patrols in this tier</label></div>`}
       <button${vehicle.damaged ? ' disabled' : ''}>Send itinerary</button>
     </form><script src="/node/vehicle-journey.js?v=20260825b" defer></script>` : '<p>No compatible routes from this city.</p>'}</section>`;
-  const shuttleSetupSection = vehicle.cargoSize === 0 ? `<section class="vehicle-send-panel vehicle-shuttle-setup"><p class="eyebrow">Automatic transport</p><h2>Set up a shuttle</h2><p>Each outbound trip loads as many eligible things as will fit, rarest first, unloads them at the destination, then returns empty and repeats until cancelled. Manufactured things are never loaded. Oil Field machine parts stay in their Oil Field home city.</p>${shuttleRouteOptions ? `<form method="post" action="/vehicles/${vehicle.id}/shuttle"><label>Destination<select name="routeId" required${vehicle.damaged ? ' disabled' : ''}>${shuttleRouteOptions}</select></label><button${vehicle.damaged ? ' disabled' : ''}>Start shuttle</button></form>` : '<p>No compatible shuttle destination from this city.</p>'}</section>` : '';
+  const shuttleSetupControls = Number(vehicle.capacity) <= 0
+    ? `<p class="capacity-warning"><strong>No cargo space is available.</strong> Fittings or ammunition use every capacity slot. <a class="text-link" href="/vehicles/${vehicle.id}/customize">Free at least one slot</a> before setting up a shuttle.</p>`
+    : shuttleRouteOptions
+      ? `<form class="vehicle-shuttle-form" method="post" action="/vehicles/${vehicle.id}/shuttle"><label>Destination<select name="routeId" required${vehicle.damaged ? ' disabled' : ''}>${shuttleRouteOptions}</select></label><fieldset${vehicle.damaged ? ' disabled' : ''}><legend>Mine categories</legend><p>Every category is selected. Untick anything this shuttle must leave behind; the rarest eligible things among the remaining categories load first.</p><div class="vehicle-shuttle-categories">${shuttleMineTypeOptions}</div></fieldset><button${vehicle.damaged ? ' disabled' : ''}>Start shuttle</button></form>`
+      : '<p>No compatible shuttle destination from this city.</p>';
+  const shuttleSetupSection = vehicle.cargoSize === 0 ? `<section class="vehicle-send-panel vehicle-shuttle-setup"><p class="eyebrow">Automatic transport</p><h2>Set up a shuttle</h2><p>Each outbound trip loads as many eligible things as will fit, rarest first, unloads them at the destination, then returns empty and repeats until cancelled. Manufactured things are never loaded. Oil Field machine parts stay in their Oil Field home city.</p>${shuttleSetupControls}</section>` : '';
   const sendSection = vehicle.shuttle
     ? vehicleShuttlePanel(player, catalog, vehicle)
     : `${ordinarySendSection}${shuttleSetupSection}`;
@@ -3544,7 +3886,7 @@ export function battlePage(report) {
   }
   const opponentVehicleName = typeof report.opponent.vehicle_name === 'string'
     ? report.opponent.vehicle_name : 'Vehicle data unavailable';
-  return `<section class="page-title"><div><p class="eyebrow">Battle report</p><h1>${outcome}</h1></div><a href="/vehicles">Back to vehicles</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">Battle report</p><h1>${outcome}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section>
     <section class="battle-summary"><h2>${escapeHtml(report.opponent.player_name)}'s ${escapeHtml(opponentVehicleName)}</h2>
     <p>Your vehicle was <strong>${report.aggressive ? 'aggressive' : 'defensive'}</strong>; the enemy was <strong>${enemyAggressive ? 'aggressive' : 'defensive'}</strong>.</p>${details}
     <p class="battle-outcome">${report.tied ? 'You tied.' : report.won ? 'You won.' : 'You lost.'}</p><p>Rating ${Math.round(report.ratingBefore)} → <strong>${Math.round(report.ratingAfter)}</strong></p></section>`;
@@ -3569,7 +3911,7 @@ function ratingsPage(report, catalog) {
     catalogLabel(catalog, 'vehicle_type', group.routeType))} ranks</h2><ol class="ratings-list">${group.players.map((entry) => {
     const name = entry.playerId === null
       ? `<strong>${escapeHtml(entry.name)}</strong>`
-      : `<a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a>`;
+      : `<a class="text-link" href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a>`;
     const participation = entry.participantType === 'creature'
       ? 'Event creature'
       : `${entry.vehicleCount} participating vehicle${entry.vehicleCount === 1 ? '' : 's'} · ${entry.meldCount} melds${entry.isNpc ? ' · NPC fleet' : ''}`;
@@ -3582,7 +3924,7 @@ function ratingsPage(report, catalog) {
     return `<a href="/ratings?class=${combatClassValue}"${report.combatClass === combatClassValue ? ' aria-current="page"' : ''}>${escapeHtml(label)}</a>`;
   }).join('');
   const seasonEnd = report.season.endsAt - 24 * 60 * 60 * 1000;
-  return `<section class="page-title"><div><p class="eyebrow">Live combat ranks · Combat season ${report.season.number}</p><h1>Vehicle rankings</h1></div><div class="page-title-actions"><a class="button" href="/ratings/prizes">View season prizes</a><a href="/vehicles">Back to vehicles</a></div></section><nav class="rating-tabs">${tabs}</nav>
+  return `<section class="page-title"><div><p class="eyebrow">Live combat ranks · Combat season ${report.season.number}</p><h1>Vehicle rankings</h1></div><div class="page-title-actions"><a class="button" href="/ratings/prizes">View season prizes</a><a class="text-link" href="/vehicles">Back to vehicles</a></div></section><nav class="rating-tabs">${tabs}</nav>
     <p><strong>${combatSeasonDate(report.season.startsAt)}–${combatSeasonDate(seasonEnd)}.</strong> Every vehicle, ship, ghost fleet, and event creature participates automatically from its live rating. Every resolved fight changes the combatants' ratings, including trial waves and creature encounters; no win is required to appear. Miner and ghost standings use the current strongest vehicle in that division. Player prizes are limited to non-NPC miners with at least one resolved fight. Ratings reset when the season closes.</p><div class="ratings-grid">${sections}</div>`;
 }
 
@@ -3603,13 +3945,13 @@ function combatSeasonPrizesPage(report, prizes, catalog) {
     return `<tr><td>${escapeHtml(
       combatDivisionLabel(catalog, result.combatClass))}</td><td>${escapeHtml(
       catalogLabel(catalog, 'vehicle_type', result.routeType))}</td><td>#${result.place}</td><td>${result.playerId
-        ? `<a href="/miners/${encodeURIComponent(result.playerName)}">${escapeHtml(result.playerName)}</a>`
+        ? `<a class="text-link" href="/miners/${encodeURIComponent(result.playerName)}">${escapeHtml(result.playerName)}</a>`
         : escapeHtml(result.playerName)}</td><td><a class="thing-link rarity-${prizeItem.rarity}" href="/items/${result.prizeItemId}">${escapeHtml(result.prizeName)}</a></td></tr>`;
   }).join('');
   const latest = prizes.latestSeason
     ? `<section><h2>Previous season winners</h2><p>${combatSeasonDate(prizes.latestSeason.startsAt)}–${combatSeasonDate(prizes.latestSeason.endsAt - 24 * 60 * 60 * 1000)}</p><div class="table-scroll"><table><thead><tr><th>Division</th><th>Type</th><th>Place</th><th>Miner</th><th>Prize</th></tr></thead><tbody>${latestRows || '<tr><td colspan="5">No qualifying winners.</td></tr>'}</tbody></table></div></section>`
     : '';
-  return `<section class="page-title"><div><p class="eyebrow">Three-month combat seasons</p><h1>Season prizes</h1></div><a href="/ratings">Back to ratings</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">Three-month combat seasons</p><h1>Season prizes</h1></div><a class="text-link" href="/ratings">Back to ratings</a></section>
     <section class="combat-prize-intro"><h2>Fight upward</h2><p>The current season runs from <strong>${combatSeasonDate(report.season.startsAt)}</strong> through <strong>${combatSeasonDate(currentEnd)}</strong>. The top five non-NPC Land and Ship miners with at least one resolved fight in every division receive one unfitted transport in their current city. Yellow winners receive Green–Blue transports; Green–Blue winners receive Red+ transports. In Red+, first place receives the matching Champion and places two through five receive desirable Red+ transports.</p></section>${divisions}${latest}`;
 }
 
@@ -3626,7 +3968,7 @@ function ammoBoxesPage(player, catalog, vehicleId = null) {
     const crates = player.inventory[ammo.itemId] ?? 0;
     return `<tr><td>${itemCard(boxItem, { count: boxes, compact: true })}</td><td>${itemCard(ammoItem, { count: crates, compact: true })}</td><td><form method="post" action="/vehicles/boxes/${box.type}/open${query}"><label>${escapeHtml(boxItem.name)} boxes<input aria-label="${escapeHtml(boxItem.name)} boxes to open" type="number" name="quantity" min="1" max="${Math.max(1, boxes)}" value="1" ${boxes ? '' : 'disabled'}></label><button ${boxes ? '' : 'disabled'}>Open boxes</button></form></td></tr>`;
   }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Ship ammunition</p><h1>Open ammo boxes</h1></div><a href="${backHref}">${backLabel}</a></section>
+  return `<section class="page-title"><div><p class="eyebrow">Ship ammunition</p><h1>Open ammo boxes</h1></div><a class="text-link" href="${backHref}">${backLabel}</a></section>
     <p>Each box opens into ${catalog.settings.ammo_box_crates} crates, with ${catalog.settings.shots_per_crate} shots per crate. Opened crates cannot be repacked.</p><table><thead><tr><th>Boxes</th><th>Crates</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -3753,7 +4095,7 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
   const packerNames = joinedNames(labels.packers);
   const craneNames = joinedNames(labels.cranes);
   const eventRows = field.events.map((event) => `<tr><td>${new Date(event.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(event.type)}</td><td>${event.hexId}</td><td>${event.otherPlayerName ? escapeHtml(event.otherPlayerName) : ''}</td><td>${event.details.litersLost ? `${event.details.litersLost}L burned` : escapeHtml(event.details.name ?? event.details.type ?? '')}</td></tr>`).join('');
-  const stats = field.stats ? `<section class="oil-report"><p class="eyebrow">Live intelligence</p><h2>${escapeHtml(catalogGadgetForBehavior(catalog, 'ledger').displayName)} field report</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Machines</th><th>Oil</th><th>Pumping</th><th>Packing</th><th>Barrels</th></tr></thead><tbody>${field.stats.map((entry) => `<tr><td><a href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a> (${entry.meldCount})</td><td>${entry.machines}</td><td>${entry.oilLiters}L</td><td>${entry.pumpingLitersPerHour}L/h</td><td>${entry.packingLitersPerHour}L/h</td><td>${entry.barrels}</td></tr>`).join('')}</tbody></table></div></section>` : '';
+  const stats = field.stats ? `<section class="oil-report"><p class="eyebrow">Live intelligence</p><h2>${escapeHtml(catalogGadgetForBehavior(catalog, 'ledger').displayName)} field report</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Machines</th><th>Oil</th><th>Pumping</th><th>Packing</th><th>Barrels</th></tr></thead><tbody>${field.stats.map((entry) => `<tr><td><a class="text-link" href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a> (${entry.meldCount})</td><td>${entry.machines}</td><td>${entry.oilLiters}L</td><td>${entry.pumpingLitersPerHour}L/h</td><td>${entry.packingLitersPerHour}L/h</td><td>${entry.barrels}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   const serializedState = escapeHtml(JSON.stringify(state));
   const litersPerBarrel = Number(catalog.settings.oil_units_per_barrel)
     / Number(catalog.settings.oil_units_per_liter);
@@ -3778,7 +4120,8 @@ function unavailableOilFieldPage(player) {
     <section class="empty-state oil-empty-state"><p class="eyebrow">No local operation</p><h2>No Oil Field in ${escapeHtml(player.mapName)}</h2><p>Travel to a region with an Oil Field to deploy machines, inspect its board, or collect barrels. Each field has its own hexes, machines, oil, and events.</p><a class="button" href="/map">Open world map</a></section></article>`;
 }
 
-function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug = '') {
+function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug = '',
+  oilFieldCityIds = []) {
   const currentCity = catalogCityForId(catalog, player.cityId);
   const playerMap = catalog.maps.find((map) => map.id === currentCity.mapId)
     ?? { id: currentCity.mapId, name: 'Gallego', slug: 'gallego' };
@@ -3789,6 +4132,7 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
     && visibleMapIds.has(map.id));
   const currentMap = requestedMap ?? playerMap;
   const mapCities = catalog.cities.filter((city) => city.mapId === currentMap.id);
+  const oilFieldCities = new Set(oilFieldCityIds.map(Number));
   const capitalCityId = Number(currentMap.capitalCityId);
   const capitalCity = mapCities.find((city) => city.id === capitalCityId);
   if (!Number.isInteger(capitalCityId) || !capitalCity) {
@@ -3844,18 +4188,36 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
     const isCapital = city.id === capitalCityId;
     const cityRole = isCapital ? 'regional capital' : 'outpost';
     const availableMines = availableMinesForCity(city.id);
-    const trayWidth = Math.max(42, availableMines.length * 34 + 8);
-    const iconStart = -((availableMines.length * 34 - 4) / 2);
-    const mineIcons = availableMines.map((mineType, index) => `<g class="map-mine-icon" transform="translate(${iconStart + index * 34} 29)"><title>${escapeHtml(`${mineType.name} Mine available in ${city.name}`)}</title><image href="${escapeHtml(mineType.icon)}" width="30" height="30" /></g>`).join('');
+    const hasOilField = oilFieldCities.has(city.id);
+    const resourceCount = availableMines.length + (hasOilField ? 1 : 0);
+    const resourceWidth = Math.max(0, resourceCount * 29 - 3);
+    const trayWidth = Math.max(40, resourceWidth + 12);
+    const iconStart = -resourceWidth / 2;
+    const mineIcons = availableMines.map((mineType, index) => {
+      const icon = mineMapIconPath(mineType.id);
+      if (!icon) throw new Error(`Missing map symbol for mine type ${mineType.id}.`);
+      return `<g class="map-resource-icon map-mine-icon" data-mine-type-id="${mineType.id}" transform="translate(${iconStart + index * 29} 31)"><title>${escapeHtml(`${mineType.name} Mine available in ${city.name}`)}</title><circle class="map-resource-token" cx="13" cy="13" r="12" /><image href="${escapeHtml(icon)}" x="1" y="1" width="24" height="24" preserveAspectRatio="xMidYMid meet" /></g>`;
+    }).join('');
+    const oilFieldIcon = hasOilField
+      ? `<g class="map-resource-icon map-oil-field-icon" data-oil-field="true" transform="translate(${iconStart + availableMines.length * 29} 31)"><title>${escapeHtml(`Oil Field in ${city.name}`)}</title><circle class="map-resource-token" cx="13" cy="13" r="12" /><image href="${OIL_FIELD_MAP_ICON_PATH}" x="1" y="1" width="24" height="24" preserveAspectRatio="xMidYMid meet" /></g>`
+      : '';
     const mineNames = availableMines.map((mineType) => `${mineType.name} Mine`).join(', ');
-    const label = escapeHtml(`${city.name}: ${cityState} ${cityRole}. Mines available: ${mineNames || 'none'}`);
+    const label = escapeHtml(`${city.name}: ${cityState} ${cityRole}. Mines available: ${mineNames || 'none'}${hasOilField ? '. Oil Field regional operation' : ''}`);
     const gateway = gatewayRoutes.some((route) =>
       route.city1Id === city.id || route.city2Id === city.id);
-    const gatewayLabel = gateway
-      ? '<text class="map-gateway-label" text-anchor="middle" y="-42">GATEWAY</text>' : '';
-    const capitalLabel = isCapital
-      ? '<rect class="map-capital-badge" x="-42" y="-72" width="84" height="17" rx="3" /><text class="map-capital-label" text-anchor="middle" y="-60">★ CAPITAL</text>' : '';
-    const node = `<g class="map-city map-city-${cityState}${gateway ? ' map-city-gateway' : ''}${isCapital ? ' map-city-capital' : ''}" data-city-id="${city.id}" transform="translate(${position.x} ${position.y})"><title>${label}</title><circle class="map-city-halo" r="25" /><circle class="map-city-pin" r="13" /><text class="map-city-name" text-anchor="middle" y="-24">${isCapital ? `${CAPITAL_CITY_ICON} ` : ''}${escapeHtml(city.name)}</text>${gatewayLabel}${capitalLabel}<g class="map-city-mines"><rect x="${-trayWidth / 2}" y="25" width="${trayWidth}" height="38" rx="8" />${mineIcons}</g></g>`;
+    const cityNameplateWidth = Math.max(88, Math.ceil([...city.name].length * 7.8 + 32));
+    const capitalMarker = isCapital
+      ? `<text class="map-capital-star-marker" text-anchor="middle" y="5">${CAPITAL_CITY_ICON}</text>`
+      : '';
+    const capitalRank = isCapital
+      ? `<path class="map-city-rank-plate" d="M-42 -78h84l-5 14h-74z" /><text class="map-city-rank" text-anchor="middle" y="-68.5">${CAPITAL_CITY_ICON} Capital</text>`
+      : '';
+    const plateX = -cityNameplateWidth / 2;
+    const plateRight = plateX + cityNameplateWidth;
+    const platePath = `M${plateX + 6} -66H${plateRight - 6}L${plateRight} -60v20l-6 6H${plateX + 6}L${plateX} -40v-20z`;
+    const inlayPath = `M${plateX + 8} -62H${plateRight - 8}L${plateRight - 4} -58v16l-4 4H${plateX + 8}L${plateX + 4} -42v-16z`;
+    const oilFieldAttribute = hasOilField ? ' data-oil-field="true"' : '';
+    const node = `<g class="map-city map-city-${cityState}${gateway ? ' map-city-gateway' : ''}${isCapital ? ' map-city-capital' : ''}" data-city-id="${city.id}"${oilFieldAttribute} transform="translate(${position.x} ${position.y})"><title>${label}</title><circle class="map-city-halo" r="25" /><circle class="map-city-pin" r="13" />${capitalMarker}<g class="map-city-label">${capitalRank}<path class="map-city-nameplate-shadow" d="${platePath}" transform="translate(3 3)" /><path class="map-city-nameplate" d="${platePath}" /><path class="map-city-nameplate-tail" d="M-6 -34h12L0 -29z" /><path class="map-city-nameplate-inlay" d="${inlayPath}" /><circle class="map-city-label-rivet" cx="${plateX + 10}" cy="-50" r="1.7" /><circle class="map-city-label-rivet" cx="${plateRight - 10}" cy="-50" r="1.7" /><text class="map-city-name" text-anchor="middle" y="-44.5">${escapeHtml(city.name)}</text></g><g class="map-city-resources"><rect class="map-city-resource-rack" x="${-trayWidth / 2}" y="27" width="${trayWidth}" height="34" rx="17" />${mineIcons}${oilFieldIcon}</g></g>`;
     return known.has(city.id) && city.id !== player.cityId
       ? `<a class="map-city-link" href="#city-${city.id}" data-city-select="/cities/${city.id}/select" aria-label="${label}. Switch to this city">${node}</a>`
       : `<g role="group" aria-label="${label}">${node}</g>`;
@@ -3868,6 +4230,7 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
   }).join('');
   const cities = mapCities.map((city) => {
     const availableMines = availableMinesForCity(city.id);
+    const hasOilField = oilFieldCities.has(city.id);
     const surfaceTypes = surfaceRouteTypeIds.map((routeTypeId) => ({
       routeType: routeTypeId, type: routeType(routeTypeId)
     }))
@@ -3878,14 +4241,21 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
     const offers = surfaceTypes.length
       ? surfaceTypes.map((type) => `<span class="route-offer route-offer-${type.name}">${type.label}</span>`).join('')
       : '<span class="route-offer route-offer-none">No open surface routes</span>';
-    const mineList = availableMines.map((mineType) => `<li><img src="${escapeHtml(mineType.icon)}" alt=""><span><strong>${escapeHtml(mineType.name)}</strong> Mine</span></li>`).join('');
+    const mineList = availableMines.map((mineType) => {
+      const icon = mineMapIconPath(mineType.id);
+      if (!icon) throw new Error(`Missing map symbol for mine type ${mineType.id}.`);
+      return `<li data-mine-type-id="${mineType.id}"><img src="${escapeHtml(icon)}" alt=""><span><strong>${escapeHtml(mineType.name)}</strong> Mine</span></li>`;
+    }).join('');
     const isCapital = city.id === capitalCityId;
     const status = `${known.has(city.id)
       ? city.id === player.cityId ? 'Current city' : 'Discovered'
       : 'Undiscovered'} · ${isCapital ? 'regional capital' : 'outpost'}`;
     const capitalBadge = isCapital
       ? `<span class="city-capital-badge"><span aria-hidden="true">${CAPITAL_CITY_ICON}</span> Regional capital</span>` : '';
-    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"><header class="city-card-heading"><h3>${isCapital ? `<span class="city-capital-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>` : ''}${escapeHtml(city.name)}</h3>${capitalBadge}</header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${known.has(city.id) && city.id !== player.cityId ? `<form method="post" action="/cities/${city.id}/select"><button>View this city</button></form>` : ''}</article>`;
+    const oilFieldOperation = hasOilField
+      ? `<p class="city-oil-field-operation"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt=""><span><strong>Oil Field</strong><small>Regional operation</small></span></p>`
+      : '';
+    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"${hasOilField ? ' data-oil-field="true"' : ''}><header class="city-card-heading">${capitalBadge}<h3>${escapeHtml(city.name)}</h3></header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${oilFieldOperation}${known.has(city.id) && city.id !== player.cityId ? `<form method="post" action="/cities/${city.id}/select"><button>View this city</button></form>` : ''}</article>`;
   }).join('');
   const mapTabs = catalog.maps.filter((map) => visibleMapIds.has(map.id))
     .map((map) => {
@@ -3921,8 +4291,11 @@ function mapPage(player, catalog, knownCityIds, vehicles = [], requestedMapSlug 
   }).join('');
   const exitsSection = exits
     ? `<section><h2>Inter-map corridors</h2><ul class="route-list">${exits}</ul></section>` : '';
-  return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} region</p><h1>Cities</h1></div><p>Vehicles reveal cities and regions when they complete a route.</p></section><section class="map-opportunities" aria-labelledby="regional-capital-heading"><p class="eyebrow">${escapeHtml(currentMap.name)} opportunities · Shared regional base</p><h2 id="regional-capital-heading"><span class="city-capital-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>${escapeHtml(capitalCity.name)} · Regional capital</h2><p>Every miner in ${escapeHtml(currentMap.name)} shares ${escapeHtml(capitalCity.name)} as their capital and home city in this region. Bring things here to Meld, build factories, hire workers, and trade with other miners gathering in the region’s central market. Other cities remain independent outposts with their own mines, routes, and local markets.</p><p class="map-region-facts"><strong>${mapCities.length} cities</strong> · <strong>${mapMineTypes.size} mine types</strong> · ${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}</p></section>
-    <figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital and gateways</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types, and gateway cities. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="gateway-key">Gateway to another region</span></figcaption></figure>
+  const currentMapOilField = mapCities.find((city) => oilFieldCities.has(city.id));
+  const oilFieldFact = currentMapOilField
+    ? ` · <strong>Oil Field</strong> at ${escapeHtml(currentMapOilField.name)}` : '';
+  return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} region</p><h1>Cities</h1></div><p>Vehicles reveal cities and regions when they complete a route.</p></section><section class="map-opportunities" aria-labelledby="regional-capital-heading"><p class="eyebrow">${escapeHtml(currentMap.name)} opportunities · Shared regional base</p><h2 id="regional-capital-heading"><span class="city-capital-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>${escapeHtml(capitalCity.name)} · Regional capital</h2><p>Every miner in ${escapeHtml(currentMap.name)} shares ${escapeHtml(capitalCity.name)} as their capital and home city in this region. Bring things here to Meld, build factories, hire workers, and trade with other miners gathering in the region’s central market. Other cities remain independent outposts with their own mines, routes, and local markets.</p><p class="map-region-facts"><strong>${mapCities.length} cities</strong> · <strong>${mapMineTypes.size} mine types</strong> · ${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}${oilFieldFact}</p></section>
+    <figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital and gateways</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types${currentMapOilField ? `, the Oil Field at ${escapeHtml(currentMapOilField.name)}` : ''}, and gateway cities. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="oil-field-key"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt="">Oil Field</span><span class="gateway-key">Gateway to another region</span></figcaption></figure>
     <section><h2>Local route network</h2><ul class="route-list">${routeRows || '<li>No routes are currently available.</li>'}</ul></section>${exitsSection}
     <section><h2>City operations</h2><div class="city-grid">${cities}</div></section><script src="/node/map.js?v=20260821a" defer></script>`;
 }
@@ -3956,10 +4329,14 @@ function worldEventsPage(player, catalog, status, vehicles, currentTime) {
   }).join('');
   const activeGhosts = (status.ghosts ?? []).filter((ghost) => !ghost.defeatedAt);
   const ghostCards = activeGhosts.map((ghost) => {
-    return `<article class="threat-card ghost-card threat-ghost ghost-${ghost.kind} rarity-${ghost.rarity}"><div class="threat-mark"><img src="${escapeHtml(ghost.icon)}" alt="" aria-hidden="true"></div><div class="threat-card-body"><header><div><p class="eyebrow">${ghost.kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'} | ${escapeHtml(ghost.routeName)}</p><h3>${escapeHtml(ghost.name)}</h3></div><span class="threat-condition threat-condition-restless">Restless</span></header><dl class="threat-facts"><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)}</dd></div><div><dt>Heading</dt><dd>Patrolling</dd></div></dl></div></article>`;
+    const attackOptions = ghost.attackOptions ?? [];
+    const attack = attackOptions.length
+      ? `<form class="threat-action" method="post" action="/events/ghosts/${ghost.id}/attack"><label>Vehicle<select name="vehicleId" required>${attackOptions.map((option) => `<option value="${option.vehicleId}">${escapeHtml(option.vehicleName)}</option>`).join('')}</select></label><button>Launch hunt</button></form>`
+      : '';
+    return `<article class="threat-card ghost-card threat-ghost ghost-${ghost.kind} rarity-${ghost.rarity}"><div class="threat-mark"><img src="${escapeHtml(ghost.icon)}" alt="" aria-hidden="true"></div><div class="threat-card-body"><header><div><p class="eyebrow">${ghost.kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'} | ${escapeHtml(ghost.routeName)}</p><h3>${escapeHtml(ghost.name)}</h3></div><span class="threat-condition threat-condition-restless">Restless</span></header><dl class="threat-facts"><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)}</dd></div><div><dt>Heading</dt><dd>Patrolling</dd></div></dl>${attack}</div></article>`;
   }).join('');
   const recentGhosts = (status.ghosts ?? []).filter((ghost) => ghost.defeatedAt)
-    .map((ghost) => `<tr><td>${new Date(ghost.defeatedAt).toLocaleString('en-GB')}</td><td>${escapeHtml(ghost.name)}</td><td>${escapeHtml(ghost.routeName)}</td><td>${ghost.defeatedByName ? `Banished by ${escapeHtml(ghost.defeatedByName)}` : 'Banished'}${ghost.defeatedBattleId ? ` | <a href="/battles/${ghost.defeatedBattleId}">battle report</a>` : ''}</td></tr>`).join('');
+    .map((ghost) => `<tr><td>${new Date(ghost.defeatedAt).toLocaleString('en-GB')}</td><td>${escapeHtml(ghost.name)}</td><td>${escapeHtml(ghost.routeName)}</td><td>${ghost.defeatedByName ? `Banished by ${escapeHtml(ghost.defeatedByName)}` : 'Banished'}${ghost.defeatedBattleId ? ` | <a class="text-link" href="/battles/${ghost.defeatedBattleId}">battle report</a>` : ''}</td></tr>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">Living world</p><h1>World Events</h1></div><p>The sky shifts. The routes answer. Watch what moves through the regions you know.</p></section>
     <section class="moon-card"><span class="moon-icon">${status.moon.icon}</span><div><p class="eyebrow">Lunar influence</p><h2>${escapeHtml(status.moon.name)}</h2><p>The light changes. So does the world.</p><small>About ${status.moon.ageDays.toFixed(1)} lunar days old | next phase in ${formatDuration(status.moon.nextPhaseAt - currentTime)}</small></div></section>
     <section><div class="section-heading"><div><p class="eyebrow">Current conditions</p><h2>Weather</h2></div></div><div class="weather-grid">${weather || '<p>Discover a region to read its weather.</p>'}</div><p class="muted">Read the sky before you send anything beyond the city.</p></section>
@@ -3971,39 +4348,42 @@ function worldEventsPage(player, catalog, status, vehicles, currentTime) {
 
 function historyPage() {
   return `<article class="editorial-page history-page">
-    <nav class="editorial-switcher" aria-label="Public records"><a href="/history" aria-current="page">History</a><a href="/legal">Legal</a></nav>
+    <nav class="editorial-switcher" aria-label="Public records"><a class="text-link" href="/history" aria-current="page">History</a><a class="text-link" href="/legal">Legal</a></nav>
     <section class="page-title"><div><p class="eyebrow">MineThings archive · Record 01</p><h1>History</h1></div><p>The story of MineThings: a strange, patient browser world about digging up our own civilisation—first recorded in 2009 and reopened in 2026.</p></section>
-    <div class="editorial-facts" aria-label="History at a glance"><div><span>Original world</span><strong>2009—2020</strong></div><div><span>Restoration</span><strong>MineThings 2</strong></div><div><span>Evidence</span><strong>Public · code · operator</strong></div></div>
-    <div class="editorial-layout"><nav class="article-index" aria-label="History sections"><strong>On this page</strong><a href="#beginnings">Beginnings</a><a href="#world">The world</a><a href="#players">Players</a><a href="#economy">Bitcoin</a><a href="#community">Community tools</a><a href="#shutdown">Shutdown</a><a href="#restoration">Restoration</a><a href="#reflection">Reflection</a><a href="#legacy">Legacy</a><a href="#sources">Sources</a></nav><div class="editorial-copy history-timeline">
+    <div class="editorial-facts" aria-label="History at a glance"><div><span>Original world</span><strong>2009—2020</strong></div><div><span>Restoration</span><strong>MineThings 2</strong></div><div><span>Evidence</span><strong>Contemporary · archive · testimony</strong></div></div>
+    <div class="editorial-layout"><nav class="article-index" aria-label="History sections"><strong>On this page</strong><a class="text-link" href="#beginnings">Beginnings</a><a class="text-link" href="#world">The world</a><a class="text-link" href="#players">Players</a><a class="text-link" href="#economy">Bitcoin</a><a class="text-link" href="#community">Community tools</a><a class="text-link" href="#shutdown">Shutdown</a><a class="text-link" href="#restoration">Restoration</a><a class="text-link" href="#reflection">Reflection</a><a class="text-link" href="#legacy">Legacy</a><a class="text-link" href="#sources">Sources</a></nav><div class="editorial-copy history-timeline">
     <section id="beginnings"><p class="source-kind">Public record</p><h2>2009: a world under the ash</h2><p>MineThings appeared in browser-game directories in October 2009. Its premise skipped two thousand years beyond the Yellowstone eruption: humanity had returned to a buried Earth and made an economy from whatever its miners could recover. It was free to play, persistent, deliberately slow and more interested in ownership and trade than in a conventional quest line.</p></section>
-    <section id="world"><p class="source-kind">Public record and surviving code</p><h2>A game made from distance</h2><p>Mines kept working while their owners were away. Things existed in particular cities, local markets developed different shortages, and vehicles made geography matter. Land vehicles, ships and aircraft carried cargo; weapons, modifications, piracy, professions, factories, melds and the shared Oil Field gradually turned an idle collection game into an intricate social simulation.</p><p>The surviving PHP, MySQL and Python code corroborates the dense mechanics described by contemporary players: city-scoped possessions, batteries, rarity tiers, player-priced markets, combat and an unusually uncompromising economy.</p></section>
-    <section id="players"><p class="source-kind">Contemporary player record</p><h2>2010: fascinating, slow and sometimes awkward</h2><p>An Ars Technica discussion begun on 20 October 2010 preserves something directory listings cannot: disagreement among actual players. They described starter mines, rarity tiers, melding, buying and renting mines, discovering towns, moving goods, and the dangers of pirates and highwaymen. They also argued about the very slow opening pace, paid acceleration and an interface whose controls were not always obvious.</p><p>The thread records separate Aso and Bromo servers with different worlds and economies. Veterans could make Aso easier through cheap equipment and loans; the newer Bromo offered a more even race to discover items. That tension—between patient discovery, social cooperation, economic advantage and deliberate inconvenience—was central to MineThings rather than incidental to it.</p></section>
+    <section id="world"><p class="source-kind">Contemporary record and surviving code</p><h2>A game made from distance</h2><p>Mines kept working while their owners were away. Things existed in particular cities, local markets developed different shortages, and vehicles made geography matter. Land vehicles, ships and aircraft carried cargo; weapons, modifications, piracy, professions, factories, melds and the shared Oil Field gradually turned an idle collection game into an intricate social simulation.</p><p>A long-running f13 player guide records city-scoped things, global gold, convoy tactics and route combat. In April 2014 it described the Oil Field as a resource-management puzzle built from randomly found parts and compared its pipe work to <em>Pipe Mania</em>. The archived PHP, MySQL and Python implementation independently corroborates the same underlying systems: city-bound possessions, batteries, rarity tiers, player-priced markets, combat and field machinery.</p></section>
+    <section id="players"><p class="source-kind">Contemporary player record</p><h2>2010: fascinating, slow and sometimes awkward</h2><p>An Ars Technica discussion begun on 20 October 2010 preserves something directory listings cannot: disagreement among actual players. They described starter mines, rarity tiers, melding, buying and renting mines, discovering towns, moving goods, and the dangers of pirates and highwaymen. They also argued about the very slow opening pace, paid acceleration and an interface whose controls were not always obvious.</p><p>The thread records separate Aso and Bromo servers with different worlds and economies. Veterans could make Aso easier through cheap equipment and loans; the newer Bromo offered a more even race to discover items. An independent January 2013 review records the same patient rhythm—checking once or twice a day—along with hundreds of common things, exceptionally rare undiscovered orange things, Melds that unlocked professions, player-set prices and the risk of travel. Together these accounts show that scarcity, cooperation, advantage and inconvenience were the game, not incidental friction.</p></section>
     <section id="economy"><p class="source-kind">Contemporary public record</p><h2>2011: experiments in value and Bitcoin</h2><p>Players set auction prices rather than selling into a universal shop. Scarcity emerged from where people mined, travelled and chose to specialise. Optional purchases supported the service, and MineThings was documented as accepting Bitcoin by March 2011, very early in the currency's history.</p><p>A BitcoinTalk promotion on 1 July offered an in-game starter pack and credited MineThings with introducing its author to Bitcoin. The apparent MineThings operator account, <strong>nextnonce</strong>, joined the discussion alongside existing players. On 29 August that account announced that MineThings had removed PayPal and moved exclusively to Bitcoin, claiming approximately 1,500 active players. The number is historically useful but remains an operator-supplied population claim, not an independently audited count. Replies welcomed the experiment while warning that obtaining Bitcoin was difficult and that the game's public explanation of payments and premium content was thin.</p></section>
-    <section id="community"><p class="source-kind">Surviving community artefacts</p><h2>Players rebuilt the interface around themselves</h2><p>MineThings attracted players willing to write browser userscripts for it. OpenUserJS preserves tools for the transport page, chat, messages and reclaiming wasted screen space. The transport extension added sorting, filtering, colour coding, ETA calculations, radar and gadget details, dynamic updates, journey statistics and event histories. The messages extension added automatic checking, filtering and different views. A smaller 2016 “Machine Owners” script grouped machines by owner.</p><p>OpenUserJS currently records 17,520 installations for the transport script, 10,009 for chat, 11,039 for screen-space changes, 8,594 for messages and 170 for Machine Owners. These are platform installation counters—not verified unique-player totals—but they demonstrate sustained circulation and a technically engaged community. They also preserve details of the information players needed badly enough to build for themselves.</p></section>
-    <section id="shutdown"><p class="source-kind">Public record</p><h2>2020: the machinery stops</h2><p>By 2020 the eleven-year-old service depended on an ageing CakePHP 1.2, PHP, MySQL, Python and CentOS stack. A server upgrade broke parts of the game, support had become exhausting, and the monthly infrastructure bill was difficult to justify. The owner publicly described choosing a player-programmer as a possible successor, but the available discussion did not name that person. MineThings closed in March 2020.</p><p>The community continued to remember it. Mini MineThings was later published as a small memorial, and abandoned-game discussions kept returning to its mix of idling, logistics and human economics.</p></section>
-    <section id="restoration"><p class="source-kind operator-account">Operator-supplied account—not independently documented</p><h2>gordonstretch and the codebase</h2><p>The current operator confirms that the unnamed original successor was the player <strong>gordonstretch</strong>, and that gordonstretch is the person operating this restoration. The private codebase was transferred for the attempted succession. The first port proved substantially larger than could be completed in the time then available, so the revival stalled. Public sources document the attempted succession, but they do not independently establish the successor's identity or the private transfer; those details are recorded here as gordonstretch's first-hand account.</p><p class="source-kind">Repository evidence</p><p>The code and database snapshots did survive. Today, AI-assisted development has made the full migration practical. This restoration is a new Node.js and SQLite implementation built from those materials: the old application is preserved as evidence, never executed by the public server. The current game keeps the original catalogue and systems while repairing security, consolidating the old servers into connected worlds, and making long-neglected state visible again.</p></section>
-    <section id="reflection"><p class="source-kind operator-account">First-hand player and operator testimony</p><h2>“But it stuck”</h2><figure class="history-quote"><blockquote><p>MineThings folk were a weird community. It attracted all sorts: griefer kids; whales (in the gaming sense); triers; chatters; people on drugs who would leave long monologues inspired by their mushroom trips; shills; young professionals; rich folks; idealists; habitualists. But it stuck—in people’s heads. It was a true sandbox, and Japhet Stevens put a huge amount of effort and creativity into it, yet received so little in return beyond abuse and suggestions about how to ‘improve his game’.</p><p>So many groundbreaking games were emerging at the time. Minecraft, FFS. Sandboxes were appearing everywhere. WoW had started as a sandbox. MineThings had a sense of an accepting community long before LGBTQ inclusion, invisible disabilities, and DEI became common topics of discussion. It connected people while, at the same time, providing a way for them to piss anonymous people off. The game had pariahs and legends.</p><p>I really want to bring this legacy forward, and I feel that it is a privilege to be in a position to do so.</p></blockquote><figcaption>Gordon Stretch (<strong>gordonstretch</strong>), original player and current restoration operator · 28 August 2026</figcaption></figure></section>
-    <section id="legacy"><p class="source-kind">Reception and legacy evidence</p><h2>The loop people remembered</h2><p>A 2012 MartialTalk recommendation names Japhet as the creator, but because it came from a friend it is useful biographical testimony rather than independent reporting. A 2011 AnandTech mention shows the game travelling by ordinary word of mouth, while a surviving catalogue classifies it as a browser-based science-fiction title published by MineThings; the origin of that catalogue's 7.8 rating is unknown.</p><p>After closure, players still tried to identify or replace it. A 2021 identification thread named MineThings as a remembered browser mining game. Requests in 2021 and 2023 grouped it with loot, scavenging and collection games and remembered its automatic, randomized acquisition and crafting. These recollections show what endured in memory; they are not treated as authoritative records of the original mechanics.</p></section>
+    <section id="community"><p class="source-kind">Surviving community artefacts</p><h2>Players rebuilt the interface around themselves</h2><p>The earliest surviving player tool found in this review predates the Ars discussion. On 7 October 2010, one player published a Python screen scraper that collected a census of miners, professions and home cities together with asking prices, bids and sales. It is unusually direct evidence that MineThings was already being treated as both a persistent world and an economic simulation.</p><p>OpenUserJS preserves later tools for transport, chat, messages and reclaiming wasted screen space. The transport extension was published in 2014 from work dated 2013 and added sorting, filtering, colour coding, ETA calculations, radar and gadget details, live refresh, journey statistics and event histories. A smaller 2016 “Machine Owners” script grouped machines by owner.</p><p>OpenUserJS currently records 17,520 installations for the transport script, 10,009 for chat, 11,039 for screen-space changes, 8,594 for messages and 170 for Machine Owners. These are platform installation counters—not verified unique-player totals—but they demonstrate sustained circulation and preserve the information players needed badly enough to build for themselves.</p></section>
+    <section id="shutdown"><p class="source-kind">Public record</p><h2>2020: the machinery stops</h2><p>By 2020 the eleven-year-old service depended on an ageing CakePHP 1.2, PHP, MySQL, Python and CentOS stack. A server upgrade broke parts of the game, support had become exhausting, and the monthly infrastructure bill was difficult to justify. The owner publicly described choosing a player-programmer as a possible successor, but the available discussion did not name that person. MineThings closed in March 2020.</p><p>The community continued to remember it. <em>Mini MineThings</em> was released on 4 January 2023 as a small playable memorial built around offline mining, explosives and factories. Its release page and later comments explicitly frame it as a revival by former players, while abandoned-game discussions kept returning to the original mix of idling, logistics and human economics.</p></section>
+    <section id="restoration"><p class="source-kind operator-account">Operator-supplied account—not independently documented</p><h2>Serif and the codebase</h2><p>The current operator confirms that the unnamed original successor was the player now known publicly as <strong>Serif</strong>, who operates this restoration. The private codebase was transferred for the attempted succession. The first port proved substantially larger than could be completed in the time then available, so the revival stalled. Public sources document the attempted succession, but they do not independently establish the successor's identity or the private transfer; those details are recorded here as Serif's first-hand account.</p><p class="source-kind">Repository evidence</p><p>The code and database snapshots did survive. Today, AI-assisted development has made the full migration practical. This restoration is a new Node.js and SQLite implementation built from those materials: the old application is preserved as evidence, never executed by the public server. The current game keeps the original catalogue and systems while repairing security, consolidating the old servers into connected worlds, and making long-neglected state visible again.</p></section>
+    <section id="reflection"><p class="source-kind operator-account">First-hand player and operator testimony</p><h2>“But it stuck”</h2><figure class="history-quote"><blockquote><p>MineThings folk were a weird community. It attracted all sorts: griefer kids; whales (in the gaming sense); triers; chatters; people on drugs who would leave long monologues inspired by their mushroom trips; shills; young professionals; rich folks; idealists; habitualists. But it stuck—in people’s heads. It was a true sandbox, and Jahet Stevens put a huge amount of effort and creativity into it, yet received so little in return beyond abuse and suggestions about how to ‘improve his game’.</p><p>So many groundbreaking games were emerging at the time. Minecraft, FFS. Sandboxes were appearing everywhere. WoW had started as a sandbox. MineThings had a sense of an accepting community long before LGBTQ inclusion, invisible disabilities, and DEI became common topics of discussion. It connected people while, at the same time, providing a way for them to piss anonymous people off. The game had pariahs and legends.</p><p>I really want to bring this legacy forward, and I feel that it is a privilege to be in a position to do so.</p></blockquote><figcaption>Serif, original player and current restoration operator · 28 August 2026</figcaption></figure></section>
+    <section id="legacy"><p class="source-kind">Reception and legacy evidence</p><h2>The loop people remembered</h2><p>A 2012 MartialTalk recommendation from a friend identifies <strong>Jahet Stevens</strong> as the creator, although it misspells his given name; the restoration operator supplies the corrected form used here. It is useful biographical testimony rather than independent reporting. A 2011 AnandTech mention shows the game travelling by ordinary word of mouth, while a surviving catalogue classifies it as a browser-based science-fiction title published by MineThings; the origin of that catalogue's 7.8 rating is unknown.</p><p>After closure, players still tried to identify or replace it. A 2021 identification thread named MineThings as a remembered browser mining game. Requests in 2021 and 2023 grouped it with loot, scavenging and collection games and remembered its automatic, randomised acquisition and crafting. These recollections show what endured in memory; they are not treated as authoritative records of the original mechanics.</p></section>
     <section id="sources" class="source-notes"><h2>Sources and provenance</h2><ol>
-      <li><a href="https://browsermmorpg.com/game-mine-things--335" rel="external noreferrer">BrowserMMORPG listing</a>—listing date, setting and original overview.</li>
-      <li><a href="https://almostidle.com/game/minethings" rel="external noreferrer">Almost Idle</a>—persistent mining, towns, vehicles and professions.</li>
-      <li><a href="https://arstechnica.com/civis/threads/mine-things-your-browser-based-epic-item-generator-game.1125701/" rel="external noreferrer">Ars Technica OpenForum discussion</a>—contemporary player reception, mechanics, servers, pacing and interface criticism.</li>
-      <li><a href="https://forums.f13.net/index.php?topic=22458.msg1288528" rel="external noreferrer">f13 player guide and discussion</a>—player-documented strategy, markets, maps, vehicles and piracy.</li>
-      <li><a href="https://uniformlyuninformative.wordpress.com/2010/10/07/minethings-screen-scraper/" rel="external noreferrer">2010 economic-simulation account</a>—player auctions and emergent prices.</li>
-      <li><a href="https://en.bitcoin.it/wiki/MineThings" rel="external noreferrer">Bitcoin Wiki record</a>—optional purchases and the March 2011 Bitcoin announcement.</li>
-      <li><a href="https://bitcointalk.org/index.php?topic=24930.0%3Bwap" rel="external noreferrer">BitcoinTalk starter-pack discussion</a>—the 1 July 2011 promotion, players and apparent operator participation.</li>
-      <li><a href="https://bitcointalk.org/index.php?topic=40042.0" rel="external noreferrer">BitcoinTalk “all-in” announcement</a>—the 29 August 2011 PayPal withdrawal and operator claim of roughly 1,500 active players.</li>
-      <li><a href="https://openuserjs.org/?orderBy=updated&amp;orderDir=asc&amp;p=50&amp;version=23.05.13" rel="external noreferrer">OpenUserJS MineThings extensions</a>—transport, radar, gadgets, journey history, chat, layout and message tooling.</li>
-      <li><a href="https://openuserjs.org/?limit=bktxxvsgrqlztl&amp;p=192" rel="external noreferrer">OpenUserJS Machine Owners</a>—a 2016 machine-ownership analysis tool.</li>
-      <li><a href="https://www.martialtalk.com/threads/mine-things-free-browser-game.104152/" rel="external noreferrer">MartialTalk recommendation</a>—promotional testimony naming Japhet and describing once-daily play.</li>
-      <li><a href="https://forums.anandtech.com/threads/new-browser-game.2167073/" rel="external noreferrer">AnandTech mention</a>—a small contemporary word-of-mouth recommendation.</li>
-      <li><a href="https://github.com/eru-iluvatar/thud/blob/master/thud.xml" rel="external noreferrer">thud game-catalogue record</a>—browser, science-fiction and publisher classification; rating provenance unknown.</li>
-      <li><a href="https://www.reddit.com/r/incremental_games/comments/f1tqlo" rel="external noreferrer">2020 shutdown discussion</a>—technical state, succession attempt and closure.</li>
-      <li><a href="https://yyyeeeeeyyy.itch.io/mini-minethings" rel="external noreferrer">Mini MineThings</a>—a community memorial after closure.</li>
-      <li><a href="https://www.reddit.com/r/tipofmyjoystick/comments/rbl577" rel="external noreferrer">2021 identification thread</a>—residual recognition after shutdown.</li>
-      <li><a href="https://www.reddit.com/r/gamingsuggestions/comments/lbbijg" rel="external noreferrer">2021 similar-games request</a>—later memory of automatic randomized loot and crafting.</li>
-      <li><a href="https://www.reddit.com/r/AndroidGaming/comments/10d7hts" rel="external noreferrer">2023 AndroidGaming reminiscence</a>—later classification as a scavenging and item-collection game.</li>
-    </ol><p>Public sources were last reviewed on 22 August 2026. Repository evidence means the archived source and SQL material shipped with this restoration. Operator-supplied history is first-hand testimony from gordonstretch and is labelled separately where public records do not corroborate it.</p></section>
+      <li><a class="text-link" href="https://browsermmorpg.com/game-mine-things--335" rel="external noreferrer">BrowserMMORPG listing</a>—listing date, setting and original overview.</li>
+      <li><a class="text-link" href="https://almostidle.com/game/minethings" rel="external noreferrer">Almost Idle</a>—persistent mining, towns, vehicles and professions.</li>
+      <li><a class="text-link" href="https://arstechnica.com/civis/threads/mine-things-your-browser-based-epic-item-generator-game.1125701/" rel="external noreferrer">Ars Technica OpenForum discussion</a>—contemporary player reception, mechanics, servers, pacing and interface criticism.</li>
+      <li><a class="text-link" href="https://forums.f13.net/index.php?topic=22458.msg1288528" rel="external noreferrer">f13 player guide and discussion</a>—player-documented strategy, markets, maps, vehicles and piracy.</li>
+      <li><a class="text-link" href="https://uniformlyuninformative.wordpress.com/2010/10/07/minethings-screen-scraper/" rel="external noreferrer">2010 screen-scraper account</a>—contemporary player census code and market-data collection.</li>
+      <li><a class="text-link" href="https://tagracat.wordpress.com/2013/01/04/mine-things/" rel="external noreferrer">2013 independent player review</a>—daily rhythm, rare discoveries, Meld progression, prices and travel risk.</li>
+      <li><a class="text-link" href="https://en.bitcoin.it/wiki/MineThings" rel="external noreferrer">Bitcoin Wiki record</a>—optional purchases and the March 2011 Bitcoin announcement.</li>
+      <li><a class="text-link" href="https://bitcointalk.org/index.php?topic=24930.0%3Bwap" rel="external noreferrer">BitcoinTalk starter-pack discussion</a>—the 1 July 2011 promotion, players and apparent operator participation.</li>
+      <li><a class="text-link" href="https://bitcointalk.org/index.php?topic=40042.0" rel="external noreferrer">BitcoinTalk “all-in” announcement</a>—the 29 August 2011 PayPal withdrawal and operator claim of roughly 1,500 active players.</li>
+      <li><a class="text-link" href="https://openuserjs.org/scripts/i-machine/Mine_Things_-_Transport_page" rel="external noreferrer">OpenUserJS transport extension</a>—publication history and detailed transport, radar, gadget and journey tooling.</li>
+      <li><a class="text-link" href="https://openuserjs.org/?orderBy=updated&amp;orderDir=asc&amp;p=50&amp;version=23.05.13" rel="external noreferrer">OpenUserJS MineThings index</a>—surviving transport, chat, layout and message tools and their platform counters.</li>
+      <li><a class="text-link" href="https://openuserjs.org/?limit=bktxxvsgrqlztl&amp;p=192" rel="external noreferrer">OpenUserJS Machine Owners</a>—a 2016 machine-ownership analysis tool.</li>
+      <li><a class="text-link" href="https://www.martialtalk.com/threads/mine-things-free-browser-game.104152/" rel="external noreferrer">MartialTalk recommendation</a>—friend testimony identifying creator Jahet Stevens, with his given name misspelled in the original post, and describing once-daily play.</li>
+      <li><a class="text-link" href="https://forums.anandtech.com/threads/new-browser-game.2167073/" rel="external noreferrer">AnandTech mention</a>—a small contemporary word-of-mouth recommendation.</li>
+      <li><a class="text-link" href="https://github.com/eru-iluvatar/thud/blob/master/thud.xml" rel="external noreferrer">thud game-catalogue record</a>—browser, science-fiction and publisher classification; rating provenance unknown.</li>
+      <li><a class="text-link" href="https://www.reddit.com/r/incremental_games/comments/f1tqlo" rel="external noreferrer">2020 shutdown discussion</a>—technical state, succession attempt and closure.</li>
+      <li><a class="text-link" href="https://yyyeeeeeyyy.itch.io/mini-minethings" rel="external noreferrer">Mini MineThings</a>—a community memorial after closure.</li>
+      <li><a class="text-link" href="https://www.newgrounds.com/portal/view/869633" rel="external noreferrer">Newgrounds release record</a>—dated publication and author description of the playable memorial.</li>
+      <li><a class="text-link" href="https://www.reddit.com/r/tipofmyjoystick/comments/rbl577" rel="external noreferrer">2021 identification thread</a>—residual recognition after shutdown.</li>
+      <li><a class="text-link" href="https://www.reddit.com/r/gamingsuggestions/comments/lbbijg" rel="external noreferrer">2021 similar-games request</a>—later memory of automatic randomized loot and crafting.</li>
+      <li><a class="text-link" href="https://www.reddit.com/r/AndroidGaming/comments/10d7hts" rel="external noreferrer">2023 AndroidGaming reminiscence</a>—later classification as a scavenging and item-collection game.</li>
+    </ol><p>Public sources were last reviewed on 30 August 2026. Repository evidence means the archived source and SQL material shipped with this restoration. Operator-supplied history is first-hand testimony from Serif and is labelled separately where public records do not corroborate it. The corrected name <strong>Jahet Stevens</strong> is operator-supplied; linked contemporary posts contain a recurring misspelling.</p></section>
     </div></div>
   </article>`;
 }
@@ -4011,20 +4391,21 @@ function historyPage() {
 function legalPage(seller, paymentConfig) {
   const version = LEGAL_VERSIONS[LEGAL_VERSION];
   const sellerDetails = seller.legalName && seller.legalAddress && seller.legalEmail
-    ? `<dl class="legal-identity"><dt>Legal seller</dt><dd>${escapeHtml(seller.legalName)}</dd><dt>Geographic address</dt><dd>${escapeHtml(seller.legalAddress)}</dd><dt>Contact</dt><dd><a href="mailto:${escapeHtml(seller.legalEmail)}">${escapeHtml(seller.legalEmail)}</a></dd></dl>`
+    ? `<dl class="legal-identity"><dt>Legal seller</dt><dd>${escapeHtml(seller.legalName)}</dd><dt>Geographic address</dt><dd>${escapeHtml(seller.legalAddress)}</dd><dt>Contact</dt><dd><a class="text-link" href="mailto:${escapeHtml(seller.legalEmail)}">${escapeHtml(seller.legalEmail)}</a></dd></dl>`
     : `<p class="legal-notice"><strong>Real-money checkout is not available.</strong> The operator's legal name, geographic address and contact email have not been configured for publication.</p>`;
-  return `<article class="editorial-page legal-page"><nav class="editorial-switcher" aria-label="Public records"><a href="/history">History</a><a href="/legal" aria-current="page">Legal</a></nav>
+  return `<article class="editorial-page legal-page"><nav class="editorial-switcher" aria-label="Public records"><a class="text-link" href="/history">History</a><a class="text-link" href="/legal" aria-current="page">Legal</a></nav>
     <section class="page-title"><div><p class="eyebrow">MineThings archive · Record 02</p><h1>Legal</h1></div><p>${escapeHtml(version.title)}. The rules, rights and responsibilities governing this independent restoration. Version ${LEGAL_VERSION}, England and Wales.</p></section>
     <div class="editorial-facts" aria-label="Legal document status"><div><span>Effective</span><strong>${escapeHtml(version.effectiveDate)}</strong></div><div><span>Jurisdiction</span><strong>England and Wales</strong></div><div><span>Payment mode</span><strong>${escapeHtml(paymentConfig.environment)}</strong></div></div>
     <p class="legal-summary" role="note"><strong>Mandatory rights remain.</strong> These terms allocate risk as far as the law permits. They do not remove consumer rights or liabilities that cannot lawfully be excluded.</p>
-    <div class="editorial-layout"><nav class="article-index" aria-label="Legal sections"><strong>On this page</strong><a href="#operator">Operator</a><a href="#accounts">Accounts</a><a href="#service">Service</a><a href="#payments">Payments</a><a href="#privacy">Privacy</a><a href="#liability">Liability</a><a href="#changes">Changes</a></nav><div class="editorial-copy legal-clauses">
-    <section id="operator"><h2>1. Operator and status</h2><p>MineThings is an unofficial, independently operated restoration presented under the name <strong>${escapeHtml(seller.operatorName)}</strong>. It is not endorsed by or affiliated with the original creator, previous operators, PayPal or any owner of third-party names or artwork. Those rights remain with their respective owners.</p>${sellerDetails}</section>
+    <div class="editorial-layout"><nav class="article-index" aria-label="Legal sections"><strong>On this page</strong><a class="text-link" href="#operator">Operator</a><a class="text-link" href="#accounts">Accounts</a><a class="text-link" href="#service">Service</a><a class="text-link" href="#payments">Payments</a><a class="text-link" href="#privacy">Privacy</a><a class="text-link" href="#rights">Rights and content</a><a class="text-link" href="#liability">Liability</a><a class="text-link" href="#changes">Changes</a></nav><div class="editorial-copy legal-clauses">
+    <section id="operator"><h2>1. Operator and status</h2><p>MineThings is an unofficial, independently operated restoration presented by <strong>${escapeHtml(seller.operatorName)}</strong>. The original game was created by <strong>Jahet Stevens</strong>. This restoration is not endorsed by or affiliated with Jahet Stevens, previous operators, PayPal or any owner of third-party names, code or artwork. No transfer of those third-party rights is claimed.</p>${sellerDetails}</section>
     <section id="accounts"><h2>2. Accounts and acceptable use</h2><p>You must provide accurate registration information, protect your password and use only accounts you are authorised to control. Do not exploit vulnerabilities, automate abusive traffic, interfere with other miners, launder value, harass people, or transmit unlawful material. Accounts may be restricted or closed where reasonably necessary for security, abuse prevention or operation of the service.</p></section>
     <section id="service"><h2>3. Experimental service</h2><p>The restoration is provided on an experimental, as-available basis. Game rules, balancing and availability may change. No promise is made that the service will be uninterrupted, error-free, permanently available, or that game data can always be preserved.</p></section>
     <section id="payments"><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Contact the seller before initiating a dispute where practical.</p></section>
-    <section id="privacy"><h2>5. Privacy</h2><p>MineThings stores account name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data, game activity, security/session information, and—when enabled—a Google account identifier and the email returned during Google sign-in. When payments are used, it also stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries. Email is used to verify account ownership and deliver essential security messages. Google and PayPal independently process sign-in or payment information under their own privacy terms.</p><p>Data is retained while the account or associated legal/audit need continues, then deleted or anonymised when reasonably possible. You may contact the published seller address to request access, correction or deletion, subject to legal and fraud-prevention retention requirements.</p></section>
-    <section id="liability"><h2>6. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
-    <section id="changes"><h2>7. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
+    <section id="privacy"><h2>5. Privacy</h2><p><strong>Controller, purposes and bases.</strong> The operator identified above controls the personal data used by MineThings. Account and gameplay data are processed to create and perform your account and provide features you request; payment records are processed to perform purchases and meet legal, accounting and dispute obligations; and security, moderation, fraud prevention and service-integrity records are processed for the operator's legitimate interests in running a safe, reliable game. A verified email is required to hold an account. MineThings does not use account data for advertising or automated decisions with legal or similarly significant effects.</p><p><strong>Data collected.</strong> MineThings stores your miner name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data; game possessions, actions, settings and communications; and essential security and session information. An essential HttpOnly session cookie keeps you signed in. If Google sign-in is enabled, MineThings stores the Google account identifier and email returned during sign-in. If payments are enabled, it stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries, but not card numbers.</p><p><strong>Who can see it.</strong> Miner names, profile details you choose to show, market activity, guild membership, public chat and public world or battle records can be visible to other miners. Private messages are addressed to their participants and guild chat to current guild members. The operator may access records where necessary to administer, secure or moderate the service.</p><p><strong>Sharing and retention.</strong> Data is shared only with service infrastructure and, when you choose them, Google for sign-in and PayPal for payment. Those providers process data under their own notices and may process it internationally. Account and gameplay records are kept while the account remains active or the persistent world requires them. Security, moderation and payment records are kept for as long as reasonably needed to prevent abuse, resolve disputes and meet legal or accounting duties, then deleted or anonymised where practical.</p><p><strong>Your rights.</strong> Depending on the processing and its legal basis, you may ask for access, correction, deletion, restriction or portability. <strong>You may object at any time to processing based on legitimate interests.</strong> Contact the published seller address above. You may also complain to the <a class="text-link" href="https://ico.org.uk/make-a-complaint/data-protection-complaints/data-protection-complaints/" rel="external noreferrer">Information Commissioner's Office</a>. Some requests may be limited by other people's rights or legal, security and fraud-prevention retention duties.</p></section>
+    <section id="rights"><h2>6. Rights and submitted content</h2><p>Names, code, artwork and other historical MineThings material remain the property of their respective rights holders. Identification of Jahet Stevens as the original creator is attribution, not a claim of endorsement or ownership by him of this restoration.</p><p>You retain any rights you hold in content you submit. You grant the operator a worldwide, non-exclusive, royalty-free licence to store, reproduce, transmit, display and moderate that content only as reasonably necessary to operate, secure and preserve MineThings. You must not submit content you have no right to use.</p></section>
+    <section id="liability"><h2>7. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
+    <section id="changes"><h2>8. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
     <p class="editorial-document-note">Payment mode: ${escapeHtml(paymentConfig.environment)}. This page is operational information, not legal advice to the operator.</p>
     </div></div>
   </article>`;
@@ -4036,13 +4417,13 @@ function formatMoneyMinor(amountMinor, currency = 'GBP') {
 
 function creditsPage(player, bundles, purchases, readiness, paymentConfig) {
   const unavailable = readiness.ready ? '' : `<p class="legal-notice"><strong>Checkout unavailable.</strong> ${escapeHtml(readiness.missing.join(', '))}.</p>`;
-  const bundleCards = bundles.map((bundle) => `<article class="credit-bundle"><p class="eyebrow">${escapeHtml(bundle.name)}</p><strong>${bundle.credits.toLocaleString('en-GB')} credits</strong><span>${escapeHtml(formatMoneyMinor(bundle.amountMinor, bundle.currency))}</span><form method="post" action="/credits/paypal/orders"><input type="hidden" name="bundleId" value="${bundle.id}"><label class="check-row"><input type="checkbox" name="acceptPaymentTerms" value="1" required><span>I accept the <a href="/legal" target="_blank" rel="noopener">payment terms</a> (version ${LEGAL_VERSION}).</span></label><label class="check-row"><input type="checkbox" name="immediateDelivery" value="1" required><span>Supply my credits immediately; I understand this affects my 14-day cancellation right.</span></label><button${readiness.ready ? '' : ' disabled'}>Continue to PayPal</button></form></article>`).join('');
-  const history = purchases.map((purchase) => `<tr><td><a href="/credits/receipts/${purchase.id}">MT-${purchase.id}</a></td><td>${new Date(purchase.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td><span class="payment-status payment-${escapeHtml(purchase.status)}">${escapeHtml(purchase.status)}</span></td></tr>`).join('');
+  const bundleCards = bundles.map((bundle) => `<article class="credit-bundle"><p class="eyebrow">${escapeHtml(bundle.name)}</p><strong>${bundle.credits.toLocaleString('en-GB')} credits</strong><span>${escapeHtml(formatMoneyMinor(bundle.amountMinor, bundle.currency))}</span><form method="post" action="/credits/paypal/orders"><input type="hidden" name="bundleId" value="${bundle.id}"><label class="check-row"><input type="checkbox" name="acceptPaymentTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">payment terms</a> (version ${LEGAL_VERSION}).</span></label><label class="check-row"><input type="checkbox" name="immediateDelivery" value="1" required><span>Supply my credits immediately; I understand this affects my 14-day cancellation right.</span></label><button${readiness.ready ? '' : ' disabled'}>Continue to PayPal</button></form></article>`).join('');
+  const history = purchases.map((purchase) => `<tr><td><a class="text-link" href="/credits/receipts/${purchase.id}">MT-${purchase.id}</a></td><td>${new Date(purchase.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td><span class="payment-status payment-${escapeHtml(purchase.status)}">${escapeHtml(purchase.status)}</span></td></tr>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">Optional support</p><h1>Buy credits</h1></div><p>Balance: <strong>${player.credits.toLocaleString('en-GB')} credits</strong> · ${escapeHtml(paymentConfig.environment)} checkout</p></section>${unavailable}<section><h2>Credit bundles</h2><p>PayPal hosts the approval step. MineThings never sees your card details.</p><div class="credit-bundles">${bundleCards}</div></section><section><h2>Purchase history</h2><div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Created</th><th>Bundle</th><th>Paid</th><th>Status</th></tr></thead><tbody>${history || '<tr><td colspan="5">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function receiptPage(purchase) {
-  return `<article class="receipt"><header class="page-title"><div><p class="eyebrow">Permanent purchase record</p><h1>Receipt MT-${purchase.id}</h1></div><a class="button secondary" href="/credits/receipts/${purchase.id}.txt">Download receipt</a></header><dl class="receipt-grid"><dt>Miner</dt><dd>${escapeHtml(purchase.playerName)}</dd><dt>Created</dt><dd>${new Date(purchase.createdAt).toLocaleString('en-GB')}</dd><dt>Status</dt><dd>${escapeHtml(purchase.status)}</dd><dt>Bundle</dt><dd>${escapeHtml(purchase.bundleName)}</dd><dt>Credits</dt><dd>${purchase.credits.toLocaleString('en-GB')}</dd><dt>Amount</dt><dd>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</dd><dt>PayPal order</dt><dd>${escapeHtml(purchase.providerOrderId || 'Not assigned')}</dd><dt>PayPal capture</dt><dd>${escapeHtml(purchase.providerCaptureId || 'Not captured')}</dd><dt>Terms accepted</dt><dd>Version ${escapeHtml(purchase.termsVersion)} at ${new Date(purchase.consentedAt).toLocaleString('en-GB')}</dd><dt>Seller</dt><dd>${escapeHtml(purchase.sellerName || 'Not configured')}<br>${escapeHtml(purchase.sellerAddress)}<br>${escapeHtml(purchase.sellerEmail)}</dd></dl><p><a href="/legal">Read the current Legal page</a> · <a href="/credits">Back to credit purchases</a></p></article>`;
+  return `<article class="receipt"><header class="page-title"><div><p class="eyebrow">Permanent purchase record</p><h1>Receipt MT-${purchase.id}</h1></div><a class="button secondary" href="/credits/receipts/${purchase.id}.txt">Download receipt</a></header><dl class="receipt-grid"><dt>Miner</dt><dd>${escapeHtml(purchase.playerName)}</dd><dt>Created</dt><dd>${new Date(purchase.createdAt).toLocaleString('en-GB')}</dd><dt>Status</dt><dd>${escapeHtml(purchase.status)}</dd><dt>Bundle</dt><dd>${escapeHtml(purchase.bundleName)}</dd><dt>Credits</dt><dd>${purchase.credits.toLocaleString('en-GB')}</dd><dt>Amount</dt><dd>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</dd><dt>PayPal order</dt><dd>${escapeHtml(purchase.providerOrderId || 'Not assigned')}</dd><dt>PayPal capture</dt><dd>${escapeHtml(purchase.providerCaptureId || 'Not captured')}</dd><dt>Terms accepted</dt><dd>Version ${escapeHtml(purchase.termsVersion)} at ${new Date(purchase.consentedAt).toLocaleString('en-GB')}</dd><dt>Seller</dt><dd>${escapeHtml(purchase.sellerName || 'Not configured')}<br>${escapeHtml(purchase.sellerAddress)}<br>${escapeHtml(purchase.sellerEmail)}</dd></dl><p><a class="text-link" href="/legal">Read the current Legal page</a> · <a class="text-link" href="/credits">Back to credit purchases</a></p></article>`;
 }
 
 function receiptText(purchase) {
@@ -4065,7 +4446,7 @@ function verifyCapturedOrder(order, purchase) {
 
 function adminPaymentsPage(bundles, purchases) {
   const bundleRows = bundles.map((bundle) => { const formId = `bundle-${bundle.id}`; return `<tr><td><input form="${formId}" name="name" value="${escapeHtml(bundle.name)}" maxlength="80" required></td><td><input form="${formId}" type="number" name="credits" value="${bundle.credits}" min="1" required></td><td><input form="${formId}" type="number" name="amountMinor" value="${bundle.amountMinor}" min="1" required> pence</td><td><label class="check-row"><input form="${formId}" type="checkbox" name="enabled" value="1"${bundle.enabled ? ' checked' : ''}><span>Enabled</span></label></td><td><form id="${formId}" method="post" action="/admin/credit-bundles/${bundle.id}"><button>Save</button></form></td></tr>`; }).join('');
-  const purchaseRows = purchases.map((purchase) => `<tr><td><a href="/admin/players/${purchase.playerId}">${escapeHtml(purchase.playerName)}</a></td><td>MT-${purchase.id}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td>${escapeHtml(purchase.status)}</td><td>${escapeHtml(purchase.providerOrderId || '—')}</td><td>${escapeHtml(purchase.reviewReason || '')}</td></tr>`).join('');
+  const purchaseRows = purchases.map((purchase) => `<tr><td><a class="text-link" href="/admin/players/${purchase.playerId}">${escapeHtml(purchase.playerName)}</a></td><td>MT-${purchase.id}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td>${escapeHtml(purchase.status)}</td><td>${escapeHtml(purchase.providerOrderId || '—')}</td><td>${escapeHtml(purchase.reviewReason || '')}</td></tr>`).join('');
   return `${adminTabs('payments')}<section class="page-title"><div><p class="eyebrow">Payment operations</p><h1>Credits and PayPal</h1></div><p>Bundle changes affect new orders only. Every purchase keeps its original price and credit snapshot.</p></section><section><h2>Bundles</h2><div class="table-scroll"><table class="bundle-admin-table"><thead><tr><th>Name</th><th>Credits</th><th>Price</th><th>State</th><th></th></tr></thead><tbody>${bundleRows}</tbody></table></div></section><section><h2>Recent purchases</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Receipt</th><th>Bundle</th><th>Amount</th><th>Status</th><th>Order</th><th>Review</th></tr></thead><tbody>${purchaseRows || '<tr><td colspan="7">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
@@ -4232,7 +4613,7 @@ function fieldGuidePage(catalog, player = null) {
     categoriesByLetter.get(letter).push(category);
   }
   const index = [...categoriesByLetter.keys()]
-    .map((letter) => `<a href="#letter-${encodeURIComponent(letter.toLocaleLowerCase('en-GB'))}">${escapeHtml(letter)}</a>`)
+    .map((letter) => `<a class="text-link" href="#letter-${encodeURIComponent(letter.toLocaleLowerCase('en-GB'))}">${escapeHtml(letter)}</a>`)
     .join('');
   const sections = [...categoriesByLetter.entries()].map(([letter, entries]) => {
     const entryRows = entries.map((category) => {
@@ -4260,7 +4641,8 @@ function fieldGuidePage(catalog, player = null) {
   return `<article class="glossary-page"><section class="page-title"><div><p class="eyebrow">Every kind of thing</p><h1>Field guide</h1></div><p>You do not get help. You do get an alphabetical account of what every category of thing is and what it is useful for.</p></section>
     <div class="glossary-summary" aria-label="Field guide coverage"><div><span>Catalogue</span><strong>${catalog.items.length.toLocaleString('en-GB')} things</strong></div><div><span>Categories</span><strong>${categories.length}</strong></div><div><span>Coverage</span><strong>${describedCount === catalog.items.length ? 'Every thing' : `${describedCount.toLocaleString('en-GB')} things`}</strong></div></div>
     <nav class="glossary-index" aria-label="Thing glossary letters"><strong>Jump to</strong>${index}</nav>
-    <p class="glossary-note">Functional entries cover every thing once. Mine entries provide a second view through every live mine category. Counts include damaged versions alongside their intact counterparts; examples and rarity coverage come from the live game catalogue.</p>
+    <p class="glossary-note"><strong>How to read this guide.</strong> Functional entries cover every thing once. Mine entries provide a second view through every live mine category. Counts include damaged versions alongside their intact counterparts; examples and rarity coverage come from the current game catalogue, so they change with it.</p>
+    <p class="glossary-note"><strong>Provenance.</strong> This is a guide to the live MineThings 2 rules, not a transcription of the old help pages. Its catalogue and systems descend from the game created by Jahet Stevens and are now restored and maintained by Serif. Category names are for people; the game keeps stable catalogue identities underneath them.</p>
     <div class="glossary-list">${sections}</div></article>`;
 }
 
@@ -4457,9 +4839,9 @@ export function createApp(options = {}) {
 
   const liveClients = new Set();
   let liveCursor = store.latestLiveUpdateId();
-  const requestedLiveDebounceMs = Number(options.liveUpdateDebounceMs ?? 15);
+  const requestedLiveDebounceMs = Number(options.liveUpdateDebounceMs ?? 1000);
   const liveDebounceMs = Number.isFinite(requestedLiveDebounceMs)
-    ? Math.max(0, Math.min(250, Math.round(requestedLiveDebounceMs))) : 15;
+    ? Math.max(0, Math.min(5000, Math.round(requestedLiveDebounceMs))) : 1000;
   const allowedLiveTopics = new Set([
     'catalog', 'market', 'factories', 'chat', 'guilds', 'oil', 'vehicles', 'world',
     'payments', 'messages', 'players', 'stats', 'all'
@@ -4486,7 +4868,7 @@ export function createApp(options = {}) {
   };
   const relevantLiveScopes = (client, events) => [...new Set(events
     .map((entry) => entry.scope)
-    .filter((scope) => client.all || client.scopes.has(scope)))];
+    .filter((scope) => client.all || client.changeScopes.has(scope)))];
   const sendFindingEvents = (client, events) => {
     const findings = events.filter((entry) => entry.eventType === 'items-found'
       && entry.scope === client.playerScope && entry.payload);
@@ -4583,19 +4965,42 @@ export function createApp(options = {}) {
   liveHeartbeatTimer.unref();
 
   const openLiveUpdates = (request, response, session, url) => {
-    if (!session || !store.hasPlayer(session.playerId) || !store.isEmailVerified(session.playerId)) {
-      response.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Sign in required');
+    const endSession = (location, clearCookie = false) => {
+      const headers = {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-store',
+        Connection: 'close',
+        'X-Accel-Buffering': 'no'
+      };
+      if (clearCookie) headers['Set-Cookie'] = clearSessionCookie(secureCookies);
+      response.writeHead(200, headers);
+      response.end(`event: session-ended\ndata: ${JSON.stringify({ location })}\n\n`);
+    };
+    if (!session || !store.hasPlayer(session.playerId)) {
+      // EventSource retries HTTP authentication failures forever. Complete its
+      // protocol instead so a page left open across a restart can return to sign-in.
+      endSession('/', true);
+      return;
+    }
+    if (!store.isEmailVerified(session.playerId)) {
+      endSession('/verify-email');
       return;
     }
     const requestedTopics = String(url.searchParams.get('topics') ?? '')
       .split(',').map((topic) => topic.trim()).filter((topic) => allowedLiveTopics.has(topic));
     const player = store.database.prepare('SELECT authority FROM players WHERE id = ?')
       .get(session.playerId);
+    const topicScopes = requestedTopics.map((topic) => `topic:${topic}`);
+    const playerScope = `player:${session.playerId}`;
+    const changeScopes = new Set(topicScopes);
+    // Market mutations have their own scope. Private player rows mostly represent
+    // background findings and must not rebuild a complete exchange page.
+    if (!requestedTopics.includes('market')) changeScopes.add(playerScope);
     const client = {
       response,
-      playerScope: `player:${session.playerId}`,
-      scopes: new Set([`player:${session.playerId}`,
-        ...requestedTopics.map((topic) => `topic:${topic}`)]),
+      playerScope,
+      scopes: new Set([playerScope, ...topicScopes]),
+      changeScopes,
       all: requestedTopics.includes('all') && player?.authority > 0
     };
     response.writeHead(200, {
@@ -4604,32 +5009,30 @@ export function createApp(options = {}) {
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no'
     });
-    response.write('retry: 2000\n\n');
+    response.write('retry: 10000\n\n');
     const lastEventHeader = Array.isArray(request.headers['last-event-id'])
       ? request.headers['last-event-id'][0] : request.headers['last-event-id'];
     const since = Math.max(0, Number(url.searchParams.get('since')) || 0,
       Number(lastEventHeader) || 0);
     liveClients.add(client);
     let catchupCursor = since;
-    let lastSentId = since;
     let missed;
     do {
-      missed = store.liveUpdatesAfter(catchupCursor, 10000);
+      missed = store.liveUpdatesAfter(catchupCursor, 10000,
+        client.all ? null : client.scopes);
       if (!missed.length) break;
       catchupCursor = missed.at(-1).id;
       sendFindingEvents(client, missed);
+      sendBattleEvents(client, missed);
       const missedScopes = relevantLiveScopes(client, missed);
       if (missedScopes.length) {
         sendLiveEvent(client, 'change', {
           revision: catchupCursor, scopes: missedScopes
         }, catchupCursor);
-        lastSentId = catchupCursor;
       }
     } while (missed.length >= 10000);
-    if (lastSentId < catchupCursor || catchupCursor === since) {
-      const revision = store.latestLiveUpdateId();
-      sendLiveEvent(client, 'ready', { revision }, revision);
-    }
+    const revision = store.latestLiveUpdateId();
+    sendLiveEvent(client, 'ready', { revision }, revision);
     const remove = () => liveClients.delete(client);
     request.once('close', remove);
     response.once('close', remove);
@@ -4834,6 +5237,96 @@ export function createApp(options = {}) {
       if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
       return;
     }
+    if (/^\/node\/weapons\/weapon-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/weapons', '/img/items/weapons');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/explosives\/explosive-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/explosives', '/img/items/explosives');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/vehicles\/vehicle-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/vehicles', '/img/items/vehicles');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/bugs\/bug-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/bugs', '/img/items/bugs');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/music\/music-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/music', '/img/items/music');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/gadgets\/gadget-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/gadgets', '/img/items/gadgets');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/oil\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/oil', '/img/items/oil');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/ore\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/ore', '/img/items/ore');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/mods\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/mods', '/img/items/mods');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/equipment\/equipment-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/equipment', '/img/items/equipment');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/avatars\/avatar-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/avatars', '/img/items/avatars');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/map-icons\/(?:mine-\d+|oil-field)\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/map-icons', '/img/map-icons');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/mines\/mine-(?:1|4|5)\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/mines', '/img/items/mines');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/starter\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/starter', '/img/items/starter');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/bait\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/bait', '/img/items/bait');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/cannons\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/cannons', '/img/items/cannons');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/fish\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/fish', '/img/items/fish');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (/^\/node\/spices\/item-\d+\.svg$/.test(url.pathname)) {
+      const relativePath = url.pathname.replace('/node/spices', '/img/items/spices');
+      if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
     if (url.pathname === '/node/oil-field.js') {
       if (!staticFile(request, response, PUBLIC_ROOT, '/oil-field.js', 'no-store')) response.writeHead(404).end('Not found');
       return;
@@ -4924,7 +5417,7 @@ export function createApp(options = {}) {
     let player;
     let flash;
     try {
-      if (session && !maintenanceRunning) {
+      if (session && !maintenanceRunning && !liveFragment) {
         store.settleMines(now(), random);
         store.runBumUpdate(now(), random);
         store.runDwarfUpdate(now(), random);
@@ -4951,6 +5444,9 @@ export function createApp(options = {}) {
         player.weather = store.currentWeatherForMap(activeMap.id, now());
         player.batteryRemaining = Math.max(0, player.batteryExpiresAt - now());
         player.liveUpdateRevision = () => store.latestLiveUpdateId();
+        if (player.emailVerified && !liveFragment) {
+          player.registrationWelcomeMail = store.registrationWelcomePrompt(player.id);
+        }
       }
       flash = liveFragment ? undefined : session?.flash;
       if (session && !liveFragment) {
@@ -4972,7 +5468,7 @@ export function createApp(options = {}) {
         session.flash = error.message;
         redirect(response, destination);
       } else {
-        responseHtml(response, 400, layout('Try again', `<section class="error"><h1>Could not do that</h1><p>${escapeHtml(error.message)}</p><a href="/">Try again</a></section>`, null));
+        responseHtml(response, 400, layout('Try again', `<section class="error"><h1>Could not do that</h1><p>${escapeHtml(error.message)}</p><a class="text-link" href="/">Try again</a></section>`, null));
       }
       return;
     }
@@ -5006,7 +5502,7 @@ export function createApp(options = {}) {
     };
     const requireAdmin = () => {
       if (player?.authority > 0) return true;
-      responseHtml(response, 404, layout('Not found', '<section class="page-title"><h1>That tunnel goes nowhere.</h1><a href="/">Return home</a></section>', player));
+      responseHtml(response, 404, layout('Not found', '<section class="page-title"><h1>That tunnel goes nowhere.</h1><a class="text-link" href="/">Return home</a></section>', player));
       return false;
     };
 
@@ -5105,7 +5601,7 @@ export function createApp(options = {}) {
         if (!pending || pending.expiresAt <= now()) {
           if (signupId) pendingGoogleSignups.delete(signupId);
           responseHtml(response, 400, layout('Google signup expired',
-            '<section class="error"><h1>Google signup expired</h1><p>Return home and start Google sign-in again.</p><a href="/">Return home</a></section>', null));
+            '<section class="error"><h1>Google signup expired</h1><p>Return home and start Google sign-in again.</p><a class="text-link" href="/">Return home</a></section>', null));
           return;
         }
         responseHtml(response, 200, layout('Choose miner name',
@@ -5153,8 +5649,7 @@ export function createApp(options = {}) {
         const id = crypto.randomBytes(32).toString('base64url');
         const newSession = {
           playerId: saved.id,
-          flash: `Miner created and verified with Google. ${starterWelcomePackMessage(catalog)}`,
-          quietNotice: starterWelcomePackMessage(catalog)
+          quietNotice: 'Miner created and verified with Google.'
         };
         const starterItems = findingNoticeItems(saved.discoveries, catalog, {
           source: 'new-mine', cityId: saved.cityId, foundAt: registeredAt
@@ -5204,8 +5699,8 @@ export function createApp(options = {}) {
         }
         if (session?.playerId === verification.playerId) {
           delete session.developmentVerificationUrl;
-          session.flash = `Email verified. ${starterWelcomePackMessage(catalog)}`;
-          session.quietNotice = starterWelcomePackMessage(catalog);
+          delete session.flash;
+          session.quietNotice = 'Email verified. Your miner is unlocked.';
           redirect(response, '/');
         } else {
           responseHtml(response, 200, layout('Email verified',
@@ -5248,7 +5743,8 @@ export function createApp(options = {}) {
           const transientNotices = {
             quietNotice: player.quietNotice,
             meldReveal: player.meldReveal,
-            findingNotice: player.findingNotice
+            findingNotice: player.findingNotice,
+            registrationWelcomeMail: player.registrationWelcomeMail
           };
           let battery = { expiresAt: player.batteryExpiresAt };
           if (!liveFragment) {
@@ -5439,9 +5935,11 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/mills\/\d+\/reinforce$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const form = await readForm(request);
-        store.startMillReinforcement(player.id, Number(url.pathname.split('/')[2]),
+        const mill = store.startMillReinforcement(player.id, Number(url.pathname.split('/')[2]),
           Number(form.vehicleId), Number(form.woodItemId), now());
-        setFlash('Vehicle reinforcement started.');
+        setFlash(mill.enqueued
+          ? `Vehicle reinforcement added to mill ${mill.id}'s queue.`
+          : 'Vehicle reinforcement started.');
         redirect(response, '/mills');
       } else if (request.method === 'POST' && /^\/mills\/\d+\/assign$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -5461,6 +5959,20 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         store.idleFactoryWorker(player.id, Number(url.pathname.split('/')[3]), now());
         setFlash('Worker idled.');
+        redirect(response, '/mills');
+      } else if (request.method === 'POST'
+        && /^\/mills\/\d+\/queue\/\d+\/(cancel|up|down)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const parts = url.pathname.split('/');
+        const millId = Number(parts[2]);
+        const queueId = Number(parts[4]);
+        if (parts[5] === 'cancel') {
+          store.cancelFactoryQueueJob(player.id, millId, queueId, now());
+          setFlash('Reinforcement removed from the queue; its Wood and screws were returned.');
+        } else {
+          store.reorderFactoryQueueJob(player.id, millId, queueId, parts[5], now());
+          setFlash('Mill queue reordered.');
+        }
         redirect(response, '/mills');
       } else if (request.method === 'POST' && /^\/mills\/\d+\/(cancel|demolish)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -5571,18 +6083,31 @@ export function createApp(options = {}) {
         );
         setFlash(`${result.vehicleName} is underway to attack the ${result.creatureName}. Expected interception in ${formatDuration(result.duration)} at ${Math.round(result.encounterLocation).toLocaleString('en-GB')} km along the route.`);
         redirect(response, '/events');
+      } else if (request.method === 'POST'
+        && /^\/events\/ghosts\/\d+\/(?:attack|hunt)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const ghostId = Number(url.pathname.split('/')[3]);
+        const form = await readForm(request);
+        const result = store.attackGhost(
+          player.id, ghostId, Number(form.vehicleId), now()
+        );
+        setFlash(`${result.vehicleName} is underway to intercept ${result.ghostName}. Expected contact in ${formatDuration(result.duration)} at ${Math.round(result.encounterLocation).toLocaleString('en-GB')} km along the route.`);
+        redirect(response, '/events');
       } else if (request.method === 'GET' && url.pathname === '/vehicles') {
         if (!requirePlayer()) return;
-        const vehicles = store.vehiclesForPlayer(player.id, now(), {
+        const vehicleTime = now();
+        const vehicles = store.vehiclesForPlayer(player.id, vehicleTime, {
           includeRoutes: true, settle: !maintenanceRunning
         });
+        const fleetPlayer = store.playerById(player.id, vehicleTime, { settle: false });
         const thiefBase = store.thiefBaseStatus(player.id);
-        const activationAvailability = new Map(Object.entries(player.inventory)
+        const activationAvailability = new Map(Object.entries(fleetPlayer.inventory)
           .map(([itemId, count]) => [Number(itemId), Number(count)])
           .filter(([itemId, count]) => count > 0 && catalog.vehicleByItemId.has(itemId))
           .map(([itemId]) => [itemId, store.vehicleActivationAvailability(player.id, itemId)]));
         responseHtml(response, 200, layout('Vehicles',
-          vehiclesPage(player, catalog, vehicles, now(), thiefBase, activationAvailability), player, flash));
+          vehiclesPage(fleetPlayer, catalog, vehicles, vehicleTime, thiefBase,
+            activationAvailability), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/vehicles/boxes') {
         if (!requirePlayer()) return;
         const requestedVehicleId = Number(url.searchParams.get('vehicleId'));
@@ -5654,13 +6179,30 @@ export function createApp(options = {}) {
         if (vehicle.cargoSize !== 0) {
           throw new Error('Empty this vehicle\'s cargo hold before starting a shuttle route.');
         }
+        if (!(Number(vehicle.capacity) > 0)) {
+          throw new Error(
+            'Free at least one cargo capacity slot before starting a shuttle route.'
+          );
+        }
         const form = await readForm(request);
         const routeId = Number(form.routeId);
+        const allowedCategoryIds = new Set(
+          selectableShuttleMineTypes(catalog).map((mineType) => Number(mineType.id))
+        );
+        const categoryIds = Object.keys(form).filter((key) => key.startsWith('category_'))
+          .map((key) => Number(key.slice('category_'.length)));
+        if (!categoryIds.length) throw new Error('Choose at least one mine category.');
+        if (categoryIds.some((mineTypeId) =>
+          !Number.isSafeInteger(mineTypeId) || !allowedCategoryIds.has(mineTypeId))) {
+          throw new Error('Choose only available mine categories.');
+        }
         const route = store.routesForVehicle(player.id, vehicleId, actionTime)
           .find((entry) => Number(entry.id) === routeId && !entry.mission
             && Number(entry.destinationCityId) !== Number(vehicle.cityId));
         if (!route) throw new Error('Choose a compatible shuttle destination from this city.');
-        const started = store.startVehicleShuttle(player.id, vehicleId, routeId, actionTime);
+        const started = store.startVehicleShuttle(
+          player.id, vehicleId, routeId, actionTime, categoryIds
+        );
         const originLabel = cityChoiceLabel(catalog, vehicle.cityId);
         const destinationLabel = vehicleRouteDestinationLabel(
           player, catalog, vehicle.cityId, route.destinationCityId
@@ -5939,11 +6481,11 @@ export function createApp(options = {}) {
         });
         responseHtml(response, 200, layout('Map', mapPage(player, catalog,
           store.knownCityIds(player.id, now()), vehicles,
-          url.searchParams.get('world') ?? ''), player, flash));
+          url.searchParams.get('world') ?? '', store.oilFieldCityIds()), player, flash));
       } else if (url.pathname === '/move' && ['GET', 'POST'].includes(request.method)) {
         if (request.method === 'POST') request.resume();
         responseHtml(response, 410, layout('Regional capitals',
-          '<section class="page-title"><div><p class="eyebrow">Regional capitals</p><h1>Home moves have ended</h1></div><a href="/map">Open world map</a></section><section class="capital-retired-note"><h2>One shared capital per region</h2><p>Aso’s starting city and each later region’s arrival gateway are now permanent capitals. Your things and existing assets have not been moved. Use the world map to find the capital and surrounding outposts.</p></section>',
+          '<section class="page-title"><div><p class="eyebrow">Regional capitals</p><h1>Home moves have ended</h1></div><a class="text-link" href="/map">Open world map</a></section><section class="capital-retired-note"><h2>One shared capital per region</h2><p>Aso’s starting city and each later region’s arrival gateway are now permanent capitals. Your things and existing assets have not been moved. Use the world map to find the capital and surrounding outposts.</p></section>',
           player, flash));
       } else if (request.method === 'POST' && /^\/cities\/\d+\/select$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -6181,6 +6723,12 @@ export function createApp(options = {}) {
         const type = normalizedMessageTypeFilter(url.searchParams.get('type'));
         responseHtml(response, 200, layout('Messages', messagesPage(
           player, store.recentMessages(player.id, filter, type), catalog, filter, type), player, flash));
+      } else if (request.method === 'POST' && url.pathname === '/messages/welcome/ignore') {
+        if (!requirePlayer()) return;
+        const form = await readForm(request);
+        store.ignoreRegistrationWelcome(player.id, form.messageId);
+        player.registrationWelcomeMail = null;
+        redirect(response, '/');
       } else if (request.method === 'GET' && url.pathname === '/stats') {
         if (!requirePlayer()) return;
         responseHtml(response, 200, layout('Server Stats', statsPage(store.publicStats(now())), player, flash));
@@ -6306,6 +6854,9 @@ export function createApp(options = {}) {
       } else if (request.method === 'GET' && /^\/messages\/view\/\d+$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const message = store.messageForPlayer(player.id, Number(url.pathname.split('/')[3]));
+        if (message.details?.event === 'registration-welcome') {
+          player.registrationWelcomeMail = null;
+        }
         if (!message.read && !message.deleted) {
           player.unreadMessages = Math.max(0, Number(player.unreadMessages ?? 0) - 1);
         }
@@ -6389,14 +6940,20 @@ export function createApp(options = {}) {
       } else if (request.method === 'GET' && url.pathname === '/casino') {
         if (!requirePlayer()) return;
         const selectedSpinId = Number(url.searchParams.get('spin'));
+        const machineKey = url.searchParams.get('machine') || THING_O_MATIC_KEY;
         responseHtml(response, 200, layout('Casino', casinoPage(
-          store.casinoState(player.id, selectedSpinId)
+          store.casinoState(player.id, selectedSpinId, machineKey)
         ), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/casino/spin') {
         if (!requirePlayer()) return;
         const form = await readForm(request);
-        const spin = store.spinCasino(player.id, form.currency, form.wager, random, now());
-        redirect(response, `/casino?spin=${spin.id}`);
+        const machineKey = form.machine || THING_O_MATIC_KEY;
+        const spin = store.spinCasino(
+          player.id, form.currency, form.wager, random, now(), machineKey
+        );
+        redirect(response, machineKey === THING_O_MATIC_KEY
+          ? `/casino?spin=${spin.id}`
+          : `/casino?machine=${encodeURIComponent(machineKey)}&spin=${spin.id}`);
       } else if (request.method === 'POST' && url.pathname === '/chat') {
         if (!requirePlayer()) return;
         const form = await readForm(request);
@@ -6474,7 +7031,7 @@ export function createApp(options = {}) {
         const recycleSettings = player && normal ? `<form class="recycle-settings" method="post" action="/items/${normal.id}/recycle-settings"><h2>Auto-recycle findings</h2><p>Factory-made copies remain protected; this setting applies only when you find the item.</p><label class="checkbox-line"><input type="checkbox" name="recycleOnFind"${player.recycleItemIds.includes(normal.id) ? ' checked' : ''}> Automatically recycle this item upon finding</label>${damagedItem ? `<label class="checkbox-line"><input type="checkbox" name="recycleDamagedOnFind"${player.recycleItemIds.includes(damagedItem.id) ? ' checked' : ''}> Automatically recycle its damaged version upon finding</label>` : ''}<button>Save recycling settings</button></form>` : '';
         const description = machineInfo ? machineInfo.text : item.description;
         const descriptionHtml = escapeHtml(description).replace(/\r?\n/gu, '<br>');
-        const content = `<section class="detail rarity-${item.rarity}${item.damaged ? ' detail-damaged' : ''}" data-item-id="${item.id}"><div class="detail-art"><img class="detail-image${item.hasLargeImage ? '' : ' detail-image-fallback'}" src="${item.largeImage}" alt="${escapeHtml(item.name)}" data-large-image="${item.hasLargeImage ? 'original' : 'fallback'}"></div><div class="detail-copy"><p class="eyebrow">${escapeHtml(item.rarityName)}</p><h1>${escapeHtml(item.name)}</h1><p>${descriptionHtml}</p>${itemDetailStats(item, catalog, player)}${player ? `<div class="button-row"><a class="button" href="/market/items/${item.id}">Open local market</a><a class="button secondary" href="/inventory">Back to things</a></div>` : '<a href="/">Back</a>'}</div></section>${recycleSettings}`;
+        const content = `<section class="detail rarity-${item.rarity}${item.damaged ? ' detail-damaged' : ''}" data-item-id="${item.id}"><div class="detail-art"><img class="detail-image${item.hasLargeImage ? '' : ' detail-image-fallback'}" src="${item.largeImage}" alt="${escapeHtml(item.name)}" data-large-image="${item.hasLargeImage ? 'original' : 'fallback'}"></div><div class="detail-copy"><p class="eyebrow">${escapeHtml(item.rarityName)}</p><h1>${escapeHtml(item.name)}</h1><p>${descriptionHtml}</p>${itemDetailStats(item, catalog, player)}${player ? `<div class="button-row"><a class="button" href="/market/items/${item.id}">Open local market</a><a class="button secondary" href="/inventory">Back to things</a></div>` : '<a class="text-link" href="/">Back</a>'}</div></section>${recycleSettings}`;
         responseHtml(response, 200, layout(item.name, content, player, flash));
       } else if (request.method === 'POST' && /^\/items\/\d+\/recycle-settings$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -6781,7 +7338,7 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }).end(JSON.stringify({ player: { ...player, passwordHash: undefined }, findIntervalMs: catalog.settings.find_interval_ms }));
       } else {
-        responseHtml(response, 404, layout('Not found', '<section class="page-title"><h1>That tunnel goes nowhere.</h1><a href="/">Return home</a></section>', player));
+        responseHtml(response, 404, layout('Not found', '<section class="page-title"><h1>That tunnel goes nowhere.</h1><a class="text-link" href="/">Return home</a></section>', player));
       }
     } catch (error) {
       const destination = requestDestination(request);
@@ -6793,7 +7350,7 @@ export function createApp(options = {}) {
       } else {
         const statusCode = Number.isSafeInteger(error?.statusCode)
           && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 400;
-        responseHtml(response, statusCode, layout('Try again', `<section class="error"><h1>Could not do that</h1><p>${escapeHtml(error.message)}</p><a href="/">Try again</a></section>`, null));
+        responseHtml(response, statusCode, layout('Try again', `<section class="error"><h1>Could not do that</h1><p>${escapeHtml(error.message)}</p><a class="text-link" href="/">Try again</a></section>`, null));
       }
     }
   });

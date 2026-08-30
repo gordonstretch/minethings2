@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Museum Background</title>
+  <desc id="desc">A miniature location scene representing the Museum Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="m14 43 50-27 50 27zM22 47h84v62H22z" fill="#dfd8c4" stroke="#242927" stroke-width="6"/><path d="M38 50v51m26-51v51m26-51v51M17 106h94" stroke="#7b7061" stroke-width="8"/><path d="M55 31h18" stroke="#d49435" stroke-width="5"/></g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">8-core Gaming Computer</title>
+  <desc id="desc">A gaming computer tower, monitor, keyboard, and glowing game controller.</desc>
+  <rect x="12" y="15" width="70" height="55" rx="4" fill="#35464a" stroke="#292d29" stroke-width="6"/><path d="M20 23h54v39H20z" fill="#3d7f92"/><path d="m26 58 17-19 12 10 9-13 10 22z" fill="#714b87"/><path d="M47 70v15m-25 0h50" stroke="#292d29" stroke-width="6"/><path d="M87 10h29v74H87z" fill="#4d5755" stroke="#292d29" stroke-width="6"/><circle cx="101" cy="29" r="8" fill="#f28c28"/><path d="M95 55h14" stroke="#d8be32" stroke-width="5"/><path d="M21 92h62l8 22H12z" fill="#b8c2bd" stroke="#292d29" stroke-width="5"/><path d="M89 96q15-12 29 0l5 18-15 3-7-9-7 9-14-3z" fill="#714b87" stroke="#292d29" stroke-width="5"/>
+</svg>

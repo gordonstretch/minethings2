@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Shotgun</title>
+  <desc id="desc">A compact pump-action shotgun with twin barrel lines, wooden furniture, and red shells.</desc>
+  <path d="M47 49h69v16H47z" fill="#75817d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M75 49v16" fill="none" stroke="#e2e7e3" stroke-width="4"/>
+  <path d="M48 50 18 62 9 83l25 3 23-22z" fill="#92552f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M57 59h31v19H57z" fill="#b7793f" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M65 78q2 17 18 18" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M91 75h10v25H91zM105 75h10v25h-10z" fill="#e32121" stroke="#292d29" stroke-width="4"/>
+  <path d="M91 81h10M105 81h10" fill="none" stroke="#f1ca65" stroke-width="4"/>
+</svg>

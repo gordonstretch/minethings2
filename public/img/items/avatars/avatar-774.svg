@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Black Border</title>
+  <desc id="desc">A material-themed portrait frame representing the Black Border avatar thing.</desc>
+  <g data-icon-family="avatar-borders" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="96" height="96" rx="5" fill="none" stroke="#171b1c" stroke-width="17"/><path d="m22 35 16-13m52 84 17-14m-85-2 12 16m70-84-13 14" stroke="#596266" stroke-width="4"/><circle cx="64" cy="57" r="17" fill="#c98f63" stroke="#242927" stroke-width="5"/><path d="M38 100q4-28 26-28t26 28" fill="#59756f" stroke="#242927" stroke-width="5"/></g>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Van</title>
+  <desc id="desc">A square cargo van with a tall enclosed body, split windscreen, sliding side door, and green utility stripe.</desc>
+  <path d="M13 32h72l30 32v37H13z" fill="#d8d8c9" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M84 37v30h27L84 37Z" fill="#acd0d3" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M21 51h51v38H21z" fill="#c8c5b5" stroke="#292d29" stroke-width="4"/>
+  <path d="M14 76h99" stroke="#698b18" stroke-width="8"/>
+  <path d="M74 35v63M46 52v36m9-18h7" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="34" cy="99" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="94" cy="99" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="34" cy="99" r="5" fill="#aeb2aa"/>
+  <circle cx="94" cy="99" r="5" fill="#aeb2aa"/>
+  <path d="M108 72h8v12h-8" fill="#f1d28a" stroke="#292d29" stroke-width="4"/>
+</svg>

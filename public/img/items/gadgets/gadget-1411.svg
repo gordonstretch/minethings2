@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Shield</title>
+  <desc id="desc">Tungsten Shield, depicted as a broad layered hex shield with reinforced energy chevrons.</desc>
+  <path d="M64 8 111 27l8 55-18 25-37 14-37-14L9 82l8-55z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m64 20 35 14 7 41-14 20-28 12-28-12-14-20 7-41z" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
+  <path d="m64 31 24 10 5 29-9 14-20 9-20-9-9-14 5-29z" fill="#242827" stroke="#292d29" stroke-width="4"/>
+  <path d="m43 49 21 16 21-16M43 72l21 16 21-16" fill="none" stroke="#a64891" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M14 47h14m72 0h14M13 83h14m74 0h14" stroke="#f28c28" stroke-width="4"/>
+</svg>

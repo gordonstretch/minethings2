@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Warehouse</title>
+  <desc id="desc">Titanium Warehouse, depicted as an arched depot with a reinforced loading door and stacked freight.</desc>
+  <path d="M13 55Q18 17 64 14q46 3 51 41v60H13z" fill="#9fc5cc" stroke="#292d29" stroke-width="7"/>
+  <path d="M25 53Q29 29 64 27q35 2 39 26" fill="none" stroke="#e3f0ef" stroke-width="6"/>
+  <path d="M34 58h60v57H34z" fill="#4184a8" stroke="#292d29" stroke-width="6"/>
+  <path d="M42 66h44v15H42zm0 17h44v15H42zm0 17h44v15H42z" fill="#e3f0ef" stroke="#292d29" stroke-width="3"/>
+  <path d="M16 65h18m60 0h18M55 14v-7h18v8" fill="none" stroke="#292d29" stroke-width="6"/>
+  <path d="M18 95h16v20H18zm76-9h17v29H94z" fill="#a66d3e" stroke="#292d29" stroke-width="4"/>
+</svg>

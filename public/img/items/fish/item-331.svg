@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mako Shark</title>
+  <desc id="desc">A torpedo-shaped mako shark with a pointed snout, powerful crescent tail, and exposed triangular teeth.</desc>
+  <path d="M7 66q32-39 86-16l26-23-7 33 14 22-32-13Q41 99 7 66z" fill="#486d7c" stroke="#292d29" stroke-width="8"/><path d="M45 50 61 18l20 37M61 73l37 31-47-19" fill="#33596a" stroke="#292d29" stroke-width="6"/><path d="M10 68q39 15 84 2" stroke="white" stroke-width="8" fill="none"/><path d="M11 66q12-10 25-3-8 17-22 10" fill="#233033" stroke="#292d29" stroke-width="4"/><path d="m16 67 6 5 6-7 6 4" stroke="white" stroke-width="3"/><circle cx="25" cy="56" r="4" fill="#292d29"/>
+</svg>

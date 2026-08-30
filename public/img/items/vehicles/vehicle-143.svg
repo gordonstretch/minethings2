@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Armored Limo</title>
+  <desc id="desc">An exceptionally long, low armoured limousine with narrow purple windows and reinforced body panels.</desc>
+  <path d="M10 72 24 57h71l16 8 8 22-12 11H21L9 87z" fill="#4b5350" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M37 57 49 39h45l14 22" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m51 44-8 13h19V44zm17 0v13h17V44zm23 0v14h13L94 44z" fill="#a64891" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M23 76h87M61 62v23m24-23v23" fill="none" stroke="#292d29" stroke-width="4"/>
+  <circle cx="31" cy="95" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="98" cy="95" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="31" cy="95" r="4" fill="#a64891"/>
+  <circle cx="98" cy="95" r="4" fill="#a64891"/>
+</svg>

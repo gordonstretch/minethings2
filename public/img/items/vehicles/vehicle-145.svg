@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bus</title>
+  <desc id="desc">A tall full-length city bus with a red belt line, five windows, and a flat forward cab.</desc>
+  <path d="M14 29h89l13 12v57H14z" fill="#d6cfbc" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M22 38h17v25H22zm23 0h17v25H45zm23 0h17v25H68zm23 0h16l5 6v19H91z" fill="#9fc5cc" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M15 70h100v14H15z" fill="#e32121" stroke="#292d29" stroke-width="4"/>
+  <path d="M21 91h87" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="34" cy="99" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="96" cy="99" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="34" cy="99" r="4" fill="#e32121"/>
+  <circle cx="96" cy="99" r="4" fill="#e32121"/>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Flatbed</title>
+  <desc id="desc">A long orange-railed flatbed truck with an empty timber deck, compact forward cab, and dual rear axle.</desc>
+  <path d="M12 64h68l9-25h17l10 27v31H12z" fill="#5e6864" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M87 43h17l9 23H82z" fill="#acd0d3" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M13 56h66v20H13z" fill="#8b5a37" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M17 48v13m19-13v13m19-13v13m19-13v13M14 48h64" fill="none" stroke="#f79721" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="29" cy="97" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="61" cy="97" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="98" cy="97" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="29" cy="97" r="5" fill="#aeb2aa"/>
+  <circle cx="61" cy="97" r="5" fill="#aeb2aa"/>
+  <circle cx="98" cy="97" r="5" fill="#aeb2aa"/>
+  <path d="M108 72h8v11h-8" fill="#f1d28a" stroke="#292d29" stroke-width="4"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Siege Tower</title>
+  <desc id="desc">A towering wooden siege engine with red braces, a crenellated roof, internal ladder, and four wheels.</desc>
+  <path d="M24 19h15v-8h14v8h14v-8h15v8h14v81H24z" fill="#9a6b3d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M34 31h52v54H34z" fill="#b8844d" stroke="#292d29" stroke-width="4"/>
+  <path d="M35 83 85 32M35 32l50 51M46 87V38m15 49V38m15 49V38" fill="none" stroke="#e32121" stroke-width="4" stroke-linecap="round"/>
+  <path d="M94 48h18l5 8-5 8H96" fill="#b8844d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="34" cy="103" r="13" fill="#6d4528" stroke="#292d29" stroke-width="6"/>
+  <circle cx="82" cy="103" r="13" fill="#6d4528" stroke="#292d29" stroke-width="6"/>
+  <path d="M34 103h1m48 0h1" fill="none" stroke="#e32121" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sneakers</title>
+  <desc id="desc">A low canvas sneaker with a rubber toe, layered sole, eyelets, and tied laces.</desc>
+  <path d="M14 73q22 2 37-27l18 18 38 13 8 25H18z" fill="#f0dfbd" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M18 91h94v16H18z" fill="#f6f0df" stroke="#292d29" stroke-width="6"/><path d="m48 57 25 20m-34-8 28 17m7-18 18 3" fill="none" stroke="#3d7f92" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Grouper</title>
+  <desc id="desc">A massive grouper with a heavy head, cavernous mouth, rounded tail, and dappled body.</desc>
+  <path d="M10 70q16-40 65-39 31 4 43 34-9 36-49 45-42 0-59-40z" fill="#6d8061" stroke="#292d29" stroke-width="7"/><path d="M13 68q13-17 31-10L29 80q-10 7-16-12z" fill="#435240" stroke="#292d29" stroke-width="5"/><circle cx="31" cy="52" r="6" fill="#d8be32" stroke="#292d29" stroke-width="3"/><path d="M70 35 87 17l13 24M74 104l21 15-5-21" fill="#57704f" stroke="#292d29" stroke-width="5"/><path d="M113 57 126 37l-2 32 2 30-15-20" fill="#6d8061" stroke="#292d29" stroke-width="6"/><g fill="#40513d"><circle cx="54" cy="58" r="5"/><circle cx="77" cy="48" r="4"/><circle cx="91" cy="68" r="6"/><circle cx="64" cy="87" r="4"/></g>
+</svg>

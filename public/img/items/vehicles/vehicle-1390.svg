@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Longship</title>
+  <desc id="desc">A Viking longship with a dragon-headed prow, striped square sail, and a rhythmic row of oars.</desc>
+  <path d="M13 70q52 15 99 0l7 10q-37 27-91 14z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M63 72V14" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M28 18h70v45H28z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M42 18v45m21-45v45m21-45v45" fill="none" stroke="#d8be32" stroke-width="7"/>
+  <path d="M31 82 20 110m29-24-7 28m27-27-2 29m23-30 5 27" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="m108 70 10-25-10 5-4-12-8 19" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

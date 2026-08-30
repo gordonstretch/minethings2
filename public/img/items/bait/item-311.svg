@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ballyhoo</title>
+  <desc id="desc">A long silver ballyhoo baitfish with a pointed bill, blue back, and forked tail.</desc>
+  <path d="M20 68q28-32 76-10l20-17-5 25 8 21-24-11q-43 21-75-8z" fill="#aeb9b5" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M25 65q38-26 72-5" fill="none" stroke="#3d7f92" stroke-width="8"/><path d="m20 68-15-7" stroke="#292d29" stroke-width="5" stroke-linecap="round"/><circle cx="34" cy="62" r="4" fill="#292d29"/><path d="M50 72q19 8 37 0" fill="none" stroke="#eef4ed" stroke-width="4"/>
+</svg>

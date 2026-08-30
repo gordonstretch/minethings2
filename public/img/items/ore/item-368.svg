@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ore Crate</title>
+  <desc id="desc">A braced timber Ore Crate packed with angular mineral crystals, metallic seams, and two bright exposed ore points.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="m22 58 13-38 22 25 14-35 19 37 15-17 6 40z" fill="#657b78"/><path d="m35 20 8 37 14-12 8 25 6-60 10 52 9-15 7 23" fill="none" stroke="#b8cfca"/><path d="M14 58h100v57H14z" fill="#9b6534"/><path d="m14 59 50 25 50-25M64 84v31" fill="none" stroke="#e0a24f"/><path d="m14 115 50-31 50 31M25 70v35m78-35v35" fill="none" stroke="#634322"/><g fill="#e69b32" stroke-width="4"><path d="m27 51 12-18 12 21z"/><path d="m74 54 10-23 15 25z"/></g></g>
+</svg>

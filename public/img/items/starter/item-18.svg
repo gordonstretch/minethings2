@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Oil Painting</title>
+  <desc id="desc">A framed oil painting of green hills beneath a glowing sky.</desc>
+  <rect x="15" y="13" width="98" height="104" fill="#d8be32" stroke="#292d29" stroke-width="7"/><rect x="27" y="25" width="74" height="80" fill="#f0dfbd" stroke="#7a542e" stroke-width="5"/><path d="M29 79 52 53l18 16 13-22 16 32v24H29z" fill="#557d52"/><path d="M29 78q23-14 42 1t28-3" fill="none" stroke="#3d7f92" stroke-width="9"/><circle cx="43" cy="42" r="9" fill="#f28c28"/>
+</svg>

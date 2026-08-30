@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tanker</title>
+  <desc id="desc">A long powered tanker with three rounded deck tanks, exposed pipework, and an aft bridge.</desc>
+  <path d="M10 78h108l-18 30H27z" fill="#596563" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M16 77V45h27v32" fill="#d7e0dd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M23 45V27h12v18" fill="#e32121" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="#889594" stroke="#292d29" stroke-width="5">
+    <path d="M49 65q0-18 14-18t14 18z"/><path d="M76 65q0-18 14-18t14 18z"/><path d="M98 65q0-15 11-15t8 15z"/>
+  </g>
+  <path d="M45 70h67M31 90h73" fill="none" stroke="#e32121" stroke-width="5" stroke-linecap="round"/>
+</svg>

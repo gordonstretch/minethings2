@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Piano</title>
+  <desc id="desc">A tall upright piano with a full keyboard, framed music panel, sturdy front legs, and two brass pedals.</desc>
+  <path d="M20 13h88v89H20z" fill="#57443a" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M27 22h74v38H27z" fill="#785746" stroke="#292d29" stroke-width="5"/>
+  <path d="M36 29h56v23H36z" fill="#a64891" stroke="#292d29" stroke-width="4"/>
+  <path d="M11 58h106v31H11z" fill="#eee7d4" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M18 60v28M29 60v28M40 60v28M51 60v28M62 60v28M73 60v28M84 60v28M95 60v28M106 60v28" fill="none" stroke="#292d29" stroke-width="3"/>
+  <path d="M25 60v15M35 60v15M47 60v15M57 60v15M68 60v15M79 60v15M90 60v15M101 60v15" fill="none" stroke="#292d29" stroke-width="6"/>
+  <path d="M27 89v28M101 89v28M18 117h25M85 117h25" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M58 103 53 114M70 103l5 11" fill="none" stroke="#c9a552" stroke-width="5" stroke-linecap="round"/>
+</svg>

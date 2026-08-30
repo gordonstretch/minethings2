@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Flimsy Hardhat</title>
+  <desc id="desc">The Flimsy Hardhat shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f2df6b"/><stop offset=".48" stop-color="#d8be32"/><stop offset="1" stop-color="#877316"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 77q3-51 45-54 42 3 45 54z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M54 23h20v52H54z" fill="#d8be32" stroke="#242927" stroke-width="5"/>
+    <path d="M12 75h104v20H12z" fill="#fff2a3" stroke="#242927" stroke-width="6"/>
+    <path d="M27 68q7-29 27-37m47 37q-7-29-27-37" fill="none" stroke="#fff2a3" stroke-width="5"/></g>
+</svg>

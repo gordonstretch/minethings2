@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Donkey</title>
+  <desc id="desc">A compact pack donkey in profile with long ears, a dark mane, bridle, and twin cargo panniers.</desc>
+  <path d="M20 56c15-12 49-11 65 0l10-19 13-8 8 10-7 19-15 8-7 25H31c-14 0-21-10-11-35z" fill="#8c8176" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M96 37 94 14l10 17m4 0 7-17 1 25" fill="#8c8176" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M35 87v24m18-22-2 22m25-22 3 22m10-25 7 25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M29 51h48v18H29z" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M25 62h20v27H24zm40 0h20v27H65z" fill="#76533b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M20 57 12 48m97-5-13 8" fill="none" stroke="#3f3732" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="106" cy="38" r="2.5" fill="#292d29"/>
+</svg>

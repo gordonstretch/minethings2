@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Fluyt</title>
+  <desc id="desc">A pear-shaped cargo fluyt with an enormous rounded belly, pinched deck, and three deliberately small sails.</desc>
+  <path d="M20 72h85l10 9q-15 32-49 36-37-4-51-36z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 71V22m27 49V15m26 58V27" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="M18 28h19v22H16zm50-7h20v24H68zm26 12h17v20H94z"/>
+  </g>
+  <path d="M22 84q44 11 87-1M68 31h20" fill="none" stroke="#e32121" stroke-width="5" stroke-linecap="round"/>
+  <path d="m105 73 12-13" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

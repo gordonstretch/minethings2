@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Swimsuit</title>
+  <desc id="desc">A striped one-piece swimsuit with crossed shoulder straps.</desc>
+  <path d="m43 13 21 28 21-28m-46 8 8 33-12 62h58L81 54l8-33" fill="#3d7f92" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M42 69h44M38 88h52" stroke="#f0dfbd" stroke-width="8"/>
+</svg>

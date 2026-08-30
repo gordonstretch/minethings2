@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Nutmeg</title>
+  <desc id="desc">A warm brown nutmeg seed beside a cut half showing its marbled interior.</desc>
+  <ellipse cx="43" cy="68" rx="29" ry="39" fill="#8c603c" stroke="#292d29" stroke-width="7"/><path d="M36 36q12 27 0 62m15-62q-11 28 1 61" fill="none" stroke="#5f412e" stroke-width="4"/><ellipse cx="91" cy="70" rx="28" ry="38" fill="#f0dfbd" stroke="#292d29" stroke-width="7"/><path d="M91 35q-25 18 0 35-25 18 0 36 24-18 0-36 24-17 0-35z" fill="#8f6544" stroke="#5d3e2c" stroke-width="4"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Calculator</title>
+  <desc id="desc">Titanium Calculator, depicted as a desktop adding machine with a crank and curling receipt tape.</desc>
+  <path d="M18 39 30 15h60l14 24v75H18z" fill="#9fc5cc" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M39 15V6h44v10" fill="#e3f0ef" stroke="#292d29" stroke-width="5"/>
+  <path d="M46 7h30l13 21H34z" fill="#f5e8c9" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M43 14h26M48 21h28" stroke="#4184a8" stroke-width="3"/>
+  <rect x="32" y="45" width="57" height="20" rx="3" fill="#263936" stroke="#292d29" stroke-width="5"/>
+  <path d="M42 55h35" stroke="#3d94c5" stroke-width="5"/>
+  <g fill="#e3f0ef" stroke="#292d29" stroke-width="4"><circle cx="40" cy="78" r="7"/><circle cx="61" cy="78" r="7"/><circle cx="82" cy="78" r="7"/><circle cx="40" cy="100" r="7"/><circle cx="61" cy="100" r="7"/><circle cx="82" cy="100" r="7"/></g>
+  <path d="M104 55h12v45h-12m7-34 9-8" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

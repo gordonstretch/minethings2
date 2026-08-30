@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pool Cue</title>
+  <desc id="desc">A sharply tapered pool cue with a chalked tip and a small chalk cube.</desc>
+  <path d="M20 108 99 18l9 8-82 87z" fill="#c68a4a" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m88 31 11-13 9 8-12 13z" fill="#ece1c6" stroke="#292d29" stroke-width="4"/>
+  <path d="m20 108 14-15 9 8-17 12z" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="m104 14 8 7-4 5-9-8z" fill="#4184a8" stroke="#292d29" stroke-width="3"/>
+  <path d="M82 91h25v25H82z" fill="#4184a8" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m87 97 14 13M101 97l-13 13" fill="none" stroke="#a8d8e7" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cello</title>
+  <desc id="desc">A floor-standing cello with a broad resonant body, long fingerboard, curved bouts, bow, and extended endpin.</desc>
+  <path d="M64 9q-10 0-10 10t10 9l-5 37h10l-5-37q10 1 10-9T64 9z" fill="#86502f" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M64 55c-15-14-34-7-33 10 0 10 10 14 8 22-2 8-12 12-9 24 4 15 23 16 34 7 11 9 30 8 34-7 3-12-7-16-9-24-2-8 8-12 8-22 1-17-18-24-33-10z" fill="#a96635" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M59 27h10l7 73H52z" fill="#48382f" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m64 67-11 42h22z" fill="#a64891" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M64 16v102M54 108h20M64 118v5" fill="none" stroke="#ead9aa" stroke-width="2"/>
+  <path d="M40 69q12 5 2 17M88 69q-12 5-2 17" fill="none" stroke="#49372c" stroke-width="4" stroke-linecap="round"/>
+  <path d="M14 18 22 115" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M14 18 22 115" fill="none" stroke="#d2bd8c" stroke-width="3" stroke-linecap="round"/>
+</svg>

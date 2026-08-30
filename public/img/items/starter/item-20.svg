@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Red Shirt</title>
+  <desc id="desc">A simple bright red short-sleeved shirt.</desc>
+  <path d="m43 20 21 9 21-9 31 22-18 25-14-10v61H44V57L30 67 12 42z" fill="#c84a3b" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M48 22q16 20 32 0" fill="none" stroke="#f19b87" stroke-width="5"/>
+</svg>

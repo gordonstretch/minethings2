@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cutlass</title>
+  <desc id="desc">A broad curved sailor's blade with a brass basket guard and wrapped grip.</desc>
+  <path d="M31 87q48 8 80-58-10 58-65 73z" fill="#dce3df" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M46 88q37-4 55-41" fill="none" stroke="#f8f6ec" stroke-width="4" stroke-linecap="round"/>
+  <path d="M28 79q24 2 30 19l-11 9q-8-13-25-13z" fill="#d0a340" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m30 88-17 19 11 10 19-20z" fill="#71442f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m24 95 11 10M19 101l11 10" fill="none" stroke="#799c9c" stroke-width="4"/>
+</svg>

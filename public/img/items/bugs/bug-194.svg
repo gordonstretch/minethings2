@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cockroach</title>
+  <desc id="desc">A low, broad brown cockroach in profile with flat wing covers, thorny legs, and two long sweeping antennae.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M43 72 25 92 9 98M59 78l-5 28-13 13M78 76l14 25 18 9"/>
+    <path d="M42 56 24 42 9 41M62 51 57 27 45 13M81 54l15-18 18-8"/>
+  </g>
+  <path d="M18 65c5-18 25-28 52-27 22 1 37 9 39 24 3 18-17 31-48 31-25 0-47-10-43-28z" fill="#77482d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M27 59c12-15 34-19 61-13-9 8-14 22-14 39-24 3-42-6-47-26z" fill="#955c35" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M75 45c20-3 31 4 34 17 1 7-3 13-12 18-11-7-19-18-22-35z" fill="#63402d" stroke="#292d29" stroke-width="5"/>
+  <path d="M97 51c8-14 15-23 23-28M101 57c9-7 15-10 21-10" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M37 56c9-6 19-8 30-7M34 68c10 6 21 9 34 8" fill="none" stroke="#a64891" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="101" cy="61" r="3" fill="#a64891"/>
+</svg>

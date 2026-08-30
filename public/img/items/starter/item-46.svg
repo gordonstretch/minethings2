@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pro Digital Camcorder</title>
+  <desc id="desc">A professional digital camcorder with lens hood, flip screen, and top microphone.</desc>
+  <path d="M18 40h72v62H18z" fill="#5e6966" stroke="#292d29" stroke-width="7"/><path d="M90 53h24v35H90z" fill="#3d7f92" stroke="#292d29" stroke-width="6"/><circle cx="34" cy="72" r="17" fill="#354346" stroke="#292d29" stroke-width="6"/><circle cx="34" cy="72" r="8" fill="#80b7c1"/><path d="M46 39 58 19h35l10 21M62 20v-9h24v9" fill="#b8c2bd" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/><path d="M63 102v13m-23 0h46" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+</svg>

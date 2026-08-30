@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Spreadsheet</title>
+  <desc id="desc">Iron Spreadsheet, depicted as a bound tabular folio with a ruler and marked totals.</desc>
+  <path d="M15 21h87l11 11v84H15z" fill="#59635f" stroke="#292d29" stroke-width="7"/>
+  <path d="M29 35h68v67H29z" fill="#aeb8b2" stroke="#292d29" stroke-width="5"/>
+  <path d="M29 51h68M29 68h68M29 85h68M50 35v67m25-67v67" stroke="#343735" stroke-width="4"/>
+  <rect x="52" y="70" width="21" height="13" fill="#f28c28"/>
+  <path d="M106 45h13v56h-13" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="M9 29h19M9 46h19M9 63h19M9 80h19M9 97h19" stroke="#292d29" stroke-width="5"/>
+  <circle cx="102" cy="24" r="8" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+</svg>

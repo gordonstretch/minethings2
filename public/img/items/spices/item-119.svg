@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Black Pepper</title>
+  <desc id="desc">A dangling green pepper spike densely packed with ripe black peppercorns.</desc>
+  <path d="M62 116V13m0 21 31 13M62 55 34 70m28 6 31 19" stroke="#557d52" stroke-width="7"/><path d="M62 29q21-25 39-8-6 28-39 8zM62 55Q38 31 22 51q10 27 40 4z" fill="#82a96c" stroke="#292d29" stroke-width="5"/><g fill="#303532" stroke="#292d29" stroke-width="3"><circle cx="89" cy="48" r="8"/><circle cx="77" cy="57" r="8"/><circle cx="95" cy="65" r="8"/><circle cx="81" cy="76" r="8"/><circle cx="96" cy="86" r="8"/><circle cx="85" cy="99" r="8"/></g>
+</svg>

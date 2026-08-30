@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Diamond Ring</title>
+  <desc id="desc">A gold ring holding a large, brilliantly faceted diamond.</desc>
+  <ellipse cx="64" cy="83" rx="34" ry="29" fill="none" stroke="#d8be32" stroke-width="13"/><path d="m64 8 27 25-12 26H49L37 33z" fill="#bde1e5" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="m38 33 26 26 27-26M50 14l14 45 15-45" fill="none" stroke="#5e9cab" stroke-width="4"/><path d="M54 84h20" stroke="#fff6cf" stroke-width="4"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Mods Mine</title>
+  <desc id="desc">A rugged hexagonal mod nut charged by a bright bolt.</desc>
+  <path d="m32 5 23 13v28L32 59 9 46V18z" fill="#aeb9b6" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><circle cx="32" cy="32" r="12" fill="#315a64" stroke="#202420" stroke-width="4"/><path d="m35 17-12 17h9l-4 14 13-19h-9z" fill="#ffd36a" stroke="#202420" stroke-width="2.5" stroke-linejoin="round"/>
+</svg>

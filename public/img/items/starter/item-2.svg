@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bolt</title>
+  <desc id="desc">A heavy threaded steel bolt with a broad hexagonal head and bright metal highlights.</desc>
+  <path d="m28 84 55-55 18 18-55 55z" fill="#b8c2bd" stroke="#292d29" stroke-width="7"/><path d="m76 22 21-10 19 19-10 21z" fill="#d9e0dc" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="m33 78 18 18m-8-28 18 18m-8-28 18 18m-8-28 18 18" stroke="#65716e" stroke-width="4"/><path d="m89 19 20 20" stroke="white" stroke-width="4"/>
+</svg>

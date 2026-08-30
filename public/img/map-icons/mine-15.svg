@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Fish Mine</title>
+  <desc id="desc">A powerful fish leaping forward with bright fins.</desc>
+  <path d="M8 33C20 16 39 16 50 31l10-9-1 25-10-9C36 52 18 49 8 33z" fill="#315a64" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="m29 22 8-11 4 14m-12 21 8 9 3-13" fill="#f39a21" stroke="#202420" stroke-width="3.5" stroke-linejoin="round"/><circle cx="20" cy="31" r="3" fill="#ffd36a"/><path d="M13 38q8 5 16 2" fill="none" stroke="#eadfc8" stroke-width="3" stroke-linecap="round"/>
+</svg>

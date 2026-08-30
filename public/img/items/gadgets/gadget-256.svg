@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Shield</title>
+  <desc id="desc">Iron Shield, depicted as a heavy kite shield with a raised spine and iron braces.</desc>
+  <path d="M64 9 111 27l-8 58c-5 18-18 29-39 36-21-7-34-18-39-36l-8-58z" fill="#59635f" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M64 17v96M24 32l40 24 40-24M31 84l33-28 33 28" fill="none" stroke="#343735" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m64 40 17 24-17 22-17-22z" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="M29 31 64 18l35 13" fill="none" stroke="#aeb8b2" stroke-width="5"/>
+  <circle cx="64" cy="64" r="5" fill="#f28c28"/>
+</svg>

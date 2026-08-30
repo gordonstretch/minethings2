@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">MP3 Player</title>
+  <desc id="desc">A pocket music player with a blue screen, click wheel, and wired earbuds.</desc>
+  <rect x="31" y="12" width="66" height="99" rx="10" fill="#3d7f92" stroke="#292d29" stroke-width="7"/><rect x="43" y="25" width="42" height="28" rx="3" fill="#b9d9d9" stroke="#292d29" stroke-width="4"/><path d="M50 39h28" stroke="#557d52" stroke-width="5"/><circle cx="64" cy="79" r="20" fill="#f0dfbd" stroke="#292d29" stroke-width="5"/><circle cx="64" cy="79" r="6" fill="#f28c28"/><path d="M43 110q-22 1-21-22m63 22q22 1 21-22" fill="none" stroke="#292d29" stroke-width="4"/><circle cx="21" cy="84" r="7" fill="#f0dfbd" stroke="#292d29" stroke-width="4"/><circle cx="107" cy="84" r="7" fill="#f0dfbd" stroke="#292d29" stroke-width="4"/>
+</svg>

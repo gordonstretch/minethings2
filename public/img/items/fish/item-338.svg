@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Spearfish</title>
+  <desc id="desc">A lean spearfish with a short sharp bill, high narrow dorsal, scattered spots, and delicate finlets.</desc>
+  <path d="M20 69q28-29 74-16l28-14-10 26 12 23-31-14q-45 19-73-5z" fill="#79919b" stroke="#292d29" stroke-width="7"/><path d="m20 68-15-5 16-5" fill="#94a8ae" stroke="#292d29" stroke-width="4"/><path d="M43 53Q55 17 88 24l7 31" fill="#526e83" stroke="#292d29" stroke-width="6"/><path d="M61 77 79 101l8-29" fill="#526e83" stroke="#292d29" stroke-width="5"/><circle cx="29" cy="59" r="4" fill="#292d29"/><g fill="#d7eff0"><circle cx="48" cy="62" r="3"/><circle cx="62" cy="70" r="3"/><circle cx="76" cy="60" r="3"/><circle cx="88" cy="68" r="3"/></g><g fill="#d8be32"><path d="m92 75 7 6-7 5z"/><path d="m97 64 7 5-7 5z"/></g>
+</svg>

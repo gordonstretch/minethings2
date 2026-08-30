@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Eel</title>
+  <desc id="desc">A green eel curling through the water with a long fin, bright eye, and open mouth.</desc>
+  <path d="M20 91q-15-25 12-38 25-12 51 15 17 18 27 1 8-14-8-26-13-10-4-26" fill="none" stroke="#557d52" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 91q17 25 42 8 17-11 12-31" fill="none" stroke="#86a76f" stroke-width="5" stroke-linecap="round"/><path d="M98 17q17 0 16 18l-12 10-16-12z" fill="#6d925f" stroke="#292d29" stroke-width="5"/><circle cx="106" cy="26" r="3" fill="#d8be32"/><path d="m113 36 10 4-11 4" fill="none" stroke="#c84a3b" stroke-width="3"/>
+</svg>

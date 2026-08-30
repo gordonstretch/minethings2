@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Brown Recluse</title>
+  <desc id="desc">A slender brown recluse spider with long splayed legs and a dark violin marking across its back.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M52 43 32 25 12 21M49 52 27 48 9 57M49 64 27 72 11 90M53 76 38 96 35 116"/>
+    <path d="M76 43 96 25 116 21M79 52 101 48 119 57M79 64 101 72 117 90M75 76 90 96 93 116"/>
+  </g>
+  <g fill="none" stroke="#9a673d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M52 43 32 25 12 21M49 52 27 48 9 57M49 64 27 72 11 90M53 76 38 96 35 116"/>
+    <path d="M76 43 96 25 116 21M79 52 101 48 119 57M79 64 101 72 117 90M75 76 90 96 93 116"/>
+  </g>
+  <ellipse cx="64" cy="76" rx="20" ry="34" fill="#a56e42" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="64" cy="47" rx="17" ry="16" fill="#b98250" stroke="#292d29" stroke-width="6"/>
+  <circle cx="64" cy="29" r="9" fill="#93603a" stroke="#292d29" stroke-width="5"/>
+  <path d="M64 38c-7 5-8 12-4 19l-7 20 11-7 11 7-7-20c4-7 3-14-4-19z" fill="#513c2d"/>
+  <circle cx="59" cy="27" r="2.5" fill="#f28c28"/>
+  <circle cx="69" cy="27" r="2.5" fill="#f28c28"/>
+  <path d="M25 47h8M95 47h8" fill="none" stroke="#f28c28" stroke-width="3" stroke-linecap="round"/>
+</svg>

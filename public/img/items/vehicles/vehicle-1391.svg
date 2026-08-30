@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bireme</title>
+  <desc id="desc">An ancient bireme with a bronze ram, a compact square sail, and two clearly stacked banks of oars.</desc>
+  <path d="M12 69h101l7 9-22 20H27z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M61 69V14" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M29 20h64v39H29z" fill="#f1e5c8" stroke="#292d29" stroke-width="4"/>
+  <path d="M30 30h62" fill="none" stroke="#698b18" stroke-width="6"/>
+  <path d="M32 76 18 102m31-25-10 28m28-27-5 29m24-29 1 27M34 84l-9 29m26-28-4 31m22-30 2 30m18-31 7 27" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="m111 69 9-12-2 21" fill="#698b18" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

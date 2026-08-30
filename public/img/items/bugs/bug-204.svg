@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Centipede</title>
+  <desc id="desc">A long amber centipede curling across the frame, with many paired legs and a blue-marked head.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round">
+    <path d="M29 27 18 12m22 15L36 9M49 36l5-18M52 48l18-8M49 61l18 9M54 74l-7 17M67 80l-1 19M81 79l8 17M94 79l15 12M105 85l12 1"/>
+    <path d="M26 35 9 31m35 10L27 53m23 2-17 12m21 1-12 17m23-7-3 18m17-18 7 17m8-14 16 9m-5-1 13 10"/>
+  </g>
+  <path d="M20 27C50 18 62 34 54 54 46 75 70 84 105 82" fill="none" stroke="#292d29" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 27C50 18 62 34 54 54 46 75 70 84 105 82" fill="none" stroke="#c97c38" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="none" stroke="#754725" stroke-width="3">
+    <path d="M34 26 35 36M47 31l-5 9M55 43l-10 1M54 57l-9-4M56 70l-7 6M69 78l-2 9M83 81l1 9M96 82l1 9"/>
+  </g>
+  <circle cx="19" cy="27" r="12" fill="#4184a8" stroke="#292d29" stroke-width="5"/>
+  <path d="M13 19 8 8m17 9 9-9" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="15" cy="25" r="2.5" fill="#171a18"/><circle cx="22" cy="22" r="2.5" fill="#171a18"/>
+</svg>

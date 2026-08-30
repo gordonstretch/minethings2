@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Hardy Light</title>
+  <desc id="desc">The Hardy Light shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b8d1d1"/><stop offset=".48" stop-color="#799c9c"/><stop offset="1" stop-color="#405f63"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M43 22h42l9 18v66H34V40z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M27 45h74v55H27z" fill="#405f63" stroke="#242927" stroke-width="6"/>
+    <circle cx="64" cy="72" r="24" fill="#e2f1ed" stroke="#242927" stroke-width="5"/>
+    <circle cx="64" cy="72" r="13" fill="#f5eedb"/>
+    <path d="M52 22V10h24v12M23 111h82" stroke="#242927" stroke-width="7"/></g>
+</svg>

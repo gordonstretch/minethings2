@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wahoo</title>
+  <desc id="desc">A fast slender wahoo with an iridescent blue back, pointed jaws, and vertical cobalt bars.</desc>
+  <path d="M7 66q28-28 87-18l29-17-10 29 12 24-31-18q-59 24-87 0z" fill="#aebfbe" stroke="#292d29" stroke-width="7"/><path d="M12 61q42-19 83-10" stroke="#244f65" stroke-width="10"/><path d="M41 51 45 73m12-24 5 25m12-24 5 23m11-20 4 16" stroke="#477da3" stroke-width="5"/><path d="M15 66 31 55l17 2-10 11H16z" fill="#e9efea"/><circle cx="25" cy="58" r="4" fill="#292d29"/><path d="M61 49 74 32l13 19" fill="#244f65" stroke="#292d29" stroke-width="4"/>
+</svg>

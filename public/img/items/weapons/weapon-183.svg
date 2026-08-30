@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sentry Gun</title>
+  <desc id="desc">An autonomous twin-barrel sentry with an orange sensor eye on a wide three-legged stand.</desc>
+  <path d="M58 35h62v13H58zM58 57h62v13H58z" fill="#7b8681" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M30 25h45v60H30z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M38 35h29v25H38z" fill="#f79721" stroke="#292d29" stroke-width="5"/>
+  <circle cx="52.5" cy="47.5" r="7" fill="#ffe0a8" stroke="#292d29" stroke-width="4"/>
+  <path d="M41 85 18 113M64 85l31 28M53 85v31" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M84 40h27M84 62h27" fill="none" stroke="#d9e0dc" stroke-width="4" stroke-linecap="round"/>
+</svg>

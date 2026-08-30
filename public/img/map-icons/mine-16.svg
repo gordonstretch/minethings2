@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Ore Mine</title>
+  <desc id="desc">Three heavy faceted ore crystals rising from stone.</desc>
+  <path d="m8 51 9-24 12 8L37 9l12 22 8-5 3 25z" fill="#aeb9b6" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="M37 10v41M17 28l12 23m20-20-7 20M11 51h48" fill="none" stroke="#315a64" stroke-width="3" stroke-linejoin="round"/><path d="m37 10 12 21-12 6-8-2z" fill="#ffd36a"/>
+</svg>

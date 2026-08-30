@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Factory Background</title>
+  <desc id="desc">A miniature location scene representing the Factory Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M16 109V63l29-17v17l30-17v17l36-21v67z" fill="#6d7470" stroke="#242927" stroke-width="6"/><path d="M81 50V20h18v37M28 77h17v18H28zm30 0h17v18H58zm30 0h17v18H88z" fill="#d8a641" stroke="#242927" stroke-width="5"/><path d="M90 18q-9-10 2-15m10 20q15-12 4-21" fill="none" stroke="#9ca7a2" stroke-width="7"/></g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Anise</title>
+  <desc id="desc">A woody eight-pointed star-anise pod holding a glossy seed in every chamber.</desc>
+  <path d="m64 10 13 31 29-17-16 29 32 11-32 11 16 29-29-17-13 31-13-31-29 17 16-29L6 64l32-11-16-29 29 17z" fill="#95613e" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><circle cx="64" cy="64" r="17" fill="#70472d" stroke="#292d29" stroke-width="5"/><g fill="#d8be32"><ellipse cx="64" cy="26" rx="6" ry="10"/><ellipse cx="97" cy="45" rx="6" ry="10" transform="rotate(55 97 45)"/><ellipse cx="99" cy="82" rx="6" ry="10" transform="rotate(115 99 82)"/><ellipse cx="64" cy="102" rx="6" ry="10"/><ellipse cx="29" cy="82" rx="6" ry="10" transform="rotate(55 29 82)"/><ellipse cx="31" cy="45" rx="6" ry="10" transform="rotate(115 31 45)"/></g>
+</svg>

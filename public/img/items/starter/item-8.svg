@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cuban Cigars</title>
+  <desc id="desc">Three banded Cuban cigars resting in an open cedar presentation box.</desc>
+  <path d="M15 62h98v45H15z" fill="#a9673d" stroke="#292d29" stroke-width="7"/><path d="m20 62 15-29h78L98 62z" fill="#c8884e" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><g stroke="#292d29" stroke-width="5"><path d="M26 75h70v11H26z" fill="#805334"/><path d="M32 47h72v13H32z" fill="#95613e"/><path d="M28 91h70v11H28z" fill="#805334"/></g><g fill="#d8be32"><path d="M43 47h12v13H43z"/><path d="M63 75h12v11H63z"/><path d="M48 91h12v11H48z"/></g>
+</svg>

@@ -506,11 +506,52 @@ test('renders one fixed regional capital without a home chooser', async ({ page 
   await expect(page.locator(
     `.route-map .map-city-capital[data-city-id="${visualCapitalCityId}"]`
   )).toHaveCount(1);
+  await expect(page.locator('.route-map .map-city-nameplate')).toHaveCount(5);
+  await expect(page.locator('.route-map .map-city-nameplate-inlay')).toHaveCount(5);
+  await expect(page.locator('.route-map .map-city-nameplate-tail')).toHaveCount(5);
+  await expect(page.locator('.route-map .map-city-label-rivet')).toHaveCount(10);
+  await expect(page.locator('.route-map .map-city-rank')).toHaveCount(1);
+  expect(await page.locator('.route-map .map-city').evaluateAll((cities) =>
+    cities.every((city) => {
+      const name = city.querySelector('.map-city-name');
+      const plate = city.querySelector('.map-city-nameplate');
+      const label = city.querySelector('.map-city-label');
+      const halo = city.querySelector('.map-city-halo');
+      if (!name || !plate || !label || !halo) return false;
+      const nameBounds = name.getBBox();
+      const plateBounds = plate.getBBox();
+      const labelBounds = label.getBBox();
+      const haloBounds = halo.getBBox();
+      return plateBounds.x <= nameBounds.x - 6
+        && plateBounds.x + plateBounds.width >= nameBounds.x + nameBounds.width + 6
+        && plateBounds.y <= nameBounds.y - 3
+        && plateBounds.y + plateBounds.height >= nameBounds.y + nameBounds.height + 3
+        && labelBounds.y + labelBounds.height <= haloBounds.y - 3;
+    })
+  )).toBeTruthy();
+  await expect(page.locator('.route-map .map-oil-field-icon')).toHaveCount(1);
+  await expect(page.locator('.route-map .map-oil-field-icon title'))
+    .toHaveText('Oil Field in Burgundy');
+  await expect(page.locator('.city-card[data-oil-field="true"] .city-oil-field-operation'))
+    .toContainText('Oil Field');
+  const capitalMarker = page.locator('.route-map .map-capital-star-marker');
+  await expect(capitalMarker).toHaveCount(1);
+  await expect(capitalMarker).toHaveCSS('fill', 'rgb(23, 18, 11)');
   const capitalCard = page.locator(
     `.city-card.capital[data-city-id="${visualCapitalCityId}"]`
   );
   await expect(capitalCard).toHaveCount(1);
   await expect(capitalCard).toContainText('Regional capital');
+  expect(await capitalCard.evaluate((card) => {
+    const badge = card.querySelector('.city-capital-badge');
+    if (!badge) return false;
+    const cardBounds = card.getBoundingClientRect();
+    const badgeBounds = badge.getBoundingClientRect();
+    return badgeBounds.left >= cardBounds.left
+      && badgeBounds.right <= cardBounds.right
+      && badgeBounds.top >= cardBounds.top
+      && badgeBounds.bottom <= cardBounds.bottom;
+  })).toBeTruthy();
   await expect(page.locator('a[href="/move"], form[action="/move"]')).toHaveCount(0);
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('regional-capital-audit-desktop.png'), fullPage: true });
@@ -1322,7 +1363,13 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
     .toHaveAttribute('href', `/items/${catalog.dwarfByRarity.get(1).itemId}`);
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img')).toBeVisible();
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
-    .toHaveCSS('color', 'rgb(240, 224, 88)');
+    .toHaveCSS('color', 'rgb(51, 54, 47)');
+  await expect(page.locator('.chat-row-player'))
+    .toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.chat-row-world').first())
+    .toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.chat-row-dwarf'))
+    .toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.chat-speaker')).toHaveCSS('color', 'rgb(0, 0, 0)');
   await expect(page.locator('.chat-message')).toHaveCSS('color', 'rgb(51, 54, 47)');
   await expect(page.locator('.chat-row time').first()).toHaveAttribute('datetime', /T/);

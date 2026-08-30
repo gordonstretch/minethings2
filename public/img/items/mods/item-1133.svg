@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Missile Turret</title>
+  <desc id="desc">A iron vehicle modification depicting a traversing twin missile pod with two pointed rockets and a reinforced turntable.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M29 88h70l-9 19H38z" fill="#39443f"/><ellipse cx="64" cy="86" rx="31" ry="12" fill="#707b76"/><path d="M31 39h66v44H31z" fill="#707b76"/><path d="M38 45h22v31H38zm30 0h22v31H68z" fill="#39443f"/><path d="m43 64 6-23 6 23v13H43zm30 0 6-23 6 23v13H73z" fill="#799c9c"/><path d="M28 36h72" stroke="#b9c2ba"/></g>
+</svg>

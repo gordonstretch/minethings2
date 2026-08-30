@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Gouge</title>
+  <desc id="desc">Gouge, a reinforced cannon with a toothed boring muzzle and scarred barrel.</desc>
+  <path d="m22 49 16-16 68 11 10 17-15 15-72-7z" fill="#65706d" stroke="#292d29" stroke-width="7"/><path d="m106 41 16 5-8 10 9 10-16 8" fill="#aeb9b5" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/><path d="M35 74h66l-11 28H43z" fill="#95613e" stroke="#292d29" stroke-width="6"/><path d="M49 43 43 72m24-26-5 29" stroke="#c84a3b" stroke-width="4"/><circle cx="49" cy="99" r="13" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="85" cy="99" r="13" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="49" cy="99" r="4" fill="#d8be32"/><circle cx="85" cy="99" r="4" fill="#d8be32"/>
+</svg>

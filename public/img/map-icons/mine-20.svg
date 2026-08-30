@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Discontinued Mine</title>
+  <desc id="desc">A retired supply crate split by a decisive crack.</desc>
+  <path d="M8 15h48v40H8z" fill="#9b6338" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="m9 16 23 14 23-14M32 30v25M12 48l12-12m28 12L40 36" fill="none" stroke="#eadfc8" stroke-width="3"/><path d="m38 8-8 13 8 7-10 13 4 15" fill="none" stroke="#c9573d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

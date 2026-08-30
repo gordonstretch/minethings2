@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium HUD</title>
+  <desc id="desc">A titanium vehicle modification depicting a transparent head-up display projecting a targeting reticle and horizon line.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="m21 27 86 8-8 67-78-7z" fill="#71899c" fill-opacity=".55"/><path d="m31 38 64 6-6 46-58-5z" fill="#3c5365" fill-opacity=".7"/><circle cx="63" cy="64" r="18" fill="none" stroke="#e32121"/><path d="M63 39v50M36 64h54m-43-9 10 9-10 9" fill="none" stroke="#c8d7dd"/><path d="M21 95h78m-55 0-8 18m48-18 8 18" stroke="#3c5365"/><circle cx="63" cy="64" r="4" fill="#e32121"/></g>
+</svg>

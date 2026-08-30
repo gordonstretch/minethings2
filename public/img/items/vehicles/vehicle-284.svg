@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Outrigger</title>
+  <desc id="desc">A narrow sailing canoe with a triangular sail and a separate stabilising float held by curved booms.</desc>
+  <path d="M16 76q52 8 99-5l-14 22q-45 9-78-2z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M51 72V18" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M48 23 19 68h29z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M55 23v44h35z" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M31 87q10 18 24 21M80 86q7 17 19 20" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M47 109q28 8 62-2l-7 10H53z" fill="#d8be32" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+</svg>

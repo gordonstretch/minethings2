@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cymbals</title>
+  <desc id="desc">A matched pair of golden hand cymbals caught mid-clash, with raised bosses, green straps, and ringing grooves.</desc>
+  <ellipse cx="42" cy="75" rx="31" ry="38" fill="#c9912f" stroke="#292d29" stroke-width="6" transform="rotate(-17 42 75)"/>
+  <ellipse cx="42" cy="75" rx="21" ry="28" fill="none" stroke="#edc65f" stroke-width="4" transform="rotate(-17 42 75)"/>
+  <ellipse cx="42" cy="75" rx="9" ry="12" fill="#e0ad3f" stroke="#292d29" stroke-width="5" transform="rotate(-17 42 75)"/>
+  <path d="M34 39c-3-13 2-22 10-25 9 4 13 13 9 25" fill="#5aa66a" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <ellipse cx="87" cy="57" rx="31" ry="38" fill="#d9a23a" stroke="#292d29" stroke-width="6" transform="rotate(18 87 57)"/>
+  <ellipse cx="87" cy="57" rx="21" ry="28" fill="none" stroke="#f1cf6b" stroke-width="4" transform="rotate(18 87 57)"/>
+  <ellipse cx="87" cy="57" rx="9" ry="12" fill="#e4b348" stroke="#292d29" stroke-width="5" transform="rotate(18 87 57)"/>
+  <path d="M79 25C76 14 81 10 87 10c8 4 12 11 9 20" fill="#5aa66a" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m107 91 10 10m-19-5 4 16m11-30h7" fill="none" stroke="#5aa66a" stroke-width="4" stroke-linecap="round"/>
+</svg>

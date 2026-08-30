@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wolf Spider</title>
+  <desc id="desc">A broad brown wolf spider seen from above, with eight powerful legs and a red abdominal chevron.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M52 38Q34 18 15 28M49 48Q28 37 11 48M48 60Q25 61 12 78M51 72Q33 88 22 108"/>
+    <path d="M76 38q18-20 37-10M79 48q21-11 38 0M80 60q23 1 36 18M77 72q18 16 29 36"/>
+  </g>
+  <ellipse cx="64" cy="70" rx="22" ry="31" fill="#785238" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="64" cy="39" rx="18" ry="17" fill="#9a7046" stroke="#292d29" stroke-width="6"/>
+  <path d="m51 64 13 10 13-10-5 20-8 8-8-8z" fill="#d94a36" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M55 36h18" fill="none" stroke="#d7a56d" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#171a18">
+    <circle cx="58" cy="33" r="2.5"/><circle cx="70" cy="33" r="2.5"/>
+    <circle cx="53" cy="39" r="2.5"/><circle cx="75" cy="39" r="2.5"/>
+  </g>
+</svg>

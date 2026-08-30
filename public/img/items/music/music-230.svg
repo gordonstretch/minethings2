@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Violin</title>
+  <desc id="desc">A compact amber violin with a narrow waist, carved scroll, dark chin rest, four strings, and a separate bow.</desc>
+  <g transform="translate(64 66) rotate(-28) scale(.82) translate(-64 -66)">
+  <path d="M62 16q-9 0-9 9t9 8l-4 31h12l-4-31q9 1 9-8t-9-9z" fill="#8d5831" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M64 57c-11-10-25-5-25 8 0 8 8 11 7 17-1 7-10 10-8 22 2 15 17 18 26 8 9 10 24 7 26-8 2-12-7-15-8-22-1-6 7-9 7-17 0-13-14-18-25-8z" fill="#b8783e" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M59 31h10l4 65H55z" fill="#4a3930" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M64 17v91M57 96h14" fill="none" stroke="#ead9aa" stroke-width="2"/>
+  <path d="M45 67q11 5 2 14M83 67q-11 5-2 14" fill="none" stroke="#49372c" stroke-width="4" stroke-linecap="round"/>
+  <path d="M43 100q11 12 24 8l-7-15q-10-1-17 7z" fill="#a64891" stroke="#292d29" stroke-width="4"/>
+  </g>
+  <path d="M108 29 80 110" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M108 29 80 110" fill="none" stroke="#d2bd8c" stroke-width="3" stroke-linecap="round"/>
+</svg>

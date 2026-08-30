@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Harmonica</title>
+  <desc id="desc">A pocket-sized chrome harmonica with a gold cover stripe and a full row of square reed-channel openings.</desc>
+  <path d="m13 38 102 7 5 44-108 1z" fill="#899391" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m17 43 95 6 2 13-98-3z" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M16 63h99l2 23H14z" fill="#d9e1dc" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <rect x="20" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <rect x="34" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <rect x="48" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <rect x="62" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <rect x="76" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <rect x="90" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <rect x="104" y="68" width="9" height="13" rx="2" fill="#292d29"/>
+  <path d="M25 48h72" fill="none" stroke="#f0d66e" stroke-width="3" stroke-linecap="round"/>
+</svg>

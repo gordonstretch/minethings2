@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Washing Machine</title>
+  <desc id="desc">A front-loading washing machine with a blue glass drum and wash controls.</desc>
+  <rect x="18" y="9" width="92" height="110" rx="7" fill="#b8c2bd" stroke="#292d29" stroke-width="7"/><path d="M21 35h86" stroke="#292d29" stroke-width="6"/><circle cx="64" cy="78" r="31" fill="#33494e" stroke="#292d29" stroke-width="6"/><circle cx="64" cy="78" r="21" fill="#3d7f92"/><path d="M49 77q15-16 31 0-12 20-31 0z" fill="#8dc0ca"/><circle cx="35" cy="22" r="5" fill="#f28c28"/><path d="M49 22h38" stroke="#67716e" stroke-width="5"/>
+</svg>

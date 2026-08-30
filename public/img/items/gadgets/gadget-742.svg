@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Remote Control</title>
+  <desc id="desc">Aluminum Remote Control, depicted as a four-button handheld remote with an antenna and radio pulse.</desc>
+  <path d="M37 28h54l13 18-9 69H33l-9-69z" fill="#d7e0dd" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M64 28V10m0 0 14 9" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="49" cy="59" r="10" fill="#799c9c" stroke="#292d29" stroke-width="4"/>
+  <g fill="#d8be32" stroke="#292d29" stroke-width="3"><circle cx="77" cy="52" r="6"/><circle cx="87" cy="65" r="6"/><circle cx="67" cy="65" r="6"/><circle cx="77" cy="78" r="6"/></g>
+  <path d="M45 94h38" stroke="#5aa66a" stroke-width="6" stroke-linecap="round"/>
+  <path d="M82 18q15 5 20 18" fill="none" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+</svg>

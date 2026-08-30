@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Flounder</title>
+  <desc id="desc">A broad mottled flounder seen from above, with both raised eyes and a rippling edge fin.</desc>
+  <path d="M20 71q5-37 43-51 35 6 48 37 9 29-18 50-36 15-66-8z" fill="#967957" stroke="#292d29" stroke-width="7"/><path d="M28 72q18-30 51-37 21 12 24 35-3 24-25 35-29 3-50-14z" fill="#b39469" stroke="#66533e" stroke-width="4"/><path d="M22 70 7 57m16 35L8 105" stroke="#292d29" stroke-width="6" stroke-linecap="round"/><circle cx="50" cy="47" r="7" fill="#d8be32" stroke="#292d29" stroke-width="4"/><circle cx="68" cy="42" r="7" fill="#d8be32" stroke="#292d29" stroke-width="4"/><g fill="#6f5943"><circle cx="47" cy="73" r="5"/><circle cx="76" cy="65" r="7"/><circle cx="83" cy="89" r="5"/><circle cx="55" cy="96" r="4"/></g>
+</svg>

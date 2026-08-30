@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Herring</title>
+  <desc id="desc">A sleek blue-backed herring with a silver belly and a smaller schooling companion.</desc>
+  <path d="M12 74q27-32 73-16l25-17-7 25 12 23-30-12q-45 17-73-3z" fill="#c9d2ce" stroke="#292d29" stroke-width="6"/><path d="M18 69q31-23 68-9" stroke="#3d7f92" stroke-width="8"/><circle cx="27" cy="69" r="4" fill="#292d29"/><path d="M49 77q20 6 34-1" stroke="white" stroke-width="4"/><path d="M38 33q18-17 43-7l18-11-3 16 8 13-23-7q-24 11-43-4z" fill="#9cb7bd" stroke="#292d29" stroke-width="4"/><circle cx="48" cy="31" r="2.5" fill="#292d29"/>
+</svg>

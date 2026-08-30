@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">King Sized Bed</title>
+  <desc id="desc">A grand king-sized bed with a tall carved headboard and paired pillows.</desc>
+  <path d="M12 23h104v94H12z" fill="#95613e" stroke="#292d29" stroke-width="7"/><path d="M21 35h86v27H21z" fill="#c28b5c" stroke="#292d29" stroke-width="5"/><path d="M17 61h94v50H17z" fill="#714b87" stroke="#292d29" stroke-width="7"/><path d="M25 68h35v22H25zm43 0h35v22H68z" fill="#f0dfbd" stroke="#292d29" stroke-width="4"/><path d="M18 97h92" stroke="#b18bc0" stroke-width="5"/><path d="M29 24v-9m70 9v-9" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Hornet</title>
+  <desc id="desc">A fierce yellow and black hornet in side profile, with swept wings, hooked legs, and a sharp sting.</desc>
+  <path d="M50 51Q59 18 94 18 84 49 57 63z" fill="#d9e7de" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M53 59q20-22 48-12-14 24-43 24z" fill="#b8d7d7" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M51 48q31-7 59 16-26 31-61 8z" fill="#e6b638" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M68 48q-2 20-10 29m26-24q-2 17-9 29m24-21q-2 12-9 20" fill="none" stroke="#292d29" stroke-width="7"/>
+  <path d="m109 64 11 7-13 2" fill="#292d29" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="47" cy="61" rx="16" ry="19" fill="#a94c38" stroke="#292d29" stroke-width="6"/>
+  <circle cx="26" cy="60" r="14" fill="#d59632" stroke="#292d29" stroke-width="6"/>
+  <path d="M18 49Q10 33 19 24m12 23q2-17 14-25M42 79 31 103l-12 1m37-25 4 23 13 5m8-28 13 18 12-1" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22" cy="57" r="3.5" fill="#292d29"/>
+</svg>

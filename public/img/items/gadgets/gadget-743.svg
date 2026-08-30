@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Remote Control</title>
+  <desc id="desc">Titanium Remote Control, depicted as a rugged dual-stick transmitter with four channel lamps.</desc>
+  <path d="M13 50 30 27h68l17 23-8 62H21z" fill="#4184a8" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M40 29V10m48 19V10M40 10l-8 8m56-8 8 8" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="43" cy="72" r="14" fill="#9fc5cc" stroke="#292d29" stroke-width="5"/>
+  <circle cx="85" cy="72" r="14" fill="#9fc5cc" stroke="#292d29" stroke-width="5"/>
+  <path d="M43 72V55m42 17V55" stroke="#d8be32" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#3d94c5" stroke="#292d29" stroke-width="2"><circle cx="45" cy="98" r="5"/><circle cx="58" cy="98" r="5"/><circle cx="71" cy="98" r="5"/><circle cx="84" cy="98" r="5"/></g>
+  <path d="M100 19q13 6 17 17" fill="none" stroke="#f28c28" stroke-width="4" stroke-linecap="round"/>
+</svg>

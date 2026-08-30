@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Vehicle Background</title>
+  <desc id="desc">A miniature location scene representing the Vehicle Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M16 109V42h96v67z" fill="#697673" stroke="#242927" stroke-width="6"/><path d="M25 51h78v58H25z" fill="#354443" stroke="#242927" stroke-width="5"/><path d="m32 84 10-19h43l14 19v13H32z" fill="#d47c2e" stroke="#242927" stroke-width="5"/><circle cx="48" cy="98" r="8" fill="#242927"/><circle cx="85" cy="98" r="8" fill="#242927"/></g>
+</svg>

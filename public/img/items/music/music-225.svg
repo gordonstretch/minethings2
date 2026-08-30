@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bongo</title>
+  <desc id="desc">A mismatched pair of joined wooden bongo drums with taut hide heads, bright rims, and rope lacing.</desc>
+  <path d="M13 43h48l-5 65c-11 8-26 8-37 0z" fill="#a96536" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M65 51h50l-7 57c-11 8-25 8-36 0z" fill="#bd7540" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <ellipse cx="37" cy="42" rx="26" ry="14" fill="#ead7ad" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="90" cy="50" rx="27" ry="15" fill="#ead7ad" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="37" cy="42" rx="19" ry="8" fill="#d8c59e" stroke="#f28c28" stroke-width="5"/>
+  <ellipse cx="90" cy="50" rx="20" ry="9" fill="#d8c59e" stroke="#f28c28" stroke-width="5"/>
+  <path d="m20 57 35 39M55 57 20 96M72 65l36 32M108 65 72 97" fill="none" stroke="#e4bf75" stroke-width="4"/>
+  <path d="M22 106q15 9 31 0M74 107q16 8 32 0M60 53l7 2" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

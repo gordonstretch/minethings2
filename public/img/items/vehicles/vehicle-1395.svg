@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Man of War</title>
+  <desc id="desc">A towering three-deck warship with three huge square rigs and two densely armed gun decks.</desc>
+  <path d="M11 70h106l-18 42H28z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 70V12m31 58V12m28 58V16" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="M14 17h23v23H12zm0 27h23v21H15zm58-30h24v24H72zm0 28h24v22H73zm28-20h18v23h-18zm0 27h18v17h-18z"/>
+  </g>
+  <path d="M24 80h84M30 96h70" fill="none" stroke="#f79721" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#292d29"><circle cx="40" cy="84" r="3"/><circle cx="56" cy="84" r="3"/><circle cx="72" cy="84" r="3"/><circle cx="88" cy="84" r="3"/><circle cx="47" cy="99" r="3"/><circle cx="65" cy="99" r="3"/><circle cx="83" cy="99" r="3"/></g>
+</svg>

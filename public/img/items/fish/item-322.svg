@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mahi-mahi</title>
+  <desc id="desc">A brilliant mahi-mahi with a steep forehead, long dorsal fin, golden flank, and electric-blue spots.</desc>
+  <path d="M9 69q10-38 49-42 39 0 61 31l-8 27q-37 27-83 11Q12 87 9 69z" fill="#4f8b67" stroke="#292d29" stroke-width="7"/><path d="M15 73q40 16 94 2-18 30-73 23z" fill="#d8be32"/><path d="M18 53q42-32 88-8" stroke="#3d7f92" stroke-width="10"/><path d="M64 29q22-17 43 8M55 98l20 20 7-25" fill="#3d7f92" stroke="#292d29" stroke-width="5"/><path d="M113 55 125 34l-2 31 3 29-17-14" fill="#d8be32" stroke="#292d29" stroke-width="6"/><circle cx="27" cy="58" r="5" fill="#292d29"/><g fill="#55b5bd"><circle cx="45" cy="59" r="3"/><circle cx="59" cy="70" r="4"/><circle cx="78" cy="55" r="3"/><circle cx="91" cy="69" r="4"/></g>
+</svg>

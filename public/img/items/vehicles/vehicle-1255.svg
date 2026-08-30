@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ambulance</title>
+  <desc id="desc">A high-roof ambulance with a pale medical cross in a red panel, emergency stripe, roof lights, and forward cab.</desc>
+  <path d="M12 27h70l34 36v38H12z" fill="#ecebdd" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M82 34v33h29L82 34Z" fill="#acd0d3" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M13 76h102" stroke="#e32121" stroke-width="8"/>
+  <path d="M22 43h45v38H22z" fill="#e32121" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M39 48h11v9h9v10h-9v9H39v-9h-9V57h9z" fill="#fff4e2"/>
+  <path d="M73 30h8m10 0h10" stroke="#e32121" stroke-width="7" stroke-linecap="round"/>
+  <path d="M71 32v65M97 70v28" fill="none" stroke="#292d29" stroke-width="4"/>
+  <circle cx="34" cy="99" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="95" cy="99" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="34" cy="99" r="5" fill="#aeb2aa"/>
+  <circle cx="95" cy="99" r="5" fill="#aeb2aa"/>
+</svg>

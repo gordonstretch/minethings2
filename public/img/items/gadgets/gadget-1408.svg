@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Ledger</title>
+  <desc id="desc">Tungsten Ledger, depicted as a chained account book embossed with scales and index tabs.</desc>
+  <path d="M17 16h83l13 15v86H17z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M24 109V23h72l10 11v75z" fill="none" stroke="#899693" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M30 28h58v76H30z" fill="#4b5050" stroke="#292d29" stroke-width="5"/>
+  <path d="M41 43h36M41 57h36M41 71h36M41 85h36" fill="none" stroke="#d8be32" stroke-width="4"/>
+  <path d="M98 44h18M98 62h18M98 80h18" stroke="#a64891" stroke-width="7"/>
+  <path d="M9 36c17 4 22 12 23 28s-5 31-18 43" fill="none" stroke="#292d29" stroke-width="8"/>
+  <path d="M13 37c13 5 17 13 17 27s-4 29-14 39" fill="none" stroke="#f28c28" stroke-width="3"/>
+  <path d="m47 96 12 15 13-15" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

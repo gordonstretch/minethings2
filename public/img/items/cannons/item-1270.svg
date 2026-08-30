@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Box of Chain Shot</title>
+  <desc id="desc">An open ammunition crate holding paired chain-shot balls and coiled links.</desc>
+  <path d="M12 49h104v68H12z" fill="#95613e" stroke="#292d29" stroke-width="7"/><path d="M14 49 31 20h83L98 49z" fill="#b47b4b" stroke="#292d29" stroke-width="7"/><g fill="#373c3a" stroke="#292d29" stroke-width="4"><circle cx="36" cy="75" r="14"/><circle cx="92" cy="75" r="14"/></g><path d="M48 66q16-16 32 0m-32 18q16 16 32 0" fill="none" stroke="#aeb9b5" stroke-width="8"/><path d="M21 106h86M20 54v58m88-58v58" stroke="#e0aa68" stroke-width="4"/>
+</svg>

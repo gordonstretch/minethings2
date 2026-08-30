@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Poppy Seed</title>
+  <desc id="desc">A crowned poppy capsule tipping a stream of tiny blue-black seeds.</desc>
+  <path d="M64 116V61" stroke="#557d52" stroke-width="7"/><path d="M39 25q25-18 50 0l-7 51H46z" fill="#82936e" stroke="#292d29" stroke-width="7"/><path d="m38 27 26-16 26 16-26 9z" fill="#9aa77b" stroke="#292d29" stroke-width="5"/><path d="M83 67q23 6 29 29" stroke="#95613e" stroke-width="5"/><g fill="#36363c"><circle cx="92" cy="80" r="4"/><circle cx="101" cy="88" r="4"/><circle cx="109" cy="99" r="4"/><circle cx="91" cy="100" r="4"/><circle cx="112" cy="113" r="4"/></g>
+</svg>

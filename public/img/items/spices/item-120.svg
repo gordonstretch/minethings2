@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Onion Seed</title>
+  <desc id="desc">Angular black onion seeds spilling beneath a round white allium flower head.</desc>
+  <path d="M64 116V50m0 7L39 34m25 23 25-23M64 49V19" stroke="#557d52" stroke-width="5"/><g fill="#f2ead5" stroke="#292d29" stroke-width="3"><circle cx="64" cy="17" r="13"/><circle cx="42" cy="31" r="12"/><circle cx="86" cy="31" r="12"/></g><g fill="#292b29"><path d="m17 93 9-8 8 9-8 9z"/><path d="m39 108 9-8 9 9-9 9z"/><path d="m72 95 8-9 9 8-8 10z"/><path d="m98 107 8-8 9 9-9 8z"/></g>
+</svg>

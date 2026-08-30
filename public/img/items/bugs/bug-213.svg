@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cricket</title>
+  <desc id="desc">A dark field cricket in profile, defined by powerful folded hind legs and two exceptionally long antennae.</desc>
+  <path d="M48 73 27 92 9 109m26-24-11-2m62-16 3 33m8-37 16 25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m46 72-12 30 31-10 14-19" fill="none" stroke="#292d29" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="60" cy="60" rx="35" ry="24" fill="#607b49" stroke="#292d29" stroke-width="6" transform="rotate(-8 60 60)"/>
+  <path d="M33 54c16-8 35-9 50-1-7 5-14 12-18 24-14 0-25-6-32-23z" fill="#7f6847" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M43 50c10 5 21 5 33 1M40 61c10 5 19 6 28 5" fill="none" stroke="#d8be32" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="93" cy="51" r="17" fill="#6f7f4a" stroke="#292d29" stroke-width="6"/>
+  <circle cx="99" cy="46" r="4" fill="#d8be32"/>
+  <path d="M103 40C111 24 117 14 123 8m-24 31c2-18 6-29 11-35M101 58l17 5" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+</svg>

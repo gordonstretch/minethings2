@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Striped Marlin</title>
+  <desc id="desc">A striped marlin with a long bill, tall violet dorsal fin, and luminous vertical body stripes.</desc>
+  <path d="M19 69q25-30 76-15l27-14-10 26 12 24-31-16q-47 21-74-5z" fill="#7087a0" stroke="#292d29" stroke-width="7"/><path d="m20 68-17-5 18-5" fill="#99adbc" stroke="#292d29" stroke-width="4"/><path d="M42 53q15-40 53-22l-4 27" fill="#53628a" stroke="#292d29" stroke-width="6"/><path d="M45 54 50 79m11-29 5 31m11-29 5 26m10-22 4 18" stroke="#c6dbe0" stroke-width="5"/><circle cx="29" cy="58" r="4" fill="#292d29"/><path d="M59 79l20 26 8-30" fill="#594f83" stroke="#292d29" stroke-width="5"/>
+</svg>

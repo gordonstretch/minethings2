@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Laptop</title>
+  <desc id="desc">An open laptop showing a warm sunrise across its bright screen.</desc>
+  <path d="M24 18h80v62H24z" fill="#54615f" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M33 28h62v43H33z" fill="#3d7f92"/><path d="m33 64 22-22 15 13 12-15 13 24z" fill="#557d52"/><circle cx="79" cy="36" r="7" fill="#d8be32"/><path d="m19 81-9 25h108l-9-25z" fill="#b8c2bd" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M49 91h30l7 9H42z" fill="#75817d"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">12 Chain Shots</title>
+  <desc id="desc">A linked pair of heavy chain-shot balls made to tear through masts and rigging.</desc>
+  <circle cx="30" cy="70" r="23" fill="#3c4240" stroke="#292d29" stroke-width="7"/><circle cx="98" cy="70" r="23" fill="#3c4240" stroke="#292d29" stroke-width="7"/><path d="M47 55q17-19 34 0M47 85q17 19 34 0" fill="none" stroke="#aeb9b5" stroke-width="10"/><path d="M51 61q13-13 26 0M51 79q13 13 26 0" fill="none" stroke="#292d29" stroke-width="3"/><circle cx="23" cy="62" r="5" fill="#69716e"/><circle cx="91" cy="62" r="5" fill="#69716e"/>
+</svg>

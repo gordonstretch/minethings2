@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Equipment Mine</title>
+  <desc id="desc">A sturdy hardhat crossed by a miner's pick.</desc>
+  <path d="m11 49 35-35m-4-4 8 8M8 53l8-1-5-5z" fill="none" stroke="#202420" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 42c1-14 8-23 19-23s18 9 19 23z" fill="#f39a21" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="M28 19v23" stroke="#ffd36a" stroke-width="4"/><path d="M9 42h46v9H9z" fill="#ffd36a" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/>
+</svg>

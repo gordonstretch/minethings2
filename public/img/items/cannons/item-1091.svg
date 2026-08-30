@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bore</title>
+  <desc id="desc">Bore, a precise long cannon with concentric reinforcing rings and a narrow muzzle.</desc>
+  <path d="m6 54 20-14 91 6 8 14-12 12-91 7z" fill="#778481" stroke="#292d29" stroke-width="7"/><path d="M41 43 38 76m20-32-3 33m22-32-3 31m22-29-3 26" stroke="#d8be32" stroke-width="6"/><path d="M32 77h68l-13 25H43z" fill="#3d7f92" stroke="#292d29" stroke-width="6"/><circle cx="49" cy="99" r="13" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="84" cy="99" r="13" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="49" cy="99" r="4" fill="#d8be32"/><circle cx="84" cy="99" r="4" fill="#d8be32"/>
+</svg>

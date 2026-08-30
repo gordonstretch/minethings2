@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Unicycle</title>
+  <desc id="desc">A single large steel wheel with a tall fork, pedals, curved saddle, and gold hub.</desc>
+  <circle cx="64" cy="85" r="31" fill="#dde0dc" stroke="#292d29" stroke-width="6"/>
+  <circle cx="64" cy="85" r="22" fill="none" stroke="#d8be32" stroke-width="4"/>
+  <circle cx="64" cy="85" r="6" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M64 85 43 67m21 18 21-18M64 85v-29m0 29-18 20m18-20 18 20" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M58 57 54 25h20l-5 32" fill="#aab0ac" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M49 24c5-9 25-9 31 0l-8 8H56z" fill="#76533b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M64 85h18m-18 0-18 9" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M82 82v7m-40 2v7" stroke="#d8be32" stroke-width="4" stroke-linecap="round"/>
+</svg>

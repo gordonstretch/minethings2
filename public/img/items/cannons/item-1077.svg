@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Anvil</title>
+  <desc id="desc">Anvil, a massive square-breeched cannon built around a forge-anvil silhouette.</desc>
+  <path d="M13 42h30l16-18h44v18h13v31H22z" fill="#4b5351" stroke="#292d29" stroke-width="8" stroke-linejoin="round"/><path d="M36 76h67l-8 28H42z" fill="#59615f" stroke="#292d29" stroke-width="7"/><path d="M67 25v42m-22-14h57" stroke="#aeb9b5" stroke-width="7"/><circle cx="49" cy="99" r="16" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="88" cy="99" r="16" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="49" cy="99" r="4" fill="#d8be32"/><circle cx="88" cy="99" r="4" fill="#d8be32"/><path d="M13 77h23" stroke="#c84a3b" stroke-width="6"/>
+</svg>

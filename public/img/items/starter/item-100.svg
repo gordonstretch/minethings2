@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Marble Sculpture</title>
+  <desc id="desc">A classical marble figure posed on a square museum plinth.</desc>
+  <path d="M42 111h44v-12H42zm-9 0h62v10H33z" fill="#bfc4bd" stroke="#292d29" stroke-width="6"/><circle cx="67" cy="24" r="15" fill="#e2e2da" stroke="#292d29" stroke-width="5"/><path d="M53 39q14-9 28 2l8 39-17 8v12H51V76l-15 15-10-11 24-28z" fill="#deded6" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/><path d="m75 48 22 17-7 10-17-12m-22 36-14-28" fill="none" stroke="#a9ada8" stroke-width="5"/>
+</svg>

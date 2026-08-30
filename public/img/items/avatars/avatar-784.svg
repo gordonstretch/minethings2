@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Detonator Background</title>
+  <desc id="desc">A miniature location scene representing the Detonator Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M15 99 36 72l14 8 14-45 12 31 15-14 23 47z" fill="#504b42" stroke="#242927" stroke-width="5"/><path d="m64 22 7 15 16-8-8 16 17 5-17 7 10 15-18-7-5 18-7-18-17 8 8-17-17-5 17-8-9-15 18 7z" fill="#f39a2e" stroke="#242927" stroke-width="4"/></g>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Gong</title>
+  <desc id="desc">A hammered bronze gong hanging from a dark wooden stand, with a golden central boss and padded mallet.</desc>
+  <path d="M13 113V14h102v99M13 18h102M9 114h25m60 0h25" fill="none" stroke="#292d29" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 18v15m64-15v15" fill="none" stroke="#d8be32" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="64" cy="65" r="40" fill="#a96f35" stroke="#292d29" stroke-width="7"/>
+  <circle cx="64" cy="65" r="31" fill="none" stroke="#d49a43" stroke-width="4"/>
+  <circle cx="64" cy="65" r="13" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="M95 105 76 83" fill="none" stroke="#6e4934" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="73" cy="80" r="9" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="M45 45c10-9 28-11 40-2" fill="none" stroke="#e1b563" stroke-width="4" stroke-linecap="round"/>
+</svg>

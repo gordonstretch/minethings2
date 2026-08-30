@@ -58,6 +58,15 @@ export function validateCasinoRules(rules) {
   if (!payoutMultipliersByItemId[jackpotItemId]) {
     throw new Error('The jackpot symbol needs a line payout.');
   }
+  const explosiveSmallMatchMultiplier = wholeNumber(
+    rules.explosiveSmallMatchMultiplier, 'small explosive match multiplier', 1
+  );
+  const explosiveSmallMatchMinimum = wholeNumber(
+    rules.explosiveSmallMatchMinimum, 'small explosive match minimum', 2
+  );
+  if (explosiveSmallMatchMinimum >= 5) {
+    throw new Error('Casino small explosive matches must stay below scatter payouts.');
+  }
 
   const explosiveScatterCountFactors = {};
   for (const [countValue, factorValue] of Object.entries(
@@ -99,6 +108,8 @@ export function validateCasinoRules(rules) {
     bonusSymbols,
     ordinaryMultiplier: wholeNumber(rules.ordinaryMultiplier, 'ordinary multiplier', 1),
     payoutMultipliersByItemId,
+    explosiveSmallMatchMultiplier,
+    explosiveSmallMatchMinimum,
     explosiveScatterCountFactors,
     jackpotItemId,
     jackpotBonusMultiplier: wholeNumber(rules.jackpotBonusMultiplier,
@@ -158,8 +169,11 @@ export function evaluateCasinoGrid(grid, configuredRules) {
     const cells = cleanGrid.flatMap((gridItemId, index) =>
       gridItemId === itemId ? [index] : []);
     const factor = rules.explosiveScatterCountFactors[cells.length];
-    if (!factor) continue;
-    const multiplier = baseMultiplier * factor;
+    const multiplier = factor
+      ? baseMultiplier * factor
+      : cells.length >= rules.explosiveSmallMatchMinimum
+        ? rules.explosiveSmallMatchMultiplier : 0;
+    if (!multiplier) continue;
     wins.push({
       kind: 'scatter', name: `${cells.length} matching explosives`, cells,
       itemId, count: cells.length, multiplier

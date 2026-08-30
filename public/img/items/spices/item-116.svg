@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Licorice</title>
+  <desc id="desc">Dark fibrous licorice roots cut into sturdy sticks with golden woody centres.</desc>
+  <g stroke="#292d29" stroke-width="7" stroke-linecap="round"><path d="M21 109 54 18" stroke="#60432f"/><path d="M50 112 75 15" stroke="#6e4b31"/><path d="M78 112 106 27" stroke="#4c3728"/></g><path d="m16 105 15 5m14-2 16 4m12-4 16 5" stroke="#f0dfbd" stroke-width="6"/><g fill="#d8be32" stroke="#292d29" stroke-width="4"><ellipse cx="57" cy="18" rx="12" ry="7" transform="rotate(-73 57 18)"/><ellipse cx="78" cy="16" rx="12" ry="7" transform="rotate(-76 78 16)"/></g>
+</svg>

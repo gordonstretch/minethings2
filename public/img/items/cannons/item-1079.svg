@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Revenge</title>
+  <desc id="desc">Revenge, a black and crimson cannon with an aggressive bladed carriage.</desc>
+  <path d="m10 48 25-21 79 17 9 21-24 18-79-14z" fill="#272b2a" stroke="#292d29" stroke-width="8"/><path d="M40 38 34 72m25-29-6 34m28-28-5 31" stroke="#c84a3b" stroke-width="6"/><path d="M29 75h75l-13 31H42z" fill="#4e3130" stroke="#292d29" stroke-width="7"/><path d="m41 104-21 15 32-5m40-10 21 15-32-5" fill="#c84a3b" stroke="#292d29" stroke-width="5"/><circle cx="52" cy="99" r="12" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="84" cy="99" r="12" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="52" cy="99" r="4" fill="#d8be32"/><circle cx="84" cy="99" r="4" fill="#d8be32"/>
+</svg>

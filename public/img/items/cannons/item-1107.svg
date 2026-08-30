@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Block and Tackle</title>
+  <desc id="desc">A timber block-and-tackle with twin pulleys, hook, and neatly reeved rope.</desc>
+  <g fill="#95613e" stroke="#292d29" stroke-width="6"><rect x="17" y="14" width="38" height="43" rx="8"/><rect x="73" y="14" width="38" height="43" rx="8"/></g><circle cx="36" cy="35" r="10" fill="#aeb9b5" stroke="#292d29" stroke-width="4"/><circle cx="92" cy="35" r="10" fill="#aeb9b5" stroke="#292d29" stroke-width="4"/><path d="M36 45v44q0 20 18 20t18-18V49q0-14 20-14" fill="none" stroke="#d8be32" stroke-width="7"/><path d="M54 108q10 16 20 0l-4 14H57z" fill="#aeb9b5" stroke="#292d29" stroke-width="5"/>
+</svg>

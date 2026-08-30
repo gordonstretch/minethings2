@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Dragonfly</title>
+  <desc id="desc">A dragonfly viewed from above, with four long blue-glass wings and a narrow segmented emerald body.</desc>
+  <path d="M55 54Q29 18 10 26q5 28 45 41z" fill="#bcdfe5" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M73 54q26-36 45-28-5 28-45 41z" fill="#bcdfe5" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M55 65Q22 70 15 100q26 4 44-25z" fill="#83bad0" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M73 65q33 5 40 35-26 4-44-25z" fill="#83bad0" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M54 58 18 33m91 0L74 58M54 69 24 92m80 0L74 69" fill="none" stroke="#4184a8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M54 50q10-15 20 0l-4 63-6 8-6-8z" fill="#4d8d69" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="64" cy="39" r="13" fill="#4184a8" stroke="#292d29" stroke-width="6"/>
+  <path d="M58 66h12M59 80h10M59 94h10M59 106h10" fill="none" stroke="#b2d6a6" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="58" cy="37" r="3" fill="#171a18"/><circle cx="70" cy="37" r="3" fill="#171a18"/>
+</svg>

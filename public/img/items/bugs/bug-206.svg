@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Katydid</title>
+  <desc id="desc">A leaf-green katydid in side profile, with veined wings, very long antennae, and angular hind legs.</desc>
+  <path d="M51 67 33 90 14 105m40-35L41 98l-21 16M71 72l23 25 24 2" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 53q33-26 68 8-27 27-68 7z" fill="#6fa557" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M43 54q30-18 50 6-19 17-48 7z" fill="#91bf63" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M49 61q19-4 36 1M56 57 68 69m3-15 7 14" fill="none" stroke="#527942" stroke-width="3" stroke-linecap="round"/>
+  <path d="M94 49q15-6 24 6l-7 18-22 3-8-15z" fill="#7cad58" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M109 52Q94 22 53 9m62 44Q111 20 83 8" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M32 59 17 45m19 22-22 2m69 3 14 18" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M44 68q25 9 47-5" fill="none" stroke="#4184a8" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="106" cy="58" r="4" fill="#4184a8" stroke="#292d29" stroke-width="3"/>
+</svg>

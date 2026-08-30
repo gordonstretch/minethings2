@@ -5,6 +5,7 @@
     ?? document.querySelector('script[src^="/node/live-updates.js"]');
   if (!script || typeof window.EventSource !== 'function') return;
 
+  // These pages have client-owned transient state that a server snapshot cannot safely restore.
   const contentMorphEnabled = !/^\/(?:casino|oil-field)(?:\/|$)/
     .test(window.location.pathname);
 
@@ -13,6 +14,7 @@
   let updateTimer = null;
   let updateRunning = false;
   let updatePending = false;
+  let lastContentUpdateAt = 0;
   let latestScopes = [];
   let protectedForms = 0;
   const chatPage = /^\/chat(?:\/|$)/.test(window.location.pathname);
@@ -78,10 +80,9 @@
       topics.add('vehicles');
       topics.add('world');
     }
-    if (/^\/(?:miners|stats|professions)/.test(pathname)) {
-      topics.add('players');
-      topics.add('stats');
-    }
+    // Player writes are already delivered through the authenticated player's scope.
+    // Public miner/stat pages need only the coalesced aggregate signal.
+    if (/^\/(?:miners|stats)/.test(pathname)) topics.add('stats');
     if (/^\/credits/.test(pathname)) topics.add('payments');
     if (/^\/admin/.test(pathname)) topics.add('all');
     return [...topics];
@@ -269,13 +270,19 @@
       setStatus(`${error.message} · Retry`, 'error');
     } finally {
       updateRunning = false;
+      lastContentUpdateAt = Date.now();
       if (updatePending && revision > appliedRevision) scheduleUpdate();
     }
   };
 
   const scheduleUpdate = () => {
-    clearTimeout(updateTimer);
-    updateTimer = setTimeout(updateContent, 150);
+    if (updateTimer) return;
+    const minimumInterval = chatPage ? 100 : 1000;
+    const delay = Math.max(75, minimumInterval - (Date.now() - lastContentUpdateAt));
+    updateTimer = setTimeout(() => {
+      updateTimer = null;
+      updateContent();
+    }, delay);
   };
   if (chatPage) {
     bindChatPane();
@@ -286,6 +293,21 @@
   }
   const topics = topicsForPath(window.location.pathname).join(',');
   const stream = new EventSource(`/api/live-updates?since=${revision}&topics=${encodeURIComponent(topics)}`);
+  let sessionEnded = false;
+  stream.addEventListener('session-ended', (event) => {
+    sessionEnded = true;
+    stream.close();
+    if (updateTimer) clearTimeout(updateTimer);
+    let destination = '/';
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.location === '/verify-email') destination = payload.location;
+    } catch {
+      // A malformed expiry notice is still terminal and returns safely home.
+    }
+    setStatus('Session ended', 'error');
+    window.location.assign(destination);
+  });
   stream.addEventListener('ready', (event) => {
     const payload = JSON.parse(event.data);
     revision = Math.max(revision, Number(payload.revision) || 0);
@@ -331,5 +353,7 @@
       // The battle report remains available if a malformed live notice is ignored.
     }
   });
-  stream.addEventListener('error', () => setStatus('Reconnecting live updates…', 'connecting'));
+  stream.addEventListener('error', () => {
+    if (!sessionEnded) setStatus('Reconnecting live updates…', 'connecting');
+  });
 })();

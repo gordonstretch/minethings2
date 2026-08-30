@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Former Champ</title>
+  <desc id="desc">A retired boxy race champion with a faded orange stripe, dented nose, old roll hoop, and uneven competition wheels.</desc>
+  <path d="M12 72 27 53h29l13-18h25l9 27 13 12v24H12z" fill="#707875" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M59 53 72 39h18l6 23H55z" fill="#9fbabd" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M19 71h89" stroke="#f79721" stroke-width="7"/>
+  <path d="M67 38V25h23v13" fill="none" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M101 62h11l4 12-10 8-9-7" fill="#8a5d45" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="32" cy="96" r="17" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="94" cy="99" rx="16" ry="13" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="32" cy="96" r="6" fill="#aeb2aa"/>
+  <circle cx="94" cy="99" r="5" fill="#aeb2aa"/>
+  <path d="M27 58h8v8h-8m13-8h8v8h-8" fill="#eee9d6" stroke="#292d29" stroke-width="2"/>
+  <path d="m74 82 8-6 8 7" fill="none" stroke="#f79721" stroke-width="4" stroke-linecap="round"/>
+</svg>

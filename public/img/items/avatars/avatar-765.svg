@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Snow Border</title>
+  <desc id="desc">A material-themed portrait frame representing the Snow Border avatar thing.</desc>
+  <g data-icon-family="avatar-borders" stroke-linecap="round" stroke-linejoin="round"><rect x="17" y="17" width="94" height="94" rx="18" fill="none" stroke="#eaf7f4" stroke-width="15"/><path d="m24 24 10 10m70-10-10 10m10 70-10-10m-70 10 10-10" stroke="#7fb7c6" stroke-width="5"/><circle cx="64" cy="57" r="17" fill="#c98f63" stroke="#242927" stroke-width="5"/><path d="M38 100q4-28 26-28t26 28" fill="#59756f" stroke="#242927" stroke-width="5"/></g>
+</svg>

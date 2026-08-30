@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Faction Comics #1</title>
+  <desc id="desc">A vivid first-issue Faction comic book with a masked hero bursting from its cover.</desc>
+  <path d="M25 9h78v110H25z" fill="#c84a3b" stroke="#292d29" stroke-width="7"/><path d="M34 20h60v18H34z" fill="#f0dfbd" stroke="#292d29" stroke-width="4"/><path d="M41 45 64 52l20-11-4 23 14 17-22 3-12 20-10-20-23-3 16-16z" fill="#d8be32" stroke="#292d29" stroke-width="4"/><path d="M47 55q15-14 30 0l-6 23H51z" fill="#3d7f92" stroke="#292d29" stroke-width="4"/><path d="m52 58 9 8 13-10M37 29h38" stroke="#292d29" stroke-width="4"/><path d="M84 18h13v24H84z" fill="#f28c28" stroke="#292d29" stroke-width="3"/>
+</svg>

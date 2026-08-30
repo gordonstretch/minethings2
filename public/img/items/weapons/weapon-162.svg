@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Smoke Screen</title>
+  <desc id="desc">A vented smoke canister releasing a dense cloud in three rolling plumes.</desc>
+  <path d="M39 109 34 61h60l-5 48z" fill="#66716d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M31 61h66v14H31z" fill="#698b18" stroke="#292d29" stroke-width="5"/>
+  <path d="M47 87h34M50 98h28" fill="none" stroke="#cdd5cf" stroke-width="4" stroke-linecap="round"/>
+  <path d="M48 59q-17-3-13-17 3-10 15-9 1-17 17-18 15 0 18 14 15-3 21 8 8 16-12 23z" fill="#d8ddd8" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M49 46q8-7 17 0M73 35q8-6 16 1" fill="none" stroke="#f5f2e8" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Dill Seed</title>
+  <desc id="desc">A delicate dill umbel with flat oval seeds radiating from fine stems.</desc>
+  <path d="M64 117V43m0 14L37 30m27 27 27-27M64 44 49 17m15 27 15-27" stroke="#557d52" stroke-width="4"/><g fill="#9c7c43" stroke="#292d29" stroke-width="3"><ellipse cx="34" cy="27" rx="5" ry="9" transform="rotate(-48 34 27)"/><ellipse cx="48" cy="15" rx="5" ry="9" transform="rotate(-25 48 15)"/><ellipse cx="64" cy="10" rx="5" ry="9"/><ellipse cx="80" cy="15" rx="5" ry="9" transform="rotate(25 80 15)"/><ellipse cx="94" cy="27" rx="5" ry="9" transform="rotate(48 94 27)"/></g><g fill="#ad8b50" stroke="#292d29" stroke-width="3"><ellipse cx="29" cy="91" rx="7" ry="12" transform="rotate(55 29 91)"/><ellipse cx="57" cy="99" rx="7" ry="12" transform="rotate(15 57 99)"/><ellipse cx="89" cy="91" rx="7" ry="12" transform="rotate(-48 89 91)"/></g>
+</svg>

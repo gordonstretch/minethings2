@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Blue Shark</title>
+  <desc id="desc">A graceful blue shark with a long conical snout, indigo back, narrow body, and sweeping pectoral fins.</desc>
+  <path d="M8 66q35-34 85-15l27-22-8 31 13 22-31-13q-51 25-86-3z" fill="#426f86" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M47 50 63 21l16 33M65 72l37 31-48-19" fill="#244f65" stroke="#292d29" stroke-width="5"/><path d="M12 68q39 13 81 1" fill="none" stroke="#d9e5df" stroke-width="7"/><circle cx="25" cy="59" r="4" fill="#292d29"/><path d="M92 52 111 42m-18 27 19 8" stroke="#7398a8" stroke-width="4"/>
+</svg>

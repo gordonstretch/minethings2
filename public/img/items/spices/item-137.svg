@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Celery Seed</title>
+  <desc id="desc">Tiny celery seeds beside a pale green celery flower umbel and ribbed stalk.</desc>
+  <path d="M64 116V45m0 12L38 34m26 23 26-23M64 45 50 20m14 25 14-25" stroke="#70945e" stroke-width="5"/><g fill="#d8dbc4" stroke="#292d29" stroke-width="2"><circle cx="35" cy="31" r="7"/><circle cx="49" cy="18" r="7"/><circle cx="64" cy="12" r="7"/><circle cx="79" cy="18" r="7"/><circle cx="93" cy="31" r="7"/></g><g fill="#8a744e" stroke="#292d29" stroke-width="3"><ellipse cx="30" cy="89" rx="5" ry="9"/><ellipse cx="50" cy="99" rx="5" ry="9" transform="rotate(20 50 99)"/><ellipse cx="75" cy="91" rx="5" ry="9" transform="rotate(-15 75 91)"/><ellipse cx="99" cy="101" rx="5" ry="9" transform="rotate(25 99 101)"/></g>
+</svg>

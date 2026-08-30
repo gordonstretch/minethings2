@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Flame Exhaust</title>
+  <desc id="desc">A tungsten vehicle modification depicting a swept exhaust pipe firing a hot stylized flame from its polished tip.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 32h34v18H33v42h41v22H19Q8 114 8 101V39q0-7 7-7z" fill="#505862"/><path d="M74 88h24v30H74z" fill="#282f37"/><path d="M96 104q25-7 26-31-13 9-18-8-14 15-8 39z" fill="#a64891"/><path d="M103 100q12-7 12-18-8 5-11-5-7 10-1 23z" fill="#f3c64f"/><path d="M27 36v53q0 10 10 10h42" fill="none" stroke="#aab2b5"/></g>
+</svg>

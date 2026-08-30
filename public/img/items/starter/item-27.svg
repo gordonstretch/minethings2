@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Snowboard</title>
+  <desc id="desc">A blue snowboard with bindings, edge highlights, and a mountain emblem.</desc>
+  <path d="M17 105Q55 14 112 20 82 110 17 105z" fill="#3d7f92" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="m36 89 25-15m11-15 24-14" stroke="#f0dfbd" stroke-width="10" stroke-linecap="round"/><path d="m47 49 11-13 8 17 18-5-11 15-3 18-11-14-19 5 12-15z" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+</svg>

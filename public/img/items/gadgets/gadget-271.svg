@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Armory</title>
+  <desc id="desc">Aluminum Armory, depicted as a locked double-door equipment cabinet with concealed tools.</desc>
+  <rect x="19" y="12" width="90" height="105" rx="6" fill="#d7e0dd" stroke="#292d29" stroke-width="7"/>
+  <path d="M64 15v99M28 27h27m18 0h27M28 101h27m18 0h27" fill="none" stroke="#799c9c" stroke-width="4"/>
+  <path d="m39 43 13 29m-17 0 19-29m35 0L75 72m18 0L74 43" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="55" cy="83" r="4" fill="#d8be32" stroke="#292d29" stroke-width="3"/>
+  <circle cx="73" cy="83" r="4" fill="#d8be32" stroke="#292d29" stroke-width="3"/>
+  <path d="M48 13h32" stroke="#f4f7f2" stroke-width="4"/>
+</svg>

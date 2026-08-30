@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Market Background</title>
+  <desc id="desc">A miniature location scene representing the Market Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M18 53h92v56H18z" fill="#ddd1af" stroke="#242927" stroke-width="5"/><path d="M13 50 25 25h78l12 25z" fill="#b94e3f" stroke="#242927" stroke-width="5"/><path d="M27 25 22 50m25-25-2 25m19-25v25m19-25 2 25m18-25 6 25" stroke="#f4dfaa" stroke-width="7"/><path d="M31 71h27v38H31zm40 0h25v20H71z" fill="#5f8178" stroke="#242927" stroke-width="4"/></g>
+</svg>

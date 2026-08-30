@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Oboe</title>
+  <desc id="desc">A warm wooden oboe standing upright, with a tiny double reed, dense silver keys, red bands, and a modest bell.</desc>
+  <path d="m61 28-6 68q-10 8-9 18h36q1-10-9-18l-6-68z" fill="#955a36" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M64 28V13" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M64 27V13" fill="none" stroke="#e4be7b" stroke-width="3" stroke-linecap="round"/>
+  <path d="m59 14 5-8 5 8z" fill="#d7b36d" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M58 34h12M55 86h18M51 101h26" fill="none" stroke="#d94a36" stroke-width="5" stroke-linecap="round"/>
+  <path d="M62 40 49 48m14 3 14 7m-16 5-14 8m13 4 17 8m-18 5-14 7" fill="none" stroke="#d6ddda" stroke-width="4" stroke-linecap="round"/>
+  <path d="M51 43v50m26-40v36" fill="none" stroke="#aeb8b5" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#edf0ed" stroke="#292d29" stroke-width="2">
+    <circle cx="51" cy="48" r="4"/><circle cx="76" cy="58" r="4"/><circle cx="48" cy="71" r="4"/><circle cx="76" cy="82" r="4"/><circle cx="46" cy="95" r="4"/>
+  </g>
+</svg>

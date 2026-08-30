@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Go Kart</title>
+  <desc id="desc">A tiny exposed-frame go kart with a rear engine, bucket seat, and low steering column.</desc>
+  <circle cx="27" cy="96" r="12" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="101" cy="96" r="12" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <path d="M17 89h92M28 88l27-23 23 23m-41 0 42-12 22 14" fill="none" stroke="#698b18" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 69h25v20H17z" fill="#686e6b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M51 48h17l8 30H55z" fill="#76533b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M82 77 91 53m-5 0h13" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M18 64h19l8-8M22 77h16m-11-7v13" fill="none" stroke="#b9c0ba" stroke-width="4" stroke-linecap="round"/>
+  <path d="M107 86h9v7" fill="none" stroke="#f1d28a" stroke-width="4" stroke-linecap="round"/>
+</svg>

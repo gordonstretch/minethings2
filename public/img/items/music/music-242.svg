@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Xylophone</title>
+  <desc id="desc">A concert xylophone in perspective, with graduated wooden bars, a blue frame, sturdy legs, and two crossed mallets.</desc>
+  <path d="m25 21 79 21M103 18 27 45" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="20" cy="19" r="7" fill="#3d94c5" stroke="#292d29" stroke-width="4"/>
+  <circle cx="108" cy="17" r="7" fill="#3d94c5" stroke="#292d29" stroke-width="4"/>
+  <path d="m18 46 91-10 10 61-110 14z" fill="#3d94c5" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <g fill="#c47b3d" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="m20 45 12-2 6 61-17 2z"/><path d="m34 43 13-1 5 60-15 2z"/><path d="m49 41 14-2 3 61-15 2z"/><path d="m65 39 14-1 1 60-14 2z"/><path d="m81 38 13-2 4 60-18 2z"/><path d="m96 36 13-1 9 61-20 2z"/>
+  </g>
+  <path d="M29 108 19 121m89-19 9 17M50 105l-4 14m42-17 5 15" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="m14 82 101-12" fill="none" stroke="#f0bf62" stroke-width="4" stroke-linecap="round"/>
+</svg>

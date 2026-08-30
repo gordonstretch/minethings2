@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Hydra</title>
+  <desc id="desc">Hydra, a legendary three-headed cannon sharing one armored carriage.</desc>
+  <path d="M12 31h87l22 10-22 12H12zm0 24h87l22 11-22 11H12zm0 24h87l22 11-22 11H12z" fill="#557365" stroke="#292d29" stroke-width="6"/><path d="M32 97h70l-13 22H45z" fill="#3f594e" stroke="#292d29" stroke-width="6"/><path d="m102 28 20 3-8 10 9 10-21 5m0-4 20 4-8 10 9 10-21 4m0-4 20 4-8 10 9 10-21 4" fill="#d8be32" stroke="#292d29" stroke-width="3"/>
+</svg>

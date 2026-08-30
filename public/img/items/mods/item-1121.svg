@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Ammunition Rack</title>
+  <desc id="desc">A aluminum vehicle modification depicting a reinforced ammunition rack holding four large pointed cannon shells.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 82h102v28H13zM20 37h88v17H20z" fill="#aabcc5"/><g fill="#698b18"><path d="m25 81 4-40 10-19 10 19 4 40z"/><path d="m51 81 4-40 10-19 10 19 4 40z"/><path d="m77 81 4-40 10-19 10 19 4 40z"/></g><path d="M32 49h14m12 0h14m12 0h14M20 92h88" stroke="#5d727c"/><path d="M38 29 33 43h11zM64 29l-5 14h11zM90 29l-5 14h11z" fill="#e5eef0"/></g>
+</svg>

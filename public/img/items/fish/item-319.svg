@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Manta Ray</title>
+  <desc id="desc">A manta ray gliding from above with immense triangular wings, cephalic lobes, and a whip tail.</desc>
+  <path d="M64 21q23 22 55 31-12 39-43 38l-12 20-12-20q-31 1-43-38 32-9 55-31z" fill="#244f65" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M18 54q27 5 46-23 19 28 46 23-15 17-39 22H57q-24-5-39-22z" fill="#3d7f92"/><path d="M64 88v34" stroke="#292d29" stroke-width="6" stroke-linecap="round"/><path d="M49 37 35 25m44 12 14-12" stroke="#244f65" stroke-width="8" stroke-linecap="round"/><circle cx="53" cy="49" r="4" fill="#d8be32"/><circle cx="75" cy="49" r="4" fill="#d8be32"/>
+</svg>

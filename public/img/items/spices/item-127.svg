@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ginger</title>
+  <desc id="desc">A knobbly golden ginger rhizome with one cut face and a fresh green shoot.</desc>
+  <path d="M16 78q15-25 38-14 2-33 29-30 19 3 13 27 27-7 32 17 2 24-28 23-10 25-34 12-13 18-32 5-16-12-2-40z" fill="#c18a4d" stroke="#292d29" stroke-width="7"/><path d="M71 38Q75 9 97 8" stroke="#557d52" stroke-width="8"/><path d="M82 42q-13-29-29-22" fill="none" stroke="#82a96c" stroke-width="7"/><ellipse cx="96" cy="83" rx="22" ry="18" fill="#f0dfbd" stroke="#292d29" stroke-width="5"/><circle cx="96" cy="83" r="6" fill="#d8be32"/>
+</svg>

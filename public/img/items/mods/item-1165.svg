@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Brake Coolers</title>
+  <desc id="desc">A tungsten vehicle modification depicting a ventilated brake disc with caliper, cooling vanes, and rushing air marks.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="59" cy="66" r="48" fill="#505862"/><circle cx="59" cy="66" r="34" fill="#282f37"/><circle cx="59" cy="66" r="13" fill="#aab2b5"/><g fill="#aab2b5"><path d="M54 25h10l4 22H50z"/><path d="m88 38 7 7-13 19-12-12z"/><path d="m98 72-3 10-23-2 4-16z"/><path d="m79 99-9 5-14-19 14-8z"/><path d="m40 103-9-6 9-21 14 9z"/><path d="m17 76-1-10 23-7 2 16z"/><path d="m24 45 6-8 20 12-9 14z"/></g><path d="M83 35h26v64H83q-14-32 0-64z" fill="#a64891"/><path d="M94 48v38" stroke="#282f37"/></g>
+</svg>

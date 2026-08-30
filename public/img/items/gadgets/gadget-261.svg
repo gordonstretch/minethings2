@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tin Spreadsheet</title>
+  <desc id="desc">Tin Spreadsheet, depicted as a gridded clipboard sheet with a pencil and highlighted cell.</desc>
+  <path d="M24 17h72l11 13v88H24z" fill="#e4e8df" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M44 11h33v15H44z" fill="#aeb2aa" stroke="#292d29" stroke-width="5"/>
+  <path d="M37 42h57M37 58h57M37 74h57M37 90h57M54 38v59m20-59v59" stroke="#68726c" stroke-width="3"/>
+  <rect x="56" y="60" width="16" height="12" fill="#d8be32" stroke="#f28c28" stroke-width="3"/>
+  <path d="m16 106 74-74 11 11-74 74-14 3z" fill="#b87842" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Plink</title>
+  <desc id="desc">Plink, a tiny nimble swivel cannon mounted on a simple forked stand.</desc>
+  <path d="m17 58 17-12 70 4 14 12-14 13-72 4z" fill="#a4aca8" stroke="#292d29" stroke-width="7"/><path d="M60 78v25m-20 15 20-15 22 15M60 103l-28 2" fill="none" stroke="#95613e" stroke-width="8" stroke-linecap="round"/><circle cx="60" cy="78" r="8" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+</svg>

@@ -339,7 +339,7 @@ test('v94 migration adds fixed capitals without rewriting legacy miner data', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 112);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 115);
   store.ensureWorldMaps(2000);
   const migratedCatalog = store.loadCatalog();
   assert.deepEqual({ ...store.database.prepare(
@@ -392,7 +392,7 @@ test('v99 adds only regional-capital catalog metadata before world bootstrap', (
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 112);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 115);
   assert.ok(store.database.prepare('PRAGMA table_info(world_maps)').all()
     .some((column) => column.name === 'capital_city_id'));
   assert.deepEqual({ ...store.database.prepare(

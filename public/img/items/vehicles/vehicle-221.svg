@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Scout</title>
+  <desc id="desc">An open-top purple scout jeep with roll cage, upright windscreen, spare wheel, and rugged tyres.</desc>
+  <path d="M13 70h56l13-18h21l13 20v24H13z" fill="#71506f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M78 54h20l9 17H78z" fill="#acd0d3" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M42 69V39h42v14M42 39h42" fill="none" stroke="#a64891" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 57h21v16H49z" fill="#76533b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="29" cy="94" r="17" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="96" cy="94" r="17" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="29" cy="94" r="6" fill="#9ca19d"/>
+  <circle cx="96" cy="94" r="6" fill="#9ca19d"/>
+  <circle cx="18" cy="62" r="9" fill="#3a3e3b" stroke="#292d29" stroke-width="4"/>
+  <path d="M108 75h8v10h-8" fill="#f1d28a" stroke="#292d29" stroke-width="4"/>
+</svg>

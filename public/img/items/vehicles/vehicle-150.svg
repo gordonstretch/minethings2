@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sidecar Motorcycle</title>
+  <desc id="desc">A steel motorcycle with a rounded passenger sidecar, three visible wheels, and a high lamp.</desc>
+  <circle cx="29" cy="91" r="16" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="98" cy="91" r="17" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="67" cy="101" r="10" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <path d="m29 91 27-33 18 31H42l31-22 25 24" fill="none" stroke="#799c9c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M47 55h22l8 14H50z" fill="#8e4b34" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M60 77h24c10 0 15 6 15 16H59c-8 0-12-5-12-11z" fill="#b5a67b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M76 76V61h10l7 15" fill="#b9d6d9" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M96 90 89 48h15M89 48l-9-7M51 54l-8-11h13" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="101" cy="52" r="6" fill="#f1d28a" stroke="#292d29" stroke-width="4"/>
+</svg>

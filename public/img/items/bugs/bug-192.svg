@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Walkingstick</title>
+  <desc id="desc">A twiglike walkingstick insect with a long knobbled body, six spindly legs, and searching antennae.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M74 48 45 23 14 18M67 61 34 55 10 68M58 75 28 89 16 113"/>
+    <path d="M82 56 107 39 118 23M75 69 103 76 118 94M66 83 86 108 105 118"/>
+  </g>
+  <g fill="none" stroke="#826643" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M74 48 45 23 14 18M67 61 34 55 10 68M58 75 28 89 16 113"/>
+    <path d="M82 56 107 39 118 23M75 69 103 76 118 94M66 83 86 108 105 118"/>
+  </g>
+  <path d="M33 108 91 31" fill="none" stroke="#292d29" stroke-width="13" stroke-linecap="round"/>
+  <path d="M33 108 91 31" fill="none" stroke="#8b6e48" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="94" cy="27" r="10" fill="#9a7a50" stroke="#292d29" stroke-width="5"/>
+  <path d="m99 20 17-12m-22 10 4-12" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M51 84h10M63 68h10M75 52h10" fill="none" stroke="#a64891" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="96" cy="25" r="2.5" fill="#a64891"/>
+</svg>

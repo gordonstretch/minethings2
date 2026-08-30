@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Missile Pod</title>
+  <desc id="desc">An angled armoured pod holding six orange-tipped missiles in two rows of launch cells.</desc>
+  <path d="M19 25h90l8 75H11z" fill="#626d69" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <g fill="#242a28" stroke="#292d29" stroke-width="5">
+    <circle cx="34" cy="48" r="14"/><circle cx="64" cy="48" r="14"/><circle cx="94" cy="48" r="14"/>
+    <circle cx="34" cy="78" r="14"/><circle cx="64" cy="78" r="14"/><circle cx="94" cy="78" r="14"/>
+  </g>
+  <g fill="#f79721">
+    <circle cx="34" cy="48" r="7"/><circle cx="64" cy="48" r="7"/><circle cx="94" cy="48" r="7"/>
+    <circle cx="34" cy="78" r="7"/><circle cx="64" cy="78" r="7"/><circle cx="94" cy="78" r="7"/>
+  </g>
+  <path d="M45 101v15M83 101v15" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M23 31h82" fill="none" stroke="#aeb8b3" stroke-width="4" stroke-linecap="round"/>
+</svg>

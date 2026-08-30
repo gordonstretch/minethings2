@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Dwarves Mine</title>
+  <desc id="desc">A stout dwarf in a broad helmet with a magnificent beard.</desc>
+  <path d="M13 27c1-15 8-22 19-22s18 7 19 22z" fill="#f39a21" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="M9 27h46v8H9z" fill="#ffd36a" stroke="#202420" stroke-width="4"/><path d="M18 33h28v10L39 58l-7-5-7 5-7-15z" fill="#9b6338" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="m32 30-5 13 5 4 5-4z" fill="#eadfc8" stroke="#202420" stroke-width="3"/><circle cx="24" cy="36" r="2.5" fill="#202420"/><circle cx="40" cy="36" r="2.5" fill="#202420"/>
+</svg>

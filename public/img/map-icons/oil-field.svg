@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Oil Field</title>
+  <desc id="desc">An amber pumpjack drawing oil beside a deep teal droplet.</desc>
+  <path d="M7 54h38M13 52l5-34m21 34-8-33M17 31h17m-20 9h23" fill="none" stroke="#202420" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><path d="m20 16 29 9-3 10-29-9z" fill="#f39a21" stroke="#202420" stroke-width="4" stroke-linejoin="round"/><path d="M47 24 57 12M8 54l8-14m25 14-8-14" fill="none" stroke="#202420" stroke-width="4.5" stroke-linecap="round"/><path d="M57 35c0 8-5 14-11 14s-11-6-11-14c0-6 7-14 11-20 4 6 11 14 11 20z" fill="#315a64" stroke="#202420" stroke-width="4"/><path d="M43 31q2-5 5-8" fill="none" stroke="#eadfc8" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

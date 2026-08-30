@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Hammer</title>
+  <desc id="desc">Aluminum Hammer, depicted as a light cross-peen mechanic hammer with a gear inset.</desc>
+  <path d="M25 112 17 103 76 44l12 12z" fill="#d7e0dd" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M46 31 68 11l24 23h25v27H92L76 76 35 36z" fill="#799c9c" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M92 40h17v14H92M50 30l18-12 14 14-15 15z" fill="#f4f7f2" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="70" cy="42" r="9" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="m70 35 3 5 6 2-5 4-1 6-5-4-6 2 2-6-4-5 6 1z" fill="#f28c28"/>
+  <path d="m25 96 12 12" fill="none" stroke="#799c9c" stroke-width="4"/>
+</svg>

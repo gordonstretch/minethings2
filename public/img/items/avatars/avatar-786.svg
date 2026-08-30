@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mine Background</title>
+  <desc id="desc">A miniature location scene representing the Mine Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M14 112 26 45l38-26 38 26 12 67z" fill="#5b4b3b"/><path d="M37 112V63q27-35 54 0v49z" fill="#252a28" stroke="#242927" stroke-width="6"/><path d="M26 49 64 24l38 25M25 75h15m48 0h15" stroke="#b37a42" stroke-width="7"/><path d="M64 56v52" stroke="#f1bd4f" stroke-width="5"/></g>
+</svg>

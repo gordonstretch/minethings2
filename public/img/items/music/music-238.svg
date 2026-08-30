@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Trombone</title>
+  <desc id="desc">A long brass trombone angled across the frame, with a huge bell, twin slide rails, blue braces, and a rounded slide bow.</desc>
+  <path d="M78 45 18 76q-12 7-6 18t18 5l67-35" fill="none" stroke="#292d29" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M78 45 18 76q-12 7-6 18t18 5l67-35" fill="none" stroke="#d7a52e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M83 31 114 12q8 25 7 49L87 55z" fill="#e0ae35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M87 43 48 64" fill="none" stroke="#292d29" stroke-width="13" stroke-linecap="round"/>
+  <path d="M87 43 48 64" fill="none" stroke="#d8aa35" stroke-width="7" stroke-linecap="round"/>
+  <path d="m50 56 10 19m19-31 10 19" fill="none" stroke="#3d94c5" stroke-width="6" stroke-linecap="round"/>
+  <path d="M91 65 102 76" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M91 65 102 76" fill="none" stroke="#d6a42e" stroke-width="3" stroke-linecap="round"/>
+  <path d="M106 76h12" fill="none" stroke="#3d94c5" stroke-width="6" stroke-linecap="round"/>
+  <path d="M101 25q10 10 13 24" fill="none" stroke="#f5d977" stroke-width="4" stroke-linecap="round"/>
+</svg>

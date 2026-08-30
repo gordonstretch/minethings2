@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Box of Cannonballs</title>
+  <desc id="desc">An open reinforced crate filled with orderly rows of black cannonballs.</desc>
+  <path d="M12 49h104v68H12z" fill="#95613e" stroke="#292d29" stroke-width="7"/><path d="M14 49 31 20h83L98 49z" fill="#b47b4b" stroke="#292d29" stroke-width="7"/><g fill="#373c3a" stroke="#292d29" stroke-width="4"><circle cx="35" cy="65" r="12"/><circle cx="64" cy="65" r="12"/><circle cx="93" cy="65" r="12"/><circle cx="49" cy="89" r="12"/><circle cx="79" cy="89" r="12"/></g><path d="M21 106h86M20 54v58m88-58v58" stroke="#e0aa68" stroke-width="4"/>
+</svg>

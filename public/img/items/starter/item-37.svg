@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">HD Movie Player</title>
+  <desc id="desc">A slim movie player with an open disc tray, display, and round media disc.</desc>
+  <rect x="11" y="54" width="106" height="50" rx="5" fill="#626c69" stroke="#292d29" stroke-width="7"/><path d="M24 68h53v20H24z" fill="#303c3d" stroke="#292d29" stroke-width="4"/><path d="M33 78h29" stroke="#f28c28" stroke-width="4"/><circle cx="99" cy="79" r="9" fill="#d8be32" stroke="#292d29" stroke-width="4"/><path d="M27 52 74 17l35 23-47 35z" fill="#b8c2bd" stroke="#292d29" stroke-width="6"/><circle cx="69" cy="45" r="16" fill="#708a8c" stroke="#292d29" stroke-width="4"/><circle cx="69" cy="45" r="5" fill="#f0dfbd"/>
+</svg>

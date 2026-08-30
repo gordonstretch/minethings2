@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Binoculars</title>
+  <desc id="desc">Aluminum Binoculars, depicted as compact straight binocular barrels with a focus wheel and strap.</desc>
+  <path d="M20 44 43 28l12 13v56l-12 13-29-13zM108 44 85 28 73 41v56l12 13 29-13z" fill="#d7e0dd" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M53 48h22v41H53z" fill="#799c9c" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="28" cy="76" rx="18" ry="25" fill="#f4f7f2" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="100" cy="76" rx="18" ry="25" fill="#f4f7f2" stroke="#292d29" stroke-width="6"/>
+  <circle cx="64" cy="42" r="10" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M21 107q43 25 86 0" fill="none" stroke="#a66d3e" stroke-width="5" stroke-linecap="round"/>
+</svg>

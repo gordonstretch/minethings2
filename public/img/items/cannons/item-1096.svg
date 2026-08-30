@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Magnum</title>
+  <desc id="desc">Magnum, an immense polished cannon with an oversized muzzle and gold recoil bands.</desc>
+  <path d="m5 45 28-25 83 17 10 29-27 23-84-16z" fill="#8a9692" stroke="#292d29" stroke-width="9"/><ellipse cx="111" cy="60" rx="15" ry="25" fill="#3a4240" stroke="#292d29" stroke-width="7"/><path d="M40 26 33 78m28-47-7 51m29-47-7 52" stroke="#d8be32" stroke-width="8"/><path d="M30 82h73l-7 29H38z" fill="#6b7672" stroke="#292d29" stroke-width="7"/><circle cx="48" cy="99" r="17" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="88" cy="99" r="17" fill="#95613e" stroke="#292d29" stroke-width="6"/><circle cx="48" cy="99" r="4" fill="#d8be32"/><circle cx="88" cy="99" r="4" fill="#d8be32"/>
+</svg>

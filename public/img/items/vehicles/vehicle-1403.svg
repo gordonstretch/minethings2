@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Champion</title>
+  <desc id="desc">A sleek orange championship racer with teardrop canopy, flared wheel arches, side intake, and high rear wing.</desc>
+  <path d="M12 79c13-18 31-23 49-25l14-17h19l10 20 12 15v24H12z" fill="#d06d25" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M64 55 78 41h13l7 17z" fill="#acd0d3" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M16 76c28-8 62-8 96 1" fill="none" stroke="#f79721" stroke-width="7" stroke-linecap="round"/>
+  <path d="M20 54V38h30v14M16 38h38" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M62 72h26l-8 14H55z" fill="#292d29" stroke="#f79721" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="34" cy="95" r="18" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="96" cy="95" r="18" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="34" cy="95" r="7" fill="#d8ded9" stroke="#f79721" stroke-width="4"/>
+  <circle cx="96" cy="95" r="7" fill="#d8ded9" stroke="#f79721" stroke-width="4"/>
+  <path d="M107 68h9v10h-8" fill="#f1d28a" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tractor</title>
+  <desc id="desc">A work-worn tractor with a huge rear wheel, small front wheel, upright exhaust, and blue-grey engine cowling.</desc>
+  <circle cx="39" cy="88" r="27" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="39" cy="88" r="11" fill="#799c9c" stroke="#292d29" stroke-width="4"/>
+  <circle cx="101" cy="96" r="14" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M55 68h47l14 17-7 14H57z" fill="#799c9c" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M52 64V39h28l10 29" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M72 40V21h9v18m13 27V44h8v22" fill="#4b5350" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M63 78h41m-30 0v15m13-15v15" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+</svg>

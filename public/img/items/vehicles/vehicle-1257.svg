@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Stagecoach</title>
+  <desc id="desc">A wooden frontier stagecoach with a rounded green canvas roof, lantern, passenger door, and large spoked wheels.</desc>
+  <path d="M18 43c4-15 16-23 32-23h31c14 0 25 9 29 23v50H18z" fill="#9a6238" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M19 43c4-15 16-23 31-23h32c13 0 24 9 28 23z" fill="#698b18" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M30 49h24v31H30zm34 0h27v44H64z" fill="#ccb987" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="35" cy="94" r="20" fill="#8b5a37" stroke="#292d29" stroke-width="6"/>
+  <circle cx="91" cy="94" r="20" fill="#8b5a37" stroke="#292d29" stroke-width="6"/>
+  <circle cx="35" cy="94" r="5" fill="#698b18" stroke="#292d29" stroke-width="4"/>
+  <circle cx="91" cy="94" r="5" fill="#698b18" stroke="#292d29" stroke-width="4"/>
+  <path d="M35 75v38M16 94h38m37-19v38M72 94h38" fill="none" stroke="#292d29" stroke-width="4"/>
+  <path d="M109 55h7v15h-10V58z" fill="#f1d28a" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

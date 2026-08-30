@@ -48,6 +48,10 @@ function escapeXml(value) {
   })[character]);
 }
 
+// Oil Field cells are flat-top hexes. Machine facing is expressed by rotating
+// the inner glyph in 60-degree steps, so the tile shell must share that grid.
+const MACHINE_HEX_PATH = 'M17 6H47L62 32 47 58H17L2 32Z';
+
 export function machineIconPath(type, rarity) {
   if (!type) return null;
   const rarityId = Number(rarity);
@@ -64,5 +68,5 @@ export function machineIconSvg(type, rarity, rarityColours, displayName = null) 
     ? type.split('-').map((part) => part[0].toUpperCase() + part.slice(1)).join(' ')
     : String(displayName);
   const colour = rarityColours[rarityId];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img"><title>${escapeXml(title)} machine</title><path d="M32 2 58 17v30L32 62 6 47V17Z" fill="${escapeXml(colour)}" stroke="#443825" stroke-width="2"/><g transform="translate(32 32)" fill="none" stroke="#fff8df" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" color="#fff8df">${machineGlyph(type)}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img"><title>${escapeXml(title)} machine</title><path d="${MACHINE_HEX_PATH}" fill="${escapeXml(colour)}" stroke="#443825" stroke-width="2"/><g transform="translate(32 32)" fill="none" stroke="#fff8df" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" color="#fff8df">${machineGlyph(type)}</g></svg>`;
 }

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Two-handed Claymore</title>
+  <desc id="desc">A long two-handed greatsword with a broad blade, swept guard, and wrapped grip.</desc>
+  <path d="m70 12 12 10-9 63-12 1-5-11z" fill="#dce3df" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M69 24 64 71" fill="none" stroke="#f8f6ec" stroke-width="4" stroke-linecap="round"/>
+  <path d="m37 72 11-8 16 13 23-6 8 10q-16 9-29 9-12-2-29-18z" fill="#698b18" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m63 86-25 29-12-10 26-29z" fill="#7d4930" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m41 89 13 11M35 96l13 11" fill="none" stroke="#ddec9f" stroke-width="4"/>
+  <circle cx="28" cy="108" r="7" fill="#698b18" stroke="#292d29" stroke-width="5"/>
+</svg>

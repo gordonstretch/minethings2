@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Stink Bug</title>
+  <desc id="desc">A green stink bug viewed from above, with a broad shield-shaped shell and a blue central marking.</desc>
+  <path d="M41 39 25 31m20 22L17 54m26 14L19 86m68-47 16-8M83 53l28 1M85 68l24 18" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M48 29 40 16m40 13 8-13" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M64 20 91 31l13 31-14 34-26 18-26-18-14-34 13-31z" fill="#78984d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m64 42 24-11 7 21-31 47-31-47 7-21z" fill="#91ae5e" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m64 42 12 28-12 29-12-29z" fill="#4184a8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M52 29q12-12 24 0l-4 16H56z" fill="#53683c" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="57" cy="31" r="2.5" fill="#171a18"/><circle cx="71" cy="31" r="2.5" fill="#171a18"/>
+</svg>

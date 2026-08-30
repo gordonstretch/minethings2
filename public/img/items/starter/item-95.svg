@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Purple Monster</title>
+  <desc id="desc">A cheerful purple monster with horns, spots, claws, and one enormous eye.</desc>
+  <path d="M28 51q4-32 36-32t36 32l13 51-24 17-25-12-25 12-24-17z" fill="#714b87" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="m39 26-10-18 24 13m36 5 10-18-24 13" fill="#d8be32" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/><circle cx="64" cy="61" r="24" fill="#efe4b8" stroke="#292d29" stroke-width="6"/><circle cx="64" cy="61" r="10" fill="#3d7f92" stroke="#292d29" stroke-width="4"/><path d="M48 91q16 13 32 0" fill="none" stroke="#292d29" stroke-width="6"/><circle cx="36" cy="73" r="6" fill="#a77abb"/><circle cx="91" cy="83" r="7" fill="#a77abb"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mule</title>
+  <desc id="desc">A sturdy grey-brown mule in side profile, carrying a yellow pack saddle and facing right.</desc>
+  <path d="M28 55q18-15 46-5l18 12-8 25H39L22 72z" fill="#8a735d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M79 61q8-24 19-31l12 4 8 13-9 14-19 2z" fill="#9b846b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m96 33-2-18 11 14m4 7 7-16 3 20" fill="#9b846b" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 84 38 110m24-25 1 25m20-27 8 25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M27 59 14 48l-3 10" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 48h30l8 20-38 5-8-15z" fill="#d8be32" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M48 55h22m33-12h1" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+</svg>

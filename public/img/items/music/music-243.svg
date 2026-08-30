@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Saxophone</title>
+  <desc id="desc">A curled brass saxophone with a flared bell, dark mouthpiece, green key pads, and a sweeping lower bow.</desc>
+  <path d="M14 18h25l8 9-9 10H14z" fill="#4f4d45" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M37 28h15c11 0 17 9 13 19l-7 17v22c0 18 10 29 26 29 18 0 29-13 29-33" fill="none" stroke="#292d29" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M37 28h15c11 0 17 9 13 19l-7 17v22c0 18 10 29 26 29 18 0 29-13 29-33" fill="none" stroke="#c78b32" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M96 78c8-1 14-5 18-12l6 7-4 34c-10 4-20 2-28-5 7-8 10-17 8-24z" fill="#d9a13c" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M98 77c7 5 13 7 21 4" fill="none" stroke="#f2ca68" stroke-width="4" stroke-linecap="round"/>
+  <path d="M72 51 89 76M68 63l17 8M67 76l18 5M68 89l18 1" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="88" cy="75" r="5" fill="#5aa66a" stroke="#292d29" stroke-width="3"/>
+  <circle cx="85" cy="88" r="5" fill="#5aa66a" stroke="#292d29" stroke-width="3"/>
+  <path d="m44 35 9 8" fill="none" stroke="#5aa66a" stroke-width="5" stroke-linecap="round"/>
+</svg>

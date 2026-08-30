@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Skid Plate</title>
+  <desc id="desc">A titanium vehicle modification depicting a broad underbody skid plate with a raised spine, vents, and countersunk bolts.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 35 49-17 49 17-9 75H24z" fill="#71899c"/><path d="M64 23v82M19 39l45 15 45-15" stroke="#c8d7dd"/><path d="M38 65h52l-7 27H45z" fill="#3c5365"/><path d="M49 72h30M47 82h34" stroke="#e32121"/><g fill="#e32121"><circle cx="28" cy="43" r="5"/><circle cx="100" cy="43" r="5"/><circle cx="31" cy="100" r="5"/><circle cx="97" cy="100" r="5"/></g></g>
+</svg>

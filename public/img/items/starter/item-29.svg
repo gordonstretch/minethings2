@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bed</title>
+  <desc id="desc">A neatly made single bed with a blue blanket, cream pillow, and wooden frame.</desc>
+  <path d="M13 49h102v59H13z" fill="#3d7f92" stroke="#292d29" stroke-width="7"/><path d="M13 36h25v78H13zm102 0h-10v78h10z" fill="#95613e" stroke="#292d29" stroke-width="7"/><path d="M39 50h61v25H39z" fill="#f0dfbd" stroke="#292d29" stroke-width="5"/><path d="M19 80h86" stroke="#6fa6b4" stroke-width="5"/>
+</svg>

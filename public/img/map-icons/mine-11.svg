@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Explosives Mine</title>
+  <desc id="desc">A round iron bomb with a hot, sparkling fuse.</desc>
+  <path d="M36 17c0-7 4-11 11-11" fill="none" stroke="#202420" stroke-width="5" stroke-linecap="round"/><circle cx="28" cy="38" r="20" fill="#f39a21" stroke="#202420" stroke-width="4.5"/><path d="M21 22h15l4 7H17z" fill="#aeb9b6" stroke="#202420" stroke-width="4" stroke-linejoin="round"/><path d="m51 7 2 5 6-1-4 5 4 4-6-1-2 6-2-6-6 1 4-4-4-5 6 1z" fill="#ffd36a" stroke="#202420" stroke-width="2" stroke-linejoin="round"/><path d="M17 43q8 8 17 4" fill="none" stroke="#ffd36a" stroke-width="3" stroke-linecap="round"/>
+</svg>

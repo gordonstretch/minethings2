@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tin Meldal Detector</title>
+  <desc id="desc">Tin Meldal Detector, depicted as a handheld detector coil scanning a small meld medallion.</desc>
+  <path d="m29 102 51-70 12 9-49 68" fill="#aeb2aa" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M75 34 89 15l16 12-14 19" fill="#68726c" stroke="#292d29" stroke-width="5"/>
+  <ellipse cx="30" cy="102" rx="23" ry="13" fill="none" stroke="#292d29" stroke-width="7"/>
+  <path d="M48 89q20-13 40-1" fill="none" stroke="#3d94c5" stroke-width="5" stroke-linecap="round"/>
+  <path d="m92 91 6 9 11 2-8 8 2 11-11-5-10 5 2-11-8-8 11-2z" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+</svg>

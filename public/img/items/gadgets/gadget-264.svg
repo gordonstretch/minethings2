@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Meldal Detector</title>
+  <desc id="desc">Iron Meldal Detector, depicted as a twin-coil detector with an analog meter and ping arcs.</desc>
+  <path d="m27 104 45-63 13 10-43 61" fill="#59635f" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="27" cy="104" rx="20" ry="11" fill="none" stroke="#292d29" stroke-width="7"/>
+  <ellipse cx="47" cy="91" rx="15" ry="8" fill="none" stroke="#aeb8b2" stroke-width="5"/>
+  <rect x="68" y="20" width="43" height="42" rx="5" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M79 49V34h21M81 44l8-7 8 6" fill="none" stroke="#f28c28" stroke-width="4" stroke-linecap="round"/>
+  <path d="M92 72q16 4 22 15M91 82q8 3 12 9" fill="none" stroke="#c36d37" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="106" cy="106" r="11" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+</svg>

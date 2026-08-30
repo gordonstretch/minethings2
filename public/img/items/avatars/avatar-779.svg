@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">City Background</title>
+  <desc id="desc">A miniature location scene representing the City Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M17 103V58h20v45m0 0V35h25v68m0 0V52h20v51m0 0V27h27v76z" fill="#566665" stroke="#242927" stroke-width="5"/><path d="M45 48h8m17 17h7m14-25h9M25 70h5" stroke="#f0bd4f" stroke-width="4"/></g>
+</svg>

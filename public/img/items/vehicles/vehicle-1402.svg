@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Champion</title>
+  <desc id="desc">A sleek armored flagship with a towering crown-shaped mainsail, shielded prow, and long championship pennant.</desc>
+  <path d="M10 82q58 2 108-11l-20 37H27z" fill="#596563" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M61 81V13" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="m58 14-34 55h70L84 40 72 55z" fill="#f79721" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M62 13h50l-17 11 17 11H76" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M93 69h22v17H93l-8-9z" fill="#f79721" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M28 92h73" fill="none" stroke="#f79721" stroke-width="6" stroke-linecap="round"/>
+  <path d="M20 81V62h19v19" fill="#d7e0dd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+</svg>

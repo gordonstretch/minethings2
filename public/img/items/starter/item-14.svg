@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Crystal Chandelier</title>
+  <desc id="desc">An ornate crystal chandelier with candles, hanging drops, and a faceted centre.</desc>
+  <path d="M64 9v21m-24 2h48M45 32q0 24-19 39m57-39q0 24 19 39M64 32v43" fill="none" stroke="#d8be32" stroke-width="6" stroke-linecap="round"/><path d="M18 68h20l-4 15H22zm72 0h20l-4 15H94zM53 73h22l-5 17H58z" fill="#f0dfbd" stroke="#292d29" stroke-width="5"/><g fill="#79b7c5" stroke="#292d29" stroke-width="3"><path d="m28 85 8 13-8 14-8-14z"/><path d="m100 85 8 13-8 14-8-14z"/><path d="m64 92 10 15-10 14-10-14z"/></g>
+</svg>

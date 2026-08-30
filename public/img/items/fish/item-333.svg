@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Hammerhead</title>
+  <desc id="desc">A hammerhead shark with a broad cephalofoil, eyes at each tip, tall dorsal, and sweeping tail.</desc>
+  <path d="M19 62 4 50l25-9 19 10q28-11 52 2l24-19-8 28 10 22-28-15q-25 17-51 3L28 84 4 74z" fill="#718684" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><circle cx="12" cy="53" r="4" fill="#292d29"/><circle cx="12" cy="71" r="4" fill="#292d29"/><path d="M55 50 71 17l19 40M61 73l35 29-45-18" fill="#596e6c" stroke="#292d29" stroke-width="5"/><path d="M30 67q34 11 67 2" stroke="#d9e5df" stroke-width="6" fill="none"/>
+</svg>

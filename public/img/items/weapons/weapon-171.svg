@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Lead Pipe</title>
+  <desc id="desc">A battered industrial lead pipe with a threaded elbow and taped lower grip.</desc>
+  <path d="M26 103 74 39l23 17-50 62z" fill="#77837f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M73 40 88 20h28v24L97 57z" fill="#9ba7a2" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M91 29h24M88 37h27" fill="none" stroke="#d4ddd8" stroke-width="4"/>
+  <path d="m27 89 22 17-11 14-22-18z" fill="#799c9c" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m23 94 21 16M19 100l20 15" fill="none" stroke="#d6ecea" stroke-width="3"/>
+  <path d="m55 68 11-15" fill="none" stroke="#cbd4cf" stroke-width="5" stroke-linecap="round"/>
+</svg>

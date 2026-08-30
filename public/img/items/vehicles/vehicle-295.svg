@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Galleon</title>
+  <desc id="desc">An ornate high-stern galleon with three square-rigged masts, a gilded stripe, and a stern lantern.</desc>
+  <path d="M13 72h103l-18 37H29z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M17 72V45h24v27l-8 13H18zm76 0V53h19v19" fill="#a64891" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M43 72V14m29 58V13m24 59V20" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="M19 20h22v24H17zm55-5h27v25H74zm24 11h18v22H98zM47 45h23v21H47zM74 45h20v20H74z"/>
+  </g>
+  <path d="M28 88h75" fill="none" stroke="#a64891" stroke-width="6" stroke-linecap="round"/>
+  <path d="M13 42h11v13H13z" fill="#a64891" stroke="#292d29" stroke-width="4"/><path d="M18 42V31" stroke="#292d29" stroke-width="4"/>
+</svg>

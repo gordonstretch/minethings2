@@ -4,8 +4,29 @@ import { fileURLToPath } from 'node:url';
 import { dwarfFindRange } from './dwarves.js';
 import { cryptoType } from './crypto.js';
 import { validateCasinoRules } from './casino.js';
+import {
+  BROMO_SPOREFALL_KEY, BROMO_SPOREFALL_RULES,
+  KINGS_LOCKBOX_KEY, KINGS_LOCKBOX_RULES, validateCasinoMachineRules
+} from './casino-machines.js';
 import { assignItemGoldValues } from './item-values.js';
 import { machineIconPath } from './item-icons.js';
+import { bugIconPath } from './bug-icons.js';
+import { gadgetIconPath } from './gadget-icons.js';
+import { musicIconPath } from './music-icons.js';
+import { vehicleIconPath } from './vehicle-icons.js';
+import { weaponIconPath } from './weapon-icons.js';
+import { explosiveIconPath } from './explosive-icons.js';
+import { mineIconPath } from './mine-icons.js';
+import { starterIconPath } from './starter-icons.js';
+import { baitIconPath } from './bait-icons.js';
+import { cannonIconPath } from './cannon-icons.js';
+import { fishIconPath } from './fish-icons.js';
+import { spiceIconPath } from './spice-icons.js';
+import { oilIconPath } from './oil-icons.js';
+import { oreIconPath } from './ore-icons.js';
+import { modIconPath } from './mod-icons.js';
+import { equipmentIconPath } from './equipment-icons.js';
+import { avatarIconPath } from './avatar-icons.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_SQL = path.join(ROOT, 'gallegodb_copy.sql');
@@ -17,9 +38,61 @@ const EQUIPMENT_TYPE_NAMES = ['', 'Tool Belt', 'Boots', 'Pickaxe', 'Drill', 'Car
 const EQUIPMENT_RARITY_ADJECTIVES = ['', 'Flimsy', 'Standard', 'Hardy', 'Crafted', 'Fabled', 'Legendary'];
 export const LEGACY_STARTER_WELCOME_PACK = Object.freeze({
   vehicleItemId: 154,
+  dwarfItemId: 1348,
+  gadgetItemIds: Object.freeze([255, 257, 259]),
+  rentalMineTypeIds: Object.freeze([4, 5]),
   cryptoTypeId: 1,
-  cryptoQuantity: 5
+  cryptoQuantity: 5,
+  casinoVoucherCryptoTypeId: 1,
+  casinoVoucherQuantity: 100
 });
+
+export const EXPANDED_STONE_CATALOG = Object.freeze([
+  { id: 43, name: 'Specialised', behaviorKey: 'Specialised',
+    description: 'changed to a different mining specialisation', rank: 43, rarity: 2 },
+  { id: 44, name: 'Founded', behaviorKey: 'Founded',
+    description: 'founded a guild for miners to share', rank: 44, rarity: 3 },
+  { id: 45, name: 'Allied', behaviorKey: 'Allied',
+    description: 'became a member of a guild', rank: 45, rarity: 1 },
+  { id: 46, name: 'Contributed', behaviorKey: 'Contributed',
+    description: 'deposited a thing in a guild bank', rank: 46, rarity: 2 },
+  { id: 47, name: 'Confided', behaviorKey: 'Confided',
+    description: 'spoke in the private chat of a guild', rank: 47, rarity: 1 },
+  { id: 48, name: 'Gambled', behaviorKey: 'Gambled',
+    description: 'played one of the casino machines', rank: 48, rarity: 1 },
+  { id: 49, name: 'Cascaded', behaviorKey: 'Cascaded',
+    description: 'triggered a cascade on Bromo Sporefall', rank: 49, rarity: 3 },
+  { id: 50, name: 'Unlocked', behaviorKey: 'Unlocked',
+    description: "opened the King's Lockbox feature", rank: 50, rarity: 3 },
+  { id: 51, name: 'Jackpotted', behaviorKey: 'Jackpotted',
+    description: 'won a jackpot on any casino machine', rank: 51, rarity: 6 },
+  { id: 52, name: 'Listed', behaviorKey: 'Listed',
+    description: 'placed a thing for sale on a local market', rank: 52, rarity: 1 },
+  { id: 53, name: 'Brokered', behaviorKey: 'Brokered',
+    description: 'completed a player-to-player market trade', rank: 53, rarity: 2 },
+  { id: 54, name: 'Cryptic', behaviorKey: 'Cryptic',
+    description: 'completed a trade on the crypto exchange', rank: 54, rarity: 2 },
+  { id: 55, name: 'Shuttled', behaviorKey: 'Shuttled',
+    description: 'started an automatic cargo shuttle', rank: 55, rarity: 2 },
+  { id: 56, name: 'Hunted', behaviorKey: 'Hunted',
+    description: 'launched a vehicle to intercept a living threat or restless dead', rank: 56, rarity: 2 },
+  { id: 57, name: 'Exorcised', behaviorKey: 'Exorcised',
+    description: 'banished a Ghost Ship or Ghost Rider', rank: 57, rarity: 5 },
+  { id: 58, name: 'Reinforced', behaviorKey: 'Reinforced',
+    description: 'completed a mill reinforcement for a vehicle', rank: 58, rarity: 3 },
+  { id: 59, name: 'Machined', behaviorKey: 'Machined',
+    description: 'deployed a working machine on the Oil Field', rank: 59, rarity: 2 },
+  { id: 60, name: 'Bombarded', behaviorKey: 'Bombarded',
+    description: 'dropped a bomb on an Oil Field hex', rank: 60, rarity: 4 },
+  { id: 61, name: 'Gated', behaviorKey: 'Gated',
+    description: 'crossed a gateway into a previously unknown region', rank: 61, rarity: 4 },
+  { id: 62, name: 'Captured', behaviorKey: 'Captured',
+    description: 'captured a Dwarf stowaway during combat', rank: 62, rarity: 4 },
+  { id: 63, name: 'Contained', behaviorKey: 'Contained',
+    description: 'expanded storage by buying a container', rank: 63, rarity: 2 },
+  { id: 64, name: 'Constructed', behaviorKey: 'Constructed',
+    description: 'completed construction of a factory or mill', rank: 64, rarity: 3 }
+]);
 export const SHROOM_CATALOG = Object.freeze({
   mapId: 2,
   mapSlug: 'bromo',
@@ -514,7 +587,7 @@ export const WORLD_CREATURE_TYPES = Object.freeze([
   'kraken', 'land_whale', 'white_whale', 'orca_pod', 'elephant_herd', 't_rex'
 ]);
 export const LEGACY_CASINO_SLOT_RULES = Object.freeze({
-  version: 3,
+  version: 5,
   symbolItemIds: [2, 1434, 1464, 1494, 1524, 1554, 277, 278, 279, 280, 281, 282],
   regularSymbolWeight: 10,
   maximumBonusSpins: 8,
@@ -531,6 +604,8 @@ export const LEGACY_CASINO_SLOT_RULES = Object.freeze({
   ],
   ordinaryMultiplier: 2,
   payoutMultipliersByItemId: { 277: 3, 278: 5, 279: 10, 280: 20, 281: 40, 282: 80 },
+  explosiveSmallMatchMultiplier: 1,
+  explosiveSmallMatchMinimum: 3,
   explosiveScatterCountFactors: { 5: 1, 6: 2, 7: 3, 8: 4, 9: 5 },
   jackpotItemId: 282,
   jackpotBonusMultiplier: 1000,
@@ -751,7 +826,7 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   // weather changes. Each completed roll schedules the next one
   // at a uniformly random point inside this range.
   world_creature_roll_min_interval_ms: 60 * 1000,
-  world_creature_roll_max_interval_ms: 45 * 60 * 1000,
+  world_creature_roll_max_interval_ms: 10 * 60 * 1000,
   world_creature_hp: {
     kraken: 180, land_whale: 140, white_whale: 170,
     orca_pod: 125, elephant_herd: 165, t_rex: 220
@@ -780,7 +855,7 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_event_weather_retention_days: 60,
   world_event_outcome_retention_days: 7,
   world_event_player_history_limit: 20,
-  mining_dwarf_capture_chance: 0.0025
+  mining_dwarf_capture_chance: 0.01
 });
 
 export const LEGACY_COMBAT_SEASON_SETTINGS = Object.freeze({
@@ -1016,6 +1091,10 @@ function genericIconFor(item) {
 }
 
 function specificIconFor(item, sources) {
+  const avatarSvgIcon = avatarIconPath(item.id);
+  if (avatarSvgIcon && sources.avatarByItemId.has(item.id)) {
+    return { icon: avatarSvgIcon, iconSource: 'avatar-svg' };
+  }
   const avatar = sources.avatarByItemId.get(item.id);
   if (avatar && fs.existsSync(path.join(IMAGE_ROOT, 'avatars', 'src', avatar.filename))) {
     return { icon: `/legacy/img/avatars/src/${encodeURIComponent(avatar.filename)}`, iconSource: 'avatar' };
@@ -1024,6 +1103,42 @@ function specificIconFor(item, sources) {
   const machineType = sources.machineTypeById.get(machine?.machineTypeId);
   const machineIcon = machineIconPath(machineType?.name, item.rarity);
   if (machineIcon) return { icon: machineIcon, iconSource: 'machine' };
+  const starterIcon = starterIconPath(item.id);
+  if (starterIcon) return { icon: starterIcon, iconSource: 'starter-svg' };
+  const baitIcon = baitIconPath(item.id);
+  if (baitIcon) return { icon: baitIcon, iconSource: 'bait-svg' };
+  const cannonIcon = cannonIconPath(item.id);
+  if (cannonIcon) return { icon: cannonIcon, iconSource: 'cannon-svg' };
+  const fishIcon = fishIconPath(item.id);
+  if (fishIcon) return { icon: fishIcon, iconSource: 'fish-svg' };
+  const spiceIcon = spiceIconPath(item.id);
+  if (spiceIcon) return { icon: spiceIcon, iconSource: 'spice-svg' };
+  const oilIcon = oilIconPath(item.id);
+  if (oilIcon) return { icon: oilIcon, iconSource: 'oil-svg' };
+  const oreIcon = oreIconPath(item.id);
+  if (oreIcon) return { icon: oreIcon, iconSource: 'ore-svg' };
+  const mod = sources.modByItemId.get(item.id);
+  const modIcon = modIconPath(mod?.itemId);
+  if (modIcon) return { icon: modIcon, iconSource: 'mod-svg' };
+  const vehicle = sources.vehicleByItemId.get(item.id);
+  const vehicleIcon = vehicleIconPath(vehicle?.itemId);
+  if (vehicleIcon) return { icon: vehicleIcon, iconSource: 'vehicle-svg' };
+  const weapon = sources.weaponByItemId.get(item.id);
+  const weaponIcon = weaponIconPath(weapon?.itemId);
+  if (weaponIcon) return { icon: weaponIcon, iconSource: 'weapon-svg' };
+  const explosive = sources.explosiveByItemId.get(item.id);
+  const explosiveIcon = explosiveIconPath(explosive?.itemId);
+  if (explosiveIcon) return { icon: explosiveIcon, iconSource: 'explosive-svg' };
+  const bugIcon = bugIconPath(item.id);
+  if (bugIcon) return { icon: bugIcon, iconSource: 'bug-svg' };
+  const musicIcon = musicIconPath(item.id);
+  if (musicIcon) return { icon: musicIcon, iconSource: 'music-svg' };
+  const gadgetIcon = gadgetIconPath(item.id);
+  if (gadgetIcon) return { icon: gadgetIcon, iconSource: 'gadget-svg' };
+  const equipmentSvgIcon = equipmentIconPath(item.id);
+  if (equipmentSvgIcon && sources.equipmentByItemId.has(item.id)) {
+    return { icon: equipmentSvgIcon, iconSource: 'equipment-svg' };
+  }
   const equipment = sources.equipmentByItemId.get(item.id);
   if (equipment) {
     const filename = `${item.name.replace(' ', '')}.png`;
@@ -1031,7 +1146,7 @@ function specificIconFor(item, sources) {
       return { icon: `/legacy/img/equipment/src/${encodeURIComponent(filename)}`, iconSource: 'equipment' };
     }
   }
-  if (sources.explosiveByItemId.has(item.id)) {
+  if (explosive) {
     const filename = `explosive${item.rarity}.png`;
     if (fs.existsSync(path.join(IMAGE_ROOT, 'explosives', filename))) {
       return { icon: `/legacy/img/explosives/${filename}`, iconSource: 'explosive' };
@@ -1065,7 +1180,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   const mineTypes = tableRows(sql, 'mine_types').map((row) => ({
     id: row[0], name: row[1], creditCost: row[3], rentCost: row[4],
     hasOre: Boolean(row[5]), refundable: Boolean(row[6]),
-    icon: `/legacy/img/icons/M${row[0]}L6.png`
+    icon: mineIconPath(row[0]) ?? `/legacy/img/icons/M${row[0]}L6.png`
   }));
   mineTypes.push(
     { ...SHROOM_CATALOG.mineType },
@@ -1239,11 +1354,15 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     id: row[0], name: row[1], behaviorKey: row[1],
     description: row[2], rank: row[3], rarity: Math.floor((row[3] - 1) / 7) + 1
   }));
+  stones.push(...EXPANDED_STONE_CATALOG.map((stone) => ({ ...stone })));
   const sources = {
     marketableIconById,
     equipmentByItemId: new Map(equipment.map((entry) => [entry.itemId, entry])),
     explosiveByItemId: new Map(explosives.map((entry) => [entry.itemId, entry])),
     robotByItemId: new Map(robots.map((entry) => [entry.itemId, entry])),
+    vehicleByItemId: new Map(vehicles.map((entry) => [entry.itemId, entry])),
+    weaponByItemId: new Map(weapons.map((entry) => [entry.itemId, entry])),
+    modByItemId: new Map(mods.map((entry) => [entry.itemId, entry])),
     machineByItemId: new Map(machines.map((entry) => [entry.itemId, entry])),
     machineTypeById: new Map(machineTypes.map((entry) => [entry.id, entry])),
     avatarByItemId: new Map(avatarElements.map((entry) => [entry.itemId, entry]))
@@ -1259,7 +1378,11 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     return {
       ...item, icon, iconSource, damaged: item.repairedItemId !== null, largeImageFilename,
       largeImage: hasLargeImage ? `/legacy/img/${largeImageFilename}` : icon,
-      hasLargeImage
+      hasLargeImage: hasLargeImage
+        || ['avatar-svg', 'bait-svg', 'bug-svg', 'cannon-svg', 'equipment-svg', 'explosive-svg',
+          'fish-svg', 'gadget-svg', 'mod-svg', 'music-svg', 'oil-svg', 'ore-svg', 'spice-svg',
+          'starter-svg', 'vehicle-svg', 'weapon-svg']
+          .includes(iconSource)
     };
   });
   items.push(...SHROOM_CATALOG.items.map((item) => {
@@ -1348,7 +1471,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       ? RARITY_NAMES[range.maximum]
       : `${RARITY_NAMES[range.maximum]} through ${RARITY_NAMES[range.minimum]}`;
     return `Far better than any mining robot, ${tier.name}s have mining in their blood. `
-      + `A Dwarf stored in a city finds ${quality} things from that city's mines after a random delay of 0–7 minutes. `
+      + `A Dwarf stored in a city finds ${quality} things from that city's mines after a random delay of 0–2 minutes. `
       + `After each find this ${tier.name} has a 5% chance to disappear. `
       + 'Dwarves may also stow away on compatible vehicles and ships.';
   };
@@ -1449,6 +1572,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     mill_minimum_map_sort_order: 3,
     mill_wood_mine_type_id: WOOD_CATALOG.mineType.id,
     mill_reinforcement_action_id: 19,
+    mill_reinforcement_screw_item_id: WOOD_CATALOG.screwItemId,
+    mill_reinforcement_screw_quantity: 4,
     mill_reinforcement_absorption_by_rarity: [0, 5, 10, 20, 40, 80, 160],
     factory_worker_bot_contract_duration_ms: 7 * 24 * 60 * 60 * 1000,
     factory_worker_bot_tiers: [
@@ -1507,7 +1632,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     specialisation_titles: LEGACY_SPECIALISATION_TITLES,
     ...LEGACY_WORLD_EVENT_SETTINGS,
     dwarf_find_min_delay_ms: 1,
-    dwarf_find_max_delay_ms: 7 * 60 * 1000,
+    dwarf_find_max_delay_ms: 2 * 60 * 1000,
     dwarf_competition_duration_ms: 20 * 60 * 60 * 1000,
     oil_field_city_id: 2,
     oil_units_per_liter: 180,
@@ -1639,6 +1764,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     item_value_excluded_mine_type_ids: [18],
     item_value_rules: LEGACY_ITEM_VALUE_RULES,
     casino_slot_rules: LEGACY_CASINO_SLOT_RULES,
+    casino_bromo_sporefall_rules: BROMO_SPOREFALL_RULES,
+    casino_kings_lockbox_rules: KINGS_LOCKBOX_RULES,
     chat_message_max_length: 500,
     chat_rate_window_ms: 30000,
     chat_rate_max_messages: 20,
@@ -1831,12 +1958,23 @@ export function indexCatalog({
     }
   }
   const mineTypeById = new Map(mineTypes.map((entry) => [entry.id, entry]));
+  const cityById = new Map(cities.map((city) => [city.id, city]));
   const mineTypesByCity = new Map(cities.map((city) => [city.id, []]));
+  const regionalMineTypes = new Map();
   for (const availability of cityMineTypes) {
     const mineType = mineTypeById.get(availability.mineTypeId);
     const cityMineTypes = mineTypesByCity.get(availability.cityId);
     if (!mineType) throw new Error(`Missing catalog mine type ${availability.mineTypeId}.`);
     if (!cityMineTypes) throw new Error(`Missing catalog city ${availability.cityId}.`);
+    const city = cityById.get(availability.cityId);
+    if (Number.isSafeInteger(Number(city.mapId))) {
+      const key = `${city.mapId}:${availability.mineTypeId}`;
+      const existingCity = regionalMineTypes.get(key);
+      if (existingCity) {
+        throw new Error(`${mineType.name} is available in both ${existingCity.name} and ${city.name} within one region.`);
+      }
+      regionalMineTypes.set(key, city);
+    }
     cityMineTypes.push(mineType);
   }
   for (const available of mineTypesByCity.values()) {
@@ -1872,6 +2010,15 @@ export function indexCatalog({
     requireReference(new Map(cities.map((entry) => [entry.id, entry])), id, `city for ${context}`);
   const casinoRules = validateCasinoRules(settings.casino_slot_rules);
   for (const itemId of casinoRules.symbolItemIds) requireItem(itemId, 'casino reel');
+  for (const [machineKey, configuredRules] of [
+    [BROMO_SPOREFALL_KEY, settings.casino_bromo_sporefall_rules],
+    [KINGS_LOCKBOX_KEY, settings.casino_kings_lockbox_rules]
+  ]) {
+    const machineRules = validateCasinoMachineRules(machineKey, configuredRules);
+    for (const itemId of machineRules.symbolItemIds) {
+      requireItem(itemId, `${machineKey} casino reel`);
+    }
+  }
   const routeTypeIds = settings.route_type_ids;
   const aircraftRoleIds = settings.aircraft_role_ids;
   if (!routeTypeIds || typeof routeTypeIds !== 'object' || Array.isArray(routeTypeIds)) {
@@ -1917,12 +2064,44 @@ export function indexCatalog({
   );
   const welcomeVehicle = welcomePack
     && vehicles.find((vehicle) => vehicle.itemId === Number(welcomePack.vehicleItemId));
+  const welcomeDwarfItem = welcomePack && requireItem(
+    welcomePack.dwarfItemId, 'setting starter_welcome_pack.dwarfItemId'
+  );
+  const welcomeDwarf = welcomePack
+    && dwarfTiers.find((dwarf) => dwarf.itemId === Number(welcomePack.dwarfItemId));
+  const welcomeGadgetItemIds = Array.isArray(welcomePack?.gadgetItemIds)
+    ? welcomePack.gadgetItemIds.map(Number) : [];
+  const welcomeGadgets = welcomeGadgetItemIds.map((itemId) => {
+    const item = byId.get(itemId);
+    const gadgetItem = gadgetItemByItemId.get(itemId);
+    return item && gadgetItem ? { item, gadgetItem } : null;
+  });
+  const welcomeRentalMineTypeIds = Array.isArray(welcomePack?.rentalMineTypeIds)
+    ? welcomePack.rentalMineTypeIds.map(Number) : [];
+  const welcomeRentalMineTypes = welcomeRentalMineTypeIds.map((mineTypeId) =>
+    mineTypes.find((mineType) => mineType.id === mineTypeId));
   if (!welcomePack || typeof welcomePack !== 'object' || Array.isArray(welcomePack)
     || !welcomeVehicle || welcomeVehicleItem.rarity !== 1
     || welcomeVehicle.routeType !== Number(routeTypeIds.land)
+    || !welcomeDwarf || Number(welcomeDwarf.rarity) !== 2
+    || welcomeDwarfItem.rarity !== 2 || welcomeDwarfItem.repairedItemId !== null
+    || welcomeGadgetItemIds.length < 2
+    || new Set(welcomeGadgetItemIds).size !== welcomeGadgetItemIds.length
+    || welcomeGadgets.some((entry) => !entry || entry.item.rarity !== 1
+      || entry.item.repairedItemId !== null)
+    || !['shield', 'turbo'].every((behaviorKey) => welcomeGadgets.some(
+      (entry) => entry?.gadgetItem.gadget.behaviorKey === behaviorKey
+    ))
+    || welcomeRentalMineTypeIds.length !== 2
+    || new Set(welcomeRentalMineTypeIds).size !== welcomeRentalMineTypeIds.length
+    || welcomeRentalMineTypes.some((mineType) => !mineType || mineType.rentCost <= 0
+      || !byMineType.has(mineType.id))
     || !cryptoType(welcomePack.cryptoTypeId)
     || !Number.isSafeInteger(Number(welcomePack.cryptoQuantity))
-    || Number(welcomePack.cryptoQuantity) < 1) {
+    || Number(welcomePack.cryptoQuantity) < 1
+    || !cryptoType(welcomePack.casinoVoucherCryptoTypeId)
+    || !Number.isSafeInteger(Number(welcomePack.casinoVoucherQuantity))
+    || Number(welcomePack.casinoVoucherQuantity) < 1) {
     throw new Error('Invalid catalog setting: starter_welcome_pack.');
   }
   const vehicleById = new Map(vehicles.map((entry) => [entry.id, entry]));
@@ -2175,6 +2354,10 @@ export function indexCatalog({
     || Number(settings.mill_minimum_map_sort_order) < 1
     || !mineTypeById.has(Number(settings.mill_wood_mine_type_id))
     || reinforcementAction?.actionKind !== 'reinforce'
+    || !WOOD_CATALOG.items.some((item) =>
+      item.id === Number(settings.mill_reinforcement_screw_item_id))
+    || !Number.isSafeInteger(Number(settings.mill_reinforcement_screw_quantity))
+    || Number(settings.mill_reinforcement_screw_quantity) < 1
     || !Array.isArray(reinforcementByRarity)
     || rarities.some((rarity) => !Number.isFinite(Number(reinforcementByRarity[rarity.id]))
       || Number(reinforcementByRarity[rarity.id]) < 0)

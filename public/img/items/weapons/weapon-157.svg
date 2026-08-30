@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Fire Axe</title>
+  <desc id="desc">A red fire axe with a broad cutting edge, rear spike, and wrapped wooden handle.</desc>
+  <path d="M25 110 17 101 79 38l12 12z" fill="#a66539" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m21 98 15 15 11-14-15-14z" fill="#d8be32" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M67 25q20-9 39 2l-12 31q-15-11-34-10l7-23z" fill="#d94a36" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m93 31 22-4-17 15" fill="#d94a36" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M70 31q14-5 26 0" fill="none" stroke="#ffb29b" stroke-width="4" stroke-linecap="round"/>
+</svg>

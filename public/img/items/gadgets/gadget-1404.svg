@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Hammer</title>
+  <desc id="desc">Tungsten Hammer, depicted as a massive powered forge mallet with an energized gear core.</desc>
+  <path d="m17 109 12 10 46-52-13-13z" fill="#899693" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M24 32 55 10l62 48-25 35-31-15-19 11L9 58z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m27 34 27-16 20 16-20 25-30-9zM93 45l18 14-19 26-19-10z" fill="#4b5050" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="65" cy="50" r="15" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="m65 38 4 8 9 1-7 6 2 9-8-5-8 5 2-9-7-6 9-1z" fill="#a64891"/>
+  <path d="m18 82-10-6m24-2-2-13m16 5 4-12" fill="none" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+</svg>

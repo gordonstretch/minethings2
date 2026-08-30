@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Tactical Display</title>
+  <desc id="desc">A titanium vehicle modification depicting a rugged tactical screen showing a route grid, target, and control keys.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21h98v85H15z" fill="#71899c"/><path d="M25 31h78v58H25z" fill="#3c5365"/><path d="M33 43h62M33 58h62M33 73h62M45 36v48m18-48v48m18-48v48" stroke="#c8d7dd" stroke-opacity=".45"/><path d="m32 78 19-21 17 8 21-23" fill="none" stroke="#e32121"/><circle cx="89" cy="42" r="7" fill="none" stroke="#e32121"/><circle cx="64" cy="98" r="5" fill="#e32121"/><path d="M39 114h50" stroke="#3c5365"/></g>
+</svg>

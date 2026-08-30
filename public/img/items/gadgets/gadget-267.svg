@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Warehouse</title>
+  <desc id="desc">Aluminum Warehouse, depicted as a compact corrugated storehouse with an open bay and crates.</desc>
+  <path d="M13 48 64 17l51 31v66H13z" fill="#d7e0dd" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M21 51h86M29 45v69m17-69v69m17-69v69m18-69v69m18-69v69" fill="none" stroke="#799c9c" stroke-width="3" opacity=".8"/>
+  <path d="M45 69h38v45H45z" fill="#799c9c" stroke="#292d29" stroke-width="6"/>
+  <path d="M52 91h24v23H52z" fill="#a66d3e" stroke="#292d29" stroke-width="4"/>
+  <path d="M21 92h24v22H21zm62 5h23v17H83z" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M18 45 64 18l46 27" fill="none" stroke="#f4f7f2" stroke-width="5" stroke-linecap="round"/>
+</svg>

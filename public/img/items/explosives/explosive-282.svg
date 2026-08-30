@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">BLU-82</title>
+  <desc id="desc">A colossal midnight BLU-82 bomb with orange fins, gold bands, rivets, and a gleaming nose cone.</desc>
+  <path d="M36 14h53l16 18v65l-16 18H36L20 97V32z" fill="#263944" stroke="#292d29" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m20 32-14 8v28l14 8zm85 0 17 8v28l-17 8zM36 115l-20 9h32zm53 0 20 9H77z" fill="#e86d37" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M27 35h71M27 94h71" stroke="#e0ad39" stroke-width="10"/>
+  <path d="M43 14 51 4h23l8 10" fill="#8aa7aa" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39 48h47v34H39z" fill="#f1d483" stroke="#292d29" stroke-width="5"/>
+  <path d="m62 52 5 9 10 2-7 7 2 9-10-4-9 4 2-9-7-7 10-2z" fill="#ef603e" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+  <g fill="#dce4df"><circle cx="32" cy="22" r="3"/><circle cx="93" cy="22" r="3"/><circle cx="32" cy="107" r="3"/><circle cx="93" cy="107" r="3"/></g>
+  <path d="M33 44v39" fill="none" stroke="#fff6df" stroke-width="6" stroke-linecap="round" opacity=".72"/>
+</svg>

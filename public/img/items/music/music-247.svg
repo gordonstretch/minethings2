@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Harp</title>
+  <desc id="desc">A graceful golden harp with a curved neck, sturdy sound box, green carving, and a fan of fine strings.</desc>
+  <path d="M24 111 49 17c23 1 44 13 60 34l-8 60z" fill="#f1dfad" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M26 109 50 17c20 2 40 12 58 34" fill="none" stroke="#c98d32" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m40 105 15-77m-4 77 12-72m0 72 8-66m4 66 4-58m8 58-1-48m10 48-3-37" fill="none" stroke="#8e7853" stroke-width="3" stroke-linecap="round"/>
+  <path d="m26 109 75 2 8-60" fill="none" stroke="#b8782e" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M31 96c12 2 19 8 23 17m-18-29c13 2 23 8 29 20" fill="none" stroke="#5aa66a" stroke-width="5" stroke-linecap="round"/>
+  <path d="M48 17c13 0 25 4 37 11" fill="none" stroke="#f1c969" stroke-width="4" stroke-linecap="round"/>
+</svg>

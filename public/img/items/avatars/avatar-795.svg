@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Thief Base Background</title>
+  <desc id="desc">A miniature location scene representing the Thief Base Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M15 110V57l49-39 49 39v53z" fill="#343c3b" stroke="#242927" stroke-width="6"/><path d="M38 110V67h52v43z" fill="#1b2322" stroke="#242927" stroke-width="5"/><path d="m47 82 17-11 17 11-17 12z" fill="#d4a23b"/><path d="M22 49 13 35m92 14 10-14" stroke="#8b4a3d" stroke-width="7"/></g>
+</svg>

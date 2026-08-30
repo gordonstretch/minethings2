@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Locust</title>
+  <desc id="desc">A side-on locust with a wedge-shaped head, folded wings, and enormous jointed hind legs ready to spring.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M55 72 31 93 12 112M57 72 83 92 103 117"/>
+    <path d="M78 67 95 84 112 85M68 69 73 95 62 113"/>
+    <path d="M98 42 117 21M96 39l12-26"/>
+  </g>
+  <g fill="none" stroke="#778b3d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M55 72 31 93 12 112M57 72 83 92 103 117"/>
+    <path d="M78 67 95 84 112 85M68 69 73 95 62 113"/>
+    <path d="M98 42 117 21M96 39l12-26"/>
+  </g>
+  <path d="M20 55c24-17 54-17 75-7L81 78c-22 7-47 4-66-10z" fill="#859b45" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M25 57c22-9 43-8 59 0L72 72c-17 4-34 2-49-5z" fill="#b0aa55" stroke="#292d29" stroke-width="4"/>
+  <path d="m75 49 16-15 19 9-8 24-21 11z" fill="#718c43" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M83 55 29 59 70 71" fill="#a64891" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="98" cy="43" r="5" fill="#a64891" stroke="#292d29" stroke-width="3"/>
+  <path d="M28 59h38" fill="none" stroke="#d0c77a" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Skirt</title>
+  <desc id="desc">A pleated purple skirt with a broad fitted waistband.</desc>
+  <path d="M39 15h50l3 23H36z" fill="#714b87" stroke="#292d29" stroke-width="7"/><path d="m38 38-20 78h92L90 38z" fill="#9165a8" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M51 41 43 111M64 41v70M77 41l8 70" stroke="#c8a7d2" stroke-width="4"/>
+</svg>

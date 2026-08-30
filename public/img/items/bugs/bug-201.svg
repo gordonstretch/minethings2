@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Grasshopper</title>
+  <desc id="desc">A green grasshopper in side profile, with a wedge-shaped head and enormous folded jumping legs.</desc>
+  <path d="M49 60Q28 66 22 88L10 108m42-43L30 99l-18 9" fill="none" stroke="#292d29" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 69 77 102l27 8M76 67l19 30 19 4" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 48q26-14 57 4l-9 29q-31 2-52-15z" fill="#6f9949" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M49 52q26-5 44 6L72 73 45 64z" fill="#91b957" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M92 47q14-10 26 2l-2 19-24 9-10-16z" fill="#7cab4f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M108 47q5-17 13-26M101 46q-1-17 5-29" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M53 55q18 1 31 9" fill="none" stroke="#d94a36" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="108" cy="54" r="4" fill="#d94a36" stroke="#292d29" stroke-width="3"/>
+</svg>

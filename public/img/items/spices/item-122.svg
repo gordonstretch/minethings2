@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Paprika</title>
+  <desc id="desc">A ripe red paprika pepper beside a bowl heaped with vivid ground spice.</desc>
+  <path d="M25 15q35 1 35 40-2 37-38 48-14-39 3-88z" fill="#c84a3b" stroke="#292d29" stroke-width="7"/><path d="M25 17q-4-12 12-10l8 12" fill="none" stroke="#557d52" stroke-width="7"/><path d="M60 112h63L113 78H70z" fill="#b26c3d" stroke="#292d29" stroke-width="7"/><path d="M67 81q22-27 50 0" fill="#f28c28" stroke="#292d29" stroke-width="6"/><path d="M75 87h36" stroke="#f6b24e" stroke-width="4"/>
+</svg>

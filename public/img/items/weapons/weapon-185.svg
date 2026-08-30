@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Syringe Gun</title>
+  <desc id="desc">A pneumatic dart gun with an oversized fluid chamber, pressure bottle, and long needle barrel.</desc>
+  <path d="M47 34h53v29H47z" fill="#c6edf0" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M55 42h35v13H55z" fill="#f79721"/>
+  <path d="M100 41h16v15h-16M116 48h7" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 51 15 58 7 77l38 3 17-22z" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M47 62h42v24H47z" fill="#77827e" stroke="#292d29" stroke-width="6"/>
+  <path d="m58 85-9 28H33l8-39" fill="#59635f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <rect x="72" y="74" width="17" height="35" rx="7" fill="#f79721" stroke="#292d29" stroke-width="5"/>
+  <path d="M52 38h14" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+</svg>

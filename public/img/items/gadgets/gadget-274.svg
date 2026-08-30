@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Ledger</title>
+  <desc id="desc">Titanium Ledger, depicted as a clasped metal ledger beside balanced coin stacks.</desc>
+  <path d="M20 13h80l12 13v89H20z" fill="#9fc5cc" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M33 28h54v73H33z" fill="#e3f0ef" stroke="#292d29" stroke-width="5"/>
+  <path d="M60 31v67M39 47h42M39 63h42M39 79h42" fill="none" stroke="#4184a8" stroke-width="4"/>
+  <path d="M96 39h18v34H96z" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M12 86h24v24H12zm82 0h24v24H94z" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="M18 78h12m70 0h12M12 114h106" fill="none" stroke="#3d94c5" stroke-width="4"/>
+</svg>

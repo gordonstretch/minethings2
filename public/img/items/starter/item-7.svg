@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Meteor Fragment</title>
+  <desc id="desc">A glowing, fractured meteor fragment trailing sparks through the air.</desc>
+  <path d="M12 31 57 58" stroke="#f28c28" stroke-width="10" stroke-linecap="round"/><path d="M20 14 62 52" stroke="#d8be32" stroke-width="6" stroke-linecap="round"/><path d="m55 45 43 10 18 33-31 27-37-20z" fill="#786d69" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="m72 57 19 10-9 13-19-5zm19 31 14-8 4 12-13 12z" fill="#f28c28"/><circle cx="35" cy="42" r="4" fill="#d8be32"/>
+</svg>

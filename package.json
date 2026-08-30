@@ -11,6 +11,7 @@
     "build:production": "node scripts/build-production.mjs",
     "test:production": "node scripts/production-smoke.mjs",
     "audit:assets": "node scripts/audit-legacy-assets.mjs",
+    "grant:cinderwake-oil-test-kits": "node scripts/provision-cinderwake-oil-test-kits.mjs",
     "audit:rendered": "playwright test test/rendered-audit.spec.mjs --workers=1",
     "audit:live-updates": "playwright test test/live-update-audit.spec.mjs --workers=1",
     "audit:item-cards": "playwright test test/item-card-audit.spec.mjs --workers=1"

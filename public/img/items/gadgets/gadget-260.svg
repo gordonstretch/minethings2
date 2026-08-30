@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Radar</title>
+  <desc id="desc">Iron Radar, depicted as a rotating receiver dish with a boxy sweep display.</desc>
+  <path d="M17 23q52-2 77 40-34 30-77-40z" fill="#59635f" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m22 27 46 38" stroke="#aeb8b2" stroke-width="5"/>
+  <circle cx="69" cy="65" r="8" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M69 73v15" stroke="#292d29" stroke-width="7"/>
+  <rect x="42" y="84" width="70" height="34" rx="5" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M53 108V94h48" fill="none" stroke="#c36d37" stroke-width="4"/>
+  <path d="m55 103 17-7 14 8 13-12" fill="none" stroke="#f28c28" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M84 36q15 10 20 26M82 21q26 15 34 41" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

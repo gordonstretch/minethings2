@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Flimsy Drill</title>
+  <desc id="desc">The Flimsy Drill shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f2df6b"/><stop offset=".48" stop-color="#d8be32"/><stop offset="1" stop-color="#877316"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 35h64l18 16v22L80 87H16z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M98 51h16l9 11-9 11H98z" fill="#877316" stroke="#242927" stroke-width="5"/>
+    <path d="M40 87h34l-8 34H43z" fill="#877316" stroke="#242927" stroke-width="6"/>
+    <circle cx="76" cy="61" r="11" fill="#fff2a3" stroke="#242927" stroke-width="5"/>
+    <path d="M25 48h28m-28 13h20" stroke="#fff2a3" stroke-width="5"/></g>
+</svg>

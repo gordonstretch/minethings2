@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Harpsichord</title>
+  <desc id="desc">An ornate wing-shaped harpsichord with a raised painted lid, exposed strings, two manuals, and slender legs.</desc>
+  <path d="M24 53 96 12l17 7-31 42z" fill="#9a6038" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M31 49 94 20 82 52z" fill="#d0a05a" stroke="#a64891" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M14 55h69l31-22-4 39-32 19H14z" fill="#7f4d31" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M15 66h65v24H15z" fill="#eee7d4" stroke="#292d29" stroke-width="5"/>
+  <path d="M19 77h57M27 67v22M39 67v22M51 67v22M63 67v22M33 67v10M45 67v10M57 67v10M69 67v10" fill="none" stroke="#292d29" stroke-width="3"/>
+  <path d="M24 92 20 116M69 92l5 24M101 77l8 32" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M22 52 87 26M26 57 83 34M30 62 79 42" fill="none" stroke="#e6c97b" stroke-width="2"/>
+  <path d="M54 37q8-10 15 0t15 0" fill="none" stroke="#a64891" stroke-width="4" stroke-linecap="round"/>
+</svg>

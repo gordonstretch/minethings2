@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Yellowfin Tuna</title>
+  <desc id="desc">A muscular yellowfin tuna with a metallic flank, long yellow sickle fins, and rows of bright finlets.</desc>
+  <path d="M8 66q25-35 81-24l32 24-32 25Q31 102 8 66z" fill="#aebfbe" stroke="#292d29" stroke-width="7"/><path d="M14 60q37-26 78-13" stroke="#244f65" stroke-width="11"/><path d="M67 45 84 14l12 34M65 87l21 28 9-31" fill="#d8be32" stroke="#292d29" stroke-width="5"/><path d="m91 44 30-20-7 42 7 39-32-18" fill="#d8be32" stroke="#292d29" stroke-width="6"/><circle cx="24" cy="60" r="5" fill="#292d29"/><g fill="#d8be32"><path d="m93 51 8 6-8 6z"/><path d="m97 65 9 5-9 6z"/><path d="m93 78 8 5-8 6z"/></g>
+</svg>

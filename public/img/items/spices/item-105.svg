@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Vanilla Bean</title>
+  <desc id="desc">Two long black vanilla pods beside a pale star-shaped vanilla orchid.</desc>
+  <path d="M35 112Q42 57 53 16M57 115Q66 59 72 13" fill="none" stroke="#3f3128" stroke-width="11" stroke-linecap="round"/><path d="M78 66q-25-12-15-35 17-20 32 3 14-22 27-1 8 24-19 32-7 26-27 10z" fill="#f0dfbd" stroke="#292d29" stroke-width="5"/><circle cx="91" cy="52" r="8" fill="#d8be32"/><path d="M91 51 78 34m13 17 5-23m-5 23 20-12" stroke="#b88835" stroke-width="3"/>
+</svg>

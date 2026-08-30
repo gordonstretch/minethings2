@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bee</title>
+  <desc id="desc">A sturdy honey bee with a striped golden abdomen, green thorax, clear wings, and six braced legs.</desc>
+  <path d="M51 54C43 26 26 17 18 27c-8 11 8 29 31 36m18-9c8-28 25-37 33-27 8 11-8 29-31 36M51 74c-17 9-26 18-32 31m42-26-6 35m21-35 8 34m8-40 18 27" fill="#dceae4" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M18 59 7 48m11 20L5 75" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="84" cy="66" rx="35" ry="25" fill="#dfa92e" stroke="#292d29" stroke-width="6"/>
+  <path d="M70 44c-5 12-5 31 0 44m15-47c-5 14-5 35 0 50m15-44c-4 12-4 26 0 38" fill="none" stroke="#292d29" stroke-width="7"/>
+  <circle cx="48" cy="66" r="22" fill="#5a9f62" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="25" cy="66" rx="16" ry="18" fill="#6c4a35" stroke="#292d29" stroke-width="6"/>
+  <circle cx="20" cy="61" r="4" fill="#f2db6b"/>
+  <path d="M18 51 9 36m25 16 8-17" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="m109 59 12 7-12 8" fill="#292d29" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+</svg>

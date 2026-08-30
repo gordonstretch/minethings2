@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">King Mackerel</title>
+  <desc id="desc">A streamlined king mackerel with a dark wavy back, silver flank, finlets, and deeply forked tail.</desc>
+  <path d="M10 67q28-29 82-14l26-19-8 27 12 24-30-15q-53 24-82-3z" fill="#aebfbe" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M15 62q37-22 79-7" stroke="#244f65" stroke-width="10"/><path d="M44 53q7 9 15 0m2 2q7 9 15 0m2 2q7 8 14 0" fill="none" stroke="#8fb6bb" stroke-width="4"/><circle cx="27" cy="61" r="4" fill="#292d29"/><path d="M60 52 72 35l12 19m2 19 15 11" fill="#244f65" stroke="#292d29" stroke-width="4"/><g fill="#d8be32"><path d="m78 76 7 8 5-10z"/><path d="m91 73 7 7 4-10z"/></g>
+</svg>

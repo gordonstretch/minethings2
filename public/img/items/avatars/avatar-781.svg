@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Hangar Background</title>
+  <desc id="desc">A miniature location scene representing the Hangar Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M17 108V53q47-48 94 0v55z" fill="#687372" stroke="#242927" stroke-width="6"/><path d="M30 104V61q34-35 68 0v43z" fill="#263536" stroke="#242927" stroke-width="5"/><path d="m39 83 50-18-10 18 10 18z" fill="#d3b053" stroke="#242927" stroke-width="4"/></g>
+</svg>

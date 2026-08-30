@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ant</title>
+  <desc id="desc">A russet worker ant in profile, with three strong body segments, elbowed antennae, and six angular legs.</desc>
+  <path d="M48 58 34 35 16 30m35 39-22 1-17 13m44-3-16 18-9 18m40-58 14-23 18-5M77 69l22 1 17 13M72 80l16 18 9 18" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="31" cy="68" rx="24" ry="28" fill="#8d4f39" stroke="#292d29" stroke-width="6"/>
+  <path d="M29 42c-5 15-5 36 0 52" fill="none" stroke="#d8be32" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="61" cy="68" r="18" fill="#a25d3e" stroke="#292d29" stroke-width="6"/>
+  <circle cx="84" cy="68" r="9" fill="#704333" stroke="#292d29" stroke-width="5"/>
+  <ellipse cx="103" cy="65" rx="17" ry="18" fill="#9a583c" stroke="#292d29" stroke-width="6"/>
+  <path d="m111 53 7-14-5-13m-3 28 10-7 1-11" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="108" cy="61" r="3" fill="#d8be32"/>
+</svg>

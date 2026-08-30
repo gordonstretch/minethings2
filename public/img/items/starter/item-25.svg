@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pet Snake</title>
+  <desc id="desc">A green pet snake coiled upright with a curious forked tongue.</desc>
+  <path d="M35 100q-24-13-9-31 14-16 41 0 25 15 11 35-13 18-43 3 52 22 67-8 14-29-17-48-24-15-14-33 7-13 24-5 14 7 9 21" fill="none" stroke="#557d52" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><path d="M91 16q17 0 14 17l-13 7-14-9z" fill="#75a56e" stroke="#292d29" stroke-width="5"/><circle cx="96" cy="24" r="2.5" fill="#292d29"/><path d="m104 33 12 5-10 3" fill="none" stroke="#c84a3b" stroke-width="3"/>
+</svg>

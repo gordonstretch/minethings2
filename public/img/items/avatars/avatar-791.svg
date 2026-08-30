@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Shelter Background</title>
+  <desc id="desc">A miniature location scene representing the Shelter Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M14 108q4-70 50-78 46 8 50 78z" fill="#6a7068" stroke="#242927" stroke-width="6"/><path d="M42 108V66h44v42z" fill="#303a37" stroke="#242927" stroke-width="6"/><path d="M50 76h28M64 68v39" stroke="#d3a646" stroke-width="5"/></g>
+</svg>

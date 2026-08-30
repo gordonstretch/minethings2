@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">June Bug</title>
+  <desc id="desc">A plump metallic green June bug with rounded wing cases, six hooked legs, and short fan-shaped antennae.</desc>
+  <g fill="none" stroke="#292d29" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M45 49 25 39 11 46M39 68 18 73 10 88M44 87 28 104 28 117"/>
+    <path d="M83 49 103 39 117 46M89 68 110 73 118 88M84 87 100 104 100 117"/>
+  </g>
+  <g fill="none" stroke="#27715c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M45 49 25 39 11 46M39 68 18 73 10 88M44 87 28 104 28 117"/>
+    <path d="M83 49 103 39 117 46M89 68 110 73 118 88M84 87 100 104 100 117"/>
+  </g>
+  <path d="M64 30c-23 0-35 17-35 43 0 28 14 46 35 46s35-18 35-46c0-26-12-43-35-43z" fill="#278366" stroke="#292d29" stroke-width="6"/>
+  <path d="M64 56v61M35 59h58" fill="none" stroke="#292d29" stroke-width="5"/>
+  <path d="M64 27c-16 0-25 8-26 24 17 9 35 9 52 0-1-16-10-24-26-24z" fill="#3b9a75" stroke="#292d29" stroke-width="6"/>
+  <path d="M54 29 47 17 34 12m40 17 7-12 13-5M45 17l-10 4m48-4 10 4" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M43 69c4-5 9-7 14-7M85 69c-4-5-9-7-14-7M42 88h15M71 88h15" fill="none" stroke="#a64891" stroke-width="5" stroke-linecap="round"/>
+  <path d="M45 45q19-13 38 0" fill="none" stroke="#86c5a0" stroke-width="3" stroke-linecap="round"/>
+</svg>

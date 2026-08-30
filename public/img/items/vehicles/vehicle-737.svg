@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Search Plane</title>
+  <desc id="desc">A high-wing propeller search plane with a glazed cockpit, camera pod, and long observation antenna.</desc>
+  <path d="M30 52h70l17 13-17 12H30z" fill="#d9e0dc" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m57 55 16-35h18L82 55zM57 74l16 34h18l-9-34z" fill="#777" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M28 55 14 40H8l5 26-5 27h6l14-18z" fill="#8e9994" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M92 55h12l10 10-12 9H92z" fill="#bfe2ea" stroke="#292d29" stroke-width="4"/>
+  <path d="M111 46v38M105 65h13" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="M64 77q1 15 13 15t13-15" fill="#777" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="77" cy="88" r="5" fill="#bfe2ea"/>
+  <path d="M38 51 24 25" fill="none" stroke="#777" stroke-width="4" stroke-linecap="round"/>
+</svg>

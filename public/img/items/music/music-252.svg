@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Kazoo</title>
+  <desc id="desc">A bright gold kazoo with a slim tapered mouthpiece, flared end, and a single raised circular membrane window.</desc>
+  <path d="M10 57h17l7 8-7 9H10z" fill="#84735b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M27 51h72l20-9v45l-20-9H27z" fill="#d8be32" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M35 58h64l10-4v21l-10-4H35z" fill="#e5c94c" stroke="#9a7722" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M57 52c0-18 8-28 20-28s20 10 20 28z" fill="#d8be32" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="77" cy="39" r="11" fill="#b9c6c1" stroke="#292d29" stroke-width="5"/>
+  <circle cx="77" cy="39" r="4" fill="#5d6662"/>
+  <path d="M105 53v24" fill="none" stroke="#292d29" stroke-width="4"/>
+  <path d="M39 57h15" fill="none" stroke="#f5de7d" stroke-width="4" stroke-linecap="round"/>
+</svg>

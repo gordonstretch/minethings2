@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pet Dog</title>
+  <desc id="desc">A friendly brown dog sitting alertly with a blue collar.</desc>
+  <path d="M39 56q1-28 25-28t25 28v31q0 27-25 27T39 87z" fill="#a9764e" stroke="#292d29" stroke-width="7"/><path d="M42 45 22 29l3 38 17 5m44-27 20-16-3 38-17 5" fill="#805738" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M44 88q20 13 40 0" fill="none" stroke="#3d7f92" stroke-width="8"/><circle cx="53" cy="65" r="4" fill="#292d29"/><circle cx="75" cy="65" r="4" fill="#292d29"/><path d="m58 76 6 7 6-7z" fill="#292d29"/>
+</svg>

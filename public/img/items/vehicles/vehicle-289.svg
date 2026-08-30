@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Brig</title>
+  <desc id="desc">A compact deep-hulled brig carrying two equally tall masts stacked with square sails.</desc>
+  <path d="M14 80h100l-15 27H31z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M43 80V13m39 67V13" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="M17 22h24v25H13zm0 31h24v22H16zM84 22h27l4 25H84zm0 31h27l2 22H84z"/>
+  </g>
+  <path d="M16 61h25m43-31h28M28 91h72" fill="none" stroke="#799c9c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M105 80 116 60" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

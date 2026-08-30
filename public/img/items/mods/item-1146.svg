@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Range Finder</title>
+  <desc id="desc">A titanium vehicle modification depicting a precision optical range finder with twin lenses and a central sight reticle.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 47h92v39H18z" fill="#71899c"/><circle cx="41" cy="66" r="27" fill="#3c5365"/><circle cx="41" cy="66" r="17" fill="#c8d7dd"/><circle cx="41" cy="66" r="7" fill="#e32121"/><circle cx="89" cy="66" r="20" fill="#3c5365"/><circle cx="89" cy="66" r="11" fill="#c8d7dd"/><path d="M64 29v74M27 66h74" stroke="#e32121"/><path d="M60 51h11v30H60z" fill="#3c5365"/></g>
+</svg>

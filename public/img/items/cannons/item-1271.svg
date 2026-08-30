@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Box of Grape Shot</title>
+  <desc id="desc">An open ammunition crate packed with compact cloth bags of grape shot.</desc>
+  <path d="M12 49h104v68H12z" fill="#95613e" stroke="#292d29" stroke-width="7"/><path d="M14 49 31 20h83L98 49z" fill="#b47b4b" stroke="#292d29" stroke-width="7"/><g fill="#f0dfbd" stroke="#292d29" stroke-width="4"><path d="m25 65 17-10 16 10-3 35H28z"/><path d="m70 65 17-10 16 10-3 35H73z"/></g><g fill="#3b403e"><circle cx="36" cy="75" r="4"/><circle cx="47" cy="85" r="4"/><circle cx="81" cy="76" r="4"/><circle cx="93" cy="87" r="4"/></g><path d="M21 106h86M20 54v58m88-58v58" stroke="#e0aa68" stroke-width="4"/>
+</svg>

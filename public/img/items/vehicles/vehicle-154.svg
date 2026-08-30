@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Camel</title>
+  <desc id="desc">A saddled one-humped camel in profile, with a long arched neck, bridle, and sturdy walking legs.</desc>
+  <path d="M17 65c8-17 20-22 35-8 9-24 29-25 36-2 6 19 5 27-5 34H35c-16 0-25-9-18-24z" fill="#b9864e" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M79 67c9-5 7-25 13-36 5-9 12-13 18-7l6 9-7 10-9-1-1 34" fill="#b9864e" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 85v25m20-23-3 23m24-24 4 24m15-31 3 31" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M25 51h45l10 19H27z" fill="#d8be32" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M36 48h27v15H36z" fill="#744833" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M104 29h11m-18 7 14 5M93 55l10 10" fill="none" stroke="#744833" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="108" cy="31" r="2.5" fill="#292d29"/>
+</svg>

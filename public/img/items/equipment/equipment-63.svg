@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Standard Tool Belt</title>
+  <desc id="desc">The Standard Tool Belt shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a6c94c"/><stop offset=".48" stop-color="#698b18"/><stop offset="1" stop-color="#3d5710"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 43q48-16 96 0l-4 22q-44-13-88 0z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M24 59v39h27V55m26 0v43h27V59" fill="#698b18" stroke="#242927" stroke-width="6"/>
+    <path d="M31 69h13m40 0h13" stroke="#d9e67a" stroke-width="4"/>
+    <rect x="54" y="38" width="20" height="28" rx="3" fill="#d9e67a" stroke="#242927" stroke-width="5"/>
+    <rect x="60" y="46" width="8" height="12" rx="1" fill="#3d5710"/></g>
+</svg>

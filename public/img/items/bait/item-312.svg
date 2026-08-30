@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mullet</title>
+  <desc id="desc">A sturdy striped mullet with a blunt head, broad scales, and powerful forked tail.</desc>
+  <path d="M14 67q25-38 75-21l28-18-8 31 10 29-31-13Q38 94 14 67z" fill="#9eb1a9" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M22 59q33-23 68-10" stroke="#557d52" stroke-width="8"/><path d="M46 47q-2 23 7 39m14-42q-3 23 7 38" fill="none" stroke="#657a70" stroke-width="5"/><circle cx="29" cy="61" r="4" fill="#292d29"/><path d="M21 74h22" stroke="#f0dfbd" stroke-width="4"/>
+</svg>

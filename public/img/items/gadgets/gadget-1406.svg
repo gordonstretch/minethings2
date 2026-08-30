@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Binoculars</title>
+  <desc id="desc">Tungsten Binoculars, depicted as a gimballed triple-lens rangefinder with a hooded sight.</desc>
+  <path d="M12 49 28 18h26l10 24 10-24h26l16 31-7 59H79L64 89l-15 19H19z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m25 52 10-21h13l8 19-8 40H30zm78 0-10-21H80l-8 19 8 40h18z" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
+  <circle cx="39" cy="67" r="17" fill="#899693" stroke="#292d29" stroke-width="5"/>
+  <circle cx="89" cy="67" r="17" fill="#899693" stroke="#292d29" stroke-width="5"/>
+  <circle cx="64" cy="58" r="13" fill="#a64891" stroke="#292d29" stroke-width="5"/>
+  <path d="M31 67h16m-8-8v16m42-8h16m-8-8v16M58 58h12" stroke="#f28c28" stroke-width="3"/>
+  <path d="m19 108 20 11m70-11-20 11" stroke="#899693" stroke-width="5" stroke-linecap="round"/>
+</svg>

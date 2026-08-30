@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Bushings</title>
+  <desc id="desc">A iron vehicle modification depicting a matched pair of thick vibration-control bushings with bright inner sleeves.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-16 43 64)"><rect x="15" y="35" width="57" height="58" rx="20" fill="#39443f"/><circle cx="43" cy="64" r="21" fill="#707b76"/><circle cx="43" cy="64" r="9" fill="#799c9c"/></g><g transform="rotate(16 87 64)"><rect x="58" y="35" width="57" height="58" rx="20" fill="#39443f"/><circle cx="87" cy="64" r="21" fill="#707b76"/><circle cx="87" cy="64" r="9" fill="#799c9c"/></g><path d="M37 22h54M37 106h54" stroke="#b9c2ba"/></g>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Steel Drum</title>
+  <desc id="desc">A polished steel pan with a hammered field of tuned notes, a deep skirt, and a sturdy tripod stand.</desc>
+  <path d="M18 40h92L102 91c-22 12-54 12-76 0z" fill="#718a91" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <ellipse cx="64" cy="40" rx="48" ry="29" fill="#aec1c2" stroke="#292d29" stroke-width="6"/>
+  <ellipse cx="64" cy="40" rx="42" ry="23" fill="#879fa2" stroke="#f28c28" stroke-width="5"/>
+  <g fill="#bfd0cf" stroke="#536b70" stroke-width="3">
+    <path d="m64 18-9 14 9 8 9-8z"/><path d="m37 25 4 17 15 1-1-15z"/><path d="m91 25-4 17-15 1 1-15z"/>
+    <path d="m28 45 14 11 14-8-15-6z"/><path d="m100 45-14 11-14-8 15-6z"/><path d="m64 40-10 12 10 9 10-9z"/>
+  </g>
+  <path d="M35 91 22 116M93 91l13 25M64 96v22" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M27 73q37 13 74 0" fill="none" stroke="#d3dfdc" stroke-width="4"/>
+</svg>

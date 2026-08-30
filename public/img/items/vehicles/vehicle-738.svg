@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bomber</title>
+  <desc id="desc">A heavy swept-wing bomber seen from above with a pointed nose, twin tail, and four underslung bombs.</desc>
+  <path d="M104 64 76 51 57 12H42l7 41L12 44v15l33 11-33 12v15l37-10-7 29h15l19-39z" fill="#66716d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M99 64 56 54v20z" fill="#aeb8b3" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M43 28 28 17M43 100l-15 11" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M58 47h22M58 81h22" fill="none" stroke="#cbd4cf" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#777" stroke="#292d29" stroke-width="4">
+    <path d="m28 53 10 4v12l-10 5-7-11z"/><path d="m48 55 10 4v10l-10 5-7-10z"/>
+    <path d="m28 76 10-5v-12l-10-4-7 10z"/><path d="m48 74 10-5V59l-10-4-7 10z"/>
+  </g>
+</svg>

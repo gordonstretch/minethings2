@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Short Bus</title>
+  <desc id="desc">A stubby three-window bus with a rounded roof, folding front door, and blue-grey transit stripe.</desc>
+  <path d="M12 42c0-11 9-19 20-19h57c15 0 27 12 27 27v50H12z" fill="#d4b84e" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M21 39h21v24H21zm27 0h21v24H48zm27 0h22l12 24H75z" fill="#a9ced3" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M13 72h102" stroke="#799c9c" stroke-width="8"/>
+  <path d="M91 67h20v31H91zM101 67v31" fill="#d9d5c1" stroke="#292d29" stroke-width="4"/>
+  <circle cx="34" cy="99" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="91" cy="99" r="14" fill="#303332" stroke="#292d29" stroke-width="6"/>
+  <circle cx="34" cy="99" r="5" fill="#aeb2aa"/>
+  <circle cx="91" cy="99" r="5" fill="#aeb2aa"/>
+  <path d="M106 54h10v11" fill="none" stroke="#f1d28a" stroke-width="4" stroke-linecap="round"/>
+</svg>

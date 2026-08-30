@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Auditorium Background</title>
+  <desc id="desc">A miniature location scene representing the Auditorium Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M15 20h98v91H15z" fill="#5b3a45" stroke="#242927" stroke-width="6"/><path d="M26 25q17 26 0 52m76-52q-17 26 0 52" fill="#a83f43" stroke="#d79b44" stroke-width="5"/><path d="M38 85q26-20 52 0v20H38z" fill="#b88743" stroke="#242927" stroke-width="5"/><path d="M49 58h30" stroke="#efd06c" stroke-width="6"/></g>
+</svg>

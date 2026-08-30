@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sailfish</title>
+  <desc id="desc">A spectacular sailfish with a spear bill, cobalt stripes, and an enormous spotted dorsal sail.</desc>
+  <path d="M20 68q25-27 76-15l24-13-11 26 12 25-28-17q-46 19-73-6z" fill="#aebfbe" stroke="#292d29" stroke-width="7"/><path d="m21 68-17-5 18-5" fill="#d9e5df" stroke="#292d29" stroke-width="4"/><path d="M40 54Q51 3 99 18l-8 38z" fill="#244f65" stroke="#292d29" stroke-width="6"/><path d="M49 49q4-19 10-28m5 30q5-23 10-33m5 35q6-22 12-31" stroke="#6fb1bd" stroke-width="4"/><g fill="#d9e5df"><circle cx="57" cy="28" r="3"/><circle cx="73" cy="25" r="3"/><circle cx="85" cy="33" r="3"/></g><path d="M31 69q31 13 60 3" stroke="#3d7f92" stroke-width="6" fill="none"/><circle cx="31" cy="58" r="4" fill="#292d29"/>
+</svg>

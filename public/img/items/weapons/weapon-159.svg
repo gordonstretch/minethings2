@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Butcher Knife</title>
+  <desc id="desc">A broad rectangular butcher blade with a riveted wooden handle.</desc>
+  <path d="M48 19h64v50q-24 13-64 4z" fill="#d9e0dc" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M56 30h43" fill="none" stroke="#f7f5e8" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="99" cy="35" r="5" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M52 66 38 108H14l22-45z" fill="#96582f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="31" cy="87" r="3.5" fill="#f0d38a"/>
+  <circle cx="24" cy="100" r="3.5" fill="#f0d38a"/>
+</svg>

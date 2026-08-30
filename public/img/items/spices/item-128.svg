@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Garlic</title>
+  <desc id="desc">A papery white garlic bulb opened to show several plump individual cloves.</desc>
+  <path d="M64 14q14 22 10 34 31 8 30 38-2 35-40 35T24 86q-1-30 30-38-4-12 10-34z" fill="#eee6d3" stroke="#292d29" stroke-width="7"/><path d="M64 47v70m0-68q-25 9-19 62m19-62q25 9 19 62" fill="none" stroke="#c5b899" stroke-width="5"/><path d="M28 96q14-19 31-5-6 27-27 28z" fill="#f0dfbd" stroke="#292d29" stroke-width="5"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Clay Pigeon</title>
+  <desc id="desc">A terracotta clay target disc sailing past two speed marks.</desc>
+  <ellipse cx="72" cy="67" rx="41" ry="30" fill="#bc6f43" stroke="#292d29" stroke-width="7" transform="rotate(-18 72 67)"/><ellipse cx="72" cy="67" rx="24" ry="16" fill="#dd9764" stroke="#7c4936" stroke-width="5" transform="rotate(-18 72 67)"/><path d="M11 40h29M8 58h25M18 76h18" stroke="#f28c28" stroke-width="6" stroke-linecap="round"/>
+</svg>

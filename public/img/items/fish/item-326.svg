@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Amberjack</title>
+  <desc id="desc">A powerful amberjack with a deep silver body, amber lateral stripe, forked tail, and dark eye band.</desc>
+  <path d="M9 68q22-38 74-31 26 4 39 29-15 33-52 39-43-1-61-37z" fill="#aebfbe" stroke="#292d29" stroke-width="7"/><path d="M15 63q41-17 89-4" stroke="#9a752d" stroke-width="9"/><path d="m91 42 29-22-6 45 8 41-31-24" fill="#d8be32" stroke="#292d29" stroke-width="6"/><path d="M30 48 42 65" stroke="#292d29" stroke-width="7"/><circle cx="27" cy="52" r="5" fill="#d8be32" stroke="#292d29" stroke-width="3"/><path d="M58 42 72 21l16 20M63 99l19 18 6-22" fill="#748784" stroke="#292d29" stroke-width="5"/>
+</svg>

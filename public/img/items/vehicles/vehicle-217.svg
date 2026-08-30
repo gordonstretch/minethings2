@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Rickshaw</title>
+  <desc id="desc">A hand-pulled wooden rickshaw with a curved canopy, passenger seat, large spoked wheel, and forward shafts.</desc>
+  <circle cx="43" cy="91" r="24" fill="#e6ddc8" stroke="#292d29" stroke-width="6"/>
+  <circle cx="43" cy="91" r="5" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M43 67V37h35c13 0 22 12 20 30v18H43z" fill="#9d6940" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M46 38c8-21 42-22 51 0z" fill="#d8be32" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M58 57h23v29H58z" fill="#6d4230" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M43 91 27 73m16 18 23-11M43 91l-4 23m4-23 21 17" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M90 82h25M90 91l25 16" fill="none" stroke="#8b5b38" stroke-width="6" stroke-linecap="round"/>
+</svg>

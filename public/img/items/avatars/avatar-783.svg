@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Harbor Background</title>
+  <desc id="desc">A miniature location scene representing the Harbor Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M14 77h100v35H14z" fill="#3d8190"/><path d="M24 104h80L90 84H36z" fill="#805533" stroke="#242927" stroke-width="5"/><path d="M65 26h24v58H65z" fill="#eee3ca" stroke="#242927" stroke-width="5"/><path d="m60 28 17-14 17 14z" fill="#bd503a" stroke="#242927" stroke-width="5"/><path d="M89 37q18 5 22 16" fill="none" stroke="#f2d268" stroke-width="5"/></g>
+</svg>

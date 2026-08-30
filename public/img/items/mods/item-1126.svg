@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Power Inverter</title>
+  <desc id="desc">A aluminum vehicle modification depicting a finned power inverter with terminals and a vivid high-voltage bolt.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 27h84v78H22z" fill="#aabcc5"/><path d="M31 18v18m13-18v18m13-18v18m14-18v18m13-18v18m13-18v18M31 96v18m13-18v18m13-18v18m14-18v18m13-18v18m13-18v18" stroke="#5d727c"/><path d="m69 34-23 37h18l-7 27 27-41H66z" fill="#698b18"/><circle cx="35" cy="46" r="7" fill="#e5eef0"/><circle cx="94" cy="87" r="7" fill="#e5eef0"/><path d="M31 85h17m32-39h17" stroke="#5d727c"/></g>
+</svg>

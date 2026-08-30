@@ -148,14 +148,14 @@ test('validates weather change interval settings and random rolls', () => {
   }
 });
 
-test('chooses natural creature roll intervals across the inclusive 1-to-45-minute range', () => {
+test('chooses natural creature roll intervals across the inclusive 1-to-10-minute range', () => {
   assert.equal(worldCreatureRollInterval(catalog.settings, () => 0), 60 * 1000);
   assert.equal(worldCreatureRollInterval(
     catalog.settings, () => 1 - Number.EPSILON
-  ), 45 * 60 * 1000);
+  ), 10 * 60 * 1000);
   for (let index = 0; index <= 100; index += 1) {
     const interval = worldCreatureRollInterval(catalog.settings, () => index / 100);
     assert.ok(Number.isSafeInteger(interval));
-    assert.ok(interval >= 60 * 1000 && interval <= 45 * 60 * 1000);
+    assert.ok(interval >= 60 * 1000 && interval <= 10 * 60 * 1000);
   }
 });

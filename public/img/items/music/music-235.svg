@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bassoon</title>
+  <desc id="desc">A tall reddish bassoon with its doubled wooden bore, rounded boot joint, silver keys, curved bocal, and reed.</desc>
+  <path d="M48 22 35 99q-2 15 13 16 14 1 17-13l10-50" fill="none" stroke="#292d29" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M48 22 35 99q-2 15 13 16 14 1 17-13l10-50" fill="none" stroke="#9b5637" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M73 55q10-19 23-23l9-14" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <path d="M73 55q10-19 23-23l9-14" fill="none" stroke="#cbd2cf" stroke-width="3" stroke-linecap="round"/>
+  <path d="m102 20 5-10 8 5-8 8z" fill="#d8b774" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m41 91 17 3m-20 10 19 3M67 76l-16-3M71 61l-17-4" fill="none" stroke="#d94a36" stroke-width="5" stroke-linecap="round"/>
+  <path d="M46 33 60 38M43 48l-12 5m10 10 13 5m-16 10-11 6m39 4 12 5m-15 8 11 6" fill="none" stroke="#d9dfdc" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#eef1ef" stroke="#292d29" stroke-width="2">
+    <circle cx="58" cy="38" r="4"/><circle cx="32" cy="53" r="4"/><circle cx="53" cy="68" r="4"/><circle cx="28" cy="84" r="4"/><circle cx="78" cy="93" r="4"/>
+  </g>
+</svg>

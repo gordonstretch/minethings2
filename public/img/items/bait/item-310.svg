@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Lure</title>
+  <desc id="desc">A bright spinner lure with a striped spoon, treble hook, and tempting feather tail.</desc>
+  <path d="M18 26q25 9 43 35" fill="none" stroke="#3d7f92" stroke-width="5" stroke-linecap="round"/><path d="m55 52 24 21-18 24-23-22z" fill="#f28c28" stroke="#292d29" stroke-width="6"/><path d="m48 62 23 22" stroke="#f0dfbd" stroke-width="5"/><circle cx="40" cy="43" r="8" fill="#d8be32" stroke="#292d29" stroke-width="4"/><path d="M61 97q3 25 21 13 14-10 1-24" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/><path d="m78 73 25-8-12 17 22 7-30 9" fill="#c84a3b" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

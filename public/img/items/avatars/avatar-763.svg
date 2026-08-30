@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sticks Border</title>
+  <desc id="desc">A material-themed portrait frame representing the Sticks Border avatar thing.</desc>
+  <g data-icon-family="avatar-borders" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20 25 111M39 16l-6 96M111 20l-8 92M89 16l7 96M18 24l92 7M17 103l94-9" fill="none" stroke="#79502d" stroke-width="9"/><path d="m17 20 94 83M111 20 17 103" opacity=".25" stroke="#d7a55a" stroke-width="4"/><circle cx="64" cy="57" r="17" fill="#c98f63" stroke="#242927" stroke-width="5"/><path d="M38 100q4-28 26-28t26 28" fill="#59756f" stroke="#242927" stroke-width="5"/></g>
+</svg>

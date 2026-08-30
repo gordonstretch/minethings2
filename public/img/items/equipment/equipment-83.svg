@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Fabled Boots</title>
+  <desc id="desc">The Fabled Boots shown clearly as a standalone mining equipment icon.</desc>
+  <defs>
+    <linearGradient id="tier" x1="28" y1="20" x2="96" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d17bc0"/><stop offset=".48" stop-color="#a64891"/><stop offset="1" stop-color="#612957"/>
+    </linearGradient>
+  </defs>
+  <g data-icon-family="equipment" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 21h34v55L45 101H13q-7 0-5-11l15-18z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M71 21h34v51l15 18q2 11-5 11H83L71 76z" fill="url(#tier)" stroke="#242927" stroke-width="6"/>
+    <path d="M25 40h30m18 0h30M19 76h36m18 0h36" fill="none" stroke="#f1b5dc" stroke-width="5"/>
+    <path d="M11 102h45m16 0h45" stroke="#242927" stroke-width="7"/></g>
+</svg>

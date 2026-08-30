@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Galley</title>
+  <desc id="desc">A long low galley with a bronze ram, one lateen sail, and a dense comb of rowing oars.</desc>
+  <path d="M12 75h99l8 9-21 19H27z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M59 74V17" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="m21 26 70 20-32 24z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M29 83 18 108m29-23-8 26m27-25-4 27m23-27 2 25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M28 83 17 106m30-21-7 24m26-23-4 25m23-25 2 23" fill="none" stroke="#698b18" stroke-width="3" stroke-linecap="round"/>
+  <path d="m108 75 12-12-3 21" fill="#698b18" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+</svg>

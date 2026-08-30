@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Whaler</title>
+  <desc id="desc">A rugged high-bowed whaler with a crow's nest, a hanging side boat, and a long harpoon at the rail.</desc>
+  <path d="M13 77q57 4 102-11l-15 39H29z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M60 76V14" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="M38 23h20v39H36zm25-2v39h28z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M47 17h26l-5 13H51z" fill="#e32121" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M37 85q21 10 42 0l-7 13H45z" fill="#e32121" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M91 69 118 45m-3-1 4 12m-4-12-11 1" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

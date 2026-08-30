@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bullet Border</title>
+  <desc id="desc">A material-themed portrait frame representing the Bullet Border avatar thing.</desc>
+  <g data-icon-family="avatar-borders" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="96" height="96" rx="8" fill="none" stroke="#4d5555" stroke-width="15"/><path d="M22 23h18v9H22zm66 0h18v9H88zM22 96h18v9H22zm66 0h18v9H88z" fill="#d2a43f" stroke="#242927" stroke-width="3"/><path d="m27 23 4-7 4 7m58 0 4-7 4 7m-74 73 4-7 4 7m58 0 4-7 4 7" fill="#c8c4aa" stroke="#242927" stroke-width="2"/><circle cx="64" cy="57" r="17" fill="#c98f63" stroke="#242927" stroke-width="5"/><path d="M38 100q4-28 26-28t26 28" fill="#59756f" stroke="#242927" stroke-width="5"/></g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Basketball Shoes</title>
+  <desc id="desc">A high-top basketball shoe beside a panelled orange ball.</desc>
+  <path d="M15 79q20-1 28-44l20 7 3 31 28 10 7 23H17z" fill="#f5f2e9" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/><path d="M20 92h78v15H20z" fill="#c84a3b" stroke="#292d29" stroke-width="5"/><path d="M46 50h17m-20 11h22m-25 12h26" stroke="#c84a3b" stroke-width="5"/><circle cx="99" cy="42" r="23" fill="#f28c28" stroke="#292d29" stroke-width="6"/><path d="M78 42h42M99 19q-12 23 0 46m0-46q12 23 0 46" fill="none" stroke="#292d29" stroke-width="4"/>
+</svg>

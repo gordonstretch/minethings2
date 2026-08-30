@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sage</title>
+  <desc id="desc">Soft silver-green sage leaves with broad wrinkled blades and downy edges.</desc>
+  <path d="M64 116V29m0 27L31 37m33 38 34-25M64 92 32 76m32 16 31-13" stroke="#557d52" stroke-width="6"/><g fill="#93a88d" stroke="#292d29" stroke-width="5"><path d="M31 37Q5 14 11 52q21 22 20-15z"/><path d="M98 50q25-25 23 12-19 25-23-12z"/><path d="M32 76Q8 53 11 89q20 23 21-13z"/><path d="M95 79q24-22 22 13-19 22-22-13z"/></g><path d="M20 39 31 37m77 17-10-4M21 79l11-3m73 6-10-3" stroke="#f0dfbd" stroke-width="3"/>
+</svg>

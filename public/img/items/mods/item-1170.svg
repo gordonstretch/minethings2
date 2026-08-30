@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Carbon Range Finder</title>
+  <desc id="desc">A carbon vehicle modification depicting a precision optical range finder with twin lenses and a central sight reticle.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 47h92v39H18z" fill="#2d3437"/><circle cx="41" cy="66" r="27" fill="#151a1c"/><circle cx="41" cy="66" r="17" fill="#737f81"/><circle cx="41" cy="66" r="7" fill="#f79721"/><circle cx="89" cy="66" r="20" fill="#151a1c"/><circle cx="89" cy="66" r="11" fill="#737f81"/><path d="M64 29v74M27 66h74" stroke="#f79721"/><path d="M60 51h11v30H60z" fill="#151a1c"/></g>
+</svg>

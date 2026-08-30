@@ -31,7 +31,7 @@ function SwitchMenu(obj){
 	}
 }
 
-// japhet's function to collapse all menus.  Could be called upon onmouseout event.
+// Jahet Stevens's function to collapse all menus.  Could be called upon onmouseout event.
 // We use it now when the map link is clicked.
 // In general: use this when a new window is opened from a submenu.
 function CollapseMenu() {

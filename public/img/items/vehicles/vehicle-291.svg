@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Caravel</title>
+  <desc id="desc">A round-bellied caravel driven by two large triangular lateen sails raked toward its bow.</desc>
+  <path d="M13 79q53 5 103-4l-17 31H31z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M45 80V15m34 64V24" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <path d="m17 27 60 14-32 34zm38 9 57 14-33 24z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m29 30 36 9M68 41l32 8M28 90h73" fill="none" stroke="#799c9c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M107 76 118 61" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

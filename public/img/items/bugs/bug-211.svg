@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Moth</title>
+  <desc id="desc">A broad night moth with swept taupe wings, green eyespots, a furry body, and feathery antennae.</desc>
+  <path d="M60 48C46 34 28 26 13 32c3 27 12 55 31 75l19-31zm8 0c14-14 32-22 47-16-3 27-12 55-31 75L65 76z" fill="#a98d6b" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M55 58C41 45 29 41 22 42c4 17 11 30 24 41m27-25c14-13 26-17 33-16-4 17-11 30-24 41" fill="none" stroke="#5b9e64" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="35" cy="62" r="9" fill="#d4c56b" stroke="#292d29" stroke-width="4"/>
+  <circle cx="93" cy="62" r="9" fill="#d4c56b" stroke="#292d29" stroke-width="4"/>
+  <circle cx="35" cy="62" r="4" fill="#5b9e64"/>
+  <circle cx="93" cy="62" r="4" fill="#5b9e64"/>
+  <ellipse cx="64" cy="70" rx="11" ry="37" fill="#6d5541" stroke="#292d29" stroke-width="5"/>
+  <path d="M58 38C48 23 37 14 26 12m32 17-14-6m11-1-11-8m26 24c10-15 21-24 32-26M70 29l14-6m-11-1 11-8" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M58 60h12M58 75h12M59 90h10" fill="none" stroke="#d1b88d" stroke-width="3" stroke-linecap="round"/>
+</svg>

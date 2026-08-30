@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Frigate</title>
+  <desc id="desc">A lean three-masted frigate with raked spars, a long gun deck, and a sharp fighting bow.</desc>
+  <path d="M11 80q57 4 106-8l-18 30H28z" fill="#8f5d35" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m39 80 5-65m27 64 4-68m23 65 4-55" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round">
+    <path d="M18 23h24v20H17zm30-5h25v23H47zm30 0h23v22H78zm26 10 14 29h-16z"/>
+  </g>
+  <path d="M25 87h76" fill="none" stroke="#a64891" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#292d29"><circle cx="38" cy="91" r="3"/><circle cx="52" cy="91" r="3"/><circle cx="66" cy="91" r="3"/><circle cx="80" cy="91" r="3"/><circle cx="94" cy="91" r="3"/></g>
+  <path d="M111 74 119 59" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+</svg>

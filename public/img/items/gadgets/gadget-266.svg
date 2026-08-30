@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Titanium Hammer</title>
+  <desc id="desc">Titanium Hammer, depicted as a reinforced split-face engineering hammer with impact marks.</desc>
+  <path d="M19 105 27 116 80 66 68 54z" fill="#9fc5cc" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M43 29 69 12l43 43-18 25-22-11-15 9-31-31z" fill="#4184a8" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m46 29 17-10 14 14-15 15zM92 48l14 7-12 17-13-12z" fill="#e3f0ef" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m21 88-10-8m23 2-4-14m18 3 3-13" fill="none" stroke="#f28c28" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="67" cy="47" r="4" fill="#d8be32"/>
+</svg>

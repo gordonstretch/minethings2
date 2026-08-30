@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Blunderbuss</title>
+  <desc id="desc">A short powder gun with a huge trumpet muzzle, brass fittings, and wooden stock.</desc>
+  <path d="M44 54h42l25-17v39L86 65H44z" fill="#b9c4bf" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M83 50v20" fill="none" stroke="#698b18" stroke-width="7"/>
+  <path d="M44 56 16 72l8 18 26-24z" fill="#9f6037" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m25 88-9 13q13 10 25 1l10-36" fill="#9f6037" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M53 67q1 22 19 25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="64" cy="78" r="5" fill="#ddec9f" stroke="#292d29" stroke-width="3"/>
+  <path d="M97 48v18" fill="none" stroke="#edf0e8" stroke-width="4" stroke-linecap="round"/>
+</svg>

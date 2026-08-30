@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Earwig</title>
+  <desc id="desc">A chestnut earwig viewed from above, with a segmented body and a dramatic pair of curved tail pincers.</desc>
+  <path d="M53 33 34 19 24 8m51 25 19-14 10-11M49 48 25 40 10 48m39 17-25 2-13 12m42 1-20 10-9 15m55-57 24-8 15 8M79 65l25 2 13 12M75 81l20 9 9 15" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="64" cy="31" rx="17" ry="15" fill="#8b5638" stroke="#292d29" stroke-width="6"/>
+  <path d="M46 45c2-9 9-14 18-14s16 5 18 14l7 40c2 14-8 22-25 22S37 99 39 85z" fill="#9d6744" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M47 45c5-6 11-8 17-8s12 2 17 8l2 15H45z" fill="#5aa66a" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M42 68h44M40 81h48M41 94h46" fill="none" stroke="#603d2d" stroke-width="4" stroke-linecap="round"/>
+  <path d="M53 103c-13 1-22 8-18 16 3 6 14 1 22-11m18-5c13 1 22 8 18 16-3 6-14 1-22-11" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="57" cy="28" r="2.5" fill="#f4e6a4"/>
+  <circle cx="71" cy="28" r="2.5" fill="#f4e6a4"/>
+</svg>

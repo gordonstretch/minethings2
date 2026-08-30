@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tin Turbo Engine</title>
+  <desc id="desc">Tin Turbo Engine, depicted as a compact snail turbo with a visible impeller and exhaust puff.</desc>
+  <path d="M28 96C9 79 12 44 36 29c25-16 61-4 68 24 6 24-12 48-37 48H45" fill="#aeb2aa" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="61" cy="61" r="25" fill="#68726c" stroke="#292d29" stroke-width="6"/>
+  <path d="M61 61 59 39q19 4 22 19zm0 0 20-3q-2 19-17 23zm0 0 3 20q-19-2-23-17zm0 0-20 3q2-19 18-25z" fill="#e4e8df" stroke="#292d29" stroke-width="3"/>
+  <circle cx="61" cy="61" r="6" fill="#d8be32"/>
+  <path d="M88 91h28v20H84" fill="#68726c" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m17 99-8 3m14 7-8 8" stroke="#3d94c5" stroke-width="5" stroke-linecap="round"/>
+</svg>

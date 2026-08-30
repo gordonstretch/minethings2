@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Fennel Seed</title>
+  <desc id="desc">A fennel umbel above several plump green-gold, deeply ridged seeds.</desc>
+  <path d="M64 116V37m0 24L35 44m29 17 29-19M64 45 47 24m17 21 17-23" stroke="#557d52" stroke-width="5"/><g fill="#d8be32" stroke="#292d29" stroke-width="3"><ellipse cx="31" cy="40" rx="5" ry="10" transform="rotate(-55 31 40)"/><ellipse cx="47" cy="22" rx="5" ry="10" transform="rotate(-25 47 22)"/><ellipse cx="64" cy="15" rx="5" ry="10"/><ellipse cx="82" cy="21" rx="5" ry="10" transform="rotate(25 82 21)"/><ellipse cx="98" cy="39" rx="5" ry="10" transform="rotate(55 98 39)"/></g><g fill="#a78642" stroke="#292d29" stroke-width="3"><path d="m22 89 13-20 8 6-13 21z"/><path d="m49 104 8-27 9 3-7 28z"/><path d="m78 99 13-23 8 5-13 24z"/></g>
+</svg>

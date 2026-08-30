@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Liner</title>
+  <desc id="desc">A huge ocean liner with a blunt black hull, stepped white decks, and three powerful orange funnels.</desc>
+  <path d="M10 80h108l-18 29H27z" fill="#4d5b59" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M22 52h82v29H22zm12-20h58v20H34z" fill="#d7e0dd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M42 32V15h12v17m10 0V12h12v20m10 0V17h12v15" fill="#f79721" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M31 64h65M32 91h72" fill="none" stroke="#f79721" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#292d29"><circle cx="40" cy="65" r="3"/><circle cx="55" cy="65" r="3"/><circle cx="70" cy="65" r="3"/><circle cx="85" cy="65" r="3"/></g>
+</svg>

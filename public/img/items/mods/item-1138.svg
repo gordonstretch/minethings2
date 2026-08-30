@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Iron Grill Guard</title>
+  <desc id="desc">A iron vehicle modification depicting a heavy front guard with upright bars, cross rails, and wraparound bumper wings.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 39v62m98-62v62M15 93h98M21 48h86" fill="none" stroke="#39443f" stroke-width="12"/><path d="M31 46v47m17-47v47m16-47v47m17-47v47m17-47v47" stroke="#707b76"/><path d="M8 100h112" stroke="#799c9c"/><path d="M16 78 7 67m105 11 9-11" stroke="#b9c2ba"/></g>
+</svg>

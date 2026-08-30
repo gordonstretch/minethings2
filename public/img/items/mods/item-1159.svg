@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Chain Gun</title>
+  <desc id="desc">A tungsten vehicle modification depicting a rotary chain gun with clustered barrels, a drive drum, and an ammunition feed.</desc>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 89h82l-8 19H28z" fill="#282f37"/><path d="M31 63h55v32H31z" fill="#505862"/><circle cx="43" cy="79" r="15" fill="#282f37"/><circle cx="43" cy="79" r="7" fill="#a64891"/><path d="M81 66h42M81 75h42M81 84h42M81 93h42" stroke="#282f37"/><path d="M117 62v36" stroke="#a64891"/><path d="M54 65 68 42h18v23" fill="#aab2b5"/></g>
+</svg>

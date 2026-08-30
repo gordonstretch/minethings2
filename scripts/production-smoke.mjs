@@ -37,6 +37,13 @@ try {
     assert.equal((await fetch(`${base}/app.css`)).status, 200);
     assert.equal((await fetch(`${base}/node/navigation.js`)).status, 200);
     assert.equal((await fetch(`${base}/node/favicon.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/weapons/weapon-157.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/vehicles/vehicle-5.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/bugs/bug-187.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/music/music-223.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/gadgets/gadget-253.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/equipment/equipment-51.svg`)).status, 200);
+    assert.equal((await fetch(`${base}/node/avatars/avatar-761.svg`)).status, 200);
     assert.equal((await fetch(`${base}/app/webroot/index.php`)).status, 404);
     assert.equal((await fetch(`${base}/portal/img/colors.jpg`)).status, 404);
   } finally {

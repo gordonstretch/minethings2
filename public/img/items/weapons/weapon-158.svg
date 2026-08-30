@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Wrench</title>
+  <desc id="desc">A heavy steel combination wrench with an open jaw and ring handle.</desc>
+  <path d="M98 15 83 31l-12-4-4-12Q47 22 50 42l-34 50q-8 13 4 21t21-4l31-53q18 2 27-13 8-14-1-28z" fill="#c9d0cc" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m83 31 15-16M71 27l-4-12" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="28" cy="99" r="8" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="M49 71 63 48" fill="none" stroke="#f2f2e8" stroke-width="5" stroke-linecap="round"/>
+</svg>

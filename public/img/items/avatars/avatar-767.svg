@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Rock Border</title>
+  <desc id="desc">A material-themed portrait frame representing the Rock Border avatar thing.</desc>
+  <g data-icon-family="avatar-borders" stroke-linecap="round" stroke-linejoin="round"><path d="M18 18h24l8 9 16-11 18 10 25-8 4 27-9 14 10 18-8 34-29-5-15 8-20-7-26 4 4-29-7-18 9-17z" fill="none" stroke="#6d716d" stroke-width="15"/><path d="m24 27 13 8m52-7-11 9m19 55-14-5m-51 11 11-10" stroke="#b9b8a9" stroke-width="5"/><circle cx="64" cy="57" r="17" fill="#c98f63" stroke="#242927" stroke-width="5"/><path d="M38 100q4-28 26-28t26 28" fill="#59756f" stroke="#242927" stroke-width="5"/></g>
+</svg>

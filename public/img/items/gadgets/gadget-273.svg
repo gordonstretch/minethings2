@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Aluminum Ledger</title>
+  <desc id="desc">Aluminum Ledger, depicted as an open ruled account book with a coin and balance ticks.</desc>
+  <path d="M12 27q27-10 52 5v83q-25-15-52-5zm104 0q-27-10-52 5v83q25-15 52-5z" fill="#f4f7f2" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M64 33v81M22 48h31M22 62h31M22 76h31m22-28h31M75 62h31M75 76h31" fill="none" stroke="#799c9c" stroke-width="4"/>
+  <circle cx="91" cy="93" r="14" fill="#d8be32" stroke="#292d29" stroke-width="5"/>
+  <path d="m86 93 4 4 7-9" fill="none" stroke="#5aa66a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

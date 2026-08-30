@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bow and Arrows</title>
+  <desc id="desc">A recurved wooden bow with a nocked arrow and green fletching.</desc>
+  <path d="M33 15q-27 49 0 98M33 15q62 49 0 98" fill="none" stroke="#a96839" stroke-width="7" stroke-linecap="round"/>
+  <path d="M33 15v98" fill="none" stroke="#ece1c6" stroke-width="3"/>
+  <path d="M24 66h86" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="m109 66-15-9v18z" fill="#dce3df" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m28 66-13-9 6 9-6 9z" fill="#698b18" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M47 91 94 44M54 99l47-47" fill="none" stroke="#59635f" stroke-width="4" stroke-linecap="round"/>
+  <path d="m45 93 3-13 10 4M52 100l3-13 10 4" fill="#698b18" stroke="#292d29" stroke-width="3" stroke-linejoin="round"/>
+</svg>

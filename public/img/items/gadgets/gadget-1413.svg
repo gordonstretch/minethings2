@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Tungsten Radar</title>
+  <desc id="desc">Tungsten Radar, depicted as a faceted phased-array scanner with sweep rings and route blips.</desc>
+  <path d="m13 33 50-22 49 24-15 46-34 18-35-18z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m26 36 37-16 36 18-11 35-25 13-26-13z" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
+  <path d="M63 20v66M27 37l61 36M99 38 37 73" fill="none" stroke="#899693" stroke-width="4"/>
+  <path d="M63 91v14M33 118l30-13 31 13" fill="none" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M84 20q22 11 29 32M92 10q25 12 34 38" fill="none" stroke="#a64891" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#f28c28"><circle cx="44" cy="47" r="5"/><circle cx="73" cy="60" r="4"/><circle cx="83" cy="38" r="3"/></g>
+</svg>

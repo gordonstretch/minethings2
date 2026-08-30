@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">French Horn</title>
+  <desc id="desc">A tightly coiled brass French horn with three valves, a small mouthpiece, and a dramatically flared bell.</desc>
+  <path d="M89 40C70 16 33 24 26 58c-7 33 24 59 52 41 24-15 22-48 1-57-20-9-39 3-38 22 1 17 19 25 32 16 10-7 10-20 2-26" fill="none" stroke="#292d29" stroke-width="15" stroke-linecap="round"/>
+  <path d="M89 40C70 16 33 24 26 58c-7 33 24 59 52 41 24-15 22-48 1-57-20-9-39 3-38 22 1 17 19 25 32 16 10-7 10-20 2-26" fill="none" stroke="#d6a62f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M84 40c12-5 20-17 30-25l3 50c-13-3-24-9-33-18z" fill="#d6a62f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M110 25v31" fill="none" stroke="#a64891" stroke-width="6" stroke-linecap="round"/>
+  <path d="M51 43v23M62 39v26M73 41v25" fill="none" stroke="#292d29" stroke-width="8" stroke-linecap="round"/>
+  <path d="M51 43v23M62 39v26M73 41v25" fill="none" stroke="#d6a62f" stroke-width="4" stroke-linecap="round"/>
+  <path d="M48 40h7M59 36h7M70 38h7" fill="none" stroke="#a64891" stroke-width="5" stroke-linecap="round"/>
+  <path d="M28 58 14 53 9 58" fill="none" stroke="#292d29" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28 58 14 53" fill="none" stroke="#d6a62f" stroke-width="3" stroke-linecap="round"/>
+</svg>

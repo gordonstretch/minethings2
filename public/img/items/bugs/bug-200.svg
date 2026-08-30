@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Mayfly</title>
+  <desc id="desc">A delicate mayfly from above, with two tall triangular wings, a slim body, and three trailing tails.</desc>
+  <path d="M59 49Q34 16 12 19q2 36 46 54z" fill="#e6dfbd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M69 49q25-33 47-30-2 36-46 54z" fill="#e6dfbd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M56 58 25 29m18 28L22 48m50 10 31-29M85 57l21-9" fill="none" stroke="#b79c70" stroke-width="3" stroke-linecap="round"/>
+  <path d="M55 44q9-13 18 0l-4 52-5 10-5-10z" fill="#9b7650" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="64" cy="38" r="10" fill="#d94a36" stroke="#292d29" stroke-width="5"/>
+  <path d="M59 59h10M59 72h10M59 84h10" fill="none" stroke="#e2b069" stroke-width="3" stroke-linecap="round"/>
+  <path d="M59 98 43 119m21-17v19m5-23 16 21" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+  <path d="M58 36 49 25m21 11 9-11" fill="none" stroke="#292d29" stroke-width="4" stroke-linecap="round"/>
+</svg>

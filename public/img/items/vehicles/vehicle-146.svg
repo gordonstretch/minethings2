@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bandit</title>
+  <desc id="desc">A fast red raider coupe with a chopped roof, protective cage, jagged hood, and reinforced wheels.</desc>
+  <path d="M11 77 25 61h25l15-20h24l18 24 11 8-7 24H18L9 88z" fill="#555e5a" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m57 62 12-16h17l13 18z" fill="#9fc5cc" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M61 43 51 31m31 10 8-16m14 42 11-11 3 15" fill="none" stroke="#e32121" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m15 76 17-5 7 9 9-9 10 9" fill="none" stroke="#e32121" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="31" cy="96" r="16" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <circle cx="96" cy="96" r="16" fill="#343735" stroke="#292d29" stroke-width="6"/>
+  <path d="M31 96h1m64 0h1" fill="none" stroke="#e32121" stroke-width="4" stroke-linecap="round"/>
+</svg>

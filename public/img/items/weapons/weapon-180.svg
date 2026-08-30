@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Machine Gun</title>
+  <desc id="desc">A belt-fed machine gun with a perforated barrel jacket, chunky receiver, and folding bipod.</desc>
+  <path d="M70 41h49v18H70z" fill="#66716d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M80 47h7m9 0h7m9 0h4" fill="none" stroke="#d5ddd8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M39 43h43v42H39z" fill="#a64891" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M41 49 15 56 6 78l34 5z" fill="#46514d" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M53 85 42 112H28l13-42M81 82l20 30M86 80l31 11" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M65 84q-2 11 8 12t8 11 9 10" fill="none" stroke="#d3a43f" stroke-width="8" stroke-linecap="round" stroke-dasharray="6 6"/>
+  <path d="M49 55h22" fill="none" stroke="#e9b7dd" stroke-width="4" stroke-linecap="round"/>
+</svg>

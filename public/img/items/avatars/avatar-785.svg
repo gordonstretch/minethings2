@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Sewer Background</title>
+  <desc id="desc">A miniature location scene representing the Sewer Background avatar thing.</desc>
+  <g data-icon-family="avatar-backgrounds" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16h100v96H14z" fill="#8cb9bd" stroke="#242927" stroke-width="5"/><path d="M14 16h100v96H14z" fill="#4d6258"/><circle cx="64" cy="69" r="38" fill="#253b36" stroke="#242927" stroke-width="6"/><circle cx="64" cy="69" r="24" fill="#7fa054" stroke="#242927" stroke-width="5"/><path d="M17 38h27m40 0h27M14 96h100" stroke="#899085" stroke-width="7"/></g>
+</svg>

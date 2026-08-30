@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Trawler</title>
+  <desc id="desc">A stout motor trawler with a forward wheelhouse and a large aft A-frame carrying a fishing net.</desc>
+  <path d="M12 78h105l-18 29H28z" fill="#596563" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M70 77V49h35v28" fill="#d7e0dd" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M77 57h20v12H77z" fill="#799c9c" stroke="#292d29" stroke-width="4"/>
+  <path d="M25 76 48 31l23 45M35 56h25" fill="none" stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27 75h42L47 101z" fill="#f1e5c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M30 89h72" fill="none" stroke="#799c9c" stroke-width="5" stroke-linecap="round"/>
+</svg>
