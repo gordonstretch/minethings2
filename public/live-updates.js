@@ -6,7 +6,7 @@
   if (!script || typeof window.EventSource !== 'function') return;
 
   // These pages have client-owned transient state that a server snapshot cannot safely restore.
-  const contentMorphEnabled = !/^\/(?:casino|oil-field)(?:\/|$)/
+  const contentMorphEnabled = !/^\/(?:casino|oil-field|explore)(?:\/|$)/
     .test(window.location.pathname);
 
   let revision = Math.max(0, Number(script.dataset.liveRevision) || 0);

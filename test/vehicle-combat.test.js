@@ -1,7 +1,47 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { expectedValue, fightLand, fightShips, ratingPair } from '../src/vehicle-combat.js';
+import {
+  compatibleCargoAllowed, expectedValue, fightLand, fightShips, ratingPair
+} from '../src/vehicle-combat.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
+
+test('applies the optional vehicle cargo policy without changing standard compatibility', () => {
+  const rules = {
+    route_type_ids: { land: 1, sea: 2, air: 3 },
+    aircraft_role_ids: { bomber: 1 },
+    fishing_mine_type_ids: [],
+    fishing_cargo_extra_rarities: [],
+    oil_cargo_vehicle_rarities: [],
+    oil_item_id: 8127,
+    arms_rarities_by_vehicle_rarity: [[1]],
+    cargo_rarities_by_vehicle_rarity: [[0]]
+  };
+  const ordinaryCargo = {
+    routeType: 2, vehicleRarity: 0, itemId: 99, itemRarity: 0
+  };
+
+  assert.equal(compatibleCargoAllowed(ordinaryCargo, rules), true);
+  assert.equal(compatibleCargoAllowed({ ...ordinaryCargo, cargoPolicy: 'standard' }, rules), true);
+  assert.equal(compatibleCargoAllowed({ ...ordinaryCargo, cargoPolicy: null }, rules), true);
+  assert.equal(compatibleCargoAllowed({ ...ordinaryCargo, cargoPolicy: 'oil-only' }, rules), false);
+  assert.equal(compatibleCargoAllowed({
+    ...ordinaryCargo, itemId: rules.oil_item_id, itemRarity: 6, cargoPolicy: 'oil-only'
+  }, rules), true);
+  assert.equal(compatibleCargoAllowed({
+    routeType: 3, aircraftType: 1, vehicleRarity: 0, itemId: 99, itemRarity: 0,
+    isBomb: true, cargoPolicy: 'oil-only'
+  }, rules), false);
+  assert.equal(compatibleCargoAllowed({
+    ...ordinaryCargo, itemId: 901, itemRarity: 6, isVehicle: true,
+    cargoPolicy: 'any-item'
+  }, rules), true);
+  assert.throws(() => compatibleCargoAllowed({
+    ...ordinaryCargo, cargoPolicy: 'anything-goes'
+  }, rules), /Unknown vehicle cargo policy anything-goes/);
+  assert.throws(() => compatibleCargoAllowed({
+    ...ordinaryCargo, cargoPolicy: 'oil-only'
+  }, { ...rules, oil_item_id: null }), /Missing oil cargo item mapping/);
+});
 
 test('requires database-supplied vehicle rating and ammunition rules', () => {
   assert.throws(() => expectedValue(0), /Missing vehicle rating expectation rules/);

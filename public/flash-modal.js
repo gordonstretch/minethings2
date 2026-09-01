@@ -289,26 +289,28 @@
     const outcome = battle.outcome === 'won' ? 'Victory' : battle.outcome === 'lost'
       ? 'Defeat' : 'Draw';
     if (title) title.textContent = `${outcome} in combat`;
-    if (mark) mark.textContent = battle.outcome === 'won' ? 'âš”' : battle.outcome === 'lost' ? 'â˜ ' : 'â‰ˆ';
+    if (mark) mark.textContent = battle.outcome === 'won'
+      ? '\u2694\uFE0F' : battle.outcome === 'lost' ? '\u2620\uFE0F' : '\u2248';
     message.textContent = `${battle.vehicleName} ${battle.outcome} against ${battle.opponentPlayerName}'s ${battle.opponentVehicleName}.`;
     items.replaceChildren();
     const lines = [];
     const summary = battle.summary ?? {};
     if (summary.kind === 'land') {
       lines.push(`${Number(summary.rounds).toLocaleString('en-GB')} combat rounds`);
-      lines.push(`Attack ${Number(summary.startingAttack).toFixed(1)} â†’ ${Number(summary.endingAttack).toFixed(1)}`);
-      lines.push(`Armour ${Number(summary.startingArmor).toFixed(1)} â†’ ${Number(summary.endingArmor).toFixed(1)}; opponent ${Number(summary.opponentEndingArmor).toFixed(1)}`);
+      lines.push(`Attack ${Number(summary.startingAttack).toFixed(1)} \u2192 ${Number(summary.endingAttack).toFixed(1)}`);
+      lines.push(`Armour ${Number(summary.startingArmor).toFixed(1)} \u2192 ${Number(summary.endingArmor).toFixed(1)}; opponent ${Number(summary.opponentEndingArmor).toFixed(1)}`);
       lines.push(`Final blow ${Number(summary.finalBlow).toFixed(1)} damage`);
     } else if (summary.kind === 'sea') {
       lines.push(`${Number(summary.shots)} cannon shots; ${Number(summary.hits)} hits`);
       lines.push(`Finished with ${Number(summary.endingHull)} hull, ${Number(summary.endingSpeed).toFixed(1)} speed, and ${Number(summary.endingCrew)} crew`);
       lines.push(`${Number(summary.crewLost)} crew lost${summary.opponentSunk ? '; opponent sunk' : ''}${summary.chainEscape ? '; chain-shot escape' : ''}`);
     }
-    lines.push(`Rating ${Math.round(Number(battle.ratingBefore))} â†’ ${Math.round(Number(battle.ratingAfter))}`);
+    lines.push(`Rating ${Math.round(Number(battle.ratingBefore))} \u2192 ${Math.round(Number(battle.ratingAfter))}`);
     if (battle.pillage) {
       const loot = battle.pillage.kind === 'oil'
         ? `${Number(battle.pillage.trips)} oil-boosted trips`
-        : (battle.pillage.items ?? []).map((item) => `${Number(item.quantity)}Ã— ${item.name}`).join(', ')
+        : (battle.pillage.items ?? []).map((item) =>
+          `${Number(item.quantity)}\u00d7 ${item.name}`).join(', ')
           || battle.pillage.kind;
       lines.push(`Pillage ${battle.pillage.direction}: ${loot}${battle.pillage.disarmed ? ' (disarmed)' : ''}`);
     }
@@ -322,7 +324,7 @@
     reportRow.className = 'flash-battle-report';
     const reportLink = document.createElement('a');
     reportLink.href = sameOriginUrl(battle.reportPath, `/battles/${encodeURIComponent(String(battle.battleId))}`);
-    reportLink.textContent = 'Open the complete battle report â†’';
+    reportLink.textContent = 'Open the complete battle report \u2192';
     reportRow.append(reportLink);
     items.append(reportRow);
     rememberNoticeKey(noticeKey);

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Music Mine</title>
+  <desc id="desc">A bright pair of linked eighth notes with a sound arc.</desc>
+  <g transform="scale(2)"><path d="M24 16v30m0-26 26-7v29M24 29l26-7" fill="none" stroke="#315a64" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="16" cy="48" rx="9" ry="7" fill="#f39a21" stroke="#202420" stroke-width="4" transform="rotate(-15 16 48)"/><ellipse cx="42" cy="44" rx="9" ry="7" fill="#f39a21" stroke="#202420" stroke-width="4" transform="rotate(-15 42 44)"/><path d="M50 21q7 5 7 12" fill="none" stroke="#ffd36a" stroke-width="4" stroke-linecap="round"/></g>
+</svg>

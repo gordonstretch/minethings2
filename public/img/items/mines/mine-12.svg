@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ships Mine</title>
+  <desc id="desc">A high-prowed ship cutting through two waves.</desc>
+  <g transform="scale(2)"><path d="M9 40h46L45 53H20z" fill="#9b6338" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="M22 39V11l24 13-24 6z" fill="#eadfc8" stroke="#202420" stroke-width="4" stroke-linejoin="round"/><path d="M22 10v31" stroke="#202420" stroke-width="4.5" stroke-linecap="round"/><path d="M4 57q8-7 16 0t16 0 16 0 8 0" fill="none" stroke="#315a64" stroke-width="4.5" stroke-linecap="round"/></g>
+</svg>

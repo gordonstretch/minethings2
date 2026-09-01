@@ -8,20 +8,32 @@ import { hashPassword, SqliteStore } from '../src/store.js';
 const MACHINE_CASES = [
   {
     key: 'thing-o-matic', path: '/casino', href: '/casino',
+    theme: 'thing-o-matic', cells: 9,
     copy: [/THE THING-O-MATIC/u, /Lines, explosive matches, and scatters/u,
       /Nine BLU-82s/u]
   },
   {
     key: 'bromo-sporefall', path: '/casino?machine=bromo-sporefall',
     href: '/casino?machine=bromo-sporefall',
+    theme: 'bromo-sporefall', cells: 9,
     copy: [/BROMO SPOREFALL/u, /connect/iu, /compost/iu, /cascade/iu,
       /Nine Crowns of Bromo/u]
   },
   {
     key: 'kings-lockbox', path: '/casino?machine=kings-lockbox',
     href: '/casino?machine=kings-lockbox',
+    theme: 'kings-lockbox', cells: 9,
     copy: [/THE KING&#39;S LOCKBOX/u, /Every locked relic pays/u,
       /Soot-Clogged Coins never pay/u, /Fill all nine locks/u]
+  },
+  {
+    key: 'tzolkin-worldwheel-seven',
+    path: '/casino?machine=tzolkin-worldwheel-seven',
+    href: '/casino?machine=tzolkin-worldwheel-seven',
+    theme: 'regional', cells: 24,
+    copy: [/TZOLK&#39;IN WORLDWHEEL/u, /Gallego exclusive/u,
+      /Eight gates/u, /Match gates, locals, circuits, or corners/u,
+      /Oil Tanker/u, /Train Carriage/u]
   }
 ];
 
@@ -47,12 +59,17 @@ test('serves and keeps each casino machine in its own HTTP and ledger scope', as
   const catalog = loadLegacyCatalog();
   const store = new SqliteStore(':memory:');
   store.seedCatalog(catalog);
+  store.ensureWorldMaps(1_000);
   const password = 'casino machine server password';
   const player = store.addPlayer(createPlayer(
     'Machine Contract Miner', '', hashPassword(password), catalog, 1000, () => 0.5
   ));
   store.database.prepare('UPDATE players SET gold_units = ? WHERE id = ?')
     .run(100 * 10000, player.id);
+  store.database.prepare(`
+    UPDATE players SET city_id = (SELECT capital_city_id FROM world_maps WHERE id = 7)
+    WHERE id = ?
+  `).run(player.id);
 
   const server = createApp({
     store, random: deterministicRandom(), now: () => 2000
@@ -83,7 +100,7 @@ test('serves and keeps each casino machine in its own HTTP and ledger scope', as
     );
 
     assert.equal((floor.match(/class="casino-floor-card(?: is-current)?"/gu) ?? []).length,
-      3, `${machine.key} should show all three choices`);
+      4, `${machine.key} should show the three house machines and local exclusive`);
     assert.equal((floor.match(/class="casino-floor-card is-current"/gu) ?? []).length,
       1, `${machine.key} should have one current choice`);
     assert.equal((floor.match(/aria-current="page"/gu) ?? []).length,
@@ -91,11 +108,12 @@ test('serves and keeps each casino machine in its own HTTP and ledger scope', as
     assert.ok(floor.includes(
       `class="casino-floor-card is-current" href="${machine.href}" aria-current="page"`
     ), `${machine.key} should mark its own picker card current`);
-    assert.equal((html.match(/data-casino-cell="\d"/gu) ?? []).length,
-      9, `${machine.key} should render one nine-cell cabinet`);
+    assert.equal((html.match(/data-casino-cell="\d+"/gu) ?? []).length,
+      machine.cells, `${machine.key} should render its configured cabinet`);
     assert.equal((html.match(/id="casino-machine"/gu) ?? []).length, 1);
+    assert.match(html, /<dt>Global spins<\/dt><dd>0<\/dd>/u);
     assert.match(html, new RegExp(
-      `class="casino-page casino-theme-${machine.key}"[\\s\\S]*data-casino-machine="${machine.key}"`,
+      `class="casino-page casino-theme-${machine.theme}"[^>]*[\\s\\S]*data-casino-machine="${machine.key}"`,
       'u'
     ));
     assert.match(html, new RegExp(
@@ -112,7 +130,9 @@ test('serves and keeps each casino machine in its own HTTP and ledger scope', as
         `${machine.key} should not inherit Thing-O-Matic copy`);
       assert.doesNotMatch(machineContent, /<ol class="casino-paylines"/u,
         `${machine.key} should not inherit Thing-O-Matic paylines`);
-      assert.doesNotMatch(machineContent, /casino-line-bank|Original house machine/u,
+      assert.doesNotMatch(machineContent, /Original house machine/u,
+        `${machine.key} should not inherit the Thing-O-Matic cabinet badge`);
+      if (machine.theme !== 'regional') assert.doesNotMatch(machineContent, /casino-line-bank/u,
         `${machine.key} should not inherit Thing-O-Matic cabinet details`);
     }
   }
@@ -137,6 +157,7 @@ test('serves and keeps each casino machine in its own HTTP and ledger scope', as
   assert.equal(selectedResponse.status, 200);
   const selectedHtml = await selectedResponse.text();
   assert.match(selectedHtml, /<section class="casino-result /u);
+  assert.match(selectedHtml, /<dt>Global spins<\/dt><dd>1<\/dd>/u);
   assert.match(selectedHtml, new RegExp(
     `href="/casino\\?machine=bromo-sporefall&amp;spin=${spinId}"`, 'u'
   ));

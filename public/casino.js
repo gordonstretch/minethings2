@@ -15,12 +15,26 @@
   const readyPullLabels = {
     'thing-o-matic': 'Pull the lever',
     'bromo-sporefall': 'Start the drop',
-    'kings-lockbox': 'Open the lockbox'
+    'kings-lockbox': 'Open the lockbox',
+    'cinderwake-fuse-five': 'Light the fuse',
+    'ashfall-spore-ring': 'Turn the ring',
+    'stormcrag-timber-twins': 'Drop the timbers',
+    'emberdeep-three-verses': 'Compose a verse',
+    'frostmere-aurora-mirror': 'Charge the aurora',
+    'brimstone-furnace-four': 'Fire the furnace',
+    'tzolkin-worldwheel-seven': 'Turn the worldwheel'
   };
   const submittingLabels = {
     'thing-o-matic': 'Reels turning',
     'bromo-sporefall': 'Spores falling',
-    'kings-lockbox': 'Tumblers turning'
+    'kings-lockbox': 'Tumblers turning',
+    'cinderwake-fuse-five': 'Fuse burning',
+    'ashfall-spore-ring': 'Ring turning',
+    'stormcrag-timber-twins': 'Timbers falling',
+    'emberdeep-three-verses': 'Ink moving',
+    'frostmere-aurora-mirror': 'Aurora charging',
+    'brimstone-furnace-four': 'Furnace firing',
+    'tzolkin-worldwheel-seven': 'World turning'
   };
   const DEFAULT_FRAME_HOLD_MS = 3000;
   const MAXIMUM_FRAME_HOLD_MS = 5000;

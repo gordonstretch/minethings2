@@ -6,7 +6,8 @@ import { cryptoType } from './crypto.js';
 import { validateCasinoRules } from './casino.js';
 import {
   BROMO_SPOREFALL_KEY, BROMO_SPOREFALL_RULES,
-  KINGS_LOCKBOX_KEY, KINGS_LOCKBOX_RULES, validateCasinoMachineRules
+  KINGS_LOCKBOX_KEY, KINGS_LOCKBOX_RULES, REGIONAL_CASINO_RULE_SETTINGS,
+  validateCasinoMachineRules
 } from './casino-machines.js';
 import { assignItemGoldValues } from './item-values.js';
 import { machineIconPath } from './item-icons.js';
@@ -16,7 +17,7 @@ import { musicIconPath } from './music-icons.js';
 import { vehicleIconPath } from './vehicle-icons.js';
 import { weaponIconPath } from './weapon-icons.js';
 import { explosiveIconPath } from './explosive-icons.js';
-import { mineIconPath } from './mine-icons.js';
+import { mineShopIconPath } from './mine-icons.js';
 import { starterIconPath } from './starter-icons.js';
 import { baitIconPath } from './bait-icons.js';
 import { cannonIconPath } from './cannon-icons.js';
@@ -45,6 +46,22 @@ export const LEGACY_STARTER_WELCOME_PACK = Object.freeze({
   cryptoQuantity: 5,
   casinoVoucherCryptoTypeId: 1,
   casinoVoucherQuantity: 100
+});
+
+export const FACTORY_WORKER_BOT_TIERS = Object.freeze([
+  Object.freeze({ id: 1, name: 'Worker Bot Mk I', cph: 25, costGold: 1000 }),
+  Object.freeze({ id: 2, name: 'Worker Bot Mk II', cph: 100, costGold: 5000 }),
+  Object.freeze({ id: 3, name: 'Worker Bot Mk III', cph: 400, costGold: 25000 })
+]);
+
+export const STARTER_BOT_STONE = Object.freeze({
+  id: 65, name: 'Assembled', behaviorKey: 'Assembled',
+  description: 'completed the thirteen-part starter miner bot', rank: 65, rarity: 3
+});
+
+export const HOME_STONE = Object.freeze({
+  id: 66, name: 'Homed', behaviorKey: 'Homed',
+  description: 'found and entered a home-city dwelling', rank: 66, rarity: 2
 });
 
 export const EXPANDED_STONE_CATALOG = Object.freeze([
@@ -91,7 +108,9 @@ export const EXPANDED_STONE_CATALOG = Object.freeze([
   { id: 63, name: 'Contained', behaviorKey: 'Contained',
     description: 'expanded storage by buying a container', rank: 63, rarity: 2 },
   { id: 64, name: 'Constructed', behaviorKey: 'Constructed',
-    description: 'completed construction of a factory or mill', rank: 64, rarity: 3 }
+    description: 'completed construction of a factory or mill', rank: 64, rarity: 3 },
+  STARTER_BOT_STONE,
+  HOME_STONE
 ]);
 export const SHROOM_CATALOG = Object.freeze({
   mapId: 2,
@@ -239,16 +258,16 @@ export const SHROOM_CATALOG = Object.freeze({
   ])
 });
 const WOOD_ITEMS = Object.freeze([
-  { id: 1464, name: 'Pine Plank', rarity: 1,
+  { id: 1464, name: 'Pine Plank', rarity: 1, canFind: false,
     description: 'A straight Calbuco pine plank, light enough for crates and sturdy enough for the first Wood Meld.',
     marketableId: 1291, goldValueUnits: 10000, icon: '/node/wood/wood-1.svg' },
-  { id: 1465, name: 'Cedar Board', rarity: 1,
+  { id: 1465, name: 'Cedar Board', rarity: 1, canFind: false,
     description: 'A fragrant Calbuco cedar board that resists damp and keeps a packing crate respectable.',
     marketableId: 1292, goldValueUnits: 9246, icon: '/node/wood/wood-1-2.svg' },
-  { id: 1466, name: 'Birch Slat', rarity: 1,
+  { id: 1466, name: 'Birch Slat', rarity: 1, canFind: false,
     description: 'A pale, flexible birch slat cut for bracing useful things without adding much weight.',
     marketableId: 1293, goldValueUnits: 9246, icon: '/node/wood/wood-1-3.svg' },
-  { id: 1467, name: 'Spruce Beam', rarity: 1,
+  { id: 1467, name: 'Spruce Beam', rarity: 1, canFind: false,
     description: 'A clean Calbuco spruce beam used wherever a simple Wood Meld needs a dependable spine.',
     marketableId: 1294, goldValueUnits: 9246, icon: '/node/wood/wood-1-4.svg' },
   { id: 1468, name: 'Wood Screws', rarity: 1,
@@ -340,7 +359,8 @@ const WOOD_MELDS = Object.freeze([
 ]);
 let nextWoodRequirementId = 1736;
 const WOOD_MELD_REQUIREMENTS = Object.freeze(WOOD_MELDS.flatMap((meld) => {
-  const tierItems = WOOD_ITEMS.filter((item) => item.rarity === meld.rarity).map((item) => ({
+  const tierItems = WOOD_ITEMS.filter((item) => item.rarity === meld.rarity
+    && item.canFind !== false).map((item) => ({
     id: nextWoodRequirementId++, meldId: meld.id, itemId: item.id,
     count: item.id === 1468 ? 4 + meld.rarity * 2 : 1
   }));
@@ -583,6 +603,128 @@ export const RELICS_CATALOG = Object.freeze({
   melds: RELIC_MELDS,
   meldRequirements: RELIC_MELD_REQUIREMENTS
 });
+export const MANUFACTURED_TRANSPORT_CATALOG = Object.freeze({
+  items: Object.freeze([
+    Object.freeze({
+      id: 1584,
+      name: 'Oil Tanker',
+      rarity: 0,
+      description: 'A plated industrial tanker built around a deep, baffled hold. It carries up to 100 barrels of Oil behind the heaviest hull ever fitted to a working cargo ship.',
+      marketableId: null,
+      mineTypeId: 12,
+      repairedItemId: null,
+      canFind: false,
+      icon: '/node/vehicles/vehicle-1584.svg',
+      iconSource: 'vehicle-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: '/node/vehicles/vehicle-1584.svg',
+      hasLargeImage: true,
+      goldValueUnits: 280000
+    }),
+    Object.freeze({
+      id: 1585,
+      name: 'Train Carriage',
+      rarity: 0,
+      description: 'A high-speed freight carriage made for the capital network. It carries up to 200 loaded things at 200 km/h between regional capitals.',
+      marketableId: null,
+      mineTypeId: 5,
+      repairedItemId: null,
+      canFind: false,
+      icon: '/node/vehicles/vehicle-1585.svg',
+      iconSource: 'vehicle-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: '/node/vehicles/vehicle-1585.svg',
+      hasLargeImage: true,
+      goldValueUnits: 310000
+    }),
+    Object.freeze({
+      id: 1586,
+      name: 'Damaged Oil Tanker',
+      rarity: 0,
+      description: 'This is a damaged item. It cannot be used or sold in its current state. It must be repaired at a factory.',
+      marketableId: null,
+      mineTypeId: 12,
+      repairedItemId: 1584,
+      canFind: false,
+      icon: '/node/vehicles/vehicle-1584.svg',
+      iconSource: 'damaged-vehicle-svg',
+      damaged: true,
+      largeImageFilename: null,
+      largeImage: '/node/vehicles/vehicle-1584.svg',
+      hasLargeImage: true,
+      goldValueUnits: 80000
+    }),
+    Object.freeze({
+      id: 1587,
+      name: 'Damaged Train Carriage',
+      rarity: 0,
+      description: 'This is a damaged item. It cannot be used or sold in its current state. It must be repaired at a factory.',
+      marketableId: null,
+      mineTypeId: 5,
+      repairedItemId: 1585,
+      canFind: false,
+      icon: '/node/vehicles/vehicle-1585.svg',
+      iconSource: 'damaged-vehicle-svg',
+      damaged: true,
+      largeImageFilename: null,
+      largeImage: '/node/vehicles/vehicle-1585.svg',
+      hasLargeImage: true,
+      goldValueUnits: 90000
+    })
+  ]),
+  vehicles: Object.freeze([
+    Object.freeze({
+      id: 78,
+      itemId: 1584,
+      speed: 40,
+      capacity: 100,
+      capacityCap: 100,
+      routeType: 1,
+      cargoPolicy: 'oil-only',
+      routePolicy: 'standard'
+    }),
+    Object.freeze({
+      id: 79,
+      itemId: 1585,
+      speed: 200,
+      capacity: 200,
+      capacityCap: 200,
+      routeType: 0,
+      cargoPolicy: 'any-item',
+      routePolicy: 'capital-link'
+    })
+  ]),
+  lands: Object.freeze([
+    Object.freeze({ id: 36, vehicleId: 79, attack: 0.5, armor: 300 })
+  ]),
+  ships: Object.freeze([
+    Object.freeze({ id: 58, vehicleId: 78, cannonPortals: 0, hull: 750, crew: 20 })
+  ]),
+  factoryActions: Object.freeze([
+    Object.freeze({
+      id: 20,
+      name: 'Build Oil Tanker',
+      ore: 40,
+      components: 60000,
+      actionKind: 'item',
+      outputItemId: 1584,
+      outputQuantity: 1
+    }),
+    Object.freeze({
+      id: 21,
+      name: 'Build Train Carriage',
+      ore: 75,
+      components: 120000,
+      actionKind: 'item',
+      outputItemId: 1585,
+      outputQuantity: 1
+    })
+  ])
+});
+const VEHICLE_CARGO_POLICIES = new Set(['standard', 'oil-only', 'any-item']);
+const VEHICLE_ROUTE_POLICIES = new Set(['standard', 'capital-link']);
 export const WORLD_CREATURE_TYPES = Object.freeze([
   'kraken', 'land_whale', 'white_whale', 'orca_pod', 'elephant_herd', 't_rex'
 ]);
@@ -875,6 +1017,25 @@ export const LEGACY_COMBAT_SEASON_SETTINGS = Object.freeze({
   }
 });
 
+const normalizeSpecialisation = (entry) => Object.freeze({
+  ...entry,
+  bonuses: Object.freeze(Object.fromEntries(SPECIALISATION_BONUS_KEYS.map(
+    (key) => [key, Number(entry.bonuses[key] ?? 0)]
+  )))
+});
+
+export const PRESTIGE_SPECIALISATIONS = Object.freeze([
+  { id: 11, name: 'Pit Boss', melds: 60, bonus: '20% more mine gold and worker throughput', bonuses: { mineGold: 0.2, workerThroughput: 0.2 } },
+  { id: 12, name: 'Caravaneer', melds: 75, bonus: '20% faster loaded land and sea travel', bonuses: { loadedLandSpeed: 0.2, loadedSeaSpeed: 0.2 } },
+  { id: 13, name: 'Marshal', melds: 90, bonus: '20% more land and naval defensive power while patrolling', bonuses: { landPatrolDefense: 0.2, seaPatrolDefense: 0.2 } },
+  { id: 14, name: 'Marauder', melds: 110, bonus: '20% more land and naval aggressive power while pillaging', bonuses: { landPillageOffense: 0.2, seaPillageOffense: 0.2 } },
+  { id: 15, name: 'Harpooner', melds: 130, bonus: '20% faster loaded sea travel and more fishing opportunities', bonuses: { loadedSeaSpeed: 0.2, fishingOpportunities: 0.2 } },
+  { id: 16, name: 'Foreman', melds: 155, bonus: '20% more worker and factory throughput', bonuses: { workerThroughput: 0.2, factoryThroughput: 0.2 } },
+  { id: 17, name: 'Storm Pilot', melds: 180, bonus: '20% faster aircraft and longer-lived Oil Field machines', bonuses: { aircraftSpeed: 0.2, oilMachineLife: 0.2 } },
+  { id: 18, name: 'Wayfinder', melds: 200, bonus: '20% faster loaded land and sea travel, and faster aircraft', bonuses: { loadedLandSpeed: 0.2, loadedSeaSpeed: 0.2, aircraftSpeed: 0.2 } },
+  { id: 19, name: 'Meldwright', melds: 216, bonus: '20% to every specialisation bonus', bonuses: Object.fromEntries(SPECIALISATION_BONUS_KEYS.map((key) => [key, 0.2])) }
+].map(normalizeSpecialisation));
+
 const LEGACY_SPECIALISATIONS = Object.freeze([
   { id: 0, name: 'Bum', melds: 0, bonus: '20% more mine gold, collected automatically', bonuses: { mineGold: 0.2 } },
   { id: 1, name: 'Trader', melds: 0, bonus: '20% faster loaded land travel', bonuses: { loadedLandSpeed: 0.2 } },
@@ -887,12 +1048,7 @@ const LEGACY_SPECIALISATIONS = Object.freeze([
   { id: 8, name: 'Worker', melds: 10, bonus: '20% more components per hour', bonuses: { workerThroughput: 0.2 } },
   { id: 9, name: 'Manufacturer', melds: 50, bonus: '20% more factory throughput', bonuses: { factoryThroughput: 0.2 } },
   { id: 10, name: 'Pilot', melds: 40, bonus: '20% faster aircraft and longer-lived Oil Field machines', bonuses: { aircraftSpeed: 0.2, oilMachineLife: 0.2 } }
-].map((entry) => ({
-  ...entry,
-  bonuses: Object.fromEntries(SPECIALISATION_BONUS_KEYS.map(
-    (key) => [key, Number(entry.bonuses[key] ?? 0)]
-  ))
-})));
+].map(normalizeSpecialisation).concat(PRESTIGE_SPECIALISATIONS));
 const LEGACY_DWARF_TIERS = Object.freeze([
   Object.freeze({ itemId: 1430, rarity: 1, name: 'Yellow Dwarf', minimumFindRarity: 1, maximumFindRarity: 1, disappearanceChance: 0.05, stowawayWeight: 32 }),
   Object.freeze({ itemId: 1348, rarity: 2, name: 'Green Dwarf', minimumFindRarity: 1, maximumFindRarity: 2, disappearanceChance: 0.05, stowawayWeight: 16 }),
@@ -1180,7 +1336,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   const mineTypes = tableRows(sql, 'mine_types').map((row) => ({
     id: row[0], name: row[1], creditCost: row[3], rentCost: row[4],
     hasOre: Boolean(row[5]), refundable: Boolean(row[6]),
-    icon: mineIconPath(row[0]) ?? `/legacy/img/icons/M${row[0]}L6.png`
+    icon: mineShopIconPath(row[0]) ?? `/legacy/img/icons/M${row[0]}L6.png`
   }));
   mineTypes.push(
     { ...SHROOM_CATALOG.mineType },
@@ -1205,6 +1361,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   const aircrafts = tableRows(sql, 'aircrafts').map((row) => ({
     id: row[0], vehicleId: row[1], itemId: row[2], type: row[3]
   }));
+  lands.push(...MANUFACTURED_TRANSPORT_CATALOG.lands.map((entry) => ({ ...entry })));
+  ships.push(...MANUFACTURED_TRANSPORT_CATALOG.ships.map((entry) => ({ ...entry })));
   const landByVehicleId = new Map(lands.map((entry) => [entry.vehicleId, entry]));
   const shipByVehicleId = new Map(ships.map((entry) => [entry.vehicleId, entry]));
   const aircraftByVehicleId = new Map(aircrafts.map((entry) => [entry.vehicleId, entry]));
@@ -1215,6 +1373,12 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     ship: shipByVehicleId.get(row[0]) ?? null,
     aircraft: aircraftByVehicleId.get(row[0]) ?? null
   }));
+  vehicles.push(...MANUFACTURED_TRANSPORT_CATALOG.vehicles.map((vehicle) => ({
+    ...vehicle,
+    land: landByVehicleId.get(vehicle.id) ?? null,
+    ship: shipByVehicleId.get(vehicle.id) ?? null,
+    aircraft: aircraftByVehicleId.get(vehicle.id) ?? null
+  })));
   const weapons = tableRows(sql, 'weapons').map((row) => ({
     id: row[0], itemId: row[1], offense: row[2], defense: row[3]
   }));
@@ -1331,6 +1495,9 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     id: 19, name: 'Reinforce vehicle', ore: 0, components: 1250,
     actionKind: 'reinforce'
   });
+  factoryActions.push(...MANUFACTURED_TRANSPORT_CATALOG.factoryActions.map((action) => ({
+    ...action
+  })));
   const machineTypes = tableRows(sql, 'machine_types').map((row) => {
     const presentation = LEGACY_MACHINE_TYPE_RULES[row[1]];
     const behavior = LEGACY_MACHINE_BEHAVIOR_RULES[row[1]];
@@ -1385,6 +1552,19 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
           .includes(iconSource)
     };
   });
+  items.push(...MANUFACTURED_TRANSPORT_CATALOG.items.map((item) => {
+    const { icon, iconSource } = specificIconFor(item, sources);
+    const hasLargeImage = ['vehicle-svg'].includes(iconSource);
+    return {
+      ...item,
+      icon,
+      iconSource,
+      damaged: item.repairedItemId !== null,
+      largeImageFilename: null,
+      largeImage: icon,
+      hasLargeImage
+    };
+  }));
   items.push(...SHROOM_CATALOG.items.map((item) => {
     const icon = item.icon;
     return {
@@ -1407,7 +1587,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       ...item,
       mineTypeId: WOOD_CATALOG.mineType.id,
       repairedItemId: null,
-      canFind: true,
+      canFind: item.canFind !== false,
       icon,
       iconSource: 'wood-svg',
       damaged: false,
@@ -1471,7 +1651,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       ? RARITY_NAMES[range.maximum]
       : `${RARITY_NAMES[range.maximum]} through ${RARITY_NAMES[range.minimum]}`;
     return `Far better than any mining robot, ${tier.name}s have mining in their blood. `
-      + `A Dwarf stored in a city finds ${quality} things from that city's mines after a random delay of 0–2 minutes. `
+      + `A Dwarf stored in a city finds ${quality} things from that city's mines after a random delay of 0–1 minute. `
       + `After each find this ${tier.name} has a 5% chance to disappear. `
       + 'Dwarves may also stow away on compatible vehicles and ships.';
   };
@@ -1576,11 +1756,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     mill_reinforcement_screw_quantity: 4,
     mill_reinforcement_absorption_by_rarity: [0, 5, 10, 20, 40, 80, 160],
     factory_worker_bot_contract_duration_ms: 7 * 24 * 60 * 60 * 1000,
-    factory_worker_bot_tiers: [
-      { id: 1, name: 'Worker Bot Mk I', cph: 25, costGold: 10000 },
-      { id: 2, name: 'Worker Bot Mk II', cph: 100, costGold: 100000 },
-      { id: 3, name: 'Worker Bot Mk III', cph: 400, costGold: 1000000 }
-    ],
+    factory_worker_bot_tiers: FACTORY_WORKER_BOT_TIERS,
     recycling_scraps_by_rarity: { 0: 1, 1: 1, 2: 10, 3: 100, 4: 1000, 5: 5000, 6: 10000 },
     recycling_scraps_per_ore: 1000,
     gold_find_base_maximum: 5,
@@ -1632,7 +1808,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     specialisation_titles: LEGACY_SPECIALISATION_TITLES,
     ...LEGACY_WORLD_EVENT_SETTINGS,
     dwarf_find_min_delay_ms: 1,
-    dwarf_find_max_delay_ms: 2 * 60 * 1000,
+    dwarf_find_max_delay_ms: 60 * 1000,
     dwarf_competition_duration_ms: 20 * 60 * 60 * 1000,
     oil_field_city_id: 2,
     oil_units_per_liter: 180,
@@ -1764,6 +1940,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     item_value_excluded_mine_type_ids: [18],
     item_value_rules: LEGACY_ITEM_VALUE_RULES,
     casino_slot_rules: LEGACY_CASINO_SLOT_RULES,
+    ...REGIONAL_CASINO_RULE_SETTINGS,
     casino_bromo_sporefall_rules: BROMO_SPOREFALL_RULES,
     casino_kings_lockbox_rules: KINGS_LOCKBOX_RULES,
     chat_message_max_length: 500,
@@ -1857,6 +2034,20 @@ export function indexCatalog({
   validateReferences = true,
   useStoredGoldValues = false
 }) {
+  const landSubtypeByVehicleId = new Map(lands.map((entry) => [Number(entry.vehicleId), entry]));
+  const shipSubtypeByVehicleId = new Map(ships.map((entry) => [Number(entry.vehicleId), entry]));
+  const aircraftSubtypeByVehicleId = new Map(
+    aircrafts.map((entry) => [Number(entry.vehicleId), entry])
+  );
+  vehicles = vehicles.map((vehicle) => ({
+    ...vehicle,
+    capacityCap: vehicle.capacityCap ?? null,
+    cargoPolicy: vehicle.cargoPolicy ?? 'standard',
+    routePolicy: vehicle.routePolicy ?? 'standard',
+    land: landSubtypeByVehicleId.get(Number(vehicle.id)) ?? vehicle.land ?? null,
+    ship: shipSubtypeByVehicleId.get(Number(vehicle.id)) ?? vehicle.ship ?? null,
+    aircraft: aircraftSubtypeByVehicleId.get(Number(vehicle.id)) ?? vehicle.aircraft ?? null
+  }));
   const byId = new Map(items.map((item) => [item.id, item]));
   const discoverableItems = items.filter((item) => item.canFind && item.repairedItemId === null);
   const damagedItems = items.filter((item) => item.canFind && item.repairedItemId !== null);
@@ -2003,6 +2194,24 @@ export function indexCatalog({
     if (!value) throw new Error(`Missing catalog ${context}: ${id}.`);
     return value;
   };
+  const requireUnique = (entries, key, context) => {
+    const seen = new Set();
+    for (const entry of entries) {
+      const value = Number(entry[key]);
+      if (!Number.isSafeInteger(value) || seen.has(value)) {
+        throw new Error(`Invalid or duplicate catalog ${context}: ${entry[key]}.`);
+      }
+      seen.add(value);
+    }
+  };
+  requireUnique(items, 'id', 'item id');
+  requireUnique(vehicles, 'id', 'vehicle id');
+  requireUnique(vehicles, 'itemId', 'vehicle item id');
+  requireUnique(lands, 'id', 'land subtype id');
+  requireUnique(lands, 'vehicleId', 'land subtype vehicle id');
+  requireUnique(ships, 'id', 'ship subtype id');
+  requireUnique(ships, 'vehicleId', 'ship subtype vehicle id');
+  requireUnique(factoryActions, 'id', 'factory-action id');
   const requireItem = (id, context) => requireReference(byId, id, `item for ${context}`);
   const requireMineType = (id, context) =>
     requireReference(mineTypeById, id, `mine type for ${context}`);
@@ -2056,6 +2265,29 @@ export function indexCatalog({
     requireItem(vehicle.itemId, `vehicle ${vehicle.id}`);
     if (!routeTypeValues.has(Number(vehicle.routeType))) {
       throw new Error(`Missing catalog route-type mapping for vehicle ${vehicle.id}.`);
+    }
+    const capacity = Number(vehicle.capacity);
+    const capacityCap = vehicle.capacityCap === null ? null : Number(vehicle.capacityCap);
+    if (!Number.isSafeInteger(capacity) || capacity < 0
+      || (capacityCap !== null && (!Number.isSafeInteger(capacityCap)
+        || capacityCap < capacity))) {
+      throw new Error(`Invalid catalog capacity policy for vehicle ${vehicle.id}.`);
+    }
+    if (!VEHICLE_CARGO_POLICIES.has(vehicle.cargoPolicy)) {
+      throw new Error(`Invalid catalog cargo policy for vehicle ${vehicle.id}: ${vehicle.cargoPolicy}.`);
+    }
+    if (!VEHICLE_ROUTE_POLICIES.has(vehicle.routePolicy)) {
+      throw new Error(`Invalid catalog route policy for vehicle ${vehicle.id}: ${vehicle.routePolicy}.`);
+    }
+    const subtypeCount = [vehicle.land, vehicle.ship, vehicle.aircraft]
+      .filter(Boolean).length;
+    const correctSubtype = Number(vehicle.routeType) === Number(routeTypeIds.land)
+      ? Boolean(vehicle.land)
+      : Number(vehicle.routeType) === Number(routeTypeIds.sea)
+        ? Boolean(vehicle.ship)
+        : Boolean(vehicle.aircraft);
+    if (subtypeCount !== 1 || !correctSubtype) {
+      throw new Error(`Invalid catalog subtype for vehicle ${vehicle.id}.`);
     }
   }
   const welcomePack = settings.starter_welcome_pack;

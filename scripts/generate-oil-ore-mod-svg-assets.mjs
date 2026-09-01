@@ -16,7 +16,7 @@ const MATERIALS = Object.freeze({
   3: { name: 'iron', main: '#707b76', light: '#b9c2ba', dark: '#39443f', accent: '#799c9c' },
   4: { name: 'titanium', main: '#71899c', light: '#c8d7dd', dark: '#3c5365', accent: '#e32121' },
   5: { name: 'tungsten', main: '#505862', light: '#aab2b5', dark: '#282f37', accent: '#a64891' },
-  6: { name: 'carbon', main: '#2d3437', light: '#737f81', dark: '#151a1c', accent: '#f79721' }
+  6: { name: 'carbon', main: '#647174', light: '#bac4c1', dark: '#30383a', accent: '#f79721' }
 });
 
 const MATERIAL_PREFIX = /^(?:Tin|Aluminum|Iron|Titanium|Tungsten|Carbon) /u;
@@ -67,7 +67,7 @@ function modArt(component, palette) {
     case 'Missile Turret':
       return `<path d="M29 88h70l-9 19H38z" fill="${d}"/><ellipse cx="64" cy="86" rx="31" ry="12" fill="${m}"/><path d="M31 39h66v44H31z" fill="${m}"/><path d="M38 45h22v31H38zm30 0h22v31H68z" fill="${d}"/><path d="m43 64 6-23 6 23v13H43zm30 0 6-23 6 23v13H73z" fill="${a}"/><path d="M28 36h72" stroke="${l}"/>`;
     case '90mm Gun':
-      return `<path d="M18 80h79l-8 24H29z" fill="${d}"/><ellipse cx="58" cy="80" rx="35" ry="13" fill="${m}"/><path d="M35 69 45 45h34l13 24z" fill="${m}"/><path d="M67 42h52v15H67z" fill="${d}"/><path d="M113 36h11v27h-11z" fill="${a}"/><path d="M43 45h33l-6-17H50z" fill="${l}"/><circle cx="58" cy="78" r="7" fill="${a}"/>`;
+      return `<path d="M15 91h79l-8 22H27z" fill="${d}"/><ellipse cx="54" cy="89" rx="34" ry="12" fill="${m}"/><path d="M31 83 43 58h34l12 25z" fill="${m}"/><path d="m64 59 49-35 9 13-50 35z" fill="${d}"/><path d="m109 19 15-5 4 9-13 8z" fill="${a}"/><path d="M43 58h31l-8-16H50z" fill="${l}"/><circle cx="54" cy="87" r="7" fill="${a}"/>`;
     case 'Chain Gun':
       return `<path d="M17 89h82l-8 19H28z" fill="${d}"/><path d="M31 63h55v32H31z" fill="${m}"/><circle cx="43" cy="79" r="15" fill="${d}"/><circle cx="43" cy="79" r="7" fill="${a}"/><path d="M81 66h42M81 75h42M81 84h42M81 93h42" stroke="${d}"/><path d="M117 62v36" stroke="${a}"/><path d="M54 65 68 42h18v23" fill="${l}"/>`;
     case 'Door Panels':
@@ -109,7 +109,7 @@ function modArt(component, palette) {
     case 'Spoiler':
       return `<path d="m12 47 104-15-5 25L17 72z" fill="${m}"/><path d="m23 48 81-11-4 9-76 12z" fill="${l}"/><path d="M35 68v35m58-44v44" stroke="${d}" stroke-width="12"/><path d="M22 104h30m25 0h31" stroke="${a}"/><path d="m17 72 94-15" stroke="${d}"/>`;
     case 'HUD':
-      return `<path d="m21 27 86 8-8 67-78-7z" fill="${m}" fill-opacity=".55"/><path d="m31 38 64 6-6 46-58-5z" fill="${d}" fill-opacity=".7"/><circle cx="63" cy="64" r="18" fill="none" stroke="${a}"/><path d="M63 39v50M36 64h54m-43-9 10 9-10 9" fill="none" stroke="${l}"/><path d="M21 95h78m-55 0-8 18m48-18 8 18" stroke="${d}"/><circle cx="63" cy="64" r="4" fill="${a}"/>`;
+      return `<path d="m24 29 78-11 9 67-75 12z" fill="${m}" fill-opacity=".48"/><path d="m34 39 58-8 7 43-56 10z" fill="${d}" fill-opacity=".45"/><circle cx="67" cy="58" r="18" fill="none" stroke="${a}"/><path d="M64 33l7 50M39 62l57-8m-40-7 11 10-8 13" fill="none" stroke="${l}"/><path d="M49 95v13m34-17 4 17M38 109h61" stroke="${d}"/><circle cx="67" cy="58" r="4" fill="${a}"/>`;
     case 'Tactical Display':
       return `<path d="M15 21h98v85H15z" fill="${m}"/><path d="M25 31h78v58H25z" fill="${d}"/><path d="M33 43h62M33 58h62M33 73h62M45 36v48m18-48v48m18-48v48" stroke="${l}" stroke-opacity=".45"/><path d="m32 78 19-21 17 8 21-23" fill="none" stroke="${a}"/><circle cx="89" cy="42" r="7" fill="none" stroke="${a}"/><circle cx="64" cy="98" r="5" fill="${a}"/><path d="M39 114h50" stroke="${d}"/>`;
     case 'Skid Plate':
@@ -135,7 +135,7 @@ function resourceSvg(title, description, art) {
 }
 
 function oilArt() {
-  return `<path d="M18 31v65q0 13 32 13t32-13V31z" fill="#ad6824"/><ellipse cx="50" cy="31" rx="32" ry="13" fill="#e2a33d"/><ellipse cx="50" cy="31" rx="21" ry="7" fill="#242927"/><path d="M18 51h64M18 88h64" stroke="#713e20"/><path d="M31 48v42" stroke="#e9bd63"/><path d="M91 97q0-18 17-40 17 22 17 40 0 15-17 15T91 97z" fill="#252a28"/><path d="M102 96q0-9 7-19" fill="none" stroke="#657169"/><path d="m91 37 10 10-10 10-10-10z" fill="#f2c452"/>`;
+  return `<path d="M18 31v65q0 13 32 13t32-13V31z" fill="#ad6824"/><ellipse cx="50" cy="31" rx="32" ry="13" fill="#e2a33d"/><ellipse cx="50" cy="31" rx="21" ry="7" fill="#242927"/><path d="M18 51h64M18 88h64" stroke="#713e20"/><path d="M31 48v42" stroke="#e9bd63"/><path d="M91 97q0-18 17-40 17 22 17 40 0 15-17 15T91 97z" fill="#252a28" stroke="#d7a84c"/><path d="M102 96q0-9 7-19" fill="none" stroke="#8c9489"/><path d="m91 37 10 10-10 10-10-10z" fill="#f2c452"/>`;
 }
 
 function oreArt() {

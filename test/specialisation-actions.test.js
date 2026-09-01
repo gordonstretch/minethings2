@@ -62,7 +62,7 @@ test('lets every specialisation travel, order, fish, work, hire, manufacture, an
       [bomber.id]: 1
     };
     const saved = store.addPlayer(player);
-    addMelds(store, saved.id, 50);
+    addMelds(store, saved.id, 216);
 
     const hireling = store.addPlayer(createPlayer(
       'Hire ' + specialisation.id, '', 'hash', catalog, 1000, () => 0.5
@@ -75,11 +75,11 @@ test('lets every specialisation travel, order, fish, work, hire, manufacture, an
     const assignedFactory = store.assignFactoryWorker(saved.id, factory.id, hireling.id, 1200);
     assert.ok(assignedFactory.workers.some((worker) => worker.playerId === hireling.id));
     const factoryRate = assignedFactory.rate;
-    assert.equal(factoryRate, specialisation.id === 9 ? 1.2 : 1);
+    assert.equal(factoryRate, 1 * (1 + specialisation.bonuses.factoryThroughput));
     const workerCph = store.database.prepare(
       'SELECT cph FROM workers WHERE player_id = ?'
     ).get(saved.id).cph;
-    assert.equal(workerCph, specialisation.id === 8 ? 6 : 5);
+    assert.equal(workerCph, 21 * (1 + specialisation.bonuses.workerThroughput));
 
     const landId = store.activateVehicle(saved.id, land.itemId);
     const shipId = store.activateVehicle(saved.id, ship.itemId);
@@ -95,12 +95,12 @@ test('lets every specialisation travel, order, fish, work, hire, manufacture, an
     const airTrip = store.sendVehicle(saved.id, aircraftId, 8, 2000, {
       travelOrder: 'peaceful'
     });
-    assert.equal(landTrip.duration, specialisation.id === 1
-      ? Math.ceil(expectedLandDuration / 1.2) : expectedLandDuration);
-    assert.equal(seaTrip.duration, specialisation.id === 4
-      ? Math.ceil(expectedSeaDuration / 1.2) : expectedSeaDuration);
-    assert.equal(airTrip.duration, specialisation.id === 10
-      ? Math.ceil(expectedAirDuration / 1.2) : expectedAirDuration);
+    assert.equal(landTrip.duration, Math.ceil(expectedLandDuration
+      / (1 + specialisation.bonuses.loadedLandSpeed)));
+    assert.equal(seaTrip.duration, Math.ceil(expectedSeaDuration
+      / (1 + specialisation.bonuses.loadedSeaSpeed)));
+    assert.equal(airTrip.duration, Math.ceil(expectedAirDuration
+      / (1 + specialisation.bonuses.aircraftSpeed)));
     assert.equal(store.vehicleDetails(saved.id, landId, 2001).travelOrder, 'pillage');
     assert.equal(store.vehicleDetails(saved.id, shipId, 2001).travelOrder, 'patrol');
 
@@ -127,7 +127,7 @@ test('lets every specialisation travel, order, fish, work, hire, manufacture, an
       'SELECT life_seconds FROM oil_machines WHERE player_id = ?'
     ).get(saved.id).life_seconds;
     assert.equal(lifeSeconds,
-      Math.round(0.5 * 24 * 60 * 60 * (specialisation.id === 10 ? 1.2 : 1)));
+      Math.round(0.5 * 24 * 60 * 60 * (1 + specialisation.bonuses.oilMachineLife)));
     assert.equal(store.queueOilMachine(saved.id, hex.id, pump.id, 0, 1001), pump.id);
     assert.equal(store.database.prepare(
       'SELECT machine_id FROM oil_machine_queue WHERE player_id = ?'
@@ -146,7 +146,8 @@ test('creates more deterministic fishing opportunities for Fishermen', () => {
     const store = new SqliteStore(':memory:');
     try {
       store.seedCatalog(catalog);
-      const ship = [...catalog.vehicles].filter((vehicle) => vehicle.routeType === 1)
+      const ship = [...catalog.vehicles].filter((vehicle) =>
+        vehicle.routeType === 1 && vehicle.cargoPolicy === 'standard')
         .sort((first, second) => second.capacity - first.capacity)[0];
       const bait = catalog.items.find((item) =>
         item.mineTypeId === 14 && item.rarity === 1 && !item.repairedItemId);

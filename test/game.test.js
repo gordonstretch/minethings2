@@ -192,13 +192,55 @@ test('allows three active mines per discovered region and four with Remote Contr
   assert.equal(ninth.active, false);
 });
 
-test('adds half a bucket per cleared stone to the top home-city mine', () => {
-  const player = createPlayer('Stone Miner', '', 'hash', catalog, 1000, predictableRandom);
-  const before = mineBucketsPerHour(catalog, player.mines[0], player, 1000);
+test('adds each cleared-stone bonus to the top mine in every regional home city', () => {
+  const homeCities = catalog.cities.map((city) => ({ ...city, mapId: 1 }));
+  const remoteCapital = { ...homeCities[0], id: 999, mapId: 2, name: 'Remote capital' };
+  const remoteOutpost = { ...homeCities[1], id: 1000, mapId: 2, name: 'Remote outpost' };
+  const regionalCatalog = {
+    ...catalog,
+    cities: [...homeCities, remoteCapital, remoteOutpost],
+    maps: [
+      { id: 1, capitalCityId: catalog.settings.starter_city_id },
+      { id: 2, capitalCityId: remoteCapital.id }
+    ]
+  };
+  const player = createPlayer(
+    'Stone Miner', '', 'hash', regionalCatalog, 1000, predictableRandom
+  );
+  const before = mineBucketsPerHour(regionalCatalog, player.mines[0], player, 1000);
   player.stoneCount = 4;
-  assert.equal(mineBucketsPerHour(catalog, player.mines[0], player, 1000), before + 2);
+  assert.equal(mineBucketsPerHour(regionalCatalog, player.mines[0], player, 1000),
+    before + 2);
+  const remoteHomeMine = {
+    ...structuredClone(player.mines[0]), id: 2,
+    cityId: remoteCapital.id, priority: 2
+  };
+  const remoteOutpostMine = {
+    ...structuredClone(player.mines[0]), id: 3, cityId: remoteOutpost.id, priority: 3
+  };
+  const secondRemoteHomeMine = {
+    ...structuredClone(player.mines[0]), id: 4,
+    cityId: remoteCapital.id, priority: 4
+  };
+  player.mines.push(remoteHomeMine, remoteOutpostMine, secondRemoteHomeMine);
+  player.stoneCount = 0;
+  const remoteHomeBase = mineBucketsPerHour(regionalCatalog, remoteHomeMine, player, 1000);
+  const remoteOutpostBase = mineBucketsPerHour(
+    regionalCatalog, remoteOutpostMine, player, 1000
+  );
+  const secondRemoteHomeBase = mineBucketsPerHour(
+    regionalCatalog, secondRemoteHomeMine, player, 1000
+  );
+  player.stoneCount = 4;
+  assert.equal(mineBucketsPerHour(regionalCatalog, remoteHomeMine, player, 1000),
+    remoteHomeBase + 2);
+  assert.equal(mineBucketsPerHour(regionalCatalog, remoteOutpostMine, player, 1000),
+    remoteOutpostBase);
+  assert.equal(mineBucketsPerHour(regionalCatalog, secondRemoteHomeMine, player, 1000),
+    secondRemoteHomeBase, 'only the top mine in a regional home city receives the bonus');
   player.homeCityId = 2;
-  assert.equal(mineBucketsPerHour(catalog, player.mines[0], player, 1000), before);
+  assert.equal(mineBucketsPerHour(regionalCatalog, player.mines[0], player, 1000), before + 2,
+    'the obsolete single-home field cannot remove a regional-capital bonus');
 });
 
 test('rents mines for fourteen days and resells refundable permanent mines', () => {

@@ -7,16 +7,21 @@ import {
   CASINO_MACHINE_REGISTRY,
   KINGS_LOCKBOX_KEY,
   KINGS_LOCKBOX_RULES,
+  REGIONAL_CASINO_MACHINES,
+  REGIONAL_CASINO_MACHINE_KEYS,
   THING_O_MATIC_KEY,
   casinoMachineByKey,
   evaluateBromoSporefallGrid,
+  evaluateRegionalCasinoGrid,
   requireCasinoMachine,
   resolveBromoSporefallPull,
   resolveCasinoMachinePull,
   resolveKingsLockboxPull,
+  resolveRegionalCasinoPull,
   validateBromoSporefallRules,
   validateCasinoMachineRules,
-  validateKingsLockboxRules
+  validateKingsLockboxRules,
+  validateRegionalCasinoRules
 } from '../src/casino-machines.js';
 import { LEGACY_CASINO_SLOT_RULES } from '../src/legacy-catalog.js';
 
@@ -51,7 +56,8 @@ function assertSharedOutcome(result, machineKey) {
 
 test('registers immutable machine definitions and adapts the Thing-O-Matic engine', () => {
   assert.deepEqual(CASINO_MACHINE_KEYS, [
-    THING_O_MATIC_KEY, BROMO_SPOREFALL_KEY, KINGS_LOCKBOX_KEY
+    THING_O_MATIC_KEY, BROMO_SPOREFALL_KEY, KINGS_LOCKBOX_KEY,
+    ...REGIONAL_CASINO_MACHINE_KEYS
   ]);
   assert.ok(Object.isFrozen(CASINO_MACHINE_REGISTRY));
   assert.equal(casinoMachineByKey(BROMO_SPOREFALL_KEY).defaultRules,
@@ -76,6 +82,60 @@ test('registers immutable machine definitions and adapts the Thing-O-Matic engin
   assert.equal(result.replayKind, 'bonus-spin');
   assert.equal(result.frames[0].label, 'Paid spin');
   assert.equal(result.frames[0].holdMs, 3000);
+});
+
+test('gives every region one immutable machine with its own cabinet geometry', () => {
+  assert.equal(REGIONAL_CASINO_MACHINES.length, 7);
+  assert.deepEqual(REGIONAL_CASINO_MACHINES.map((machine) => machine.regionId),
+    [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(new Set(REGIONAL_CASINO_MACHINES.map((machine) =>
+    `${machine.rules.gridColumns}x${machine.rules.gridRows}`)).size, 7,
+  'every regional cabinet should have a distinct reel and row shape');
+  assert.ok(REGIONAL_CASINO_MACHINES.every((machine) => machine.rules.gridSize >= 12),
+    'regional cabinets should be materially larger than the nine-cell house machines');
+  assert.ok(REGIONAL_CASINO_MACHINES.some((machine) => machine.rules.gridRows === 5));
+  assert.ok(REGIONAL_CASINO_MACHINES.some((machine) => machine.rules.gridColumns === 8));
+  assert.ok(REGIONAL_CASINO_MACHINES.some((machine) =>
+    machine.rules.symbolItemIds.includes(1584) && machine.rules.symbolItemIds.includes(1585)),
+  'the worldwheel should use the manufactured tanker and train art');
+  assert.ok(REGIONAL_CASINO_MACHINES.every((machine) => Object.isFrozen(machine.rules)));
+
+  for (const machine of REGIONAL_CASINO_MACHINES) {
+    const rules = validateRegionalCasinoRules(machine.key, machine.rules);
+    const randomValues = [0.5, ...Array(rules.gridSize).fill(0)];
+    const result = resolveRegionalCasinoPull(machine.key, rules, sequence(randomValues));
+    assert.equal(randomValues.length, 0, `${machine.name} should roll exactly one full screen`);
+    assert.equal(result.machineKey, machine.key);
+    assert.equal(result.grid.length, rules.gridSize);
+    assert.equal(result.frames.length, 1);
+    assert.equal(result.frames[0].grid.length, rules.gridSize);
+    assert.equal(result.replayKind, 'regional-pattern');
+    assert.ok(result.wins.length >= 1);
+    assert.equal(result.jackpot, false);
+  }
+});
+
+test('scores overlapping regional patterns and forces only that cabinet jackpot', () => {
+  const machine = REGIONAL_CASINO_MACHINES[0];
+  const [common, , , , , legendary] = machine.rules.symbolItemIds;
+  const evaluated = evaluateRegionalCasinoGrid(
+    machine.key, Array(machine.rules.gridSize).fill(common)
+  );
+  assert.deepEqual(evaluated.wins.map((win) => win.name),
+    ['Upper short fuse', 'Upper long fuse', 'Lower short fuse', 'Lower long fuse',
+      'Left magazine', 'Centre magazine', 'Right magazine', 'Everything goes up']);
+  assert.equal(evaluated.multiplier, 25);
+  assert.equal(evaluated.jackpot, false);
+
+  const forced = resolveRegionalCasinoPull(machine.key, machine.rules, sequence([0]));
+  assert.deepEqual(forced.grid, Array(machine.rules.gridSize).fill(legendary));
+  assert.equal(forced.jackpot, true);
+  assert.equal(forced.jackpotMultiplier, machine.rules.jackpotBonusMultiplier);
+  assert.throws(() => validateRegionalCasinoRules(machine.key, {
+    ...machine.rules, gridColumns: 4
+  }), /cabinet shape|grid size/iu);
+  assert.throws(() => evaluateRegionalCasinoGrid(machine.key, [common]),
+    /must contain/iu);
 });
 
 test('scores connected Sporefall matches by count and cascade depth', () => {

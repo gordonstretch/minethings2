@@ -181,7 +181,15 @@ export function mineBucketsPerHour(catalog, mine, player = null, now = Date.now(
     return Number(setting(catalog, 'inactive_mine_buckets_per_hour'))
       + (mine.oilExpiresAt > now ? Number(setting(catalog, 'mine_oil_buckets_per_hour')) : 0);
   }
-  const isTopHomeMine = player && mine.cityId === player.homeCityId
+  const regionalHomeCityIds = new Set([
+    ...(catalog.maps ?? []).map((map) => map.capitalCityId),
+    ...(player?.regionHomeCityIds ?? []),
+    ...(player?.regionCapitalCityIds ?? [])
+  ].map(Number).filter(Number.isSafeInteger));
+  if (!regionalHomeCityIds.size && Number.isSafeInteger(Number(player?.homeCityId))) {
+    regionalHomeCityIds.add(Number(player.homeCityId));
+  }
+  const isTopHomeMine = player && regionalHomeCityIds.has(Number(mine.cityId))
     && !(player.mines ?? []).some((candidate) => candidate.id !== mine.id && candidate.cityId === mine.cityId
       && (candidate.priority ?? candidate.id) < (mine.priority ?? mine.id));
   const homeStoneBonus = isTopHomeMine
@@ -311,14 +319,18 @@ export function buyMine(player, catalog, mineTypeId, now = Date.now(), random = 
   return mine;
 }
 
-export function rentMine(player, catalog, mineTypeId, now = Date.now(), random = Math.random) {
+export function rentMine(player, catalog, mineTypeId, now = Date.now(), random = Math.random,
+  options = {}) {
   const mineType = catalog.mineTypes.find((candidate) => candidate.id === mineTypeId);
   if (!mineType || mineType.rentCost <= 0 || !catalog.byMineType.has(mineTypeId)) throw new Error('That mine cannot be rented.');
   if (!mineTypeAvailableInCity(catalog, mineTypeId, player.cityId)) {
     throw new Error('That mine is not available in this city.');
   }
-  if (player.credits < mineType.rentCost) throw new Error('You do not have enough credits.');
-  player.credits -= mineType.rentCost;
+  const waiveCost = options?.waiveCost === true;
+  if (!waiveCost && player.credits < mineType.rentCost) {
+    throw new Error('You do not have enough credits.');
+  }
+  if (!waiveCost) player.credits -= mineType.rentCost;
   const mine = {
     id: player.nextMineId++, mineTypeId, cityId: player.cityId,
     active: player.mines.filter((candidate) => candidate.active).length

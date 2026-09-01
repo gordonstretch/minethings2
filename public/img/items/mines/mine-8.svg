@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Bugs Mine</title>
+  <desc id="desc">A bold top-down beetle with six strong legs.</desc>
+  <g transform="scale(2)"><path d="M25 17c0-7 14-7 14 0" fill="none" stroke="#202420" stroke-width="4.5"/><path d="M18 34c0-13 6-20 14-20s14 7 14 20v8c0 11-6 17-14 17s-14-6-14-17z" fill="#5f7f46" stroke="#202420" stroke-width="4.5"/><path d="M32 15v43M19 32h26" stroke="#202420" stroke-width="3"/><path d="m18 28-10-6m10 17-11 1m12 8-9 7m36-27 10-6M46 39l11 1m-12 8 9 7" fill="none" stroke="#202420" stroke-width="4" stroke-linecap="round"/><circle cx="27" cy="26" r="3" fill="#ffd36a"/><circle cx="37" cy="26" r="3" fill="#ffd36a"/></g>
+</svg>

@@ -150,10 +150,15 @@
     const availability = buildTier === Number(state.oilBuildTiers.helicopter)
       ? `Buildable — ${state.labels.helicopter} required`
       : buildTier === Number(state.oilBuildTiers.local) ? 'Buildable' : 'Unavailable';
-    addSummarySection('Position', [
+    const isOilSpill = hexPath.data('oilSpill') === true;
+    const positionRows = [
       ['Coordinates', `${hex.Hex.x}, ${hex.Hex.y}`],
       ['Access', availability]
-    ]);
+    ];
+    if (isOilSpill) {
+      positionRows.push(['Hazard', `${state.labels.oil} spill — machine placement blocked`]);
+    }
+    addSummarySection('Position', positionRows);
 
     const placed = hex.HexesMachine;
     let placedType = null;
@@ -291,6 +296,9 @@
   let dragCandidate = null;
   const restoreCandidate = () => {
     if (!dragCandidate) return;
+    dragCandidate.node.classList.remove(
+      'oil-drop-target', 'oil-drop-target-spill', 'oil-drop-target-blocked'
+    );
     dragCandidate.attr({
       stroke: window.dialog.machine
         ? dragCandidate.data('availableStroke') : dragCandidate.data('oilStroke'),
@@ -329,18 +337,37 @@
       if (candidate !== dragCandidate) {
         restoreCandidate();
         dragCandidate = candidate;
-        if (dragCandidate) dragCandidate.attr({ stroke: '#ffda31', 'stroke-width': 5 });
+        if (dragCandidate) {
+          const candidateHex = dragCandidate.data('hex');
+          const machineTypeId = Number(machine.machine.Machine.machine_type_id);
+          const isBomb = bombMachineTypeIds.has(machineTypeId);
+          const isOilSpill = dragCandidate.data('oilSpill') === true;
+          dragCandidate.node.classList.add('oil-drop-target');
+          dragCandidate.node.classList.toggle('oil-drop-target-spill', isOilSpill && isBomb);
+          dragCandidate.node.classList.toggle('oil-drop-target-blocked', isOilSpill && !isBomb);
+          dragCandidate.attr({
+            stroke: isOilSpill && !isBomb ? '#ff5a36' : '#ffda31',
+            'stroke-width': 5
+          });
+          if (isOilSpill) {
+            status(isBomb
+              ? `${state.labels.oil} spill at hex (${candidateHex.Hex.x},${candidateHex.Hex.y}). Drop here to bomb it.`
+              : `${state.labels.oil} spill at hex (${candidateHex.Hex.x},${candidateHex.Hex.y}) blocks machine placement.`);
+          }
+        }
       }
     }, function () {
       origin = machine.startingPos.slice();
       window.dialog.SetMachine(machine);
+      document.getElementById('board')?.classList.add('oil-machine-drag-active');
       machine.set.attr({ cursor: 'grabbing' });
       hideRackTooltip(machine);
       setRackMachineClass(machine, 'is-dragging', true);
-      status(`Dragging ${machine.machine.MachineType.name}. Drop it on a hex.`);
+      status(`Dragging ${machine.machine.MachineType.name}. Oil spills remain marked on the field.`);
     }, function () {
       const destination = dragCandidate;
       restoreCandidate();
+      document.getElementById('board')?.classList.remove('oil-machine-drag-active');
       machine.set.attr({ cursor: 'grab' });
       setRackMachineClass(machine, 'is-dragging', false);
       machine.draggedUntil = Date.now() + 250;
@@ -351,7 +378,12 @@
       }
       window.dialog.SetHex(destination);
       const hex = destination.data('hex');
-      status(`Selected hex (${hex.Hex.x},${hex.Hex.y}). Rotate if needed, then choose Deploy or Queue on the board.`);
+      const isBomb = bombMachineTypeIds.has(Number(machine.machine.Machine.machine_type_id));
+      status(destination.data('oilSpill') === true
+        ? isBomb
+          ? `Selected ${state.labels.oil} spill at hex (${hex.Hex.x},${hex.Hex.y}). Choose Bomb on the board.`
+          : `${state.labels.oil} spill at hex (${hex.Hex.x},${hex.Hex.y}) blocks machine placement.`
+        : `Selected hex (${hex.Hex.x},${hex.Hex.y}). Rotate if needed, then choose Deploy or Queue on the board.`);
     });
   };
 
@@ -407,6 +439,7 @@
   if (boardElement) boardElement.dataset.renderer = window.oilRendererMode;
 
   let visibleOilHexes = 0;
+  let visibleOilSpills = 0;
   const oilOverlays = [];
   const bringOilOverlaysToFront = () => {
     for (const overlay of oilOverlays) overlay.toFront();
@@ -414,11 +447,15 @@
   const boardTime = Date.now() / 1000 + window.timeOffset;
   for (const hexPath of window.boardHexes) {
     const hex = hexPath.data('hex');
+    hexPath.data('oilSpill', false);
     if (!hex.Oil) continue;
     const oilUnits = Math.max(0, Number(hex.Oil.oil)
       + Number(hex.Oil.oil_rate) * (boardTime - Number(hex.Oil.oil_update_time)));
     const liters = oilUnits / window.unitsPerLiter;
     if (liters <= 0.001) continue;
+    const isOilSpill = !hex.HexesMachine && oilUnits >= Number(window.oilspill);
+    hexPath.data('oilSpill', isOilSpill);
+    if (isOilSpill) visibleOilSpills += 1;
     visibleOilHexes += 1;
     const center = window.Hex2Cart(hex.Hex.x, hex.Hex.y);
     const radius = 5.5 + Math.min(7.5, Math.log10(1 + liters) * 3.2);
@@ -443,6 +480,31 @@
       overlay.node.style.pointerEvents = 'none';
       oilOverlays.push(overlay);
     }
+    if (isOilSpill) {
+      const spillRing = window.paper.path([
+        `M ${center[0] - 12} ${center[1] - 1}`,
+        `C ${center[0] - 9} ${center[1] - 12}, ${center[0] + 1} ${center[1] - 15}, ${center[0] + 8} ${center[1] - 9}`,
+        `C ${center[0] + 16} ${center[1] - 3}, ${center[0] + 12} ${center[1] + 10}, ${center[0] + 3} ${center[1] + 13}`,
+        `C ${center[0] - 7} ${center[1] + 15}, ${center[0] - 16} ${center[1] + 8}, ${center[0] - 12} ${center[1] - 1} Z`
+      ].join(' ')).attr({
+        fill: 'none', stroke: '#ff5a36', 'stroke-width': 2.8,
+        'stroke-dasharray': '4 2', 'stroke-linejoin': 'round'
+      });
+      const spillLabel = window.paper.text(center[0], center[1] - 8.5, 'SPILL')
+        .attr({
+          fill: '#fff4d0', stroke: '#15110b', 'stroke-width': 1.7,
+          'paint-order': 'stroke', 'font-size': 6.8,
+          'font-family': 'Arial, sans-serif', 'font-weight': 'bold',
+          'letter-spacing': 0.7
+        });
+      spillRing.node.classList.add('oil-spill-marker', 'oil-spill-ring');
+      spillLabel.node.classList.add('oil-spill-marker', 'oil-spill-label');
+      for (const overlay of [spillRing, spillLabel]) {
+        overlay.node.dataset.hexId = String(hex.Hex.id);
+        overlay.node.style.pointerEvents = 'none';
+        oilOverlays.push(overlay);
+      }
+    }
     hexPath.data('oilStroke', '#e8aa3a');
     hexPath.attr({ stroke: '#e8aa3a' });
   }
@@ -454,11 +516,15 @@
     hexPath.node.dataset.hexId = String(hex.Hex.id);
     hexPath.node.dataset.hexX = String(hex.Hex.x);
     hexPath.node.dataset.hexY = String(hex.Hex.y);
+    const isOilSpill = hexPath.data('oilSpill') === true;
+    hexPath.node.dataset.oilSpill = String(isOilSpill);
+    hexPath.node.classList.toggle('oil-spill-hex', isOilSpill);
     hexPath.node.setAttribute('tabindex', '0');
     hexPath.node.setAttribute('role', 'button');
     const oilLabel = hex.Oil ? Math.max(0, Number(hex.Oil.oil)
       + Number(hex.Oil.oil_rate) * (boardTime - Number(hex.Oil.oil_update_time))) / window.unitsPerLiter : null;
-    hexPath.node.setAttribute('aria-label', `Oil Field hex ${hex.Hex.x}, ${hex.Hex.y}${oilLabel === null ? ', oil hidden' : `, ${oilLabel.toFixed(2)} litres oil`}`);
+    hexPath.node.setAttribute('aria-label', `Oil Field hex ${hex.Hex.x}, ${hex.Hex.y}${
+      oilLabel === null ? ', oil hidden' : `, ${oilLabel.toFixed(2)} litres oil${isOilSpill ? ', oil spill' : ''}`}`);
     hexPath.node.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
       event.preventDefault();
@@ -629,7 +695,7 @@
   }
   renderVolumeLabelPreference();
   if (animationButton) animationButton.textContent = window.animate ? 'Pause animation' : 'Play animation';
-  status(`Oil Field ready with ${rendererLabel}: ${window.boardHexes.length} hexes, ${visibleOilHexes} containing visible oil, ${window.boardMachines.length} deployed machines, ${rackMachines.length} machine parts in the rack.`);
+  status(`Oil Field ready with ${rendererLabel}: ${window.boardHexes.length} hexes, ${visibleOilHexes} containing visible oil, ${visibleOilSpills} oil spills marked, ${window.boardMachines.length} deployed machines, ${rackMachines.length} machine parts in the rack.`);
   };
   initialize();
 })();

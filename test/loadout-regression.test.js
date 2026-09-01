@@ -352,6 +352,14 @@ test('binds land and cargo commits to an exact one-use server preview', async (c
   const base = await startServer(context, store);
   const cookie = await login(base, player.name, password);
   const customizePath = `/vehicles/${vehicleId}/customize`;
+  const initialHtml = await (await fetch(`${base}${customizePath}`, {
+    headers: { cookie }
+  })).text();
+  assert.match(initialHtml, /class="combat-stat-board"/u);
+  assert.match(initialHtml, /Current fitted totals/u);
+  for (const stat of ['attack', 'armor', 'offense', 'defense', 'dodge']) {
+    assert.match(initialHtml, new RegExp(`data-combat-stat="${stat}"`, 'u'));
+  }
 
   const retiredDirectFit = await postForm(base, `/vehicles/${vehicleId}/mods`, cookie, {
     [`mod_${mod.id}`]: 'on'
@@ -370,6 +378,9 @@ test('binds land and cargo commits to an exact one-use server preview', async (c
   assert.match(previewHtml, /data-live-preview-panel/u);
   assert.match(previewHtml, /data-live-preview-form/u);
   assert.match(previewHtml, /data-preview-commit/u);
+  assert.match(previewHtml, /Proposed fitted totals/u);
+  assert.equal([...previewHtml.matchAll(/class="combat-stat-board"/gu)].length, 2,
+    'current and proposed combat states are presented side by side in the preview flow');
   assert.equal(store.vehicleDetails(player.id, vehicleId, 2000).mods.length, 0);
 
   const changedCommit = await postForm(base, customizePath, cookie, {
@@ -499,6 +510,7 @@ test('renders a complete ship editor and recovery-only damaged controls', async 
   store.database.prepare('UPDATE player_vehicles SET damaged = 1 WHERE id = ?').run(vehicleId);
   const damagedHtml = await (await fetch(`${base}${path}`, { headers: { cookie } })).text();
   assert.match(damagedHtml, /recovery|remove|unload/i);
+  assert.match(damagedHtml, /city repair underway/i);
   assert.doesNotMatch(inputTag(damagedHtml, `cannon_${second.id}`), /disabled/u,
     'the currently fitted cannon control must allow removal');
   assert.match(inputTag(damagedHtml, `cannon_${first.id}`), /disabled/u,
@@ -510,6 +522,14 @@ test('renders a complete ship editor and recovery-only damaged controls', async 
     `<form[^>]+action="/vehicles/${vehicleId}/ammo/unload"[\\s\\S]*?</form>`, 'u'))?.[0] ?? '';
   assert.doesNotMatch(ammoUnloadForm, /<button[^>]*disabled/u,
     'a damaged ship must still allow unloading');
+  const statusHtml = await (await fetch(`${base}/vehicles/${vehicleId}`, {
+    headers: { cookie }
+  })).text();
+  const storeForm = statusHtml.match(new RegExp(
+    `<form[^>]+action="/vehicles/${vehicleId}/store"[\\s\\S]*?</form>`, 'u'))?.[0] ?? '';
+  assert.match(storeForm, /repairs complete|city repair/i);
+  assert.match(storeForm, /<button[^>]*disabled/u,
+    'damage must not be cleared by packing the vehicle back into inventory');
 });
 
 test('quantity-only ship commits preserve the portal order of an unchanged mixed set',

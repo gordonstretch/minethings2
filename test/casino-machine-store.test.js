@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  BROMO_SPOREFALL_KEY, KINGS_LOCKBOX_KEY, THING_O_MATIC_KEY
+  BROMO_SPOREFALL_KEY, KINGS_LOCKBOX_KEY, REGIONAL_CASINO_MACHINES,
+  THING_O_MATIC_KEY
 } from '../src/casino-machines.js';
 import { createPlayer } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
@@ -52,6 +53,16 @@ function assertMachineSchema(store) {
       .all().map((column) => column.name),
     ['player_id', 'machine_key', 'created_at', 'id']
   );
+  const globalStats = store.database.prepare(`
+    SELECT id, spin_count FROM casino_global_stats
+  `).get();
+  assert.equal(globalStats.id, 1);
+  assert.ok(Number.isSafeInteger(Number(globalStats.spin_count))
+    && Number(globalStats.spin_count) >= 0);
+  assert.ok(store.database.prepare(`
+    SELECT 1 FROM sqlite_master
+    WHERE type = 'trigger' AND name = 'casino_global_spin_count_after_insert'
+  `).get());
 }
 
 function weightedValue(rules, itemId) {
@@ -109,11 +120,12 @@ function replayProjection(spin) {
   }));
 }
 
-function assertMachineStats(state, spins) {
+function assertMachineStats(state, spins, globalSpinCount) {
   assert.deepEqual(state.stats, {
     spinCount: spins.length,
     jackpotCount: spins.filter((spin) => spin.jackpot).length,
-    bestMultiplier: Math.max(...spins.map((spin) => spin.multiplier))
+    bestMultiplier: Math.max(...spins.map((spin) => spin.multiplier)),
+    globalSpinCount
   });
 }
 
@@ -124,7 +136,10 @@ function settlementSnapshot(store, playerId) {
     `).get(playerId),
     spinCount: store.database.prepare(`
       SELECT COUNT(*) AS count FROM casino_spins WHERE player_id = ?
-    `).get(playerId).count
+    `).get(playerId).count,
+    globalSpinCount: store.database.prepare(`
+      SELECT spin_count FROM casino_global_stats WHERE id = 1
+    `).get().spin_count
   };
 }
 
@@ -207,12 +222,13 @@ test('machine histories, statistics, last bets, and selected spins stay isolated
     assert.deepEqual(thingState.lastBet, { currency: 'gold', wager: thingWager });
     assert.deepEqual(sporefallState.lastBet, { currency: 'gold', wager: sporefallWager });
     assert.deepEqual(lockboxState.lastBet, { currency: 'gold', wager: lockboxWager });
-    assertMachineStats(thingState, [thing]);
-    assertMachineStats(sporefallState, [sporefall]);
-    assertMachineStats(lockboxState, [lockbox]);
+    assertMachineStats(thingState, [thing], 3);
+    assertMachineStats(sporefallState, [sporefall], 3);
+    assertMachineStats(lockboxState, [lockbox], 3);
 
     const expectedCounts = new Map([
-      [THING_O_MATIC_KEY, 1], [BROMO_SPOREFALL_KEY, 1], [KINGS_LOCKBOX_KEY, 1]
+      [THING_O_MATIC_KEY, 1], [BROMO_SPOREFALL_KEY, 1], [KINGS_LOCKBOX_KEY, 1],
+      ['tzolkin-worldwheel-seven', 0]
     ]);
     for (const state of [thingState, sporefallState, lockboxState]) {
       assert.deepEqual(
@@ -247,6 +263,134 @@ test('machine histories, statistics, last bets, and selected spins stay isolated
     assert.deepEqual(replayProjection(reopenedSporefall), sporefallReplay);
     assert.deepEqual(replayProjection(reopenedLockbox), lockboxReplay);
   });
+
+test('counts every successful machine request globally and keeps the all-time total',
+  (context) => {
+    const fixture = storeFixture(context, 'minethings-casino-global-count-');
+    const first = addCasinoPlayer(fixture.store, 'Global Spinner One');
+    const second = fixture.store.addPlayer(createPlayer(
+      'Global Spinner Two', '', 'hash', catalog, 1_000, () => 0.5
+    ));
+    fixture.store.database.prepare('UPDATE players SET gold_units = ? WHERE id = ?')
+      .run(10_000 * GOLD_SCALE, second.id);
+
+    fixture.store.spinCasino(first.id, 'gold', 1, () => 0.5, 2_000);
+    fixture.store.spinCasinoMachine(
+      second.id, BROMO_SPOREFALL_KEY, 'gold', 1, () => 0.5, 3_000
+    );
+    assert.equal(fixture.store.casinoState(first.id).stats.globalSpinCount, 2);
+    assert.equal(fixture.store.casinoState(
+      second.id, null, KINGS_LOCKBOX_KEY
+    ).stats.globalSpinCount, 2);
+
+    fixture.store.database.prepare('DELETE FROM players WHERE id = ?').run(second.id);
+    assert.equal(fixture.store.database.prepare(`
+      SELECT COUNT(*) AS count FROM casino_spins
+    `).get().count, 1, 'the deleted miner ledger should follow the player');
+    assert.equal(fixture.store.casinoState(first.id).stats.globalSpinCount, 2,
+      'the house counter must retain spins whose player ledger no longer exists');
+  });
+
+test('backfills the global counter from historical machine ledgers', (context) => {
+  const fixture = storeFixture(context, 'minethings-casino-global-backfill-');
+  const player = addCasinoPlayer(fixture.store, 'Historical Spinner');
+  fixture.store.spinCasino(player.id, 'gold', 1, () => 0.5, 2_000);
+  fixture.store.database.exec(`
+    DROP TRIGGER casino_global_spin_count_after_insert;
+    DROP TABLE casino_global_stats;
+    DELETE FROM schema_migrations WHERE name = 'casino-global-spin-count-v1';
+  `);
+  fixture.store.close();
+  fixture.store = new SqliteStore(fixture.databaseFile);
+
+  assert.equal(fixture.store.casinoState(player.id).stats.globalSpinCount, 1);
+  const migration = fixture.store.database.prepare(`
+    SELECT details_json FROM schema_migrations
+    WHERE name = 'casino-global-spin-count-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(migration.details_json), {
+    historicalSpins: 1, spinCount: 1
+  });
+});
+
+test('offers exactly one local cabinet per region and rejects remote regional play', (context) => {
+  const fixture = storeFixture(context, 'minethings-casino-regional-floor-');
+  const player = addCasinoPlayer(fixture.store, 'Regional Spinner');
+  fixture.store.ensureWorldMaps(1_000);
+  const houseKeys = [THING_O_MATIC_KEY, BROMO_SPOREFALL_KEY, KINGS_LOCKBOX_KEY];
+  const setRegion = fixture.store.database.prepare(`
+    UPDATE players SET city_id = (SELECT capital_city_id FROM world_maps WHERE id = ?)
+    WHERE id = ?
+  `);
+
+  for (const local of REGIONAL_CASINO_MACHINES) {
+    setRegion.run(local.regionId, player.id);
+    const floor = fixture.store.casinoState(player.id);
+    assert.deepEqual(floor.machines.map((machine) => machine.key),
+      [...houseKeys, local.key]);
+    const localState = fixture.store.casinoMachineState(player.id, local.key);
+    assert.equal(localState.machine.regionId, local.regionId);
+    assert.equal(localState.machine.regionName, local.regionName);
+    assert.equal(localState.rules.gridSize,
+      local.rules.gridColumns * local.rules.gridRows);
+    const remote = REGIONAL_CASINO_MACHINES.find(
+      (machine) => machine.regionId !== local.regionId
+    );
+    assert.throws(() => fixture.store.casinoState(player.id, null, remote.key),
+      /only operates in/iu);
+  }
+
+  const aso = REGIONAL_CASINO_MACHINES.find((machine) => machine.regionId === 1);
+  setRegion.run(aso.regionId, player.id);
+  const spin = fixture.store.spinCasinoMachine(
+    player.id, aso.key, 'gold', 1, () => 0.5, 5_000
+  );
+  assert.equal(spin.machineKey, aso.key);
+  assert.equal(spin.grid.length, aso.rules.gridSize);
+
+  setRegion.run(2, player.id);
+  const before = settlementSnapshot(fixture.store, player.id);
+  let randomCalls = 0;
+  assert.throws(() => fixture.store.spinCasinoMachine(
+    player.id, aso.key, 'gold', 1,
+    () => { randomCalls += 1; return 0.5; }, 6_000
+  ), /only operates in Aso/iu);
+  assert.equal(randomCalls, 0);
+  assert.deepEqual(settlementSnapshot(fixture.store, player.id), before);
+
+  fixture.store.close();
+  fixture.store = new SqliteStore(fixture.databaseFile);
+  assert.ok(fixture.store.database.prepare(`
+    SELECT 1 FROM schema_migrations WHERE name = 'casino-regional-circuit-v2'
+  `).get());
+  for (const machine of REGIONAL_CASINO_MACHINES) {
+    assert.ok(fixture.store.database.prepare(`
+      SELECT 1 FROM catalog_settings WHERE key = ?
+    `).get(machine.rulesSettingKey));
+  }
+});
+
+test('upgrades an existing regional casino circuit to the larger mixed-art cabinets', (context) => {
+  const fixture = storeFixture(context, 'minethings-casino-regional-v2-');
+  const machine = REGIONAL_CASINO_MACHINES[0];
+  fixture.store.seedCatalog(catalog);
+  fixture.store.database.prepare(`
+    UPDATE catalog_settings SET value_json = '{}' WHERE key = ?
+  `).run(machine.rulesSettingKey);
+  fixture.store.database.prepare(`
+    DELETE FROM schema_migrations WHERE name = 'casino-regional-circuit-v2'
+  `).run();
+  fixture.store.close();
+  fixture.store = new SqliteStore(fixture.databaseFile);
+
+  const migrated = JSON.parse(fixture.store.database.prepare(`
+    SELECT value_json FROM catalog_settings WHERE key = ?
+  `).get(machine.rulesSettingKey).value_json);
+  assert.deepEqual(migrated, machine.rules);
+  assert.ok(fixture.store.database.prepare(`
+    SELECT 1 FROM schema_migrations WHERE name = 'casino-regional-circuit-v2'
+  `).get());
+});
 
 test('unknown machines and failed random sources roll back the whole settlement', (context) => {
   const fixture = storeFixture(context, 'minethings-casino-machine-rollback-');

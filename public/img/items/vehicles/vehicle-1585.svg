@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Train Carriage</title>
+  <desc id="desc">A streamlined high-speed freight carriage with an armored cargo door, twin bogies, bright speed stripe, rails, and couplers.</desc>
+  <path d="M13 39 24 27h81l11 13v50H13z" fill="#d8ded9" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M20 40 29 32h71l9 8" fill="none" stroke="#f79721" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 48h25v19H21zM82 48h25v19H82z" fill="#8ec2c8" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M50 43h28v43H50z" fill="#bd732d" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m53 47 22 35m0-35L53 82" fill="none" stroke="#f1d28a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M14 73h101v17H14z" fill="#566360" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M17 74h96" fill="none" stroke="#e32121" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#303332" stroke="#292d29" stroke-width="4">
+    <circle cx="31" cy="94" r="10"/><circle cx="45" cy="94" r="10"/><circle cx="83" cy="94" r="10"/><circle cx="97" cy="94" r="10"/>
+  </g>
+  <g fill="#d8ded9">
+    <circle cx="31" cy="94" r="3"/><circle cx="45" cy="94" r="3"/><circle cx="83" cy="94" r="3"/><circle cx="97" cy="94" r="3"/>
+  </g>
+  <path d="M7 80h7m101 0h7M8 109h112" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round"/>
+  <path d="m16 109 9-8m18 8 9-8m24 8 9-8m18 8 9-8" fill="none" stroke="#8d5a24" stroke-width="4" stroke-linecap="round"/>
+</svg>

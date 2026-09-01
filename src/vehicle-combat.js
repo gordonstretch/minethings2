@@ -33,8 +33,12 @@ export function compatibleCargoAllowed({
   routeType, aircraftType = null, vehicleRarity,
   itemId = null, itemRarity, mineTypeId = null,
   isVehicle = false, isAmmoBox = false, isWeapon = false,
-  isCannonball = false, isBomb = false
+  isCannonball = false, isBomb = false, cargoPolicy = 'standard'
 }, rules) {
+  const policy = cargoPolicy ?? 'standard';
+  if (!['standard', 'oil-only', 'any-item'].includes(policy)) {
+    throw new Error(`Unknown vehicle cargo policy ${policy}.`);
+  }
   const routeTypes = rules?.route_type_ids;
   const aircraftRoles = rules?.aircraft_role_ids;
   if (!routeTypes || !aircraftRoles || !Array.isArray(rules?.fishing_mine_type_ids)
@@ -42,6 +46,14 @@ export function compatibleCargoAllowed({
     || !Array.isArray(rules?.oil_cargo_vehicle_rarities)) {
     throw new Error('Missing vehicle role or fishing cargo mappings.');
   }
+  if (policy === 'oil-only') {
+    const oilItemId = Number(rules.oil_item_id);
+    if (!Number.isInteger(oilItemId) || oilItemId <= 0) {
+      throw new Error('Missing oil cargo item mapping.');
+    }
+    return Number(itemId) === oilItemId;
+  }
+  if (policy === 'any-item') return Number.isInteger(Number(itemId)) && Number(itemId) > 0;
   if (Number(routeType) === Number(routeTypes.air)) {
     return Number(aircraftType) === Number(aircraftRoles.bomber) && isBomb;
   }

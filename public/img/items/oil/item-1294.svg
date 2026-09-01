@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">Oil</title>
   <desc id="desc">A heavy industrial barrel of glossy black Oil with bright hoops, a hazard plate, and a separate liquid droplet.</desc>
-  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 31v65q0 13 32 13t32-13V31z" fill="#ad6824"/><ellipse cx="50" cy="31" rx="32" ry="13" fill="#e2a33d"/><ellipse cx="50" cy="31" rx="21" ry="7" fill="#242927"/><path d="M18 51h64M18 88h64" stroke="#713e20"/><path d="M31 48v42" stroke="#e9bd63"/><path d="M91 97q0-18 17-40 17 22 17 40 0 15-17 15T91 97z" fill="#252a28"/><path d="M102 96q0-9 7-19" fill="none" stroke="#657169"/><path d="m91 37 10 10-10 10-10-10z" fill="#f2c452"/></g>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 31v65q0 13 32 13t32-13V31z" fill="#ad6824"/><ellipse cx="50" cy="31" rx="32" ry="13" fill="#e2a33d"/><ellipse cx="50" cy="31" rx="21" ry="7" fill="#242927"/><path d="M18 51h64M18 88h64" stroke="#713e20"/><path d="M31 48v42" stroke="#e9bd63"/><path d="M91 97q0-18 17-40 17 22 17 40 0 15-17 15T91 97z" fill="#252a28" stroke="#d7a84c"/><path d="M102 96q0-9 7-19" fill="none" stroke="#8c9489"/><path d="m91 37 10 10-10 10-10-10z" fill="#f2c452"/></g>
 </svg>

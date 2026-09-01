@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">Carbon Drive Shaft</title>
   <desc id="desc">A carbon vehicle modification depicting a balanced drive shaft with universal joints and reinforced end flanges.</desc>
-  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-24 64 64)"><path d="M18 53h92v22H18z" fill="#2d3437"/><path d="M33 46v36m62-36v36" stroke="#151a1c"/><path d="M9 42h22v44H9zm88 0h22v44H97z" fill="#151a1c"/><path d="M13 48 27 80m-14 0 14-32m74 0 14 32m-14 0 14-32" stroke="#f79721"/><path d="M39 58h50" stroke="#737f81"/></g></g>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-24 64 64)"><path d="M18 53h92v22H18z" fill="#647174"/><path d="M33 46v36m62-36v36" stroke="#30383a"/><path d="M9 42h22v44H9zm88 0h22v44H97z" fill="#30383a"/><path d="M13 48 27 80m-14 0 14-32m74 0 14 32m-14 0 14-32" stroke="#f79721"/><path d="M39 58h50" stroke="#bac4c1"/></g></g>
 </svg>

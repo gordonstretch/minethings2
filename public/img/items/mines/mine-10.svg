@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Gadgets Mine</title>
+  <desc id="desc">A field gadget with an antenna, dial, and status light.</desc>
+  <g transform="scale(2)"><path d="m39 14 9-9M43 10l6 6" stroke="#202420" stroke-width="4" stroke-linecap="round"/><rect x="12" y="14" width="40" height="44" rx="7" fill="#315a64" stroke="#202420" stroke-width="4.5"/><circle cx="32" cy="35" r="12" fill="#eadfc8" stroke="#202420" stroke-width="4"/><path d="m32 35 7-6" stroke="#c9573d" stroke-width="4" stroke-linecap="round"/><circle cx="21" cy="51" r="3" fill="#ffd36a"/><path d="M30 51h13" stroke="#ffd36a" stroke-width="3.5" stroke-linecap="round"/></g>
+</svg>

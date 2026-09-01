@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
 import {
-  MAP_MINE_TYPE_IDS, mineIconPath, mineMapIconPath, OIL_FIELD_MAP_ICON_PATH,
-  STARTER_MINE_TYPE_IDS
+  MAP_MINE_TYPE_IDS, mineIconPath, mineMapIconPath, mineShopIconPath,
+  OIL_FIELD_MAP_ICON_PATH, SHOP_MINE_TYPE_IDS, STARTER_MINE_TYPE_IDS
 } from '../src/mine-icons.js';
 import { createApp } from '../src/server.js';
 import { SqliteStore } from '../src/store.js';
@@ -15,9 +16,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ASSET_DIRECTORY = path.join(ROOT, 'public', 'img', 'items', 'mines');
 const MAP_ASSET_DIRECTORY = path.join(ROOT, 'public', 'img', 'map-icons');
 
-test('starter-pack mine types use their dedicated SVG artwork', () => {
+test('mine shop path helpers expose the exact supported mine-type allowlists', () => {
+  const expectedShopMineTypeIds = [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21, 24, 25];
   assert.deepEqual(STARTER_MINE_TYPE_IDS, [1, 4, 5]);
+  assert.deepEqual(SHOP_MINE_TYPE_IDS, expectedShopMineTypeIds);
   assert.equal(Object.isFrozen(STARTER_MINE_TYPE_IDS), true);
+  assert.equal(Object.isFrozen(SHOP_MINE_TYPE_IDS), true);
   assert.equal(mineIconPath('1'), '/node/mines/mine-1.svg');
   assert.equal(mineIconPath(4), '/node/mines/mine-4.svg');
   assert.equal(mineIconPath(5), '/node/mines/mine-5.svg');
@@ -25,21 +29,36 @@ test('starter-pack mine types use their dedicated SVG artwork', () => {
     assert.equal(mineIconPath(invalid), null, String(invalid));
   }
 
-  const catalog = loadLegacyCatalog();
-  for (const mineTypeId of STARTER_MINE_TYPE_IDS) {
-    assert.equal(catalog.mineTypes.find((mineType) => mineType.id === mineTypeId)?.icon,
-      mineIconPath(mineTypeId));
+  for (const mineTypeId of expectedShopMineTypeIds) {
+    assert.equal(mineShopIconPath(String(mineTypeId)),
+      `/node/mines/mine-${mineTypeId}.svg`);
   }
-  assert.equal(catalog.mineTypes.find((mineType) => mineType.id === 6)?.icon,
-    '/legacy/img/icons/M6L6.png');
+  for (const invalid of [
+    null, undefined, '', 0, 2, 3, 15, 16, 17, 18, 19, 20, 22, 23,
+    26, 30, 31, -1, 1.5, NaN, Infinity, {}, [], 'mine'
+  ]) {
+    assert.equal(mineShopIconPath(invalid), null, String(invalid));
+  }
+
+  const catalog = loadLegacyCatalog();
+  for (const mineTypeId of expectedShopMineTypeIds) {
+    assert.equal(catalog.mineTypes.find((mineType) => mineType.id === mineTypeId)?.icon,
+      mineShopIconPath(mineTypeId));
+  }
+  for (const mineType of catalog.mineTypes.filter((candidate) => candidate.creditCost > 0)) {
+    assert.doesNotMatch(mineType.icon,
+      /^\/legacy\/img\/icons\/M\d+L\d+\.(?:gif|png)$/u, mineType.name);
+  }
 });
 
-test('starter-pack mine SVGs are accessible, safe, and geometrically distinct', () => {
+test('all dedicated mine shop SVGs are exact, accessible, safe, and geometrically distinct', () => {
   assert.deepEqual(fs.readdirSync(ASSET_DIRECTORY).sort(),
-    STARTER_MINE_TYPE_IDS.map((mineTypeId) => `mine-${mineTypeId}.svg`));
+    SHOP_MINE_TYPE_IDS.map((mineTypeId) => `mine-${mineTypeId}.svg`).sort());
+  const catalog = loadLegacyCatalog();
+  const names = new Map(catalog.mineTypes.map((mineType) =>
+    [mineType.id, `${mineType.name} Mine`]));
   const signatures = new Set();
-  const names = new Map([[1, 'Starter Mine'], [4, 'Equipment Mine'], [5, 'Vehicles Mine']]);
-  for (const mineTypeId of STARTER_MINE_TYPE_IDS) {
+  for (const mineTypeId of SHOP_MINE_TYPE_IDS) {
     const filename = path.join(ASSET_DIRECTORY, `mine-${mineTypeId}.svg`);
     const svg = fs.readFileSync(filename, 'utf8');
     assert.match(svg, /^<svg\b[^>]*\bxmlns="http:\/\/www\.w3\.org\/2000\/svg"/u, filename);
@@ -48,15 +67,19 @@ test('starter-pack mine SVGs are accessible, safe, and geometrically distinct', 
     assert.match(svg, /\baria-labelledby="title desc"/u, filename);
     assert.ok(svg.includes(`<title id="title">${names.get(mineTypeId)}</title>`), filename);
     assert.equal((svg.match(/<desc\b/gu) ?? []).length, 1, filename);
-    assert.doesNotMatch(svg, /<!DOCTYPE|<!ENTITY|<\s*(?:script|foreignObject|image)\b/iu, filename);
+    assert.doesNotMatch(svg,
+      /<!DOCTYPE|<!ENTITY|<\s*(?:script|foreignObject|iframe|object|embed|image|text)\b/iu,
+      filename);
     assert.doesNotMatch(svg, /\b(?:href|xlink:href|on[a-z]+)\s*=/iu, filename);
+    assert.doesNotMatch(svg, /(?:javascript|data):/iu, filename);
+    assert.match(svg, /<\/svg>\s*$/u, filename);
     signatures.add(svg.replace(/<title\b[^>]*>[^]*?<\/title>/gu, '')
       .replace(/<desc\b[^>]*>[^]*?<\/desc>/gu, '').replace(/\s+/gu, ' ').trim());
   }
-  assert.equal(signatures.size, STARTER_MINE_TYPE_IDS.length);
+  assert.equal(signatures.size, SHOP_MINE_TYPE_IDS.length);
 });
 
-test('serves only the dedicated starter-pack mine SVG routes', async (context) => {
+test('serves only the dedicated mine shop SVG routes for GET and HEAD', async (context) => {
   const store = new SqliteStore(':memory:');
   store.seedCatalog(loadLegacyCatalog());
   const server = createApp({ store, backgroundMaintenance: false });
@@ -67,14 +90,88 @@ test('serves only the dedicated starter-pack mine SVG routes', async (context) =
     store.close();
   });
   const base = `http://127.0.0.1:${server.address().port}`;
-  for (const mineTypeId of STARTER_MINE_TYPE_IDS) {
-    const response = await fetch(`${base}${mineIconPath(mineTypeId)}`);
+  for (const mineTypeId of SHOP_MINE_TYPE_IDS) {
+    const response = await fetch(`${base}${mineShopIconPath(mineTypeId)}`);
     assert.equal(response.status, 200, String(mineTypeId));
     assert.match(response.headers.get('content-type'), /^image\/svg\+xml\b/u);
     assert.ok((await response.text()).includes(`<title id="title">`));
+
+    const head = await fetch(`${base}${mineShopIconPath(mineTypeId)}`, { method: 'HEAD' });
+    assert.equal(head.status, 200, `HEAD ${mineTypeId}`);
+    assert.match(head.headers.get('content-type'), /^image\/svg\+xml\b/u);
+    assert.ok(Number(head.headers.get('content-length')) > 0, `HEAD ${mineTypeId} length`);
+    assert.equal(await head.text(), '', `HEAD ${mineTypeId} body`);
   }
-  assert.equal((await fetch(`${base}/node/mines/mine-6.svg`)).status, 404);
-  assert.equal((await fetch(`${base}/node/mines/mine-anything.svg`)).status, 404);
+  for (const invalid of [
+    'mine-2.svg', 'mine-3.svg', 'mine-15.svg', 'mine-20.svg', 'mine-22.svg',
+    'mine-23.svg', 'mine-26.svg', 'mine-31.svg', 'mine-01.svg', 'mine-anything.svg'
+  ]) {
+    assert.equal((await fetch(`${base}/node/mines/${invalid}`)).status, 404, invalid);
+  }
+});
+
+test('legacy mine shop icons migrate once while custom catalog artwork survives', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-mine-shop-icons-'));
+  const databaseFile = path.join(directory, 'catalog.sqlite');
+  const openStores = new Set();
+  const openStore = () => {
+    const store = new SqliteStore(databaseFile);
+    openStores.add(store);
+    return store;
+  };
+  const closeStore = (store) => {
+    store.close();
+    openStores.delete(store);
+  };
+  context.after(() => {
+    for (const store of openStores) store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+
+  let store = openStore();
+  store.seedCatalog(loadLegacyCatalog());
+  const setIcon = store.database.prepare(
+    'UPDATE catalog_mine_types SET icon = ? WHERE id = ?'
+  );
+  for (const [index, mineTypeId] of SHOP_MINE_TYPE_IDS.entries()) {
+    const extension = index % 2 === 0 ? 'png' : 'gif';
+    setIcon.run(`/legacy/img/icons/M${mineTypeId}L6.${extension}`, mineTypeId);
+  }
+  const customMineTypeId = 25;
+  const customIcon = '/custom/machines-mine.svg';
+  setIcon.run(customIcon, customMineTypeId);
+  closeStore(store);
+
+  store = openStore();
+  for (const mineTypeId of SHOP_MINE_TYPE_IDS) {
+    const icon = store.database.prepare(
+      'SELECT icon FROM catalog_mine_types WHERE id = ?'
+    ).get(mineTypeId).icon;
+    assert.equal(icon, mineTypeId === customMineTypeId
+      ? customIcon : mineShopIconPath(mineTypeId), String(mineTypeId));
+  }
+  const migration = { ...store.database.prepare(`
+    SELECT applied_at, details_json FROM schema_migrations
+    WHERE name = 'mine-shop-svg-icons-v1'
+  `).get() };
+  assert.deepEqual(JSON.parse(migration.details_json), {
+    icons: SHOP_MINE_TYPE_IDS.length,
+    changes: SHOP_MINE_TYPE_IDS.length - 1
+  });
+  closeStore(store);
+
+  store = openStore();
+  assert.deepEqual({ ...store.database.prepare(`
+    SELECT applied_at, details_json FROM schema_migrations
+    WHERE name = 'mine-shop-svg-icons-v1'
+  `).get() }, migration);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM schema_migrations
+    WHERE name = 'mine-shop-svg-icons-v1'
+  `).get().count, 1);
+  assert.equal(store.database.prepare(
+    'SELECT icon FROM catalog_mine_types WHERE id = ?'
+  ).get(customMineTypeId).icon, customIcon);
 });
 
 test('defines one normalized map symbol for every live mine type', () => {

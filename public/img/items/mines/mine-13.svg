@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Cannons Mine</title>
+  <desc id="desc">A squat cannon on a large timber carriage wheel.</desc>
+  <g transform="scale(2)"><path d="M9 18h38l8 9-8 9H9z" fill="#aeb9b6" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><path d="M17 35 12 49h36l-8-14" fill="#9b6338" stroke="#202420" stroke-width="4.5" stroke-linejoin="round"/><circle cx="35" cy="48" r="10" fill="#f39a21" stroke="#202420" stroke-width="4.5"/><circle cx="35" cy="48" r="3" fill="#202420"/><path d="M5 23h7" stroke="#202420" stroke-width="7" stroke-linecap="round"/></g>
+</svg>

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">Tungsten 90mm Gun</title>
   <desc id="desc">A tungsten vehicle modification depicting a heavy long-barrelled cannon with a large breech, recoil block, and muzzle brake.</desc>
-  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 80h79l-8 24H29z" fill="#282f37"/><ellipse cx="58" cy="80" rx="35" ry="13" fill="#505862"/><path d="M35 69 45 45h34l13 24z" fill="#505862"/><path d="M67 42h52v15H67z" fill="#282f37"/><path d="M113 36h11v27h-11z" fill="#a64891"/><path d="M43 45h33l-6-17H50z" fill="#aab2b5"/><circle cx="58" cy="78" r="7" fill="#a64891"/></g>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 91h79l-8 22H27z" fill="#282f37"/><ellipse cx="54" cy="89" rx="34" ry="12" fill="#505862"/><path d="M31 83 43 58h34l12 25z" fill="#505862"/><path d="m64 59 49-35 9 13-50 35z" fill="#282f37"/><path d="m109 19 15-5 4 9-13 8z" fill="#a64891"/><path d="M43 58h31l-8-16H50z" fill="#aab2b5"/><circle cx="54" cy="87" r="7" fill="#a64891"/></g>
 </svg>

@@ -15,8 +15,8 @@ test('parses MySQL values including escaped apostrophes and nulls', () => {
 
 test('loads the playable catalog from the legacy dump', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(catalog.items.length, 1550);
-  assert.equal(catalog.discoverableItems.length, 848);
+  assert.equal(catalog.items.length, 1554);
+  assert.equal(catalog.discoverableItems.length, 844);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
   assert.deepEqual(catalog.mineTypes.filter((type) => [1, 4, 5].includes(type.id))
@@ -102,10 +102,17 @@ test('loads the playable catalog from the legacy dump', () => {
   [1, 2, 3, 4, 5, 6]);
   assert.throws(() => randomDwarfTier(undefined), /Missing catalog Dwarf tier data/);
   assert.equal(catalog.melds.length, 221);
-  assert.equal(catalog.meldRequirements.length, 786);
+  assert.equal(catalog.meldRequirements.length, 782);
   assert.equal(catalog.gadgets.length, 13);
   assert.equal(catalog.gadgetItems.length, 38);
-  assert.equal(catalog.factoryActions.length, 18);
+  assert.equal(catalog.factoryActions.length, 20);
+  assert.deepEqual(catalog.settings.factory_worker_bot_tiers.map((tier) => ({
+    id: tier.id, cph: tier.cph, costGold: tier.costGold
+  })), [
+    { id: 1, cph: 25, costGold: 1000 },
+    { id: 2, cph: 100, costGold: 5000 },
+    { id: 3, cph: 400, costGold: 25000 }
+  ]);
   assert.equal(catalog.machineTypes.length, 33);
   assert.equal(catalog.machines.length, 46);
   assert.equal(catalog.machineById.get(6).type, 'pump');
@@ -115,9 +122,9 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.avatarElements.length, 156);
   assert.equal(catalog.avatarElementByItemId.get(avatar.itemId).id, avatar.id);
   assert.equal(catalog.avatarElementTypeById.get(avatar.typeId).name, 'Borders');
-  assert.equal(catalog.stones.length, 64);
+  assert.equal(catalog.stones.length, 66);
   assert.equal(catalog.stones[0].name, 'Chatted');
-  assert.equal(catalog.stones.at(-1).name, 'Constructed');
+  assert.equal(catalog.stones.at(-1).name, 'Homed');
   assert.equal(catalog.stones.find((stone) => stone.name === 'Jackpotted').rarity, 6);
 
   const shrooms = catalog.items.filter((item) =>
@@ -146,8 +153,10 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(wood.length, 30);
   assert.deepEqual([1, 2, 3, 4, 5, 6].map((rarity) =>
     wood.filter((item) => item.rarity === rarity).length), [5, 5, 5, 5, 5, 5]);
-  assert.ok(wood.every((item) => item.canFind && item.hasLargeImage
-    && item.description.length > 20));
+  assert.ok(wood.every((item) => item.hasLargeImage && item.description.length > 20));
+  assert.deepEqual(wood.filter((item) => item.rarity === 1 && item.canFind)
+    .map((item) => item.id), [WOOD_CATALOG.screwItemId]);
+  assert.ok(wood.filter((item) => item.rarity > 1).every((item) => item.canFind));
   assert.ok(wood.filter((item) => item.rarity >= 5).every((item) =>
     /magic|magical/u.test(item.description)));
   assert.equal(catalog.byId.get(WOOD_CATALOG.screwItemId).name, 'Wood Screws');
@@ -159,6 +168,9 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.ok(woodMelds.every((meld) => meld.requirements.some((requirement) =>
     requirement.itemId === WOOD_CATALOG.boltItemId
       && requirement.count >= 3 && requirement.count <= 8)));
+  assert.ok(woodMelds.every((meld) => meld.requirements.every((requirement) =>
+    requirement.itemId === WOOD_CATALOG.boltItemId
+      || catalog.byId.get(requirement.itemId)?.canFind)));
 
   const wisdom = catalog.items.filter((item) =>
     item.mineTypeId === WISDOM_CATALOG.mineType.id);

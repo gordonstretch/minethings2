@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Machines Mine</title>
+  <desc id="desc">An industrial flywheel driving a stout piston lever.</desc>
+  <g transform="scale(2)"><circle cx="25" cy="38" r="18" fill="#f39a21" stroke="#202420" stroke-width="4.5"/><circle cx="25" cy="38" r="6" fill="#eadfc8" stroke="#202420" stroke-width="3.5"/><path d="M25 20v12m0 12v12M7 38h12m12 0h12m-31-13 8 8m10 10 8 8m0-26-8 8m-10 10-8 8" stroke="#202420" stroke-width="3" stroke-linecap="round"/><path d="m31 31 16-19 8 7-17 19" fill="#315a64" stroke="#202420" stroke-width="4" stroke-linejoin="round"/><path d="M45 9h13v13H45z" fill="#aeb9b6" stroke="#202420" stroke-width="4"/></g>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Oil Tanker</title>
+  <desc id="desc">A heavily plated oil tanker with a vast riveted deck tank, armored double hull, pumping pipes, and an aft bridge.</desc>
+  <path d="M8 75h112l-8 22-15 14H29L15 99z" fill="#45504f" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M15 88h97l-6 14H25z" fill="#252a28" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M20 79h94M30 102h69" fill="none" stroke="#f79721" stroke-width="5" stroke-linecap="round"/>
+  <path d="M27 42c0-8 7-14 15-14h43c9 0 16 6 16 14v31H27z" fill="#d6a337" stroke="#292d29" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M41 29v44M87 29v44" fill="none" stroke="#8d5a24" stroke-width="4"/>
+  <path d="M34 50h60" fill="none" stroke="#f1d28a" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#f1d28a" stroke="#292d29" stroke-width="2">
+    <circle cx="35" cy="36" r="2"/><circle cx="93" cy="36" r="2"/><circle cx="35" cy="66" r="2"/><circle cx="93" cy="66" r="2"/>
+  </g>
+  <path d="M64 39c-7 10-10 14-10 19a10 10 0 0 0 20 0c0-5-3-9-10-19z" fill="#292d29"/>
+  <path d="M98 72V34h17v38" fill="#d9e0d8" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M102 40h9v12h-9z" fill="#8ec2c8" stroke="#292d29" stroke-width="3"/>
+  <path d="M107 34V22h7v12M18 73V60h9M18 60h10" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 62v-9h13v-8" fill="none" stroke="#e32121" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

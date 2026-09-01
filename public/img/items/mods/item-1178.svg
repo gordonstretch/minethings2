@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">Carbon Sway Bars</title>
   <desc id="desc">A carbon vehicle modification depicting a bent anti-roll bar with paired drop links, pivots, and mounting bushings.</desc>
-  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 25v32q0 15 15 15h62q15 0 15-15V25" fill="none" stroke="#2d3437" stroke-width="14"/><path d="M25 30v25q0 8 8 8h62q8 0 8-8V30" fill="none" stroke="#737f81"/><path d="M18 67v38m92-38v38" stroke="#151a1c" stroke-width="12"/><path d="M9 105h28m54 0h28" stroke="#f79721"/><circle cx="18" cy="76" r="8" fill="#f79721"/><circle cx="110" cy="76" r="8" fill="#f79721"/></g>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 25v32q0 15 15 15h62q15 0 15-15V25" fill="none" stroke="#647174" stroke-width="14"/><path d="M25 30v25q0 8 8 8h62q8 0 8-8V30" fill="none" stroke="#bac4c1"/><path d="M18 67v38m92-38v38" stroke="#30383a" stroke-width="12"/><path d="M9 105h28m54 0h28" stroke="#f79721"/><circle cx="18" cy="76" r="8" fill="#f79721"/><circle cx="110" cy="76" r="8" fill="#f79721"/></g>
 </svg>

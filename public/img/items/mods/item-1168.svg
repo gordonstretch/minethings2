@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">Carbon Gun Rack</title>
   <desc id="desc">A carbon vehicle modification depicting a braced weapons rack securing two long guns with clamps and a lower tray.</desc>
-  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20h18v90H20zm70 0h18v90H90zM19 86h90v22H19z" fill="#2d3437"/><path d="m42 93 41-69 11 7-39 65m-21-3 22-72 13 4-22 73" fill="#151a1c"/><path d="M15 49h28m41 0h29M15 73h28m41 0h29" stroke="#f79721"/><path d="M27 27v76m70-76v76" stroke="#737f81"/></g>
+  <g stroke="#292d29" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20h18v90H20zm70 0h18v90H90zM19 86h90v22H19z" fill="#647174"/><path d="m42 93 41-69 11 7-39 65m-21-3 22-72 13 4-22 73" fill="#30383a"/><path d="M15 49h28m41 0h29M15 73h28m41 0h29" stroke="#f79721"/><path d="M27 27v76m70-76v76" stroke="#bac4c1"/></g>
 </svg>

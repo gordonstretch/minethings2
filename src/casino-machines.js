@@ -5,10 +5,236 @@ const MAXIMUM_CASCADES = 12;
 const MAXIMUM_LOCKBOX_RESPINS = 24;
 const MAXIMUM_HOLD_MS = 10_000;
 const THING_O_MATIC_HOLD_MS = 3_000;
+const MAXIMUM_REGIONAL_GRID_SIZE = 25;
+const MAXIMUM_REGIONAL_PATTERNS = 24;
 
 export const THING_O_MATIC_KEY = 'thing-o-matic';
 export const BROMO_SPOREFALL_KEY = 'bromo-sporefall';
 export const KINGS_LOCKBOX_KEY = 'kings-lockbox';
+
+const REGIONAL_SYMBOL_CURVES = Object.freeze({
+  6: Object.freeze({
+    weights: Object.freeze([48, 25, 13, 7, 4, 3]),
+    payouts: Object.freeze([1, 2, 4, 8, 16, 32])
+  }),
+  7: Object.freeze({
+    weights: Object.freeze([52, 29, 16, 9, 5, 3, 1]),
+    payouts: Object.freeze([1, 2, 3, 5, 8, 16, 40])
+  }),
+  8: Object.freeze({
+    weights: Object.freeze([55, 32, 19, 11, 7, 4, 2, 1]),
+    payouts: Object.freeze([1, 2, 3, 5, 8, 13, 21, 42])
+  })
+});
+
+function regionalPatternRules({
+  symbolItemIds, gridColumns, gridRows, winPatterns, jackpotBonusMultiplier
+}) {
+  const curve = REGIONAL_SYMBOL_CURVES[symbolItemIds.length];
+  if (!curve) throw new Error('Regional casino cabinets need six, seven, or eight symbols.');
+  return deepFreeze({
+    version: 2,
+    symbolItemIds: [...symbolItemIds],
+    symbolWeightsByItemId: Object.fromEntries(symbolItemIds.map(
+      (itemId, index) => [itemId, curve.weights[index]]
+    )),
+    payoutMultipliersByItemId: Object.fromEntries(symbolItemIds.map(
+      (itemId, index) => [itemId, curve.payouts[index]]
+    )),
+    gridColumns,
+    gridRows,
+    gridSize: gridColumns * gridRows,
+    winPatterns,
+    jackpotItemId: symbolItemIds.at(-1),
+    jackpotBonusMultiplier,
+    jackpotChanceDenominator: 100000,
+    holdMs: 650,
+    minimumGoldWager: 1,
+    maximumGoldWager: 1000,
+    minimumCryptoWager: 1,
+    maximumCryptoWager: 1000,
+    historyLimit: 20
+  });
+}
+
+const REGIONAL_MACHINE_BLUEPRINTS = [
+  {
+    key: 'cinderwake-fuse-five', name: 'Cinderwake Powder Line',
+    regionId: 1, regionName: 'Aso', regionSlug: 'aso',
+    rules: regionalPatternRules({
+      symbolItemIds: [277, 162, 167, 172, 177, 182], gridColumns: 6, gridRows: 2,
+      winPatterns: [
+        { name: 'Upper short fuse', cells: [0, 1, 2], factor: 1 },
+        { name: 'Upper long fuse', cells: [3, 4, 5], factor: 1 },
+        { name: 'Lower short fuse', cells: [6, 7, 8], factor: 1 },
+        { name: 'Lower long fuse', cells: [9, 10, 11], factor: 1 },
+        { name: 'Left magazine', cells: [0, 1, 6, 7], factor: 3 },
+        { name: 'Centre magazine', cells: [2, 3, 8, 9], factor: 3 },
+        { name: 'Right magazine', cells: [4, 5, 10, 11], factor: 3 },
+        { name: 'Everything goes up', cells: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], factor: 12 }
+      ],
+      jackpotBonusMultiplier: 750
+    })
+  },
+  {
+    key: 'ashfall-spore-ring', name: 'Ashfall Spore Ring',
+    regionId: 2, regionName: 'Bromo', regionSlug: 'bromo',
+    rules: regionalPatternRules({
+      symbolItemIds: [1434, 207, 312, 1437, 328, 1438, 1439], gridColumns: 5, gridRows: 4,
+      winPatterns: [
+        { name: 'Canopy', cells: [0, 1, 2, 3, 4], factor: 5 },
+        { name: 'High garden', cells: [5, 6, 7, 8, 9], factor: 5 },
+        { name: 'Low garden', cells: [10, 11, 12, 13, 14], factor: 5 },
+        { name: 'Root bed', cells: [15, 16, 17, 18, 19], factor: 5 },
+        { name: 'First rain', cells: [0, 5, 10, 15], factor: 3 },
+        { name: 'Second rain', cells: [1, 6, 11, 16], factor: 3 },
+        { name: 'Third rain', cells: [2, 7, 12, 17], factor: 3 },
+        { name: 'Fourth rain', cells: [3, 8, 13, 18], factor: 3 },
+        { name: 'Fifth rain', cells: [4, 9, 14, 19], factor: 3 },
+        { name: 'Falling spores', cells: [0, 6, 12, 18], factor: 4 },
+        { name: 'Rising spores', cells: [4, 8, 12, 16], factor: 4 },
+        { name: 'Four winds', cells: [0, 4, 15, 19], factor: 6 },
+        { name: 'Taproot', cells: [7, 11, 12, 13, 17], factor: 5 }
+      ],
+      jackpotBonusMultiplier: 900
+    })
+  },
+  {
+    key: 'stormcrag-timber-twins', name: 'Stormcrag Thunder Rack',
+    regionId: 3, regionName: 'Calbuco', regionSlug: 'calbuco',
+    rules: regionalPatternRules({
+      symbolItemIds: [1468, 151, 1474, 233, 1484, 1489], gridColumns: 6, gridRows: 3,
+      winPatterns: [
+        { name: 'Post one', cells: [0, 6, 12], factor: 2 },
+        { name: 'Post two', cells: [1, 7, 13], factor: 2 },
+        { name: 'Post three', cells: [2, 8, 14], factor: 2 },
+        { name: 'Post four', cells: [3, 9, 15], factor: 2 },
+        { name: 'Post five', cells: [4, 10, 16], factor: 2 },
+        { name: 'Post six', cells: [5, 11, 17], factor: 2 },
+        { name: 'Cloud beam', cells: [0, 1, 2, 3, 4, 5], factor: 7 },
+        { name: 'Thunder beam', cells: [6, 7, 8, 9, 10, 11], factor: 7 },
+        { name: 'Valley beam', cells: [12, 13, 14, 15, 16, 17], factor: 7 },
+        { name: 'Falling brace', cells: [0, 7, 14], factor: 3 },
+        { name: 'Rising brace', cells: [5, 10, 15], factor: 3 }
+      ],
+      jackpotBonusMultiplier: 1000
+    })
+  },
+  {
+    key: 'emberdeep-three-verses', name: 'Emberdeep Five Verses',
+    regionId: 4, regionName: 'Dempo', regionSlug: 'dempo',
+    rules: regionalPatternRules({
+      symbolItemIds: [1494, 127, 238, 1504, 115, 1514, 1519], gridColumns: 4, gridRows: 5,
+      winPatterns: [
+        { name: 'First verse', cells: [0, 1, 2, 3], factor: 3 },
+        { name: 'Second verse', cells: [4, 5, 6, 7], factor: 3 },
+        { name: 'Third verse', cells: [8, 9, 10, 11], factor: 3 },
+        { name: 'Fourth verse', cells: [12, 13, 14, 15], factor: 3 },
+        { name: 'Final verse', cells: [16, 17, 18, 19], factor: 3 },
+        { name: 'Patient reading', cells: [0, 4, 8, 12, 16], factor: 6 },
+        { name: 'Weather reading', cells: [1, 5, 9, 13, 17], factor: 6 },
+        { name: 'Route reading', cells: [2, 6, 10, 14, 18], factor: 6 },
+        { name: 'Secret reading', cells: [3, 7, 11, 15, 19], factor: 6 },
+        { name: 'Descending season', cells: [0, 5, 10, 15], factor: 4 },
+        { name: 'Ascending season', cells: [3, 6, 9, 12], factor: 4 },
+        { name: 'Second descent', cells: [4, 9, 14, 19], factor: 4 },
+        { name: 'Second ascent', cells: [7, 10, 13, 16], factor: 4 }
+      ],
+      jackpotBonusMultiplier: 1250
+    })
+  },
+  {
+    key: 'frostmere-aurora-mirror', name: 'Frostmere Aurora Wall',
+    regionId: 5, regionName: 'Ebeko', regionSlug: 'ebeko',
+    rules: regionalPatternRules({
+      symbolItemIds: [1524, 253, 265, 1132, 266, 1355, 1549, 1361], gridColumns: 6, gridRows: 4,
+      winPatterns: [
+        { name: 'Upper aurora', cells: [0, 1, 2, 3, 4, 5], factor: 7 },
+        { name: 'High aurora', cells: [6, 7, 8, 9, 10, 11], factor: 7 },
+        { name: 'Low aurora', cells: [12, 13, 14, 15, 16, 17], factor: 7 },
+        { name: 'Lower aurora', cells: [18, 19, 20, 21, 22, 23], factor: 7 },
+        { name: 'Circuit one', cells: [0, 6, 12, 18], factor: 4 },
+        { name: 'Circuit two', cells: [1, 7, 13, 19], factor: 4 },
+        { name: 'Circuit three', cells: [2, 8, 14, 20], factor: 4 },
+        { name: 'Circuit four', cells: [3, 9, 15, 21], factor: 4 },
+        { name: 'Circuit five', cells: [4, 10, 16, 22], factor: 4 },
+        { name: 'Circuit six', cells: [5, 11, 17, 23], factor: 4 },
+        { name: 'Falling pulse', cells: [0, 7, 14, 21], factor: 5 },
+        { name: 'Rising pulse', cells: [5, 10, 15, 20], factor: 5 },
+        { name: 'Cold core', cells: [8, 9, 14, 15], factor: 5 }
+      ],
+      jackpotBonusMultiplier: 1500
+    })
+  },
+  {
+    key: 'brimstone-furnace-four', name: 'Brimstone Grand Furnace',
+    regionId: 6, regionName: 'Fogo', regionSlug: 'fogo',
+    rules: regionalPatternRules({
+      symbolItemIds: [1554, 304, 1564, 308, 1574, 1579], gridColumns: 5, gridRows: 5,
+      winPatterns: [
+        { name: 'Crown course', cells: [0, 1, 2, 3, 4], factor: 5 },
+        { name: 'Ash course', cells: [5, 6, 7, 8, 9], factor: 5 },
+        { name: 'Fire course', cells: [10, 11, 12, 13, 14], factor: 5 },
+        { name: 'Iron course', cells: [15, 16, 17, 18, 19], factor: 5 },
+        { name: 'Foundation course', cells: [20, 21, 22, 23, 24], factor: 5 },
+        { name: 'Flue one', cells: [0, 5, 10, 15, 20], factor: 5 },
+        { name: 'Flue two', cells: [1, 6, 11, 16, 21], factor: 5 },
+        { name: 'Flue three', cells: [2, 7, 12, 17, 22], factor: 5 },
+        { name: 'Flue four', cells: [3, 8, 13, 18, 23], factor: 5 },
+        { name: 'Flue five', cells: [4, 9, 14, 19, 24], factor: 5 },
+        { name: 'Pouring channel', cells: [0, 6, 12, 18, 24], factor: 6 },
+        { name: 'Cooling channel', cells: [4, 8, 12, 16, 20], factor: 6 },
+        { name: 'North-west crucible', cells: [0, 1, 5, 6], factor: 3 },
+        { name: 'North-east crucible', cells: [3, 4, 8, 9], factor: 3 },
+        { name: 'South-west crucible', cells: [15, 16, 20, 21], factor: 3 },
+        { name: 'South-east crucible', cells: [18, 19, 23, 24], factor: 3 },
+        { name: 'Molten heart', cells: [7, 11, 12, 13, 17], factor: 7 }
+      ],
+      jackpotBonusMultiplier: 2000
+    })
+  },
+  {
+    key: 'tzolkin-worldwheel-seven', name: "Tzolk'in Worldwheel",
+    regionId: 7, regionName: 'Gallego', regionSlug: 'gallego',
+    rules: regionalPatternRules({
+      symbolItemIds: [154, 283, 151, 148, 292, 295, 1584, 1585], gridColumns: 8, gridRows: 3,
+      winPatterns: [
+        { name: 'Gate one', cells: [0, 8, 16], factor: 2 },
+        { name: 'Gate two', cells: [1, 9, 17], factor: 2 },
+        { name: 'Gate three', cells: [2, 10, 18], factor: 2 },
+        { name: 'Gate four', cells: [3, 11, 19], factor: 2 },
+        { name: 'Gate five', cells: [4, 12, 20], factor: 2 },
+        { name: 'Gate six', cells: [5, 13, 21], factor: 2 },
+        { name: 'Gate seven', cells: [6, 14, 22], factor: 2 },
+        { name: 'Gate eight', cells: [7, 15, 23], factor: 2 },
+        { name: 'Dawn circuit', cells: [0, 1, 2, 3, 4, 5, 6, 7], factor: 9 },
+        { name: 'Noon circuit', cells: [8, 9, 10, 11, 12, 13, 14, 15], factor: 9 },
+        { name: 'Dusk circuit', cells: [16, 17, 18, 19, 20, 21, 22, 23], factor: 9 },
+        { name: 'Westbound local', cells: [8, 9, 10], factor: 1 },
+        { name: 'Capital express', cells: [10, 11, 12], factor: 1 },
+        { name: 'Eastbound local', cells: [13, 14, 15], factor: 1 },
+        { name: 'World corners', cells: [0, 7, 16, 23], factor: 5 }
+      ],
+      jackpotBonusMultiplier: 2500
+    })
+  }
+];
+
+export const REGIONAL_CASINO_MACHINES = deepFreeze(REGIONAL_MACHINE_BLUEPRINTS.map(
+  (machine) => ({
+    ...machine,
+    rulesSettingKey: `casino_${machine.key.replaceAll('-', '_')}_rules`,
+    mechanic: 'regional-pattern'
+  })
+));
+
+export const REGIONAL_CASINO_MACHINE_KEYS = Object.freeze(
+  REGIONAL_CASINO_MACHINES.map((machine) => machine.key)
+);
+
+export const REGIONAL_CASINO_RULE_SETTINGS = deepFreeze(Object.fromEntries(
+  REGIONAL_CASINO_MACHINES.map((machine) => [machine.rulesSettingKey, machine.rules])
+));
 
 const BROMO_SPOREFALL_ITEM_IDS = Object.freeze([1434, 1435, 1436, 1437, 1438, 1439]);
 const KINGS_LOCKBOX_COLLECTIBLE_ITEM_IDS = Object.freeze([
@@ -580,6 +806,173 @@ export function resolveKingsLockboxPull(
   );
 }
 
+function regionalMachineBlueprint(machineKey) {
+  const key = String(machineKey ?? '').trim();
+  return REGIONAL_CASINO_MACHINES.find((machine) => machine.key === key) ?? null;
+}
+
+export function validateRegionalCasinoRules(machineKey, configuredRules) {
+  const blueprint = regionalMachineBlueprint(machineKey);
+  if (!blueprint) throw new Error('That regional casino machine does not exist.');
+  const expected = blueprint.rules;
+  const rules = record(configuredRules, `${blueprint.name} rules`);
+  const symbolItemIds = exactItemIds(
+    rules.symbolItemIds, expected.symbolItemIds, `${blueprint.name} symbols`
+  );
+  const gridColumns = wholeNumber(
+    rules.gridColumns, `${blueprint.name} reel count`, 1, 8
+  );
+  const gridRows = wholeNumber(
+    rules.gridRows, `${blueprint.name} row count`, 1, 5
+  );
+  const gridSize = safeProduct([gridColumns, gridRows], `${blueprint.name} grid size`);
+  if (gridSize > MAXIMUM_REGIONAL_GRID_SIZE || gridSize !== Number(rules.gridSize)) {
+    throw new Error(`Invalid casino ${blueprint.name} grid size.`);
+  }
+  if (gridColumns !== expected.gridColumns || gridRows !== expected.gridRows) {
+    throw new Error(`Invalid casino ${blueprint.name} cabinet shape.`);
+  }
+  const symbolWeightsByItemId = integerMap(
+    rules.symbolWeightsByItemId, symbolItemIds, `${blueprint.name} symbol weights`
+  );
+  safeSum(symbolItemIds.map((itemId) => symbolWeightsByItemId[itemId]),
+    `${blueprint.name} symbol weight`);
+  const sourcePatterns = Array.isArray(rules.winPatterns) ? rules.winPatterns : [];
+  if (!sourcePatterns.length || sourcePatterns.length > MAXIMUM_REGIONAL_PATTERNS) {
+    throw new Error(`Invalid casino ${blueprint.name} win patterns.`);
+  }
+  const signatures = new Set();
+  const names = new Set();
+  const winPatterns = sourcePatterns.map((source, index) => {
+    const pattern = record(source, `${blueprint.name} pattern ${index + 1}`);
+    const name = String(pattern.name ?? '').trim();
+    if (!name || names.has(name.toLowerCase())) {
+      throw new Error(`Invalid casino ${blueprint.name} pattern name.`);
+    }
+    names.add(name.toLowerCase());
+    if (!Array.isArray(pattern.cells)) {
+      throw new Error(`Invalid casino ${blueprint.name} pattern cells.`);
+    }
+    const cells = pattern.cells.map((cell) => wholeNumber(
+      cell, `${blueprint.name} pattern cell`, 0, gridSize - 1
+    ));
+    if (cells.length < 2 || cells.length > gridSize || new Set(cells).size !== cells.length) {
+      throw new Error(`Invalid casino ${blueprint.name} pattern cells.`);
+    }
+    const signature = [...cells].sort((first, second) => first - second).join(',');
+    if (signatures.has(signature)) {
+      throw new Error(`Casino ${blueprint.name} win patterns must be unique.`);
+    }
+    signatures.add(signature);
+    return {
+      name, cells,
+      factor: wholeNumber(pattern.factor, `${blueprint.name} pattern factor`, 1, 20)
+    };
+  });
+  const jackpotItemId = wholeNumber(rules.jackpotItemId, `${blueprint.name} jackpot item`, 1);
+  if (jackpotItemId !== symbolItemIds.at(-1)) {
+    throw new Error(`Invalid casino ${blueprint.name} jackpot item.`);
+  }
+  return {
+    version: wholeNumber(rules.version, `${blueprint.name} rules version`, 1),
+    symbolItemIds,
+    symbolWeightsByItemId,
+    payoutMultipliersByItemId: integerMap(
+      rules.payoutMultipliersByItemId, symbolItemIds, `${blueprint.name} payouts`
+    ),
+    gridColumns,
+    gridRows,
+    gridSize,
+    winPatterns,
+    jackpotItemId,
+    jackpotBonusMultiplier: wholeNumber(
+      rules.jackpotBonusMultiplier, `${blueprint.name} jackpot multiplier`, 1
+    ),
+    jackpotChanceDenominator: wholeNumber(
+      rules.jackpotChanceDenominator, `${blueprint.name} jackpot chance`, 2
+    ),
+    holdMs: wholeNumber(rules.holdMs, `${blueprint.name} frame hold`, 0, MAXIMUM_HOLD_MS),
+    ...stakeRules(rules)
+  };
+}
+
+function evaluateRegionalGrid(machine, grid, rules) {
+  if (!Array.isArray(grid) || grid.length !== rules.gridSize) {
+    throw new Error(`A ${machine.name} spin must contain ${rules.gridSize} symbols.`);
+  }
+  const allowed = new Set(rules.symbolItemIds);
+  const clean = grid.map((value) => {
+    const itemId = wholeNumber(value, `${machine.name} grid item ID`, 1);
+    if (!allowed.has(itemId)) throw new Error(`The ${machine.name} spin contains an unknown symbol.`);
+    return itemId;
+  });
+  const wins = [];
+  for (const pattern of rules.winPatterns) {
+    const itemId = clean[pattern.cells[0]];
+    if (!pattern.cells.every((cell) => clean[cell] === itemId)) continue;
+    wins.push({
+      kind: 'regional-pattern', name: pattern.name, cells: [...pattern.cells], itemId,
+      count: pattern.cells.length,
+      multiplier: safeProduct([
+        rules.payoutMultipliersByItemId[itemId], pattern.factor
+      ], `${machine.name} pattern multiplier`)
+    });
+  }
+  const baseMultiplier = safeSum(
+    wins.map((win) => win.multiplier), `${machine.name} multiplier`
+  );
+  const jackpot = clean.every((itemId) => itemId === rules.jackpotItemId);
+  const jackpotMultiplier = jackpot ? rules.jackpotBonusMultiplier : 0;
+  return {
+    grid: clean,
+    wins,
+    winningCells: [...new Set(wins.flatMap((win) => win.cells))]
+      .sort((first, second) => first - second),
+    baseMultiplier,
+    jackpotMultiplier,
+    multiplier: safeSum([baseMultiplier, jackpotMultiplier], `${machine.name} multiplier`),
+    jackpot
+  };
+}
+
+export function evaluateRegionalCasinoGrid(machineKey, grid, configuredRules = null) {
+  const machine = regionalMachineBlueprint(machineKey);
+  if (!machine) throw new Error('That regional casino machine does not exist.');
+  const rules = validateRegionalCasinoRules(machine.key, configuredRules ?? machine.rules);
+  return evaluateRegionalGrid(machine, grid, rules);
+}
+
+export function resolveRegionalCasinoPull(machineKey, configuredRules = null, random = Math.random) {
+  const machine = regionalMachineBlueprint(machineKey);
+  if (!machine) throw new Error('That regional casino machine does not exist.');
+  const rules = validateRegionalCasinoRules(machine.key, configuredRules ?? machine.rules);
+  if (typeof random !== 'function') throw new Error('The casino needs a random source.');
+  const forcedJackpot = randomUnit(random) < 1 / rules.jackpotChanceDenominator;
+  const grid = forcedJackpot
+    ? Array(rules.gridSize).fill(rules.jackpotItemId)
+    : Array.from({ length: rules.gridSize }, () => weightedRoll(rules, random));
+  const evaluated = evaluateRegionalGrid(machine, grid, rules);
+  const frame = {
+    ...evaluated,
+    frameIndex: 0,
+    spinIndex: 0,
+    replayKind: 'regional-pattern',
+    label: 'Final stop',
+    holdMs: rules.holdMs,
+    bonusSymbols: [],
+    bonusSpinsAwarded: 0
+  };
+  return normalizedResult(machine.key, machine.name, 'regional-pattern', rules.holdMs, {
+    ...evaluated,
+    frames: [frame],
+    forcedJackpot,
+    terminationReason: evaluated.jackpot ? 'jackpot' : 'settled',
+    bonusSymbols: [],
+    bonusSpinsAwarded: 0,
+    bonusWinMultiplier: 1
+  });
+}
+
 export function resolveThingOMaticPull(configuredRules, random = Math.random) {
   const rules = validateCasinoRules(configuredRules);
   const resolved = resolveCasinoPull(rules, random);
@@ -634,6 +1027,21 @@ const registry = {
   }
 };
 
+for (const regional of REGIONAL_CASINO_MACHINES) {
+  registry[regional.key] = {
+    key: regional.key,
+    name: regional.name,
+    mechanic: regional.mechanic,
+    regionId: regional.regionId,
+    regionName: regional.regionName,
+    regionSlug: regional.regionSlug,
+    rulesSettingKey: regional.rulesSettingKey,
+    defaultRules: regional.rules,
+    validateRules: (rules) => validateRegionalCasinoRules(regional.key, rules),
+    resolvePull: (rules, random) => resolveRegionalCasinoPull(regional.key, rules, random)
+  };
+}
+
 export const CASINO_MACHINE_REGISTRY = deepFreeze(registry);
 export const CASINO_MACHINE_KEYS = Object.freeze(Object.keys(CASINO_MACHINE_REGISTRY));
 
@@ -647,6 +1055,12 @@ export function requireCasinoMachine(machineKey) {
   const machine = casinoMachineByKey(machineKey);
   if (!machine) throw new Error('That casino machine does not exist.');
   return machine;
+}
+
+export function casinoMachineAvailableInRegion(machineKey, regionId) {
+  const machine = requireCasinoMachine(machineKey);
+  return machine.regionId === undefined || machine.regionId === null
+    || Number(machine.regionId) === Number(regionId);
 }
 
 export function validateCasinoMachineRules(machineKey, configuredRules) {

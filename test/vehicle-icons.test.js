@@ -21,12 +21,12 @@ const VEHICLE_ASSET_DIRECTORY = path.join(ROOT, 'public', 'img', 'items', 'vehic
 const EXPECTED_LAND_VEHICLE_ITEM_IDS = [
   5, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
   154, 155, 156, 217, 218, 219, 220, 221, 222, 1253, 1254, 1255, 1256, 1257, 1258,
-  1265, 1403
+  1265, 1403, 1585
 ];
 const EXPECTED_SEA_VEHICLE_ITEM_IDS = [
   283, 284, 285, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300,
   731, 733, 734, 735, 736, 1087, 1088, 1089, 1090, 1266, 1390, 1391, 1392,
-  1393, 1394, 1395, 1402
+  1393, 1394, 1395, 1402, 1584
 ];
 const EXPECTED_AIR_VEHICLE_ITEM_IDS = [737, 738, 739];
 const EXPECTED_VEHICLE_ITEM_IDS = [
@@ -46,12 +46,12 @@ function vehicleGeometrySignature(svg) {
     .trim();
 }
 
-test('vehicle icon paths cover the exact 68-item land, sea, and air allowlist', () => {
+test('vehicle icon paths cover the exact 70-item land, sea, and air allowlist', () => {
   assert.deepEqual(LAND_VEHICLE_ICON_ITEM_IDS, EXPECTED_LAND_VEHICLE_ITEM_IDS);
   assert.deepEqual(SEA_VEHICLE_ICON_ITEM_IDS, EXPECTED_SEA_VEHICLE_ITEM_IDS);
   assert.deepEqual(AIR_VEHICLE_ICON_ITEM_IDS, EXPECTED_AIR_VEHICLE_ITEM_IDS);
   assert.deepEqual(VEHICLE_ICON_ITEM_IDS, EXPECTED_VEHICLE_ITEM_IDS);
-  assert.equal(VEHICLE_ICON_ITEM_IDS.length, 68);
+  assert.equal(VEHICLE_ICON_ITEM_IDS.length, 70);
   for (const itemIds of [
     LAND_VEHICLE_ICON_ITEM_IDS,
     SEA_VEHICLE_ICON_ITEM_IDS,
@@ -63,8 +63,9 @@ test('vehicle icon paths cover the exact 68-item land, sea, and air allowlist', 
     assert.equal(vehicleIconPath(itemId), `/node/vehicles/vehicle-${itemId}.svg`);
   }
   assert.equal(vehicleIconPath('739'), '/node/vehicles/vehicle-739.svg');
+  assert.equal(vehicleIconPath('1584'), '/node/vehicles/vehicle-1584.svg');
   for (const invalid of [
-    null, undefined, '', 4, 6, 138, 286, 287, 288, 730, 732, 740, 1404,
+    null, undefined, '', 4, 6, 138, 286, 287, 288, 730, 732, 740, 1404, 1583, 1586,
     5.5, NaN, Infinity, 'Camel'
   ]) assert.equal(vehicleIconPath(invalid), null, String(invalid));
 });
@@ -182,7 +183,7 @@ test('serves all vehicle SVGs, supports HEAD and land-sea-air details, and rejec
     assert.ok(Number(head.headers.get('content-length')) > 0);
     assert.equal(await head.text(), '');
 
-    for (const itemId of [154, 283, 737]) {
+    for (const itemId of [154, 283, 737, 1584, 1585]) {
       const response = await fetch(`${base}/items/${itemId}`);
       assert.equal(response.status, 200, String(itemId));
       const html = await response.text();
@@ -198,6 +199,8 @@ test('serves all vehicle SVGs, supports HEAD and land-sea-air details, and rejec
       '/node/vehicles/vehicle-286.svg',
       '/node/vehicles/vehicle-740.svg',
       '/node/vehicles/vehicle-1404.svg',
+      '/node/vehicles/vehicle-1583.svg',
+      '/node/vehicles/vehicle-1586.svg',
       '/node/vehicles/vehicle-5.png',
       '/node/vehicles/vehicle-5.svg/extra',
       '/node/vehicles/not-a-vehicle.svg'
@@ -300,7 +303,7 @@ test('existing catalogs migrate representative vehicle art and preserve custom a
       intactChanges: representativePairs.length,
       damagedChanges: representativePairs.length
     });
-    assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 115);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
 
     store.close();
     store = null;

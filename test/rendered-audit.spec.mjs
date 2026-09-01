@@ -191,6 +191,9 @@ test.beforeAll(async () => {
   const field = store.oilField(pilot.id, oilSetupTime);
   store.deployOilMachine(pilot.id, field.hexes.find((hex) => hex.x === 0 && hex.y === 0).id, pump.id, 0, oilSetupTime);
   store.deployOilMachine(pilot.id, field.hexes.find((hex) => hex.x === 0 && hex.y === -1).id, power.id, 0, oilSetupTime);
+  const spillHex = field.hexes.find((hex) => hex.x === 2 && hex.y === 0);
+  store.database.prepare('UPDATE oil_hexes SET oil_units = ? WHERE id = ?')
+    .run(Number(catalog.settings.oil_spill_units) * 4, spillHex.id);
 
   const customer = store.addPlayer(createPlayer('RenderCustomer', '', hashPassword(password), catalog, 1000, () => 0.5));
   const fundedCustomer = store.playerById(customer.id);
@@ -243,6 +246,7 @@ test.beforeAll(async () => {
     'ResponsiveAudit', '', hashPassword(password), catalog, 1000, () => 0.5
   ));
   store.database.prepare('UPDATE players SET authority = 5 WHERE id = ?').run(responsive.id);
+  store.addChat(trader.id, 'Quietly checking the frequency.', Date.now() - 1);
   store.addChat(responsive.id, 'The old chat colours are back.', Date.now());
   const responsiveRare = catalog.items.find((item) => item.canFind && item.rarity === 5);
   store.database.prepare(`
@@ -688,7 +692,7 @@ test('renders recycling, Ore refining, protected outputs, bots, and the simplifi
   await page.goto(`${base}/factories`);
   await expect(page.getByRole('heading', { name: 'Hire a Factory Worker bot' })).toBeVisible();
   await expect(page.getByText('Worker Bot Mk III')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Hire · 1000000g' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Hire · 25000g' })).toBeEnabled();
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('recycling-audit-factories.png'), fullPage: true });
 
@@ -705,7 +709,7 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
 
   await login(page, 'VisualAudit');
   await page.goto(`${base}/professions`);
-  await expect(page.locator('.profession-card')).toHaveCount(11);
+  await expect(page.locator('.profession-card')).toHaveCount(20);
   await expect(page.getByText(/Every miner may use every game system, while specialisations grant bonuses\./))
     .toBeVisible();
   await page.goto(`${base}/factories`);
@@ -993,6 +997,10 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.locator('#board .oil-slick').first()).toHaveAttribute('stroke', '#ffc34d');
   await expect(page.locator('#board .oil-volume-badge').first()).toBeVisible();
   await expect(page.locator('#board .oil-volume-label').first()).toHaveText(/^\d+(?:\.\d+)?L$/);
+  const spillTarget = page.locator('#board .oil-spill-hex[data-hex-x="2"][data-hex-y="0"]');
+  await expect(spillTarget).toHaveAttribute('data-oil-spill', 'true');
+  await expect(page.locator('#board .oil-spill-ring[data-hex-id]')).toBeVisible();
+  await expect(page.locator('#board .oil-spill-label[data-hex-id]')).toHaveText('SPILL');
   const oilLabelBox = await page.locator('#board .oil-volume-label').first().boundingBox();
   expect(oilLabelBox).toBeTruthy();
   expect(oilLabelBox.width).toBeGreaterThan(20);
@@ -1030,6 +1038,8 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.locator('#board .oil-slick').first()).toBeHidden();
   await expect(page.locator('#board .oil-volume-badge').first()).toBeHidden();
   await expect(page.locator('#board .oil-volume-label').first()).toBeHidden();
+  await expect(page.locator('#board .oil-spill-ring[data-hex-id]')).toBeVisible();
+  await expect(page.locator('#board .oil-spill-label[data-hex-id]')).toBeVisible();
   await expect(page.locator('#oil-board-status')).toContainText('Oil volume labels hidden');
   await page.screenshot({ path: path.resolve('migration-audit-oil-field-labels-hidden.png'), fullPage: true });
   await volumeLabelsButton.click();
@@ -1057,15 +1067,19 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(rackTooltip).toContainText(oilRackDescription);
   await expect(rackTooltip).toContainText('P =');
   const bombBox = await rackBomb.boundingBox();
-  const centerBox = await centerHex.boundingBox();
+  const spillBox = await spillTarget.boundingBox();
   expect(bombBox).toBeTruthy();
   expect(bombBox.width).toBeGreaterThanOrEqual(36);
-  expect(centerBox).toBeTruthy();
+  expect(spillBox).toBeTruthy();
   await page.mouse.move(bombBox.x + bombBox.width / 2, bombBox.y + bombBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(centerBox.x + centerBox.width / 2, centerBox.y + centerBox.height / 2, { steps: 12 });
+  await page.mouse.move(spillBox.x + spillBox.width / 2, spillBox.y + spillBox.height / 2, { steps: 12 });
+  await expect(page.locator('#board')).toHaveClass(/oil-machine-drag-active/);
+  await expect(spillTarget).toHaveClass(/oil-drop-target-spill/);
+  await expect(page.locator('#board .oil-spill-ring[data-hex-id]')).toBeVisible();
   await page.mouse.up();
-  await expect(page.locator('#oil-board-status')).toContainText('Selected hex (0,0)');
+  await expect(page.locator('#board')).not.toHaveClass(/oil-machine-drag-active/);
+  await expect(page.locator('#oil-board-status')).toContainText('Selected Oil spill at hex (2,0)');
   await expect(page.locator('#board svg')).toContainText('Rotate');
   await expect(page.locator('#board svg')).toContainText('Bomb');
   await assertHealthyRender(page);
@@ -1320,8 +1334,8 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect(page.locator('.ghost-card h3').first()).toHaveCSS('color', 'rgb(246, 241, 232)');
   await expect(page.locator('.ghost-card .threat-facts dd').first())
     .toHaveCSS('color', 'rgb(215, 211, 202)');
-  await expect(page.locator('.ghost-card .threat-condition-restless').first())
-    .toHaveCSS('color', 'rgb(248, 239, 255)');
+  await expect(page.locator('.ghost-card .threat-condition').first())
+    .toHaveText(/^(Unhurt|Wounded|Seriously wounded)$/u);
   await expect(page.locator('link[rel="stylesheet"][href^="/app.css"]'))
     .toHaveAttribute('href', /\/app\.css\?v=[0-9a-f]{12}/u);
   await assertHealthyRender(page);
@@ -1352,9 +1366,9 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect.poll(() => chatLog.evaluate((element) =>
     Math.round(element.scrollHeight - element.scrollTop - element.clientHeight)))
     .toBeLessThanOrEqual(1);
-  await expect(page.locator('.chat-row-player')).toHaveCount(1);
+  await expect(page.locator('.chat-row-player')).toHaveCount(2);
   expect(await page.locator('.chat-row-world').count()).toBeGreaterThanOrEqual(3);
-  await expect(page.getByText(/has risen on the/).first()).toBeVisible();
+  await expect(page.getByText('Restless dead', { exact: true }).first()).toBeVisible();
   await expect(page.locator('.chat-row-rare, .chat-rare-item')).toHaveCount(0);
   await expect(page.getByText(/ResponsiveAudit found a Fabled/)).toHaveCount(0);
   await expect(page.locator('.chat-row-dwarf')).toHaveCount(1);
@@ -1362,8 +1376,21 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
     .toHaveAttribute('href', `/items/${catalog.dwarfByRarity.get(1).itemId}`);
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img')).toBeVisible();
+  await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img'))
+    .toHaveCSS('border-top-width', '0px');
+  await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img'))
+    .toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
     .toHaveCSS('color', 'rgb(51, 54, 47)');
+  await expect(page.locator('.chat-row-world:not(.chat-row-dwarf) .chat-world-message').first())
+    .toHaveCSS('font-weight', '400');
+  await expect(page.locator('.chat-row-dwarf .chat-world-message'))
+    .toHaveCSS('font-weight', '400');
+  expect(await page.locator('.chat-row-world').evaluateAll((rows) =>
+    rows.every((row) => row.querySelectorAll('a').length === 1))).toBe(true);
+  const ignoreAction = page.getByRole('button', { name: 'Ignore RenderTrader in public chat' });
+  await expect(ignoreAction).toBeVisible();
+  await expect(ignoreAction).toHaveCSS('border-top-width', '0px');
   await expect(page.locator('.chat-row-player'))
     .toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.chat-row-world').first())

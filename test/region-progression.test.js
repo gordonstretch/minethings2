@@ -63,7 +63,7 @@ test('starts new miners in Aso and reveals Bromo only after gateway arrival', as
   const hiddenMap = await (await fetch(`${base}/map`, { headers: { cookie } })).text();
   assert.match(hiddenMap, /Aso opportunities/);
   assert.match(hiddenMap, /Undiscovered region/);
-  assert.match(hiddenMap, /Complete this gateway route to reveal the region/);
+  assert.doesNotMatch(hiddenMap, /Complete this gateway route|Bring an idle|expedition reward/iu);
   assert.doesNotMatch(hiddenMap, /href="\/map\?world=bromo"/);
   assert.doesNotMatch(hiddenMap,
     /\bBromo\b|Ashfall|Tengger Gate|Sandsea|Ember Market|Craterwatch/);

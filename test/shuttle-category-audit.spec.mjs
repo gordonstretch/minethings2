@@ -60,9 +60,10 @@ test('all shuttle mine categories default selected and can be narrowed', async (
   expect(await categories.evaluateAll((inputs) =>
     inputs.filter((input) => input.checked).length)).toBe(await categories.count());
 
-  await categories.evaluateAll((inputs, selectedName) => {
-    for (const input of inputs) input.checked = input.name === selectedName;
-  }, `category_${WOOD_CATALOG.mineType.id}`);
+  await page.getByRole('button', { name: 'Deselect all' }).click();
+  expect(await categories.evaluateAll((inputs) =>
+    inputs.filter((input) => input.checked).length)).toBe(0);
+  await page.locator(`input[name="category_${WOOD_CATALOG.mineType.id}"]`).check();
   await page.locator('form.vehicle-shuttle-form select[name="routeId"]')
     .selectOption(String(routeId));
   await page.getByRole('button', { name: 'Start shuttle' }).click();
