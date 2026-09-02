@@ -102,6 +102,31 @@ test('chat keeps immutable sender regions and reveals only known-region traffic'
   ]);
 });
 
+test('public chat unread counts exclude the viewer and clear when the channel is read', (context) => {
+  const store = seededStore();
+  context.after(() => store.close());
+  const viewer = addMiner(store, 'Unread Viewer');
+  const speaker = addMiner(store, 'Unread Speaker');
+  store.database.exec('DELETE FROM world_chat_announcements; DELETE FROM chats;');
+  store.database.prepare(`
+    UPDATE player_chat_reads SET last_chat_id = 0, last_announcement_id = 0
+    WHERE player_id = ?
+  `).run(viewer.id);
+
+  store.addChat(speaker.id, 'A signal for somebody else', 2000);
+  store.addChat(viewer.id, 'My own signal', 2001);
+  store.database.prepare(`
+    INSERT INTO world_chat_announcements
+      (event_key, body, path, announcement_type, created_at)
+    VALUES ('unread-counter-event', 'A visible world event', '/events', 'world', 2002)
+  `).run();
+
+  assert.deepEqual(store.chatUnseenCounts(viewer.id, 2500), { chat: 2, guildChat: 0 });
+  const visible = store.recentChats(null, viewer.id, 0);
+  store.markChatSeen(viewer.id, visible, 2500);
+  assert.deepEqual(store.chatUnseenCounts(viewer.id, 2500), { chat: 0, guildChat: 0 });
+});
+
 test('rare findings stay out of chat while weather announcements carry region mappings', (context) => {
   const store = seededStore();
   context.after(() => store.close());
@@ -215,7 +240,7 @@ test('v96 migration preserves legacy chat rows without assigning regions', (cont
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual({ ...store.database.prepare(
     "SELECT body, map_id FROM chats WHERE body = 'Unscoped v95 chat'"
   ).get() }, { body: 'Unscoped v95 chat', map_id: null });
@@ -228,4 +253,29 @@ test('v96 migration preserves legacy chat rows without assigning regions', (cont
   assert.deepEqual(store.recentChats(null, miner.id, 0).map((entry) => entry.body), [
     'Unscoped v95 chat', 'Unscoped v95 event'
   ]);
+});
+
+test('v127 migration baselines existing chat history as already read', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-chat-v126-'));
+  const databaseFile = path.join(directory, 'game.sqlite');
+  let store = seededStore(databaseFile);
+  context.after(() => {
+    store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const viewer = addMiner(store, 'Migrated Chat Viewer');
+  const speaker = addMiner(store, 'Migrated Chat Speaker');
+  store.addChat(speaker.id, 'Existing channel history', 2000);
+  store.database.exec(`
+    DROP TABLE player_guild_chat_reads;
+    DROP TABLE player_chat_reads;
+    PRAGMA user_version = 126;
+  `);
+  store.close();
+
+  store = new SqliteStore(databaseFile);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
+  assert.deepEqual(store.chatUnseenCounts(viewer.id, 2001), { chat: 0, guildChat: 0 });
+  store.addChat(speaker.id, 'New channel history', 2002);
+  assert.deepEqual(store.chatUnseenCounts(viewer.id, 2003), { chat: 1, guildChat: 0 });
 });

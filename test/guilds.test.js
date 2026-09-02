@@ -115,9 +115,13 @@ test('guild chat is visible only to current guild members', () => {
     const guild = store.createGuild(founder.id, 'Quiet Frequency', 2000);
     store.joinGuild(member.id, guild.id, 2001);
     store.addGuildChat(founder.id, 'First private signal', 3000);
+    assert.deepEqual(store.chatUnseenCounts(founder.id, 3001), { chat: 0, guildChat: 0 });
+    assert.deepEqual(store.chatUnseenCounts(member.id, 3001), { chat: 0, guildChat: 1 });
     const state = store.recentGuildChats(member.id, 0);
     assert.equal(state.chats.length, 1);
     assert.equal(state.chats[0].body, 'First private signal');
+    store.markGuildChatSeen(member.id, state.chats, 3001);
+    assert.deepEqual(store.chatUnseenCounts(member.id, 3001), { chat: 0, guildChat: 0 });
     assert.throws(() => store.recentGuildChats(outsider.id, 0), /Join a guild/);
     assert.throws(() => store.addGuildChat(outsider.id, 'Let me in', 3001), /Join a guild/);
   } finally {
@@ -172,18 +176,25 @@ test('guild pages expose creation, membership, chat, and bank operations', async
     }, body: new URLSearchParams({ body: 'Guild route works' })
   });
   assert.equal(posted.status, 303);
+  const guildWithUnread = await fetch(`${base}/guilds`, { headers: { cookie: founderCookie } });
+  const guildWithUnreadHtml = await guildWithUnread.text();
+  assert.match(guildWithUnreadHtml, />Guilds \(1\)<\/a>/);
+  assert.match(guildWithUnreadHtml, />Enter guild chat \(1\)<\/a>/);
   const chat = await fetch(`${base}/guilds/chat`, { headers: { cookie: founderCookie } });
   assert.equal(chat.status, 200);
   const chatHtml = await chat.text();
   assert.match(chatHtml, /Guild route works/);
   assert.match(chatHtml, /<h1>Guild chat<\/h1>/);
   assert.doesNotMatch(chatHtml, /chat-page-title|chat-title-mark/);
+  assert.doesNotMatch(chatHtml, />Guilds \(1\)<\/a>/);
 
   const bank = await fetch(`${base}/guilds/bank`, { headers: { cookie: memberCookie } });
   assert.equal(bank.status, 200);
   const bankHtml = await bank.text();
   assert.match(bankHtml, /Guild bank transfers are available/);
   assert.match(bankHtml, /<h1>Guild bank<\/h1>/);
+  assert.match(bankHtml, />Deposit all<\/button>/,
+    'each local Thing offers a one-click deposit of every copy');
 
   const memberCity = catalog.cities.find((city) => city.id === store.playerById(member.id).cityId);
   const memberRegion = catalog.maps.find((map) => map.id === memberCity.mapId);

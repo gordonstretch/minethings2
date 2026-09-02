@@ -8,7 +8,7 @@ import {
   CITY_POWER_UP_COUNT, CITY_STREET_DEAD_PAUSE_MS, advanceCityStreetActors,
   generateCityInterior, generateCityStreetActors, isWalkable
 } from '../src/city-exploration.js';
-import { HOME_STONE, loadLegacyCatalog } from '../src/legacy-catalog.js';
+import { CITY_COMPLETION_STONE, HOME_STONE, loadLegacyCatalog } from '../src/legacy-catalog.js';
 import { createApp } from '../src/server.js';
 import { CITY_BAR_PRESENCE_TTL_MS, hashPassword, SqliteStore } from '../src/store.js';
 
@@ -311,6 +311,34 @@ test('all catalog cities have unique layouts and map-derived regional architectu
   assert.equal(new Set(appearances.map((entry) => entry.landmark.name)).size,
     catalog.cities.length);
   assert.equal(new Set(appearances.map((entry) => entry.landmark.kind)).size, 7);
+  assert.equal(new Set(appearances.map((entry) => entry.landmark.form)).size,
+    catalog.cities.length, 'every catalog city has its own authored architectural form');
+  assert.equal(new Set(appearances.map((entry) => entry.landmark.style)).size,
+    catalog.maps.length, 'each region supplies a distinctive architectural tradition');
+  assert.equal(new Set(appearances.map((entry) => entry.landmark.detailSeed)).size,
+    catalog.cities.length, 'line-art detail placement has a stable city-specific seed');
+  assert.ok(appearances.every(({ landmark }) =>
+    typeof landmark.material === 'string' && landmark.material.length > 30
+    && typeof landmark.silhouette === 'string' && landmark.silhouette.length > 30
+    && typeof landmark.roof === 'string' && landmark.roof.length > 20
+    && typeof landmark.setting === 'string' && landmark.setting.length > 20
+    && typeof landmark.ornament === 'string' && landmark.ornament.length > 20
+    && Number.isInteger(landmark.storeys) && landmark.storeys >= 2
+    && Number.isInteger(landmark.bays) && landmark.bays >= 3
+    && landmark.details.length === 8
+    && new Set(landmark.details).size === 8
+    && landmark.description.length > 150));
+  assert.deepEqual(appearances.filter((entry) => [6, 7, 8, 9, 10, 11, 1]
+    .includes(Number(entry.signature.split('-').at(-1))))
+    .map((entry) => entry.landmark.name).sort(), [
+    'Ashfall Spore Lantern Parliament',
+    'Brimstone Cinder Archive Pantheon',
+    'Cinderwake Derrick Basilica',
+    'Emberdeep Inverted Hearth Monastery',
+    'Frostmere Aurora Relay Palace',
+    'Stormcrag Tempest Bell Citadel',
+    "Tzolk'in Calendar Causeway"
+  ].sort());
   store.close();
 });
 
@@ -368,6 +396,7 @@ test('street Ore, landmark visits, and notice reading persist and award completi
   let position = initial.position;
   let currentTime = 10_000;
   const locationRewards = [];
+  const completionStones = [];
   const walk = (target) => {
     let result = null;
     for (const step of pathBetween(initial.interior, position, target)) {
@@ -376,6 +405,7 @@ test('street Ore, landmark visits, and notice reading persist and award completi
       );
       position = result.position;
       locationRewards.push(...result.rewards);
+      if (result.stone) completionStones.push(result.stone);
     }
     return result;
   };
@@ -402,6 +432,7 @@ test('street Ore, landmark visits, and notice reading persist and award completi
     const read = store.readCityExplorationSign(player.id, sign.key, currentTime++);
     assert.equal(read.firstRead, true);
     noticeRewards.push(...read.rewards);
+    if (read.stone) completionStones.push(read.stone);
   }
   const repeated = store.readCityExplorationSign(
     player.id, initial.interior.signs.at(-1).key, currentTime++
@@ -412,12 +443,57 @@ test('street Ore, landmark visits, and notice reading persist and award completi
   assert.equal(progress.signsRead, progress.totalSigns);
   assert.equal(progress.noticeRewardEarned, true);
   assert.deepEqual(noticeRewards.map((reward) => reward.quantity), [CITY_NOTICE_REWARD_SCRAPS]);
+
+  for (const scrap of initial.interior.scraps) walk(scrap);
+  progress = store.cityExploration(player.id).progress;
+  assert.equal(progress.scrapsCollected, progress.totalScraps);
+  assert.deepEqual(completionStones.map((stone) => stone.id), [CITY_COMPLETION_STONE.id]);
+  assert.equal(completionStones[0].cityId, player.cityId);
+  const completedAgain = walk(initial.interior.scraps[0]);
+  assert.equal(completedAgain?.stone ?? null, null);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM city_completion_stones WHERE player_id = ?
+  `).get(player.id).count, 1);
+
+  const secondCity = catalog.cities.find((city) => Number(city.id) !== Number(player.cityId));
+  store.database.prepare('UPDATE players SET city_id = ? WHERE id = ?')
+    .run(secondCity.id, player.id);
+  const second = store.cityExploration(player.id);
+  const finalSign = second.interior.signs.at(-1);
+  const insertProgress = store.database.prepare(`
+    INSERT INTO city_exploration_progress
+      (player_id, city_id, progress_type, entry_key, completed_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  for (const sign of second.interior.signs.slice(0, -1)) {
+    insertProgress.run(player.id, second.city.cityId, 'sign', sign.key, currentTime++);
+  }
+  for (const point of second.interior.points) {
+    insertProgress.run(player.id, second.city.cityId, 'location', point.key, currentTime++);
+  }
+  for (const scrap of second.interior.scraps) {
+    insertProgress.run(player.id, second.city.cityId, 'scrap', scrap.key, currentTime++);
+  }
+  store.database.prepare(`
+    INSERT INTO city_exploration
+      (player_id, city_id, x, y, steps, last_encounter_step, updated_at)
+    VALUES (?, ?, ?, ?, 0, 0, ?)
+  `).run(player.id, second.city.cityId, finalSign.x, finalSign.y, currentTime++);
+  const secondCompletion = store.readCityExplorationSign(
+    player.id, finalSign.key, currentTime++
+  );
+  assert.equal(secondCompletion.stone?.id, CITY_COMPLETION_STONE.id);
+  assert.equal(secondCompletion.stone?.cityId, second.city.cityId);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM city_completion_stones WHERE player_id = ?
+  `).get(player.id).count, 2);
+  assert.equal(store.playerById(player.id).stoneCount, 2);
   const balance = store.database.prepare(`
     SELECT quantity FROM recycling_scraps WHERE player_id = ? AND city_id = ?
-  `).get(player.id, player.cityId).quantity;
+  `).get(player.id, initial.city.cityId).quantity;
   assert.equal(balance, progress.scrapsCollected
     + CITY_LOCATION_REWARD_SCRAPS + CITY_NOTICE_REWARD_SCRAPS);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   store.close();
 });
 
@@ -599,10 +675,24 @@ test('the authenticated city page exposes a centered mouse-driven street plan', 
   assert.match(homeHtml, /id="home-dream-open"[^>]*>Lie down and dream/);
   assert.match(homeHtml, /id="home-dream-dialog"/);
   assert.match(homeHtml, /dreams in Legendary/);
+  assert.match(homeHtml, /src="\/node\/home\/bed\.svg"/);
+  assert.match(homeHtml, /src="\/node\/home\/bed-dream\.svg"/);
+  assert.doesNotMatch(homeHtml, /home-bed-mattress|home-bed-quilt|home-bed-footboard/);
   assert.equal((homeHtml.match(/data-dream-slot/gu) ?? []).length, 8);
   assert.match(homeHtml, /id="home-dream-data" type="application\/json"/);
   assert.match(homeHtml, /\/node\/home-dream\.js/);
   assert.match(homeHtml, /Dwelling market · Coming soon/);
+  for (const [path, title] of [
+    ['/node/home/bed.svg', 'Council-standard wooden bed'],
+    ['/node/home/bed-dream.svg', 'A miner sleeping in a Council-standard bed']
+  ]) {
+    const bedArt = await fetch(`${base}${path}`);
+    assert.equal(bedArt.status, 200);
+    assert.match(bedArt.headers.get('content-type'), /image\/svg\+xml/u);
+    const bedSvg = await bedArt.text();
+    assert.match(bedSvg, new RegExp(`<title id="title">${title}</title>`));
+    assert.match(bedSvg, /viewBox="0 0 720 300"/u);
+  }
   for (const [path, title] of [
     ['/explore/departures', 'Vehicle departure area'],
     ['/explore/harbour', 'Harbour'],
@@ -624,6 +714,13 @@ test('the authenticated city page exposes a centered mouse-driven street plan', 
     assert.equal(civicPlace.status, 200);
     assert.match(civicHtml, expected);
     assert.match(civicHtml, /Return to the streets/);
+    if (path === '/explore/landmark') {
+      assert.match(civicHtml,
+        /<svg class="city-landmark-art city-landmark-art-[a-z]+"[^>]+role="img"/u);
+      assert.match(civicHtml, /data-architectural-form="[a-z-]+"/u);
+      assert.ok((civicHtml.match(/<(?:path|circle|ellipse)\b/gu) ?? []).length >= 35);
+      assert.doesNotMatch(civicHtml, /class="landmark-structure"/u);
+    }
   }
   const script = await fetch(`${base}/node/city-explore.js`);
   assert.equal(script.status, 200);
@@ -655,5 +752,11 @@ test('the authenticated city page exposes a centered mouse-driven street plan', 
   const liveUpdates = await (await fetch(`${base}/node/live-updates.js`)).text();
   assert.match(liveUpdates, /casino\|oil-field\|explore/,
     'live reconciliation must not replace an active encounter dialog');
-  assert.match(fs.readFileSync('public/app.css', 'utf8'), /The street plan keeps the miner fixed/);
+  const explorerCss = fs.readFileSync('public/app.css', 'utf8');
+  assert.match(explorerCss, /The street plan keeps the miner fixed/);
+  assert.match(explorerCss, /\.city-street-burst::before[^}]+clip-path:/u,
+    'the burst silhouette should live behind its content so it cannot clip text');
+  assert.doesNotMatch(explorerCss, /\.city-street-burst \{[^}]+clip-path:/u,
+    'the popup itself must not clip long messages');
+  assert.match(explorerCss, /\.city-street-burst span \{[^}]+overflow-wrap: anywhere/u);
 });

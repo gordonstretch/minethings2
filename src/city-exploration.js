@@ -73,35 +73,294 @@ const CITY_ARCHITECTURES = Object.freeze([
   { roofPattern: 'tiles', streetMarking: 'crossings', district: 'Tiled old town' }
 ]);
 
-const CITY_LANDMARK_FORMS = Object.freeze([
-  { kind: 'spire', noun: 'Needle Spire', shape: 'a narrow tower balanced above a public arch' },
-  { kind: 'arch', noun: 'Impossible Arch', shape: 'an arch whose unsupported middle hangs over the street' },
-  { kind: 'rotunda', noun: 'Sunken Rotunda', shape: 'a circular hall descending around an open civic hearth' },
-  { kind: 'bridge', noun: 'High Bridge', shape: 'an inhabited bridge joining two otherwise unrelated roofs' },
-  { kind: 'tower', noun: 'Turning Tower', shape: 'a many-sided tower whose upper rooms follow the sun' },
-  { kind: 'arcade', noun: 'Whisper Arcade', shape: 'a colonnade that carries a whisper from end to end' },
-  { kind: 'aqueduct', noun: 'Dry Aqueduct', shape: 'an elevated channel built to carry light instead of water' }
-]);
+const REGION_ARCHITECTURE = Object.freeze({
+  aso: Object.freeze({
+    style: 'Aso volcanic-industrial classicism',
+    material: 'mirror-black basalt, firebrick, and riveted copper-black iron',
+    ornament: 'sunbursts cut through with oil-pipe geometry',
+    details: Object.freeze(['derrick cross-bracing', 'pressure dials', 'ash gutters',
+      'riveted inspection hatches'])
+  }),
+  bromo: Object.freeze({
+    style: 'Bromo ash-and-mycelium expressionism',
+    material: 'porous pumice, smoke-fired brick, and laminated mushroom timber',
+    ornament: 'gilled arches, spore rosettes, and lantern niches',
+    details: Object.freeze(['mushroom-cap corbels', 'spore lanterns', 'deep ash eaves',
+      'woven vent screens'])
+  }),
+  calbuco: Object.freeze({
+    style: 'Calbuco rainwork monumentalism',
+    material: 'storm-dark timber, blue copper, river stone, and glazed cobalt tile',
+    ornament: 'watercourses traced as branching leaves and hammer marks',
+    details: Object.freeze(['exposed timber trusses', 'rain chains', 'copper gutters',
+      'stepped water stairs'])
+  }),
+  dempo: Object.freeze({
+    style: 'Dempo thermal mountain architecture',
+    material: 'columnar basalt, pale ice glass, and heat-blued steel',
+    ornament: 'snow lines interrupted by glowing furnace seams',
+    details: Object.freeze(['snow-shedding buttresses', 'thermal flues', 'ice-glass screens',
+      'basalt stair plinths'])
+  }),
+  ebeko: Object.freeze({
+    style: 'Ebeko polar relay modernism',
+    material: 'frosted glass, insulated brass, dark cedar, and enamelled steel',
+    ornament: 'signal bars, aurora chevrons, and repeating circuit knots',
+    details: Object.freeze(['insulated relay housings', 'steam-return pipes',
+      'frosted observation panes', 'signal vanes'])
+  }),
+  fogo: Object.freeze({
+    style: 'Fogo Atlantic volcanic baroque',
+    material: 'red scoria, smoke-grey render, relic bronze, and salt-white stone',
+    ornament: 'flame finials, wave scrolls, and empty reliquary frames',
+    details: Object.freeze(['lava-cooling vents', 'relic niches', 'ash screens',
+      'ocean-facing buttresses'])
+  }),
+  gallego: Object.freeze({
+    style: 'Gallego tidal cosmopolitan masonry',
+    material: 'honey limestone, coral concrete, dark teak, and turquoise ceramic',
+    ornament: 'tide calendars, star courses, and interlocking canal lines',
+    details: Object.freeze(['coral latticework', 'tide clocks', 'canal arches',
+      'inlaid route stars'])
+  })
+});
 
-const CITY_LANDMARK_MATERIALS = Object.freeze([
-  { adjective: 'Counterweighted', material: 'blackened iron and pale Council stone' },
-  { adjective: 'Glassbound', material: 'coloured glass held in riveted salvage frames' },
-  { adjective: 'Ash-Crowned', material: 'fired brick dusted with the region’s oldest ash' },
-  { adjective: 'Root-Woven', material: 'living timber pinned through reclaimed masonry' },
-  { adjective: 'Star-Marked', material: 'blue-black blocks scored with obsolete route maps' }
+function landmarkDefinition(kind, name, form, silhouette, symmetry, storeys, bays, roof,
+  setting, description, details) {
+  return Object.freeze({
+    kind, name, form, silhouette, symmetry, storeys, bays, roof, setting, description,
+    details: Object.freeze(details)
+  });
+}
+
+// These are authored civic works rather than interchangeable names assembled at runtime.
+// The compact drafting data is consumed by the landmark renderer and is deliberately stable:
+// city interiors are persisted, so changing it should never reshuffle streets or destinations.
+const CITY_LANDMARKS = Object.freeze({
+  Cinderwake: landmarkDefinition('spire', 'Cinderwake Derrick Basilica',
+    'derrick-basilica', 'a cathedral nave shouldering a skeletal extraction tower', 'axial', 6, 7,
+    'a saw-toothed copper roof around an open derrick crown', 'on a raised oil-dark civic apron',
+    'A working derrick rises through a processional basilica, turning pipes, gantries, and pressure vessels into civic columns.',
+    ['flying pipe buttresses', 'a crown of counterweighted walking beams', 'a glazed gauge rose', 'flare-stack pinnacles']),
+  'Obsidian Quay': landmarkDefinition('arcade', 'Obsidian Quay Tideglass Customs Arcade',
+    'customs-arcade', 'a long sea wall pierced by tall customs arches', 'axial', 3, 11,
+    'a low lantern roof behind a crenellated parapet', 'built directly into the black quay wall',
+    'Customs halls, tide gates, and a covered merchants\' walk form one precise waterfront facade reflected in the harbour.',
+    ['eleven pointed inspection arches', 'tide-height rulers', 'suspended cargo scales', 'glass customs booths']),
+  'Sulfur Crown': landmarkDefinition('rotunda', 'Sulfur Crown Fumarole Observatory',
+    'fumarole-observatory', 'concentric terraces surrounding a vented copper dome', 'radial', 4, 12,
+    'a split dome venting a permanent white plume', 'straddling the lip of a living fumarole',
+    'A ring observatory turns volcanic breath through calibrated chambers before releasing it from a divided dome.',
+    ['radial instrument galleries', 'twelve wind chimneys', 'sulfur crystal screens', 'external spiral stairs']),
+  'Lahar Rest': landmarkDefinition('bridge', 'Lahar Rest Nine-Channel Hospice',
+    'channel-hospice', 'an inhabited bridge carried across nine spillways', 'bilateral', 4, 9,
+    'nine linked pitched roofs with deep rain eaves', 'spanning the old lahar diversion channels',
+    'A fortified hospice bridges the flood works so travellers can shelter above the channels when the mountain begins to move.',
+    ['nine masonry spillway arches', 'covered refuge balconies', 'flood-bell turrets', 'debris-deflecting cutwaters']),
+  Blackglass: landmarkDefinition('tower', 'Blackglass Mirror-Basalt Hall',
+    'mirror-basalt-hall', 'three offset monoliths framing a narrow atrium', 'asymmetric', 7, 5,
+    'knife-edged terraces stepping toward the sea', 'set in a court of polished volcanic glass',
+    'Three polished basalt slabs lean together without touching, enclosing a civic hall made bright by reflected sky.',
+    ['mirror-cut wall planes', 'suspended council chamber', 'slit clerestories', 'black-glass reflecting pool']),
+
+  Ashfall: landmarkDefinition('rotunda', 'Ashfall Spore Lantern Parliament',
+    'spore-parliament', 'a broad gilled dome above a circular debating chamber', 'radial', 3, 16,
+    'a layered cap roof ringed with breathing lanterns', 'within a sunken garden of pale fungus',
+    'The parliamentary chamber is grown around a stone drum; its breathing roof filters ash and glows as debates run late.',
+    ['sixteen gill ribs', 'bioluminescent voting lamps', 'spore-filter cupolas', 'root-bound public benches']),
+  'Tengger Gate': landmarkDefinition('arch', 'Tengger Gate Twin-Caldera Gatehouse',
+    'caldera-gatehouse', 'two hollow cones joined by a monumental road arch', 'bilateral', 5, 3,
+    'paired crater roofs with smoking oculi', 'commanding the pass between ash ridges',
+    'Paired gate towers imitate neighbouring volcanoes and hold the roadway beneath a bridge crowded with watch rooms.',
+    ['crater oculi', 'layered pumice voussoirs', 'portcullis counterweights', 'ash-measuring staffs']),
+  Sandsea: landmarkDefinition('arcade', 'Sandsea Wind-Carved Caravanserai',
+    'wind-carved-caravanserai', 'a low square fortress enclosing a forest of shade vaults', 'quadrilateral', 2, 13,
+    'four scooped wind towers above a flat court roof', 'half-buried in migrating grey dunes',
+    'A caravan court turns abrasive winds through sculpted towers, cooling workshops and continually redrawing its exterior.',
+    ['wind-scoop towers', 'thirteen shaded trade bays', 'sand-trap screens', 'mushroom-timber loading doors']),
+  'Ember Market': landmarkDefinition('tower', 'Ember Market Hanging Kiln Exchange',
+    'hanging-kiln-exchange', 'stacked market decks clustered around a furnace tower', 'asymmetric', 6, 8,
+    'a crown of suspended bottle kilns', 'over a crowded intersection of covered lanes',
+    'Kilns hang from an iron trading tower so their heat rises clear of the market while wares descend by chain lift.',
+    ['suspended bottle kilns', 'external goods hoists', 'ticker-bell balconies', 'heat-shield awnings']),
+  Craterwatch: landmarkDefinition('aqueduct', 'Craterwatch Ringwall Observatory',
+    'ringwall-observatory', 'an open circular wall interrupted by three tall sighting piers', 'radial', 3, 18,
+    'a narrow covered walk following the crater rim', 'wrapped around the highest inhabited crater',
+    'An inhabited survey ring encircles the crater, aligning its piers with vents, stars, and roads that have not yet opened.',
+    ['three meridian piers', 'eighteen observation bays', 'hinged sighting bridges', 'engraved eruption chronicle']),
+
+  Stormcrag: landmarkDefinition('tower', 'Stormcrag Tempest Bell Citadel',
+    'tempest-bell-citadel', 'a battered sea keep carrying an enormous open bell frame', 'axial', 7, 5,
+    'a copper storm hood split around the bell', 'anchored to a cliff above the harbour',
+    'A cliff citadel braces the harbour bell between rain towers, giving storms a structure large enough to play.',
+    ['storm-chain flying buttresses', 'five weather balconies', 'lightning combs', 'a tide-driven bell wheel']),
+  Llanquihue: landmarkDefinition('rotunda', 'Llanquihue Lake-Stair Conservatory',
+    'lake-stair-conservatory', 'a glass drum descending in terraces into the lake', 'radial', 4, 10,
+    'a shallow faceted glass dome', 'where garden terraces meet deep blue water',
+    'A botanical rotunda steps below the waterline, joining rain gardens, public baths, and submerged viewing rooms.',
+    ['ten radial winter gardens', 'submerged cobalt windows', 'overflow stair cascades', 'reed-filter colonnades']),
+  'Ashen Harbor': landmarkDefinition('arcade', 'Ashen Harbor Drowned Foundry Loggia',
+    'drowned-foundry-loggia', 'a roofless furnace hall standing on tidal arcades', 'axial', 3, 9,
+    'an exposed truss roof carrying cranes instead of tiles', 'over the flooded remains of the first foundry',
+    'The old foundry floor lies beneath the tide while its arcades, cranes, and furnace stacks continue as a public quay.',
+    ['tidal casting pits', 'nine blue-copper arches', 'travelling roof cranes', 'water-cooled furnace stacks']),
+  Rainforge: landmarkDefinition('bridge', 'Rainforge Cascade Hammerhall',
+    'cascade-hammerhall', 'a stepped industrial hall bridging a vertical watercourse', 'axial', 5, 7,
+    'descending copper roofs that channel rain to the forge', 'built across a natural cascade',
+    'Water falls through seven hammer stages beneath a public hall whose roof, gutters, and machinery form one continuous section.',
+    ['seven water hammers', 'open gear galleries', 'rain-chain colonnade', 'spray-cooled clerestory']),
+  'Cobalt Ridge': landmarkDefinition('aqueduct', 'Cobalt Ridge Blue Ore Viaduct',
+    'ore-viaduct', 'a tall procession of tapering arches carrying workshops', 'axial', 4, 14,
+    'a serrated line of glazed cobalt workshops', 'following the knife edge of the ridge',
+    'A mineral railway, water channel, and chain of narrow workshops share a viaduct visible from every approach.',
+    ['fourteen tapering stone arches', 'ore-drop chutes', 'cobalt tile friezes', 'cantilevered survey platforms']),
+
+  Emberdeep: landmarkDefinition('rotunda', 'Emberdeep Inverted Hearth Monastery',
+    'inverted-hearth-monastery', 'a descending octagonal monastery around a glowing central shaft', 'radial', 6, 8,
+    'a low snow roof surrounding an open thermal oculus', 'excavated into warm rock below the square',
+    'Monastic galleries descend toward a communal hearth, exposing a complete architectural section from the street above.',
+    ['eight descending cloisters', 'thermal prayer flues', 'hanging basalt stairs', 'an ice-rimmed central oculus']),
+  'Sumatran Reach': landmarkDefinition('bridge', 'Sumatran Reach Cloudstep Audience Hall',
+    'cloudstep-audience-hall', 'a long hall hopping between three mountain pinnacles', 'asymmetric', 4, 12,
+    'three steep roofs linked by glass wind bridges', 'suspended above a permanent cloud deck',
+    'Council chambers occupy three separate crags connected by enclosed bridges whose floors reveal the cloud below.',
+    ['twelve wind-braced bays', 'glass-bottom bridges', 'pinnacle anchor chains', 'cloud-catching roof fins']),
+  'Basalt Steps': landmarkDefinition('tower', 'Basalt Steps Thousand-Tread Ziggurat',
+    'thousand-tread-ziggurat', 'a broad stepped mountain of civic chambers', 'axial', 9, 9,
+    'a flat furnace court above nine receding terraces', 'rising from a field of natural basalt columns',
+    'Natural columns and fitted masonry merge into a terraced civic mountain whose ramps measure exactly one thousand treads.',
+    ['processional switchback ramps', 'columnar-basalt retaining walls', 'thermal rest chambers', 'a summit beacon court']),
+  Cloudforest: landmarkDefinition('arcade', 'Cloudforest Canopy Archive',
+    'canopy-archive', 'slender archive towers joined high above the forest floor', 'asymmetric', 8, 6,
+    'leaf-thin roofs draining toward a central mist cistern', 'threaded through living cloudforest trunks',
+    'Books and weather records occupy bridge rooms suspended between protected trees, leaving the forest floor unbroken.',
+    ['tree-cradling collars', 'six high bridge stacks', 'mist-catching roof nets', 'counterweighted spiral lifts']),
+  'Furnace Bay': landmarkDefinition('arch', 'Furnace Bay Thermal Drydock Cathedral',
+    'thermal-drydock-cathedral', 'a pointed drydock nave enclosed by furnace towers', 'axial', 6, 7,
+    'a ribbed retractable roof over the dock void', 'cut into the steaming edge of the bay',
+    'A monumental drydock borrows cathedral proportions, using geothermal heat to dry hulls beneath retractable steel ribs.',
+    ['seven ship-rib arches', 'paired furnace towers', 'floodgate rose window', 'steam-condensing gargoyles']),
+
+  Frostmere: landmarkDefinition('tower', 'Frostmere Aurora Relay Palace',
+    'aurora-relay-palace', 'a low palace pierced by a single luminous signal mast', 'axial', 5, 15,
+    'a shallow insulated roof beneath an open relay crown', 'at the centre of a frozen signal court',
+    'Public rooms wrap a relay mast whose glass fins translate auroral light into messages no operator admits sending.',
+    ['fifteen enamelled signal bays', 'aurora-glass fins', 'heated public arcades', 'a brass waveguide crown']),
+  'Kuril Haven': landmarkDefinition('aqueduct', 'Kuril Haven Steamglass Breakwater',
+    'steamglass-breakwater', 'a curving inhabited wall of glass-faced caissons', 'curvilinear', 3, 12,
+    'a continuous wave roof punctuated by steam chimneys', 'sweeping around the icebound harbour',
+    'A civic breakwater contains baths, signal rooms, and heated arcades behind glass panels clouded by every arriving wave.',
+    ['twelve wave caissons', 'heated lookout bays', 'ice-breaking cutwaters', 'condensation channels']),
+  Snowmelt: landmarkDefinition('spire', 'Snowmelt Thawwater Clocktower',
+    'thawwater-clocktower', 'a slender water clock stepped above public cisterns', 'axial', 8, 4,
+    'a four-faced clock crown beneath a needle finial', 'where every meltwater channel converges',
+    'Seasonal meltwater descends through visible gauges, driving a clock whose face changes scale between winter and spring.',
+    ['glass water columns', 'four season dials', 'overflow chime bowls', 'heated maintenance galleries']),
+  Steamward: landmarkDefinition('rotunda', 'Steamward Great Condenser Forum',
+    'condenser-forum', 'a circular forum surrounded by rising condenser fins', 'radial', 4, 20,
+    'an open ring roof crossed by steam pipes', 'above the junction of the district heating mains',
+    'Twenty copper condenser towers make a civic forum from the region\'s exhaust, filling its centre with warm artificial rain.',
+    ['twenty radial condenser fins', 'overhead steam manifold', 'rain-catching council benches', 'pressure-relief sculptures']),
+  Northglass: landmarkDefinition('arch', 'Northglass Polar Prism Keep',
+    'polar-prism-keep', 'a severe keep split by a full-height crystalline arch', 'bilateral', 7, 6,
+    'two dark roof slabs framing a faceted prism', 'on the last ridge before the polar ice',
+    'Twin cedar-and-steel towers hold a vast glass prism that bends the low sun through every occupied floor.',
+    ['full-height prism arch', 'six heated bridge chambers', 'faceted solar screens', 'snow-cornice cutters']),
+
+  Brimstone: landmarkDefinition('rotunda', 'Brimstone Cinder Archive Pantheon',
+    'archive-pantheon', 'a heavy drum and coffered dome ringed by archive towers', 'radial', 5, 12,
+    'a vented relic-bronze dome dusted in pale ash', 'at the head of the old processional road',
+    'A domed archive stores objects in deep wall niches while its central floor records every eruption as a new inlaid ring.',
+    ['twelve archive exedrae', 'coffered smoke vents', 'eruption-ring pavement', 'bronze catalogue doors']),
+  Caldera: landmarkDefinition('bridge', 'Caldera Suspended Crater Amphitheatre',
+    'crater-amphitheatre', 'crescent seating hung from cables inside a crater wall', 'radial', 7, 14,
+    'a floating canvas corona above the open arena', 'suspended over an active caldera throat',
+    'An amphitheatre hangs within the crater on immense chains, using the volcano itself as stage, orchestra, and warning system.',
+    ['fourteen cable masts', 'chain-hung seating crescents', 'retractable ash canopy', 'seismic tuning forks']),
+  Mosteiros: landmarkDefinition('arcade', 'Mosteiros Black Cloister of Returned Things',
+    'relic-cloister', 'a square arcaded monastery crowded with mismatched chapels', 'quadrilateral', 3, 16,
+    'steep tiled walks surrounding an open relic court', 'among old lava walls above the western shore',
+    'Recovered structures from lost settlements form a cloister in which no two arches, columns, or doors quite agree.',
+    ['sixteen mismatched arches', 'labelled relic niches', 'salvaged column capitals', 'a tide-polished central court']),
+  Lavafields: landmarkDefinition('aqueduct', 'Lavafields Ember Aqueduct',
+    'ember-aqueduct', 'a long double arcade carrying water above glowing lava cuts', 'axial', 3, 17,
+    'an open maintenance walk lined with heat shields', 'crossing the fractured eastern lava plain',
+    'Cold water and public footways share a monumental arcade whose lowest piers disappear into still-warm fissures.',
+    ['seventeen heat-jointed arches', 'ceramic expansion rollers', 'glowing inspection wells', 'wave-scroll water spouts']),
+  'Porto Cinza': landmarkDefinition('spire', 'Porto Cinza Ash-Sail Harbour Tower',
+    'ash-sail-harbour-tower', 'a harbour tower wrapped by three rigid sail planes', 'asymmetric', 9, 5,
+    'three bronze sail roofs turning around a signal lantern', 'on the outermost ash-grey mole',
+    'Rigid metal sails wrap a harbour tower, sheltering signal rooms while presenting a different profile to every vessel.',
+    ['three riveted sail planes', 'five harbour clocks', 'external lantern stair', 'salt-catching relief panels']),
+
+  "Tzolk'in": landmarkDefinition('bridge', "Tzolk'in Calendar Causeway",
+    'calendar-causeway', 'a stepped ceremonial bridge punctuated by calendar towers', 'axial', 5, 13,
+    'flat observatory roofs aligned to seasonal sunrise', 'crossing the capital lagoon on massive piers',
+    'A civic causeway doubles as a calendar: thirteen towers, tidal stairs, and shadow lines mark every permitted departure.',
+    ['thirteen calendar towers', 'tide-cut staircases', 'obsidian shadow rails', 'turquoise route mosaics']),
+  Burgundy: landmarkDefinition('tower', 'Burgundy Vine-Gear Hotel de Ville',
+    'vine-gear-town-hall', 'a many-gabled town hall clustered around an open clock cage', 'axial', 6, 9,
+    'steep slate gables climbing toward a wrought gear crown', 'fronting a narrow canal square',
+    'A mercantile town hall binds stone gables, timber galleries, and a giant exposed civic clock with curling metal vines.',
+    ['nine carved merchant bays', 'open escapement clock', 'vine-scroll iron balconies', 'canal-side loading arcade']),
+  Kemet: landmarkDefinition('arch', 'Kemet Solar Pylon Library',
+    'solar-pylon-library', 'two battered pylons framing a narrow sunlit court', 'bilateral', 5, 10,
+    'flat reading terraces beneath a suspended sun disc', 'aligned with the longest canal in the city',
+    'Paired archive pylons focus noon light into an open reading court, illuminating one route tablet at a time.',
+    ['ten recessed archive bays', 'suspended bronze sun disc', 'lotus-form ventilation grilles', 'star-chart parapets']),
+  Belfort: landmarkDefinition('spire', 'Belfort Route-Keeper Belfry',
+    'route-keeper-belfry', 'a fortified civic block rising to a perforated bell tower', 'axial', 8, 6,
+    'a steep pyramidal cap above an open timber bell cage', 'where three old roads meet the canal wall',
+    'An armoury-like belfry holds route bells of different metals, each sounded by a mechanism connected to a city gate.',
+    ['six route bell chambers', 'lion-headed counterweights', 'gate-linked rodwork', 'machicolated public gallery']),
+  'San Juan': landmarkDefinition('arcade', 'San Juan Coral Fort of Seven Tides',
+    'coral-tide-fort', 'a star fort softened by deep arcades and tidal gardens', 'radial', 4, 7,
+    'seven low bastion roofs around a central lantern court', 'occupying a reef at the harbour entrance',
+    'A seven-pointed sea fort opens its lower arcades to each tide, filling defensive courts with gardens, fish, and reflected light.',
+    ['seven tide bastions', 'coral-concrete casemates', 'floodable garden courts', 'a teak signal lantern'])
+});
+
+const FALLBACK_LANDMARKS = Object.freeze([
+  Object.freeze({ kind: 'spire', form: 'needle-spire', noun: 'Survey Spire' }),
+  Object.freeze({ kind: 'arch', form: 'civic-arch', noun: 'Council Arch' }),
+  Object.freeze({ kind: 'rotunda', form: 'civic-rotunda', noun: 'Assembly Rotunda' }),
+  Object.freeze({ kind: 'bridge', form: 'inhabited-bridge', noun: 'High Bridge' }),
+  Object.freeze({ kind: 'tower', form: 'civic-tower', noun: 'Route Tower' }),
+  Object.freeze({ kind: 'arcade', form: 'civic-arcade', noun: 'Public Arcade' }),
+  Object.freeze({ kind: 'aqueduct', form: 'civic-aqueduct', noun: 'Light Aqueduct' })
 ]);
 
 function cityLandmark(context) {
-  const index = Math.max(0, Number(context.cityId) - 1);
-  const form = CITY_LANDMARK_FORMS[index % CITY_LANDMARK_FORMS.length];
-  const material = CITY_LANDMARK_MATERIALS[
-    Math.floor(index / CITY_LANDMARK_FORMS.length) % CITY_LANDMARK_MATERIALS.length
-  ];
+  const cityId = Math.max(1, Number(context.cityId) || 1);
+  const regional = REGION_ARCHITECTURE[context.mapSlug] ?? REGION_ARCHITECTURE.aso;
+  const authored = Object.hasOwn(CITY_LANDMARKS, context.cityName)
+    ? CITY_LANDMARKS[context.cityName] : null;
+  const fallback = FALLBACK_LANDMARKS[(cityId - 1) % FALLBACK_LANDMARKS.length];
+  const landmark = authored ?? {
+    ...fallback, name: `${context.cityName} ${fallback.noun}`,
+    silhouette: 'a carefully proportioned public monument above the surrounding roofs',
+    symmetry: 'axial', storeys: 4, bays: 7, roof: 'a deeply modelled civic roof',
+    setting: 'at the meeting of the city\'s oldest streets',
+    description: 'A singular public work assembled from regional craft and recovered Council plans.',
+    details: ['survey marks', 'public stairs', 'deep window reveals', 'a route marker crown']
+  };
   return {
-    kind: form.kind,
-    name: `${context.cityName} ${material.adjective} ${form.noun}`,
-    material: material.material,
-    description: `${form.shape[0].toUpperCase()}${form.shape.slice(1)}, built from ${material.material}.`
+    kind: landmark.kind,
+    name: landmark.name,
+    material: regional.material,
+    description: `${landmark.description} It is built from ${regional.material}, with ${regional.ornament}.`,
+    form: landmark.form,
+    style: regional.style,
+    silhouette: landmark.silhouette,
+    symmetry: landmark.symmetry,
+    storeys: landmark.storeys,
+    bays: landmark.bays,
+    roof: landmark.roof,
+    setting: landmark.setting,
+    ornament: regional.ornament,
+    details: [...regional.details, ...landmark.details],
+    detailSeed: hashSeed('city-landmark-detail', context.mapSlug ?? 'aso', cityId,
+      context.cityName ?? 'Unknown')
   };
 }
 

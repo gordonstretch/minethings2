@@ -148,7 +148,7 @@ tests, portal and PHP source, audit captures, and development dependencies. Run 
 - seven distinct worlds—Aso, Bromo, Calbuco, Dempo, Ebeko, Fogo, and Gallego—recast as fully playable five-city maps, each with one shared gateway capital, 15 mine types, and a local land/sea/air network; their initially closed 12,000 km inter-map corridors are controlled from Administration
 - all original vehicle, land, ship, aircraft, mod, weapon, cannon, ammunition, bomb, box, and rating-tier catalog records
 - vehicle cargo, rarity-class restrictions, mods, weapons, oil, ship cannons, ammunition crates, peaceful/pillage/patrol orders with automatic same-tier targeting, pursuit, land and ship combat, original port and post-battle repairs, route-safe zones, timed/replanned encounters, journey disarming, protected pillage cargo, immediate sinking with complete location-accurate wrecks, per-shot battle histories, and three-month PvP seasons with tier-stepping transport prizes
-- all eight permanent credit-shop containers, with duplicate ownership and one capacity bonus per container type
+- a 500-Thing base inventory limit and all eight permanent credit-shop containers, with one capacity bonus per type raising the absolute limit to 1,000; duplicate containers remain owned without increasing capacity
 - the original rarity algorithm and 698 discoverable catalog items, including the four new Dwarf tiers
 - inventory, item details, selling, credits, and purchasing mine types
 - public, sourced History and versioned Legal pages; registration consent and PayPal-hosted GBP credit checkout with receipts, webhook recovery, reversals, and administrator auditing

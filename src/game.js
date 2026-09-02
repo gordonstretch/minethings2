@@ -355,6 +355,9 @@ function dismantleMine(player, mine) {
 export function sellMine(player, catalog, mineId) {
   const mine = mineInCurrentCity(player, mineId, false);
   if (mine.rentalUntil) throw new Error('That mine cannot be sold.');
+  if (mine.sourceKind === 'profession-kit') {
+    throw new Error('Profession Kit mines are permanent grants and cannot be sold.');
+  }
   const ownedMines = player.mines.filter((candidate) => !candidate.rentalUntil);
   if (ownedMines.length <= Number(setting(catalog, 'minimum_permanent_mines'))) {
     throw new Error('You cannot sell your last permanent mine.');

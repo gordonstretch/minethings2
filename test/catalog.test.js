@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
 import {
-  ELECTRONICS_CATALOG, loadLegacyCatalog, parseValues, RELICS_CATALOG, SHROOM_CATALOG,
+  ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog, parseValues,
+  RELICS_CATALOG, SHROOM_CATALOG,
   WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
 
@@ -46,6 +47,17 @@ test('loads the playable catalog from the legacy dump', () => {
     { name: 'Tin Shield', rarity: 1, behavior: 'shield' },
     { name: 'Tin Turbo Engine', rarity: 1, behavior: 'turbo' },
     { name: 'Tin Radar', rarity: 1, behavior: 'radar' }
+  ]);
+  assert.deepEqual(welcomePack.itemGrants.map((grant) => ({
+    name: catalog.byId.get(grant.itemId)?.name,
+    quantity: grant.quantity,
+    machine: catalog.machineByItemId.get(grant.itemId)?.type ?? null,
+    explosive: catalog.explosiveByItemId.has(grant.itemId)
+  })), [
+    { name: 'Tin Pad', quantity: 1, machine: 'pad', explosive: false },
+    { name: 'Tin Pump', quantity: 1, machine: 'pump', explosive: false },
+    { name: 'Tin Pipe200', quantity: 4, machine: 'pipe200', explosive: false },
+    { name: 'M-80', quantity: 5, machine: null, explosive: true }
   ]);
   assert.deepEqual(welcomePack.rentalMineTypeIds, [4, 5]);
   assert.deepEqual(welcomePack.rentalMineTypeIds.map((mineTypeId) =>
@@ -122,10 +134,16 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.avatarElements.length, 156);
   assert.equal(catalog.avatarElementByItemId.get(avatar.itemId).id, avatar.id);
   assert.equal(catalog.avatarElementTypeById.get(avatar.typeId).name, 'Borders');
-  assert.equal(catalog.stones.length, 66);
+  assert.equal(catalog.stones.length, 69);
   assert.equal(catalog.stones[0].name, 'Chatted');
-  assert.equal(catalog.stones.at(-1).name, 'Homed');
+  assert.equal(catalog.stones.at(-1).name, 'Completionist');
   assert.equal(catalog.stones.find((stone) => stone.name === 'Jackpotted').rarity, 6);
+  assert.equal(catalog.settings.starter_item_limit, INVENTORY_CAPACITY_RULES.base);
+  assert.equal(catalog.containers.reduce((sum, container) => sum + container.capacity, 0),
+    INVENTORY_CAPACITY_RULES.maximum - INVENTORY_CAPACITY_RULES.base);
+  assert.deepEqual(catalog.containers.map(({ id, capacity }) => ({ id, capacity })),
+    Object.entries(INVENTORY_CAPACITY_RULES.containerCapacities)
+      .map(([id, capacity]) => ({ id: Number(id), capacity })));
 
   const shrooms = catalog.items.filter((item) =>
     item.mineTypeId === SHROOM_CATALOG.mineType.id);

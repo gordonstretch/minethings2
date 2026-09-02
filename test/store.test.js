@@ -222,7 +222,7 @@ test('counts contextual extraction links and operations available in the current
 
   assert.deepEqual(store.cityOperationCounts(saved.id), {
     mines: player.mines.length,
-    things: 8,
+    things: 4,
     dwarves: 3,
     gadgets: 4,
     melds: 1,
@@ -253,13 +253,14 @@ test('counts contextual extraction links and operations available in the current
       AND catalog_cities.map_id = (
         SELECT map_id FROM catalog_cities WHERE id = ?
       )
+      AND catalog_cities.id NOT IN (?, ?)
     ORDER BY catalog_cities.id LIMIT 1
-  `).get(oilFieldCityId).id);
+  `).get(oilFieldCityId, oilFieldCityId, capitalCityId).id);
   store.database.prepare('UPDATE players SET city_id = ? WHERE id = ?')
     .run(nonFieldCityId, saved.id);
   assert.deepEqual(store.cityOperationCounts(saved.id), {
     mines: 0,
-    things: 8,
+    things: 0,
     dwarves: 3,
     gadgets: 4,
     melds: 1,
@@ -971,7 +972,7 @@ test('maintenance still delivers recorded findings when another subsystem fails'
 test('creates the findings and restless-wreck ledgers on a fresh database', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   const findingColumns = store.database.prepare('PRAGMA table_info(finding_events)')
     .all().map((column) => column.name);
   assert.deepEqual(findingColumns, [
@@ -1020,7 +1021,7 @@ test('migrates a v125 database to the restless-wreck ledger once', (context) => 
   });
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.ok(store.database.prepare(`
     SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ghost_wrecks'
   `).get());
@@ -1036,7 +1037,7 @@ test('migrates a v125 database to the restless-wreck ledger once', (context) => 
 
   store.close();
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
 });
 
 test('migrates v109 databases to the starter welcome-pack setting without backfilling miners', (context) => {
@@ -1072,7 +1073,7 @@ test('migrates v109 databases to the starter welcome-pack setting without backfi
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual(JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'starter_welcome_pack'
   `).get().value_json), LEGACY_STARTER_WELCOME_PACK);
@@ -1081,6 +1082,9 @@ test('migrates v109 databases to the starter welcome-pack setting without backfi
   assert.equal(unchanged.inventory[LEGACY_STARTER_WELCOME_PACK.dwarfItemId], undefined);
   for (const gadgetItemId of LEGACY_STARTER_WELCOME_PACK.gadgetItemIds) {
     assert.equal(unchanged.inventory[gadgetItemId], undefined);
+  }
+  for (const { itemId } of LEGACY_STARTER_WELCOME_PACK.itemGrants) {
+    assert.equal(unchanged.inventory[itemId], undefined);
   }
   assert.equal(unchanged.cryptoBalances[LEGACY_STARTER_WELCOME_PACK.cryptoTypeId], undefined);
   assert.equal(unchanged.mines.filter((mine) => mine.rentalUntil > 0).length, 0);
@@ -1120,7 +1124,7 @@ test('upgrades legacy starter packs without backfilling miners', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual(JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'starter_welcome_pack'
   `).get().value_json), {
@@ -1129,7 +1133,8 @@ test('upgrades legacy starter packs without backfilling miners', (context) => {
     rentalMineTypeIds: LEGACY_STARTER_WELCOME_PACK.rentalMineTypeIds,
     casinoVoucherCryptoTypeId: LEGACY_STARTER_WELCOME_PACK.casinoVoucherCryptoTypeId,
     casinoVoucherQuantity: LEGACY_STARTER_WELCOME_PACK.casinoVoucherQuantity,
-    gadgetItemIds: LEGACY_STARTER_WELCOME_PACK.gadgetItemIds
+    gadgetItemIds: LEGACY_STARTER_WELCOME_PACK.gadgetItemIds,
+    itemGrants: LEGACY_STARTER_WELCOME_PACK.itemGrants
   });
   const unchanged = store.playerById(existing.id);
   assert.equal(unchanged.inventory[
@@ -1137,6 +1142,9 @@ test('upgrades legacy starter packs without backfilling miners', (context) => {
   ], undefined);
   for (const gadgetItemId of LEGACY_STARTER_WELCOME_PACK.gadgetItemIds) {
     assert.equal(unchanged.inventory[gadgetItemId], undefined);
+  }
+  for (const { itemId } of LEGACY_STARTER_WELCOME_PACK.itemGrants) {
+    assert.equal(unchanged.inventory[itemId], undefined);
   }
   assert.equal(unchanged.mines.filter((mine) => mine.rentalUntil > 0).length, 0);
   assert.equal(store.casinoState(existing.id).currencies.find((currency) =>
@@ -1170,6 +1178,15 @@ test('upgrades legacy starter packs without backfilling miners', (context) => {
     gadgetItemIds: LEGACY_STARTER_WELCOME_PACK.gadgetItemIds,
     changed: true
   });
+  const supplyMigration = store.database.prepare(`
+    SELECT applied_at, details_json FROM schema_migrations
+    WHERE name = 'starter-oil-field-and-m80-supplies-v1'
+  `).get();
+  assert.ok(supplyMigration);
+  assert.deepEqual(JSON.parse(supplyMigration.details_json), {
+    itemGrants: LEGACY_STARTER_WELCOME_PACK.itemGrants,
+    changed: true
+  });
 
   store.close();
   store = new SqliteStore(databaseFile);
@@ -1185,6 +1202,10 @@ test('upgrades legacy starter packs without backfilling miners', (context) => {
     SELECT applied_at, details_json FROM schema_migrations
     WHERE name = 'starter-council-gadgets-v1'
   `).all(), [gadgetMigration]);
+  assert.deepEqual(store.database.prepare(`
+    SELECT applied_at, details_json FROM schema_migrations
+    WHERE name = 'starter-oil-field-and-m80-supplies-v1'
+  `).all(), [supplyMigration]);
 });
 
 test('migrates v103 databases to the creature attack-name catalog setting', (context) => {
@@ -1203,7 +1224,7 @@ test('migrates v103 databases to the creature attack-name catalog setting', (con
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   const attackNames = JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'world_creature_attack_names'
   `).get().value_json);
@@ -1248,7 +1269,7 @@ test('migrates a v88 database to the durable findings digest schema exactly once
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.ok(store.database.prepare(
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'finding_events'"
   ).get());
@@ -1271,7 +1292,7 @@ test('migrates a v88 database to the durable findings digest schema exactly once
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.database.prepare(
     "SELECT COUNT(*) AS count FROM catalog_settings WHERE key LIKE 'daily_findings_%'"
   ).get().count, 2, 'reopening v89 does not replay the migration');
@@ -1302,7 +1323,7 @@ test('migrates v124 players without replaying their historical finding ledger', 
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.database.prepare(`
     SELECT delivered_through_id FROM player_finding_notice_state WHERE player_id = ?
   `).get(player.id).delivered_through_id, historicalMaximum);
@@ -1353,7 +1374,7 @@ test('migrates legacy state and all live catalog data to the current schema', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   for (const table of ['catalog_rarities', 'catalog_equipment_types', 'catalog_bot_parts',
     'catalog_specialisations', 'catalog_specialisation_bonuses', 'catalog_dwarf_tiers',
     'catalog_settings', 'catalog_labels', 'external_auth_identities', 'combat_seasons',
@@ -1648,7 +1669,7 @@ test('migrates v84 creatures and their pursuit history into tiered route actors'
   legacy.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.database.prepare('PRAGMA foreign_key_check').get(), undefined);
   const creature = store.database.prepare('SELECT * FROM world_creatures WHERE id = 7').get();
   assert.equal(creature.rarity, 1);
@@ -1803,7 +1824,7 @@ test('caches catalog and settings until same-connection or external catalog data
   assert.strictEqual(store.loadCatalog(), externallyChanged);
 });
 
-test('raises existing and new starter capacity to 5000 while preserving container bonuses', (context) => {
+test('rebases existing and new capacity to 500 with unique containers reaching 1000', (context) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-capacity-v69-'));
   const databaseFile = path.join(directory, 'game.sqlite');
   let store = new SqliteStore(databaseFile);
@@ -1821,28 +1842,33 @@ test('raises existing and new starter capacity to 5000 while preserving containe
   const chest = catalog.containers.find((container) => container.name === 'Chest');
   store.buyContainer(containerOwner.id, chest.id);
   store.database.exec(`
-    UPDATE players SET item_limit = item_limit - 4950;
-    UPDATE catalog_settings SET value_json = '73' WHERE key = 'starter_item_limit';
-    PRAGMA user_version = 67;
+    UPDATE players SET item_limit = 5000;
+    UPDATE players SET item_limit = 5025 WHERE id = ${containerOwner.id};
+    UPDATE catalog_containers SET capacity = CASE id WHEN 8 THEN 25 ELSE 50 END;
+    UPDATE catalog_settings SET value_json = '5000' WHERE key = 'starter_item_limit';
+    PRAGMA user_version = 129;
   `);
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.database.prepare(
     "SELECT value_json FROM catalog_settings WHERE key = 'starter_item_limit'"
-  ).get().value_json, '5000');
-  assert.equal(store.playerById(existing.id).baseItemLimit, 5000);
-  assert.equal(store.playerById(containerOwner.id).baseItemLimit, 5025);
+  ).get().value_json, '500');
+  assert.equal(store.playerById(existing.id).baseItemLimit, 500);
+  assert.equal(store.playerById(containerOwner.id).baseItemLimit, 525);
+  assert.equal(store.database.prepare(
+    'SELECT SUM(capacity) AS capacity FROM catalog_containers'
+  ).get().capacity, 500);
   const liveCatalog = store.loadCatalog();
   const newcomer = store.addPlayer(
     createPlayer('New Capacity', '', 'hash', liveCatalog, 2000, () => 0.5)
   );
-  assert.equal(store.playerById(newcomer.id).baseItemLimit, 5000);
+  assert.equal(store.playerById(newcomer.id).baseItemLimit, 500);
 
   store.close();
   store = new SqliteStore(databaseFile);
-  assert.equal(store.playerById(containerOwner.id).baseItemLimit, 5025);
+  assert.equal(store.playerById(containerOwner.id).baseItemLimit, 525);
 });
 
 test('removes legacy Oil Field tier constraints during migration', (context) => {
@@ -1879,7 +1905,7 @@ test('removes legacy Oil Field tier constraints during migration', (context) => 
   store.database.prepare(
     'INSERT INTO oil_hexes (city_id, x, y, available, build_tier) VALUES (2, 99, 99, 91, 92)'
   ).run();
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   const remapped = store.database.prepare(
     'SELECT available, build_tier FROM oil_hexes WHERE x = 99 AND y = 99'
   ).get();
@@ -2003,7 +2029,7 @@ test('a schema upgrade adds only new settings and does not replay old catalog ba
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.database.prepare(
     "SELECT value_json FROM catalog_settings WHERE key = 'factory_market_icon'"
   ).get(), undefined);
@@ -2784,7 +2810,7 @@ test('v107 refunds legacy mine-bid gold before replacing the open order book', (
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.playerById(bidder.id).gold, 100);
   assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM mine_market_orders').get().count, 0);
   const columns = store.database.prepare('PRAGMA table_info(mine_market_orders)')
@@ -2826,7 +2852,7 @@ test('v108 and v109 install Shrooms and restrict their mine to Bromo cities', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual(store.database.prepare(`
     SELECT name, rarity, icon, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity
@@ -2884,7 +2910,7 @@ test('v109 expands an existing six-item Shroom mine to five finds per tier', (co
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual(store.database.prepare(`
     SELECT rarity, COUNT(*) AS count
     FROM catalog_items WHERE mine_type_id = ?
@@ -2931,7 +2957,7 @@ test('installs Wood finds and hardware Melds only in Calbuco', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual(store.database.prepare(`
     SELECT name, rarity, icon, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3046,7 +3072,7 @@ test('installs three-line Wisdom haiku and Melds only in Dempo', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   const wisdomItems = store.database.prepare(`
     SELECT name, rarity, description, icon, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3112,7 +3138,7 @@ test('installs Electronic Devices and their Melds only in Ebeko', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   const electronicsItems = store.database.prepare(`
     SELECT name, rarity, description, icon, icon_source, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3179,7 +3205,7 @@ test('installs ominous Relics and their Melds only in Fogo', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   const relicItems = store.database.prepare(`
     SELECT name, rarity, description, icon, icon_source, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3365,7 +3391,7 @@ test('seeds and reloads the legacy gameplay catalog from SQLite', (context) => {
   assert.equal(restored.tiers.length, 36);
   assert.equal(restored.avatarElementTypes.length, 7);
   assert.equal(restored.avatarElements.length, 156);
-  assert.equal(restored.stones.length, 66);
+  assert.equal(restored.stones.length, 69);
 });
 
 test('loads machine rules when optional fixed pipe power is omitted', (context) => {
@@ -3711,7 +3737,7 @@ test('awards each original stone once and persists achievement progress', (conte
   assert.equal(store.playerById(player.id, 3000).stoneCount, 1);
   const progress = store.stonesForPlayer(player.id);
   assert.equal(progress.earned.length, 1);
-  assert.equal(progress.next.length, 65);
+  assert.equal(progress.next.length, catalog.stones.length - 1);
   assert.equal(progress.earned[0].name, 'Conversationalist');
   assert.equal(progress.earned[0].rarity, 6);
   const messages = store.recentMessages(player.id, 'all', 'Stone');
@@ -3895,14 +3921,43 @@ test('counts only charged time toward specialisation tenure across an empty-batt
   assert.equal(tenure.title, 'Newb');
 });
 
+test('does not manufacture historical specialisation tenure after state is reset', (context) => {
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  const startedAt = 1000;
+  const player = store.addPlayer(
+    createPlayer('Reset Tenure', '', 'hash', catalog, startedAt, () => 0.5)
+  );
+  store.database.prepare('DELETE FROM specialisation_tenure WHERE player_id = ?')
+    .run(player.id);
+
+  const reopenedAt = startedAt + 100 * Number(catalog.settings.day_ms);
+  const restored = store.playerById(player.id, reopenedAt);
+  const tenure = restored.specialisationTenure.find(
+    (entry) => entry.specialisationId === restored.profession
+  );
+  assert.equal(tenure.activeMs, 0);
+  assert.equal(store.database.prepare(`
+    SELECT settled_at FROM specialisation_tenure
+    WHERE player_id = ? AND specialisation_id = ?
+  `).get(player.id, restored.profession).settled_at, reopenedAt);
+});
+
 test('purchases prerequisite-gated original bot parts with gold', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
   const player = store.addPlayer(createPlayer('PartBuilder', '', 'hash', catalog, 1000, () => 0.5));
   store.database.prepare('UPDATE players SET gold_units = 10000 WHERE id = ?').run(player.id);
   assert.throws(() => store.buyBotPart(player.id, 3, 2000), /prerequisite/);
-  assert.equal(store.buyBotPart(player.id, 1, 2000).name, 'chest');
-  assert.equal(store.buyBotPart(player.id, 3, 3000).name, 'LUarm');
+  const first = store.buyBotPart(player.id, 1, 2000);
+  assert.equal(first.name, 'chest');
+  assert.equal(first.botPartNumber, 1);
+  assert.equal(first.botPartTotal, 13);
+  const second = store.buyBotPart(player.id, 3, 3000);
+  assert.equal(second.name, 'LUarm');
+  assert.equal(second.botPartNumber, 2);
+  assert.equal(second.botPartTotal, 13);
   const restored = store.playerById(player.id);
   assert.deepEqual(restored.botPartIds, [1, 3]);
   assert.equal(restored.gold, 0.9991);
@@ -3919,6 +3974,8 @@ test('clears the Assembled Stone when the starter miner bot is complete', (conte
   let completed;
   for (const [index, part] of catalog.botParts.entries()) {
     const result = store.buyBotPart(player.id, part.id, 2000 + index);
+    assert.equal(result.botPartNumber, index + 1);
+    assert.equal(result.botPartTotal, catalog.botParts.length);
     if (index < catalog.botParts.length - 1) {
       assert.equal(result.botCompleted, false);
       assert.equal(result.stone, null);
@@ -5583,7 +5640,7 @@ test('backfills the Aso outpost voucher for players who already qualified', (con
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.playerById(player.id).mineRentalVoucher.available, true);
   const messages = store.recentMessages(player.id, 'all', 'City').filter((message) =>
     message.details.event === 'mine-rental-voucher-granted');
@@ -6058,7 +6115,7 @@ test('v97 adds a random weather clock without rewriting weather history', async 
     migrationResults.map((result) => result.message).filter(Boolean).join('; '));
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual({ ...store.database.prepare(`
     SELECT last_slot_at, next_weather_at, weather_sequence
     FROM world_event_clock WHERE id = 1
@@ -6129,7 +6186,7 @@ test('v98 adds Snow and Hurricane without rewriting weather history', (context) 
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.deepEqual(store.database.prepare(`
     SELECT map_id, slot_at, condition, temperature_c, wind_kph, rainfall_mm
     FROM world_weather_slots ORDER BY map_id, slot_at
@@ -7377,7 +7434,7 @@ test('grandfathers existing accounts into mandatory email verification', (contex
   assert.ok(store.database.prepare(
     'SELECT email_verified_at FROM players WHERE id = ?'
   ).get(player.id).email_verified_at);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
 });
 
 test('provisions every miner with an idempotent all-tier ghost-hunter fleet', (context) => {
@@ -7865,13 +7922,30 @@ test('purchases original credit containers with one capacity bonus per type', (c
   const chest = catalog.containers.find((container) => container.name === 'Chest');
   const first = store.buyContainer(player.id, chest.id);
   const second = store.buyContainer(player.id, chest.id);
-  assert.equal(first.itemLimit, 5025);
-  assert.equal(second.itemLimit, 5025);
+  assert.equal(first.itemLimit, 525);
+  assert.equal(second.itemLimit, 525);
   assert.equal(second.quantity, 2);
   const restored = store.playerById(player.id);
-  assert.equal(restored.itemLimit, 5025);
+  assert.equal(restored.itemLimit, 525);
   assert.equal(restored.containers.find((container) => container.id === chest.id).owned, 2);
   assert.equal(restored.credits, 100 - chest.credits * 2);
+
+  store.database.prepare('UPDATE players SET credits = 5000 WHERE id = ?').run(player.id);
+  for (const container of catalog.containers.filter((entry) => entry.id !== chest.id)) {
+    store.buyContainer(player.id, container.id);
+  }
+  assert.equal(store.playerById(player.id).baseItemLimit, 1000,
+    'one of every container type reaches the absolute capacity ceiling');
+  const warehouse = catalog.gadgetByBehaviorKey.get('warehouse');
+  store.database.prepare(`
+    INSERT INTO player_gadgets (player_id, gadget_id, expires_at) VALUES (?, ?, ?)
+  `).run(player.id, warehouse.id, 5000);
+  assert.equal(store.inventoryCapacity(player.id, 2000).itemLimit, 1000,
+    'temporary capacity bonuses are also bounded by the absolute ceiling');
+  const coffer = catalog.containers.find((container) => container.name === 'Coffer');
+  store.buyContainer(player.id, coffer.id);
+  assert.equal(store.playerById(player.id).itemLimit, 1000,
+    'duplicate containers never exceed the ceiling');
 });
 
 test('fits vehicle cargo, mods, and weapons with original class limits', (context) => {
@@ -8829,7 +8903,7 @@ test('repairs missing legacy ship state before loading ammunition', (context) =>
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.ok(store.vehicleDetails(player.id, vehicleId, 2000).ship);
   store.attachShipCannon(player.id, vehicleId, cannon.id);
   assert.equal(store.loadShipAmmo(player.id, vehicleId, ammunition.type, 2),
@@ -9710,7 +9784,7 @@ test('migrates v111 shuttle state with live updates exactly once', (context) => 
   });
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.ok(store.database.prepare(`
     SELECT 1 FROM sqlite_master
     WHERE type = 'table' AND name = 'player_vehicle_shuttles'
@@ -9760,7 +9834,7 @@ test('migrates v111 shuttle state with live updates exactly once', (context) => 
 
   store.close();
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.equal(store.database.prepare(
     'SELECT COUNT(*) AS count FROM live_update_events'
   ).get().count, eventCount, 'reopening v115 does not replay the shuttle migration');
@@ -9786,7 +9860,7 @@ test('migrates v112 shuttle contracts as unrestricted mine-category selections',
 
   store = new SqliteStore(databaseFile);
 
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
   assert.ok(store.database.prepare('PRAGMA table_info(player_vehicle_shuttles)').all()
     .some((column) => column.name === 'mine_type_ids_json'));
   assert.equal(store.database.prepare(`
@@ -11318,6 +11392,9 @@ test('grants registered miners a Council starter pack and kept sentencing messag
   const initialGadgetCounts = new Map(LEGACY_STARTER_WELCOME_PACK.gadgetItemIds.map(
     (itemId) => [itemId, Number(playerState.inventory[itemId] ?? 0)]
   ));
+  const initialSupplyCounts = new Map(LEGACY_STARTER_WELCOME_PACK.itemGrants.map(
+    ({ itemId }) => [itemId, Number(playerState.inventory[itemId] ?? 0)]
+  ));
   const player = store.addPlayer(playerState, {
     version: '2026-08-28', acceptedAt: 1000
   });
@@ -11330,6 +11407,9 @@ test('grants registered miners a Council starter pack and kept sentencing messag
   for (const gadgetItemId of LEGACY_STARTER_WELCOME_PACK.gadgetItemIds) {
     assert.equal(registered.inventory[gadgetItemId],
       initialGadgetCounts.get(gadgetItemId) + 1);
+  }
+  for (const { itemId, quantity } of LEGACY_STARTER_WELCOME_PACK.itemGrants) {
+    assert.equal(registered.inventory[itemId], initialSupplyCounts.get(itemId) + quantity);
   }
   assert.equal(registered.cryptoBalances[LEGACY_STARTER_WELCOME_PACK.cryptoTypeId], 5);
   const rentalDurationMs = Number(catalog.settings.mine_rental_duration_ms);
@@ -11384,6 +11464,16 @@ test('grants registered miners a Council starter pack and kept sentencing messag
       { itemId: 259, itemName: 'Tin Radar', itemRarity: 1,
         behaviorKey: 'radar', displayName: 'Radar' }
     ],
+    supplies: [
+      { itemId: 1278, itemName: 'Tin Pad', itemRarity: 1, quantity: 1,
+        machineBehaviorKey: 'pad', explosive: false },
+      { itemId: 1277, itemName: 'Tin Pump', itemRarity: 1, quantity: 1,
+        machineBehaviorKey: 'pump', explosive: false },
+      { itemId: 1272, itemName: 'Tin Pipe200', itemRarity: 1, quantity: 4,
+        machineBehaviorKey: 'pipe200', explosive: false },
+      { itemId: 277, itemName: 'M-80', itemRarity: 1, quantity: 5,
+        machineBehaviorKey: null, explosive: true }
+    ],
     rentalMines: rentalMines.map((mine) => ({
       mineId: mine.id,
       mineTypeId: mine.mineTypeId,
@@ -11408,13 +11498,17 @@ test('grants registered miners a Council starter pack and kept sentencing messag
   assert.match(welcome.body, /1 x Yellow Tin Shield/);
   assert.match(welcome.body, /1 x Yellow Tin Turbo Engine/);
   assert.match(welcome.body, /1 x Yellow Tin Radar/);
+  assert.match(welcome.body, /1 x Tin Pad/);
+  assert.match(welcome.body, /1 x Tin Pump/);
+  assert.match(welcome.body, /4 x Tin Pipe200 connectors/);
+  assert.match(welcome.body, /5 x M-80 explosives/);
   assert.match(welcome.body, /1 x Equipment Mine rental/);
   assert.match(welcome.body, /1 x Vehicles Mine rental/);
   assert.match(welcome.body, /5 ASO \(Aso Coin\)/);
   assert.match(welcome.body, /100 ASO casino voucher/);
   assert.match(welcome.body, /100 credits and 5g/);
   assert.match(welcome.body, /20 hours of battery charge/);
-  assert.match(welcome.body, /Capacity for 5,000 Things/);
+  assert.match(welcome.body, /Capacity for 500 Things/);
   assert.match(welcome.body, /^THE COUNCIL/mu);
   assert.match(welcome.body, /You have been found guilty of the following offences:/u);
   assert.match(welcome.body, / while /u);
@@ -11425,12 +11519,16 @@ test('grants registered miners a Council starter pack and kept sentencing messag
   assert.match(welcome.body, /Create your starter miner bot/u);
   assert.match(welcome.body, /thirteen original parts/u);
   assert.match(welcome.body, /“Assembled” Stone/u);
+  assert.match(welcome.body, /Seek out and clear Stones/u);
+  assert.match(welcome.body, /surest way to increase your mining rate/u);
   assert.deepEqual(welcome.details.actions, [
     { label: 'Check your mine', path: '/' },
     { label: 'Create your starter bot', path: '/' },
+    { label: 'Seek out Stones', path: '/stones' },
     { label: 'Review your Things', path: '/inventory' },
     { label: 'Meet your Green Dwarf', path: '/dwarves' },
     { label: 'Inspect your travel gadgets', path: '/gadgets' },
+    { label: 'Try the Oil Field', path: '/oil-field' },
     { label: 'Activate your Camel', path: '/vehicles' },
     { label: 'Spend your ASO voucher', path: '/casino' },
     { label: 'Open the world map', path: '/map' },
@@ -11562,7 +11660,7 @@ test('backfills durable unique Council docket numbers and preserves existing not
   );
   duplicate.docketNumber = migratedFirst.docketNumber;
   assert.throws(() => store.addPlayer(duplicate), /UNIQUE constraint failed/u);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 126);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
 });
 
 test('rolls back registration and grants when its welcome message cannot be created', (context) => {

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300" role="img" aria-labelledby="title desc">
+  <title id="title">A miner sleeping in a Council-standard bed</title>
+  <desc id="desc">A miner sleeps naturally on a pillow beneath a patterned quilt on a clearly constructed wooden bed.</desc>
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9c5b2f"/>
+      <stop offset="0.48" stop-color="#6b381f"/>
+      <stop offset="1" stop-color="#3b2115"/>
+    </linearGradient>
+    <linearGradient id="mattress-front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9dfc9"/>
+      <stop offset="0.72" stop-color="#cab99a"/>
+      <stop offset="1" stop-color="#a89676"/>
+    </linearGradient>
+    <linearGradient id="pillow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff9eb"/>
+      <stop offset="0.7" stop-color="#e1d7c3"/>
+      <stop offset="1" stop-color="#b9a98d"/>
+    </linearGradient>
+    <pattern id="quilt" width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="skewX(-5)">
+      <rect width="56" height="56" fill="#b45136"/>
+      <path d="M0 0 28 28 0 56ZM56 0 28 28 56 56Z" fill="#315f62"/>
+      <path d="M0 0h14l42 42v14H42L0 14ZM42 0h14v14L14 56H0V42Z" fill="#dc9b3c"/>
+      <path d="m28 18 10 10-10 10-10-10Z" fill="#f0c15c"/>
+    </pattern>
+    <filter id="bed-shadow" x="-20%" y="-30%" width="150%" height="180%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="373" cy="263" rx="310" ry="22" fill="#080706" opacity=".5" filter="url(#bed-shadow)"/>
+
+  <g stroke="#2d190f" stroke-width="6" stroke-linejoin="round">
+    <rect x="48" y="36" width="23" height="224" rx="9" fill="url(#wood)"/>
+    <rect x="172" y="36" width="23" height="224" rx="9" fill="url(#wood)"/>
+    <rect x="66" y="55" width="112" height="116" rx="7" fill="#754023"/>
+    <path d="M88 60v106M111 60v106M134 60v106M157 60v106" stroke="#a96737" stroke-width="10"/>
+    <path d="M69 77h106M69 149h106" stroke="#4c2919" stroke-width="8"/>
+  </g>
+
+  <path d="M132 209H648v35H132Z" fill="url(#wood)" stroke="#2b180f" stroke-width="7"/>
+  <path d="M150 239v38M618 239v38" stroke="#321c11" stroke-width="17" stroke-linecap="round"/>
+  <path d="M102 121 140 153v62l-38-30Z" fill="#b6a587" stroke="#48382a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M140 149h501v67q0 12-12 12H153q-13 0-13-13Z" fill="url(#mattress-front)" stroke="#48382a" stroke-width="6"/>
+  <path d="M113 105h481q19 0 31 14l20 22q8 9-7 12H145q-13 0-23-10l-24-22q-11-16 15-16Z" fill="#f4ead5" stroke="#48382a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M153 183h474" stroke="#a89678" stroke-width="3" opacity=".75"/>
+
+  <path d="M127 104q17-20 63-19 60 0 91 18 17 10 8 28-8 16-35 17H151q-34 0-44-15-8-13 20-29Z" fill="url(#pillow)" stroke="#8f806a" stroke-width="5"/>
+  <path d="M140 99q55-10 118 13" fill="none" stroke="#fffdf3" stroke-width="6" stroke-linecap="round" opacity=".7"/>
+
+  <path d="M267 116q15-8 31 0 13 8 11 23-2 17-20 22-17 3-28-9-9-13-3-25 2-7 9-11Z" fill="#b97850" stroke="#2f211b" stroke-width="5"/>
+  <path d="M259 131q4-23 27-25 21 0 27 20-13-6-25-3-13 5-29 8Z" fill="#26333a"/>
+  <path d="M304 143q23 0 42 15l-7 27h-48l-1-26q9-6 14-16Z" fill="#26333a" stroke="#2f211b" stroke-width="5"/>
+  <path d="M294 139q-6 5-13 0" fill="none" stroke="#6e3b2c" stroke-width="3" stroke-linecap="round"/>
+
+  <path d="M286 105h308q19 0 31 14l20 22q8 9-7 12H330Z" fill="url(#quilt)" stroke="#40251d" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M330 152h312v67q0 10-11 10H330Z" fill="url(#quilt)" stroke="#40251d" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M330 154v70" stroke="#f0bd59" stroke-width="4" opacity=".7"/>
+  <path d="M344 214h282" stroke="#542d24" stroke-width="7" opacity=".7"/>
+
+  <g stroke="#2b180f" stroke-width="7">
+    <path d="M640 126v143" stroke="url(#wood)" stroke-width="21" stroke-linecap="round"/>
+    <path d="M659 132v137" stroke="url(#wood)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M639 151h20v72h-20Z" fill="#744022"/>
+  </g>
+</svg>

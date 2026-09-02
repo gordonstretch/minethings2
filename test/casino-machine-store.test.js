@@ -291,6 +291,24 @@ test('counts every successful machine request globally and keeps the all-time to
       'the house counter must retain spins whose player ledger no longer exists');
   });
 
+test('recovers a missing global counter from the spin ledger without blocking the casino',
+  (context) => {
+    const fixture = storeFixture(context, 'minethings-casino-global-recovery-');
+    const player = addCasinoPlayer(fixture.store, 'Counter Recovery Spinner');
+
+    fixture.store.spinCasino(player.id, 'gold', 1, () => 0.5, 2_000);
+    fixture.store.spinCasino(player.id, 'gold', 1, () => 0.5, 3_000);
+    fixture.store.database.prepare('DELETE FROM casino_global_stats WHERE id = 1').run();
+
+    assert.equal(fixture.store.casinoState(player.id).stats.globalSpinCount, 2,
+      'the casino page should fall back to its surviving ledger');
+    fixture.store.spinCasino(player.id, 'gold', 1, () => 0.5, 4_000);
+    assert.equal(fixture.store.casinoState(player.id).stats.globalSpinCount, 3);
+    assert.equal(fixture.store.database.prepare(`
+      SELECT spin_count FROM casino_global_stats WHERE id = 1
+    `).get().spin_count, 3, 'the insert trigger should recreate the singleton accurately');
+  });
+
 test('backfills the global counter from historical machine ledgers', (context) => {
   const fixture = storeFixture(context, 'minethings-casino-global-backfill-');
   const player = addCasinoPlayer(fixture.store, 'Historical Spinner');

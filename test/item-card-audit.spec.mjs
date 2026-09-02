@@ -99,7 +99,7 @@ async function expectLinkedCards(page, route) {
 
 test('renders item records exclusively as linked cards with large detail artwork', async ({ page }) => {
   await login(page);
-  for (const route of ['/inventory', '/exchange', '/mines/1/equipment', '/gadgets', '/melds/52',
+  for (const route of ['/inventory', '/exchange', '/mines/1/equipment', '/mines/1/explosives', '/gadgets', '/melds/52',
     '/avatar', '/vehicles', `/vehicles/${vehicleId}`, '/vehicles/boxes', '/factories', '/dwarves',
     '/miners/CardAuditor']) {
     await expectLinkedCards(page, route);
@@ -175,7 +175,7 @@ test('keeps unavailable stored vehicle cards legible at a compact desktop width'
 
 test('keeps all four detonation quantities at the bottom of each explosive card', async ({ page }) => {
   await login(page);
-  await page.goto(`${base}/mines/1/equipment`);
+  await page.goto(`${base}/mines/1/explosives`);
   const commonExplosive = catalog.explosives.find((candidate) =>
     catalog.byId.get(candidate.itemId)?.rarity === 1);
   const card = page.locator(`.detonator-grid .item-card[data-item-id="${commonExplosive.itemId}"]`);

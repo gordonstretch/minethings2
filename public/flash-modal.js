@@ -114,6 +114,19 @@
     if (hasMessage() || hasItems()) showNotice();
     return true;
   };
+  const syncBotBuildNoticeFromDocument = (incomingDocument) => {
+    const incoming = incomingDocument.querySelector('#bot-build-burst[data-active="1"]');
+    if (!incoming) return;
+    document.dispatchEvent(new CustomEvent('minethings:bot-build-part', { detail: {
+      noticeKey: incoming.dataset.noticeKey ?? '',
+      step: Number(incoming.dataset.step ?? 0),
+      colour: incoming.style.getPropertyValue('--bot-burst-colour').trim(),
+      progress: incoming.querySelector('#bot-build-burst-progress')?.textContent ?? '',
+      shout: incoming.querySelector('#bot-build-burst-shout')?.textContent ?? '',
+      text: incoming.querySelector('#bot-build-burst-text')?.textContent ?? '',
+      install: incoming.querySelector('#bot-build-burst-install')?.textContent ?? ''
+    } }));
+  };
 
   const finitePositiveInteger = (value, fallback = 1) => {
     const number = Number(value);
@@ -435,14 +448,20 @@
       const nextLogin = nextDocument.querySelector('#login');
       const currentLogin = document.querySelector('#login');
       if (nextLogin && currentLogin) currentLogin.replaceWith(document.importNode(nextLogin, true));
-      const nextCity = nextDocument.querySelector('.city-name');
-      const currentCity = document.querySelector('.city-name');
-      if (nextCity && currentCity) currentCity.replaceWith(document.importNode(nextCity, true));
+      const nextSidebar = nextDocument.querySelector('#left');
+      const currentSidebar = document.querySelector('#left');
+      if (nextSidebar && currentSidebar) {
+        currentSidebar.replaceWith(document.importNode(nextSidebar, true));
+      }
       document.title = nextDocument.title;
       window.history.replaceState(null, '', `${destination.pathname}${destination.search}${destination.hash}`);
       requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
 
       syncNoticeFromDocument(nextDocument);
+      syncBotBuildNoticeFromDocument(nextDocument);
+      document.dispatchEvent(new CustomEvent('minethings:content-updated', {
+        detail: { root: document.querySelector('#content'), scopes: ['player'] }
+      }));
     } catch {
       rememberScroll();
       HTMLFormElement.prototype.submit.call(form);

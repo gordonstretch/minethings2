@@ -37,10 +37,30 @@ const IMAGE_ROOT = path.join(ROOT, 'td', 'public_html', 'app', 'webroot', 'img')
 const RARITY_NAMES = ['', 'Common', 'Uncommon', 'Rare', 'Exceptional', 'Fabled', 'Legendary'];
 const EQUIPMENT_TYPE_NAMES = ['', 'Tool Belt', 'Boots', 'Pickaxe', 'Drill', 'Cart', 'Hardhat', 'Light'];
 const EQUIPMENT_RARITY_ADJECTIVES = ['', 'Flimsy', 'Standard', 'Hardy', 'Crafted', 'Fabled', 'Legendary'];
+export const INVENTORY_CAPACITY_RULES = Object.freeze({
+  base: 500,
+  maximum: 1000,
+  containerCapacities: Object.freeze({
+    8: 25,
+    9: 50,
+    10: 50,
+    11: 50,
+    12: 75,
+    13: 75,
+    14: 75,
+    15: 100
+  })
+});
 export const LEGACY_STARTER_WELCOME_PACK = Object.freeze({
   vehicleItemId: 154,
   dwarfItemId: 1348,
   gadgetItemIds: Object.freeze([255, 257, 259]),
+  itemGrants: Object.freeze([
+    Object.freeze({ itemId: 1278, quantity: 1 }),
+    Object.freeze({ itemId: 1277, quantity: 1 }),
+    Object.freeze({ itemId: 1272, quantity: 4 }),
+    Object.freeze({ itemId: 277, quantity: 5 })
+  ]),
   rentalMineTypeIds: Object.freeze([4, 5]),
   cryptoTypeId: 1,
   cryptoQuantity: 5,
@@ -62,6 +82,22 @@ export const STARTER_BOT_STONE = Object.freeze({
 export const HOME_STONE = Object.freeze({
   id: 66, name: 'Homed', behaviorKey: 'Homed',
   description: 'found and entered a home-city dwelling', rank: 66, rarity: 2
+});
+
+export const HOME_DISPLAY_STONE = Object.freeze({
+  id: 67, name: 'Displayed', behaviorKey: 'Displayed',
+  description: 'placed a prized Thing on display at home', rank: 67, rarity: 1
+});
+
+export const ASO_DISCOVERY_STONE = Object.freeze({
+  id: 68, name: 'Mapped', behaviorKey: 'Mapped',
+  description: 'discovered every city in Aso', rank: 68, rarity: 3
+});
+
+export const CITY_COMPLETION_STONE = Object.freeze({
+  id: 69, name: 'Completionist', behaviorKey: 'Completionist',
+  description: 'read every notice, visited every location, and collected every Street Ore scrap in a city',
+  rank: 69, rarity: 5
 });
 
 export const EXPANDED_STONE_CATALOG = Object.freeze([
@@ -110,7 +146,10 @@ export const EXPANDED_STONE_CATALOG = Object.freeze([
   { id: 64, name: 'Constructed', behaviorKey: 'Constructed',
     description: 'completed construction of a factory or mill', rank: 64, rarity: 3 },
   STARTER_BOT_STONE,
-  HOME_STONE
+  HOME_STONE,
+  HOME_DISPLAY_STONE,
+  ASO_DISCOVERY_STONE,
+  CITY_COMPLETION_STONE
 ]);
 export const SHROOM_CATALOG = Object.freeze({
   mapId: 2,
@@ -1399,7 +1438,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     id: row[0], itemId: row[1], type: row[2]
   }));
   const containers = tableRows(sql, 'containers').map((row) => ({
-    id: row[0], marketableId: row[1], name: row[2], credits: row[3], capacity: row[4]
+    id: row[0], marketableId: row[1], name: row[2], credits: row[3],
+    capacity: INVENTORY_CAPACITY_RULES.containerCapacities[row[0]] ?? row[4]
   }));
   const tiers = tableRows(sql, 'tiers').map((row) => ({
     id: row[0], routeType: row[1], combatClass: row[2], rank: row[3], percentile: row[4],
@@ -1651,8 +1691,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       ? RARITY_NAMES[range.maximum]
       : `${RARITY_NAMES[range.maximum]} through ${RARITY_NAMES[range.minimum]}`;
     return `Far better than any mining robot, ${tier.name}s have mining in their blood. `
-      + `A Dwarf stored in a city finds ${quality} things from that city's mines after a random delay of 0–1 minute. `
-      + `After each find this ${tier.name} has a 5% chance to disappear. `
+      + `A Dwarf stored in a city finds ${quality} things from that city's mines. `
       + 'Dwarves may also stow away on compatible vehicles and ships.';
   };
   const dwarfByRarity = new Map(LEGACY_DWARF_TIERS.map((tier) => [tier.rarity, tier]));
@@ -1718,7 +1757,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     starter_city_id: 1,
     starter_credits: 100,
     starter_gold: 5,
-    starter_item_limit: 5000,
+    starter_item_limit: INVENTORY_CAPACITY_RULES.base,
     starter_battery_duration_ms: 20 * 60 * 60 * 1000,
     starter_find_count: 5,
     starter_welcome_pack: LEGACY_STARTER_WELCOME_PACK,
@@ -2308,6 +2347,22 @@ export function indexCatalog({
     const gadgetItem = gadgetItemByItemId.get(itemId);
     return item && gadgetItem ? { item, gadgetItem } : null;
   });
+  const welcomeItemGrants = Array.isArray(welcomePack?.itemGrants)
+    ? welcomePack.itemGrants.map((grant) => ({
+      itemId: Number(grant?.itemId), quantity: Number(grant?.quantity)
+    })) : [];
+  const welcomeSupplyItems = welcomeItemGrants.map((grant) => ({
+    ...grant,
+    item: byId.get(grant.itemId),
+    machine: machineByItemId.get(grant.itemId),
+    explosive: explosiveByItemId.get(grant.itemId)
+  }));
+  const welcomeMachineGrant = (behaviorKey) => welcomeSupplyItems.find(
+    (grant) => grant.machine?.type === behaviorKey
+  );
+  const welcomeM80Grant = welcomeSupplyItems.find(
+    (grant) => grant.item?.name === 'M-80' && grant.explosive
+  );
   const welcomeRentalMineTypeIds = Array.isArray(welcomePack?.rentalMineTypeIds)
     ? welcomePack.rentalMineTypeIds.map(Number) : [];
   const welcomeRentalMineTypes = welcomeRentalMineTypeIds.map((mineTypeId) =>
@@ -2324,6 +2379,15 @@ export function indexCatalog({
     || !['shield', 'turbo'].every((behaviorKey) => welcomeGadgets.some(
       (entry) => entry?.gadgetItem.gadget.behaviorKey === behaviorKey
     ))
+    || welcomeItemGrants.length !== 4
+    || new Set(welcomeItemGrants.map((grant) => grant.itemId)).size !== 4
+    || welcomeSupplyItems.some((grant) => !grant.item
+      || grant.item.rarity !== 1 || grant.item.repairedItemId !== null
+      || !Number.isSafeInteger(grant.quantity) || grant.quantity < 1)
+    || welcomeMachineGrant('pad')?.quantity !== 1
+    || welcomeMachineGrant('pump')?.quantity !== 1
+    || welcomeMachineGrant('pipe200')?.quantity !== 4
+    || welcomeM80Grant?.quantity !== 5
     || welcomeRentalMineTypeIds.length !== 2
     || new Set(welcomeRentalMineTypeIds).size !== welcomeRentalMineTypeIds.length
     || welcomeRentalMineTypes.some((mineType) => !mineType || mineType.rentCost <= 0

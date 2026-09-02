@@ -493,12 +493,16 @@
       const result = await postJson('/explore/sign', { signKey: sign.key });
       adoptProgress(result.progress);
       const reward = result.rewards[0];
-      signProgress.textContent = reward
+      signProgress.textContent = result.stone
+        ? `${result.stone.name} Stone cleared for ${result.stone.cityName}. City record complete.`
+        : reward
         ? `City notices complete. Reward: ${reward.label}.`
         : result.firstRead
           ? `Notice recorded · ${result.progress.signsRead}/${result.progress.totalSigns} read.`
           : 'Previously read.';
-      status.textContent = reward ? `Notice circuit complete — ${reward.label}.`
+      status.textContent = result.stone
+        ? `City complete — ${result.stone.name} Stone cleared for ${result.stone.cityName}.`
+        : reward ? `Notice circuit complete — ${reward.label}.`
         : result.firstRead ? 'Notice added to your city record.' : 'You read the notice again.';
       setLocation();
     } catch (error) {

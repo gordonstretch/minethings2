@@ -10,7 +10,9 @@ import {
   SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
 import { LEGAL_VERSION, sellerConfiguration } from '../src/legal.js';
-import { battlePage, casinoPage, createApp, findingNoticeItems } from '../src/server.js';
+import {
+  battlePage, botBuildComicNotice, casinoPage, createApp, findingNoticeItems
+} from '../src/server.js';
 import { hashPassword, SHUTTLE_OIL_CATEGORY_ID, SqliteStore } from '../src/store.js';
 
 async function verifyDevelopmentEmail(base, cookie) {
@@ -33,6 +35,86 @@ async function verifyDevelopmentEmail(base, cookie) {
   assert.equal(verified.headers.get('location'), '/');
   return tokenMatch[1];
 }
+
+test('gives all thirteen miner-bot purchases their ordered comic lesson', () => {
+  const lines = [
+    "Don't be fooled. Minecraft is a pretty complicated game.",
+    'It starts slow. Speed it up by making Stones.',
+    'It is a socioeconomic simulation, really.',
+    'With shinies.',
+    'There is a lot of room for people behaving badly.',
+    'And even more room for cooperation.',
+    'And outright aggression.',
+    'Stay safe out there. Be prepared.',
+    'Luck plays a part; but fortune favours the brave.',
+    'A route is an invitation, a risk, and occasionally an ambush.',
+    'The machines run alone. The world only works when people show up.',
+    'Decide what sort of miner the bot is waking up beside.',
+    'Now make some history the Council cannot tidy away.'
+  ];
+  for (const [index, expected] of lines.entries()) {
+    const notice = botBuildComicNotice({
+      label: `Part ${index + 1}`, bph: index + 1,
+      botPartNumber: index + 1, botPartTotal: lines.length,
+      botCompleted: index === lines.length - 1,
+      stone: index === lines.length - 1 ? { name: 'Assembled' } : null
+    }, 2000 + index);
+    assert.equal(notice.text, expected);
+    assert.equal(notice.step, index + 1);
+    assert.equal(notice.total, 13);
+  }
+});
+
+test('shows the city-style comic burst only after a successful bot-part purchase',
+  async (context) => {
+    const catalog = loadLegacyCatalog();
+    const store = new SqliteStore(':memory:');
+    store.seedCatalog(catalog);
+    const password = 'comic bot password';
+    const player = store.addPlayer(createPlayer(
+      'Comic Bot Builder', '', hashPassword(password), catalog, 1000, () => 0.5
+    ));
+    store.database.prepare(`
+      UPDATE players SET email_verified_at = 1, gold_units = 10000 WHERE id = ?
+    `).run(player.id);
+    const server = createApp({ store, now: () => 5000, random: () => 0.99 });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    context.after(async () => {
+      await new Promise((resolve, reject) => server.close(
+        (error) => error ? reject(error) : resolve()
+      ));
+      store.close();
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = await fetch(`${base}/login`, {
+      method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ name: player.name, password })
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+
+    const initial = await (await fetch(base, { headers: { cookie } })).text();
+    assert.match(initial, /id="bot-build-burst"[^>]+data-active="0"/u);
+    const purchase = await fetch(`${base}/bot-parts/1/buy`, {
+      method: 'POST', redirect: 'manual', headers: { cookie }
+    });
+    assert.equal(purchase.status, 303);
+    assert.equal(purchase.headers.get('location'), '/');
+    const reveal = await (await fetch(base, { headers: { cookie } })).text();
+    assert.match(reveal, /id="bot-build-burst"[^>]+data-active="1"/u);
+    assert.match(reveal, /SPARK!/u);
+    assert.match(reveal, /Don&#39;t be fooled\. Minecraft is a pretty complicated game\./u);
+    assert.match(reveal, /Part 1 of 13/u);
+    assert.match(reveal, /Chest installed/u);
+    assert.match(reveal, /\/node\/bot-build-burst\.js\?v=20260902a/u);
+
+    const consumed = await (await fetch(base, { headers: { cookie } })).text();
+    assert.match(consumed, /id="bot-build-burst"[^>]+data-active="0"/u);
+    assert.doesNotMatch(consumed, /Don&#39;t be fooled/u);
+    const client = await (await fetch(`${base}/node/bot-build-burst.js`)).text();
+    assert.match(client, /minethings:bot-build-part/u);
+    assert.match(client, /12000/u);
+  });
 
 test('renders chain-escape battle reports with accurate counts and clean numbers', () => {
   const report = {
@@ -212,6 +294,9 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
   draft.inventory = draft.inventoryByCity[missionCity.id];
   const player = store.addPlayer(draft);
 
+  store.database.prepare('DELETE FROM thief_bases').run();
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM thief_bases').get().count, 0);
+
   const server = createApp({ store, catalog, now: () => 2000 });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   context.after(async () => {
@@ -233,8 +318,12 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
 
   const fleetHtml = await getHtml('/vehicles');
   assert.doesNotMatch(fleetHtml, /class="ore-thief-operation"|Ore-thief base/);
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM thief_bases').get().count, 0,
+    'ordinary server startup and fleet views do not synthesize operation state');
 
   const hiddenHtml = await getHtml('/explore/airfield');
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM thief_bases').get().count, 1,
+    'opening the Airfield repairs a missing operation singleton');
   assert.match(hiddenHtml, /class="ore-thief-operation"/);
   assert.match(hiddenHtml, /Location unknown/);
   assert.match(hiddenHtml, /SEARCH OPEN/);
@@ -551,6 +640,44 @@ test('streams scoped database changes to live pages without reload code', async 
   assert.match(client, /window\.location\.assign\(destination\)/u);
 });
 
+test('server listening does not synchronously advance gameplay state', async (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-quiet-start-'));
+  const databaseFile = path.join(directory, 'quiet-start.sqlite');
+  const store = new SqliteStore(databaseFile, { legacyJsonFile: null });
+  store.seedCatalog(loadLegacyCatalog());
+  store.ensureWorldMaps(1000);
+  store.database.exec('DELETE FROM live_update_events;');
+
+  const settlementMethods = [
+    'settleFactories', 'settleOilField', 'settleWorldEvents', 'settleMines'
+  ];
+  const calls = [];
+  for (const method of settlementMethods) {
+    store[method] = () => {
+      calls.push(method);
+      throw new Error(`Server startup unexpectedly called ${method}.`);
+    };
+  }
+
+  const server = createApp({
+    store, backgroundMaintenance: true, maintenanceIntervalMs: 1000
+  });
+  context.after(async () => {
+    if (server.listening) {
+      await new Promise((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()));
+    }
+    store.close();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  assert.deepEqual(calls, [], 'listening only schedules the first maintenance cycle');
+  assert.equal(store.database.prepare(
+    'SELECT COUNT(*) AS count FROM live_update_events'
+  ).get().count, 0, 'idempotent world setup emits no synthetic live updates');
+});
+
 test('creates unique world maps and lets an administrator open their varied gateway routes', () => {
   const store = new SqliteStore(':memory:');
   const catalog = loadLegacyCatalog();
@@ -598,7 +725,8 @@ test('creates unique world maps and lets an administrator open their varied gate
     assert.equal(live.routes.filter((candidate) => !candidate.interMap
       && cities.some((city) => city.id === candidate.city1Id)
       && cities.some((city) => city.id === candidate.city2Id)).length,
-    map.name === 'Gallego' ? 12 : 11, `${map.name} should have a local travel network`);
+    map.name === 'Gallego' ? 12 : map.name === 'Aso' ? 13 : 11,
+    `${map.name} should have a local travel network`);
   }
   store.ensureWorldMaps(1500);
   assert.equal(store.loadCatalog().cities.length, 35, 'the region migration should be idempotent');
@@ -1334,6 +1462,31 @@ test('renders moving creatures and sends vehicles to future interception points'
     VALUES ('land_whale', ?, ?, ?, ?, ?, 140, 140, 2000, 2000, 12)
   `).run(catalog.byId.get(vehicleType.itemId).rarity,
     mapId, route.id, route.length / 2, route.city1Id).lastInsertRowid);
+  const remoteRoute = store.database.prepare(`
+    SELECT catalog_routes.*
+    FROM catalog_routes
+    JOIN catalog_cities city1 ON city1.id = catalog_routes.city1_id
+    JOIN catalog_cities city2 ON city2.id = catalog_routes.city2_id
+    WHERE city1.map_id = ? AND city2.map_id = ? AND catalog_routes.type IN (?, ?)
+      AND catalog_routes.city1_id NOT IN (
+        SELECT city_id FROM known_cities WHERE player_id = ?
+      )
+      AND catalog_routes.city2_id NOT IN (
+        SELECT city_id FROM known_cities WHERE player_id = ?
+      )
+    ORDER BY catalog_routes.id LIMIT 1
+  `).get(mapId, mapId, catalog.settings.route_type_ids.land,
+    catalog.settings.route_type_ids.sea, saved.id, saved.id);
+  assert.ok(remoteRoute, 'the fixture needs a route whose endpoints remain undiscovered');
+  const remoteCreatureType = Number(remoteRoute.type) === Number(catalog.settings.route_type_ids.sea)
+    ? 'white_whale' : 'land_whale';
+  const remoteCreatureId = Number(store.database.prepare(`
+    INSERT INTO world_creatures
+      (creature_type, rarity, map_id, route_id, location, destination_city_id,
+       hp, max_hp, awakened_at, moved_at, speed)
+    VALUES (?, 1, ?, ?, ?, ?, 170, 170, 2000, 2000, 18.7)
+  `).run(remoteCreatureType, mapId, remoteRoute.id, remoteRoute.length / 2,
+    remoteRoute.city2_id).lastInsertRowid);
   const server = createApp({ store, catalog: store.loadCatalog(), now: () => 2000 });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   context.after(async () => {
@@ -1361,6 +1514,11 @@ test('renders moving creatures and sends vehicles to future interception points'
     } Land Whale</a>`
   ));
   assert.match(html, new RegExp(`/events/creatures/${creatureId}/attack`));
+  assert.match(html, new RegExp(`id="creature-${remoteCreatureId}"`),
+    'a threat announced within a known region must not be hidden by unknown route endpoints');
+  assert.match(html, new RegExp(
+    `class="creature-record-link" href="/events/creatures/${remoteCreatureId}"`
+  ));
   const originCityName = store.database.prepare(
     'SELECT name FROM catalog_cities WHERE id = ?'
   ).get(saved.cityId).name;
@@ -1398,6 +1556,12 @@ test('renders moving creatures and sends vehicles to future interception points'
   assert.match(detailsHtml, /<dt>Health<\/dt><dd>140 \/ 140<\/dd>/);
   assert.match(detailsHtml, /Eligible vehicle tiers:/);
   assert.match(detailsHtml, new RegExp(`/events/creatures/${creatureId}/attack`));
+
+  const remoteDetails = await fetch(`${base}/events/creatures/${remoteCreatureId}`, {
+    headers: { cookie }
+  });
+  assert.equal(remoteDetails.status, 200,
+    'the chat destination for a known-region threat must open its detailed record');
 
   store.database.prepare('UPDATE world_creatures SET hp = 100 WHERE id = ?').run(creatureId);
   const woundedHtml = await (await fetch(`${base}/events`, { headers: { cookie } })).text();
@@ -2545,9 +2709,23 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.match(afterHtml, /Listed things remain in that city and still use inventory capacity/);
   assert.match(afterHtml, new RegExp(`href="/market/items/${item.id}"`));
   const exchangeHtml = await (await fetch(`${base}/exchange`, { headers: { cookie } })).text();
-  assert.match(exchangeHtml, new RegExp(`href="/market/items/${item.id}"`));
-  assert.match(exchangeHtml, /No current listing/);
-  assert.match(exchangeHtml, /Open order book · Place a bid/);
+  const unlistedCardHtml = exchangeHtml.match(new RegExp(
+    `<article[^>]*data-item-id="${item.id}"[\\s\\S]*?</article>`
+  ))?.[0];
+  assert.ok(unlistedCardHtml);
+  assert.match(unlistedCardHtml, new RegExp(
+    `href="/market/items/${item.id}#place-bid">Bid</a>`
+  ));
+  assert.doesNotMatch(unlistedCardHtml, /Collectible|No current listing/);
+  assert.doesNotMatch(exchangeHtml, /Open order book|Order book/);
+  const listerMeldNeeds = store.remainingMeldItemNeeds(saved.id);
+  const meldableKnownItemId = store.playerById(saved.id).discoveries
+    .map((entry) => entry.itemId).find((itemId) => Number(listerMeldNeeds[itemId]) > 0);
+  assert.ok(meldableKnownItemId, 'the player should know a Thing needed by an unfinished Meld');
+  const meldableCardHtml = exchangeHtml.match(new RegExp(
+    `<article[^>]*data-item-id="${meldableKnownItemId}"[\\s\\S]*?</article>`
+  ))?.[0];
+  assert.match(meldableCardHtml, /class="market-meldable-badge"[^>]*>Meldable<\/span>/);
   const buyerLogin = await fetch(`${base}/login`, {
     method: 'POST', redirect: 'manual',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -2563,17 +2741,26 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.match(buyerExchangeHtml, /3 available/);
   assert.doesNotMatch(buyerExchangeHtml, /3 owned/);
   assert.doesNotMatch(buyerExchangeHtml, /fixed value/);
-  assert.match(buyerExchangeHtml, new RegExp(`href="/market/items/${item.id}"`));
   assert.match(buyerExchangeHtml, new RegExp(
     `action="/market/items/${item.id}/buy-now"[\\s\\S]*?<button>Buy now</button>`
   ));
+  assert.match(buyerExchangeHtml, new RegExp(
+    `href="/market/items/${item.id}#place-bid">Bid</a>`
+  ));
+  assert.doesNotMatch(buyerExchangeHtml, /Open order book|Order book/);
   const knownUnlistedItemId = buyer.discoveries.find((entry) => entry.itemId !== item.id)?.itemId;
   assert.ok(knownUnlistedItemId, 'buyer should know an unlisted item');
-  assert.match(buyerExchangeHtml, new RegExp(`href="/market/items/${knownUnlistedItemId}"`));
+  assert.match(buyerExchangeHtml, new RegExp(
+    `href="/market/items/${knownUnlistedItemId}#place-bid">Bid</a>`
+  ));
+  const bidPageHtml = await (await fetch(`${base}/market/items/${knownUnlistedItemId}`, {
+    headers: { cookie: buyerCookie }
+  })).text();
+  assert.match(bidPageHtml, /<form id="place-bid" class="market-ticket"/);
   const buyerKnownIds = new Set(buyer.discoveries.map((entry) => entry.itemId));
   const unknownItem = catalog.items.find((entry) => entry.id !== item.id && !buyerKnownIds.has(entry.id));
   assert.ok(unknownItem, 'catalog should retain undiscovered items');
-  assert.doesNotMatch(buyerExchangeHtml, new RegExp(`href="/market/items/${unknownItem.id}"`));
+  assert.doesNotMatch(buyerExchangeHtml, new RegExp(`/market/items/${unknownItem.id}(?:#|\")`));
   const filteredExchangeHtml = await (await fetch(
     `${base}/exchange?type=definitely-not-a-type&sort=price-asc`,
     { headers: { cookie: buyerCookie } }
@@ -2836,6 +3023,15 @@ test('keeps an unneeded Meld-button item in Things and explains why', async (con
     `action="/inventory/${itemId}/meld"><button class="secondary"[^>]* disabled>Meld</button>`
   ));
   assert.match(disabledHtml, /is not needed for any remaining meld/);
+  const exchangeHtml = await (await fetch(`${base}/exchange`, { headers: { cookie } })).text();
+  const unneededCardHtml = exchangeHtml.match(new RegExp(
+    `<article[^>]*data-item-id="${itemId}"[\\s\\S]*?</article>`
+  ))?.[0];
+  assert.ok(unneededCardHtml);
+  assert.match(unneededCardHtml, new RegExp(
+    `href="/market/items/${itemId}#place-bid">Bid</a>`
+  ));
+  assert.doesNotMatch(unneededCardHtml, /market-meldable-badge|Meldable/);
 
   const response = await fetch(`${base}/inventory/${itemId}/meld`, {
     method: 'POST', redirect: 'manual',
@@ -3007,12 +3203,12 @@ test('uses the targeted no-hydration path for BLU-82 detonations', async (contex
 
   const response = await fetch(`${base}/mines/1/detonate`, {
     method: 'POST', redirect: 'manual', headers: {
-      cookie, referer: `${base}/mines/1/equipment`,
+      cookie, referer: `${base}/mines/1/explosives`,
       'content-type': 'application/x-www-form-urlencoded'
     }, body: new URLSearchParams({ itemId: String(blu82.id), count: '1' })
   });
   assert.equal(response.status, 303);
-  assert.equal(response.headers.get('location'), '/mines/1/equipment?detonated=1');
+  assert.equal(response.headers.get('location'), '/mines/1/explosives?detonated=1');
   assert.equal(hydrations, 0);
   assert.equal(rewrites, 0);
   assert.equal(store.database.prepare(
@@ -3029,7 +3225,7 @@ test('uses the targeted no-hydration path for BLU-82 detonations', async (contex
     .filter((finding) => finding.source === 'explosives');
   const explosiveFinding = explosiveFindings[0];
   assert.ok(explosiveFinding, 'the detonation records a structured live finding event');
-  const reveal = await fetch(`${base}/mines/1/equipment?detonated=1`, {
+  const reveal = await fetch(`${base}/mines/1/explosives?detonated=1`, {
     headers: { cookie }
   });
   const revealHtml = await reveal.text();
@@ -3097,6 +3293,10 @@ test('retires finding polls, acknowledgements, reports, and manual collection', 
   assert.ok(flashModal.includes('\\u2694\\uFE0F'));
   assert.ok(flashModal.includes('\\u2192'));
   assert.ok(flashModal.includes('\\u00d7'));
+  assert.match(flashModal, /nextDocument\.querySelector\('#left'\)/u,
+    'same-page actions refresh contextual sidebar counts');
+  assert.match(flashModal, /minethings:content-updated/u,
+    'sidebar replacement notifies navigation and other client enhancements');
   assert.doesNotMatch(flashModal, /â|Â|Ã/u);
 
   assert.equal(store.database.prepare(`
@@ -3189,6 +3389,26 @@ test('settles mines without collection and keeps retired finding reports off the
   const dwarfPageHtml = await (await fetch(`${base}/dwarves`, { headers: { cookie } })).text();
   assert.doesNotMatch(dwarfPageHtml, /dwarf-findings-feed|Live discoveries|Trash competition/);
   assert.match(dwarfPageHtml, /Your working Dwarves/);
+  assert.doesNotMatch(dwarfPageHtml,
+    /\b5%|disappearance risk|chance to disappear|database-configured|random delay/i);
+
+  const dwarfItemId = catalog.dwarfTiers[0].itemId;
+  store.database.prepare('UPDATE catalog_items SET description = ? WHERE id = ?').run(
+    'A useful little miner. After each find this Yellow Dwarf has a 5% chance to disappear. Keep watch.',
+    dwarfItemId
+  );
+  const dwarfDetailHtml = await (await fetch(`${base}/items/${dwarfItemId}`, {
+    headers: { cookie }
+  })).text();
+  const dwarfMarketHtml = await (await fetch(`${base}/market/items/${dwarfItemId}`, {
+    headers: { cookie }
+  })).text();
+  for (const html of [dwarfDetailHtml, dwarfMarketHtml]) {
+    assert.match(html, /A useful little miner/);
+    assert.match(html, /Keep watch/);
+    assert.doesNotMatch(html,
+      /\b5%|disappearance risk|chance to disappear|random delay|0(?:â€“|–|-)1 minute/i);
+  }
   assert.equal((await fetch(`${base}/node/dwarf-findings.js`)).status, 404);
 });
 
@@ -3223,8 +3443,10 @@ test('switches city-scoped mine views and rejects cross-city detonations', async
 
   const firstCityHtml = await (await fetch(`${base}/`, { headers: { cookie } })).text();
   assert.match(firstCityHtml, /Mines in Tzolk/);
-  assert.match(firstCityHtml, /\/mines\/1\/equipment/);
+  assert.match(firstCityHtml, /href="\/mines\/1\/equipment">Equip your miner<\/a>/);
+  assert.match(firstCityHtml, /href="\/mines\/1\/explosives">Mine with explosives<\/a>/);
   assert.doesNotMatch(firstCityHtml, /\/mines\/2\/equipment/);
+  assert.doesNotMatch(firstCityHtml, /\/mines\/2\/explosives/);
 
   const select = await fetch(`${base}/cities/2/select`, {
     method: 'POST', redirect: 'manual', headers: { cookie }
@@ -3233,7 +3455,9 @@ test('switches city-scoped mine views and rejects cross-city detonations', async
   const secondCityHtml = await (await fetch(`${base}/`, { headers: { cookie } })).text();
   assert.match(secondCityHtml, /Mines in Burgundy/);
   assert.match(secondCityHtml, /\/mines\/2\/equipment/);
+  assert.match(secondCityHtml, /\/mines\/2\/explosives/);
   assert.doesNotMatch(secondCityHtml, /\/mines\/1\/equipment/);
+  assert.doesNotMatch(secondCityHtml, /\/mines\/1\/explosives/);
 
   await fetch(`${base}/cities/1/select`, { method: 'POST', redirect: 'manual', headers: { cookie } });
   const before = store.database.prepare(
@@ -3266,6 +3490,10 @@ test('switches city-scoped mine views and rejects cross-city detonations', async
     redirect: 'manual', headers: { cookie }
   });
   assert.equal(remoteLoadout.status, 303);
+  const remoteExplosives = await fetch(`${base}/mines/2/explosives`, {
+    redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(remoteExplosives.status, 303);
 });
 
 test('provides a typed inbox and safe full views for system messages', async (context) => {
@@ -3824,6 +4052,17 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(visualContractCss,
     /\.spectral-transport img \{[^}]*mix-blend-mode:\s*screen;[^}]*filter:\s*var\(--spectral-filter\)/su);
   assert.match(visualContractCss, /\.spectral-transport\.spectral-rider \{/u);
+  assert.match(visualContractCss,
+    /\.city-landmark-art \{[^}]*width:\s*100%;[^}]*height:\s*auto;/su,
+    'architectural SVGs preserve their viewBox proportions');
+  for (const region of ['aso', 'bromo', 'calbuco', 'dempo', 'ebeko', 'fogo', 'gallego']) {
+    assert.match(visualContractCss,
+      new RegExp(`\\.city-landmark-page\\.region-${region} \\.city-landmark-scene \\{`, 'u'),
+      `${region} landmarks have a region-specific gallery palette`);
+  }
+  assert.match(visualContractCss,
+    /@media \(forced-colors: active\) \{[^}]*\.city-landmark-scene \{/su,
+    'landmark line art remains legible in forced-colours mode');
   assert.match(visualContractCss, /@media \(prefers-reduced-motion: reduce\)/u);
   assert.match(visualContractCss, /button\.link \{[^}]*border:\s*0[^}]*box-shadow:\s*none/su);
   assert.match(visualContractCss, /--rarity-link-color:/u);
@@ -4182,14 +4421,31 @@ test('supports registration and authenticated play pages', async (context) => {
   const loadout = await fetch(`${base}/mines/1/equipment`, { headers: { cookie } });
   assert.equal(loadout.status, 200);
   const loadoutHtml = await loadout.text();
-  assert.match(loadoutHtml, /Bot loadout/);
+  assert.match(loadoutHtml, /Equip your miner/);
+  assert.match(loadoutHtml,
+    /href="\/mines\/1\/equipment" aria-current="page">Equip your miner<\/a>/);
+  assert.match(loadoutHtml, /href="\/mines\/1\/explosives">Mine with explosives<\/a>/);
   assert.match(loadoutHtml, /equipment\/src\/NoBoots\.png/);
-  assert.match(loadoutHtml, /item-card-compact item-card-unavailable/);
-  assert.match(loadoutHtml, /href="\/items\/282"/);
+  assert.match(loadoutHtml, /Miner robots in this city/);
+  assert.doesNotMatch(loadoutHtml, /detonator-grid|Detonate explosives/);
+  const explosivesPage = await fetch(`${base}/mines/1/explosives`, { headers: { cookie } });
+  assert.equal(explosivesPage.status, 200);
+  const explosivesHtml = await explosivesPage.text();
+  assert.match(explosivesHtml, /Mine with explosives/);
+  assert.match(explosivesHtml,
+    /href="\/mines\/1\/explosives" aria-current="page">Mine with explosives<\/a>/);
+  assert.match(explosivesHtml, /href="\/mines\/1\/equipment">Equip your miner<\/a>/);
+  assert.match(explosivesHtml, /item-card-compact item-card-unavailable/);
+  assert.match(explosivesHtml, /href="\/items\/282"/);
+  assert.doesNotMatch(explosivesHtml, /Miner robots in this city|Equipment in this city/);
 
   const gadgets = await fetch(`${base}/gadgets`, { headers: { cookie } });
   assert.equal(gadgets.status, 200);
-  assert.match(await gadgets.text(), /Boosts equipment by 25%/);
+  const gadgetsHtml = await gadgets.text();
+  assert.match(gadgetsHtml, /Boosts equipment by 25%/);
+  assert.match(gadgetsHtml,
+    /<p class="gadget-description">Vehicles: Adds 10% to weapon offensive power\.\nShips: Each shot has \+10% chance of doing double damage\.\nAircraft: 40% higher bomb damage\.\nGadget must be active before sending\.<\/p>/u);
+  assert.doesNotMatch(gadgetsHtml, /&lt;br\s*\/?&gt;/iu);
 
   const melds = await fetch(`${base}/melds?q=Sunday`, { headers: { cookie } });
   assert.equal(melds.status, 200);
@@ -4452,7 +4708,8 @@ test('supports registration and authenticated play pages', async (context) => {
 
   const creditShop = await fetch(`${base}/market`, { headers: { cookie } });
   const creditShopHtml = await creditShop.text();
-  assert.match(creditShopHtml, /Gold market/);
+  assert.match(creditShopHtml, /Buy with Crypto/);
+  assert.doesNotMatch(creditShopHtml, />Gold market<\/a>/u);
   assert.match(creditShopHtml, /Buy a new mine in Cinderwake/);
   const creditShopMineIcons = [...creditShopHtml.matchAll(
     /<article class="shop-card"><img src="([^"]+)" alt="">/gu
@@ -4833,14 +5090,18 @@ test('renders item collections from highest rarity to lowest rarity', async (con
 
   const inventoryHtml = await page('/inventory');
   const loadoutHtml = await page('/mines/1/equipment');
+  const explosivesHtml = await page('/mines/1/explosives');
   const gadgetsHtml = await page('/gadgets');
   const vehiclesHtml = await page('/vehicles');
   const avatarHtml = await page('/avatar');
   for (const [label, html] of [['inventory', inventoryHtml], ['mine loadout', loadoutHtml],
+    ['mine explosives', explosivesHtml],
     ['gadgets', gadgetsHtml], ['vehicles', vehiclesHtml], ['avatar', avatarHtml]]) {
     assertItemCardsClickable(html, label);
   }
   assert.doesNotMatch(loadoutHtml, /class="loadout-item"/);
+  assert.doesNotMatch(loadoutHtml, /detonator-grid|name="count"/);
+  assert.doesNotMatch(explosivesHtml, /\/equipment\/\d+\/(?:equip|unequip)|\/robots\//);
   assert.doesNotMatch(avatarHtml, /<select name="type_/);
 
   assertBefore(inventoryHtml, `data-item-id="${ordinaryRare.id}"`,
@@ -4861,9 +5122,9 @@ test('renders item collections from highest rarity to lowest rarity', async (con
   assert.ok(exchangeRarities.every((rarity, index) => index === 0 || exchangeRarities[index - 1] >= rarity));
   assertBefore(loadoutHtml, `/equipment/${equipmentRare.itemId}/equip`,
     `/equipment/${equipmentCommon.itemId}/equip`, 'mine equipment');
-  assertBefore(loadoutHtml, `value="${explosiveRare.itemId}"`,
+  assertBefore(explosivesHtml, `value="${explosiveRare.itemId}"`,
     `value="${explosiveCommon.itemId}"`, 'explosives');
-  const commonExplosiveCard = loadoutHtml.match(new RegExp(
+  const commonExplosiveCard = explosivesHtml.match(new RegExp(
     `<article class="[^"]*item-card[^"]*" data-item-id="${explosiveCommon.itemId}"[\\s\\S]*?</article>`
   ))?.[0];
   assert.ok(commonExplosiveCard, 'common explosive card should render');
@@ -4954,6 +5215,13 @@ test('activates capital-local gadget stock only while the miner is in that capit
 
   const after = await (await fetch(`${base}/gadgets`, { headers: { cookie } })).text();
   assert.match(after, /active globally for/u);
+  assert.match(after, /<h2>Active globally \(1\)<\/h2>/u);
+  assert.match(after, new RegExp(
+    `The navigation count is 1 active plus 0 activator items stored in ${capital.name}`
+  ));
+  assert.ok(after.indexOf('<h2>Active globally (1)</h2>')
+    < after.indexOf('<h2>Other gadgets</h2>'),
+  'active gadgets must be presented before the rest of the gadget catalogue');
   assert.match(after, new RegExp(`href="/items/${item.id}"`));
   assert.match(after, new RegExp(`0 in ${capital.name}[^0-9]+2 elsewhere`));
   assert.match(after, new RegExp(`action="/gadgets/${itemId}/activate"[\\s\\S]*?<button disabled>`));
@@ -5124,6 +5392,15 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(history, /AI-assisted development/);
   assert.match(history, /href="#rebuilding">29–30 August 2026<\/a>/u);
   assert.match(history, /<section id="rebuilding">/u);
+  assert.match(history, /href="#continuation">31 August–2 September 2026<\/a>/u);
+  assert.match(history, /<section id="continuation">/u);
+  assert.match(history, /31 August 2026.*2 September 2026.*Serif makes the restored world inhabitable/su);
+  assert.match(history, /explorable city interiors/u);
+  assert.match(history, /Oil Tanker carries up to 100 barrels/u);
+  assert.match(history, /Wraith Riders or Ghost Ships may rise/u);
+  assert.match(history, /permanently unique docket number/u);
+  assert.match(history, /distinct casino cabinet for every region/u);
+  assert.match(history, /<section id="sources" class="source-notes"><h2><time datetime="2026-09-02">2 September 2026<\/time>/u);
   assert.match(history, /<time datetime="2026-08-22">By 22 August 2026<\/time>: months of reconstruction/u);
   assert.match(history, /current Git record begins on 23 August with one large restoration snapshot/u);
   assert.match(history, /both preservation and continuation/u);

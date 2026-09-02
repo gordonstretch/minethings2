@@ -719,7 +719,7 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.getByRole('heading', { name: 'Inventory containers' })).toBeVisible();
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-shop.png'), fullPage: true });
-  const mineMarketPath = await page.getByRole('link', { name: 'Gold market' }).first().getAttribute('href');
+  const mineMarketPath = await page.getByRole('link', { name: 'Buy with Crypto' }).first().getAttribute('href');
   await page.goto(`${base}${mineMarketPath}`);
   for (const heading of ['List mines', 'Place bid', 'Listings', 'Bids', 'Recent sales']) {
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
