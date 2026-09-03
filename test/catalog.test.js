@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
 import {
-  ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog, parseValues,
+  BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog, parseValues,
   RELICS_CATALOG, SHROOM_CATALOG,
   WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
@@ -16,7 +16,7 @@ test('parses MySQL values including escaped apostrophes and nulls', () => {
 
 test('loads the playable catalog from the legacy dump', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(catalog.items.length, 1554);
+  assert.equal(catalog.items.length, 1555);
   assert.equal(catalog.discoverableItems.length, 844);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
@@ -117,7 +117,14 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.meldRequirements.length, 782);
   assert.equal(catalog.gadgets.length, 13);
   assert.equal(catalog.gadgetItems.length, 38);
-  assert.equal(catalog.factoryActions.length, 20);
+  assert.equal(catalog.factoryActions.length, 21);
+  const boltBox = catalog.byId.get(catalog.settings.bolt_box_item_id);
+  const boltBoxAction = catalog.factoryActions.find((action) =>
+    action.outputItemId === boltBox.id);
+  assert.equal(boltBox.name, BOLT_BOX_CATALOG.items[0].name);
+  assert.equal(boltBox.canFind, false);
+  assert.equal(boltBoxAction.outputQuantity, 1);
+  assert.equal(catalog.settings.bolts_per_box, 20);
   assert.deepEqual(catalog.settings.factory_worker_bot_tiers.map((tier) => ({
     id: tier.id, cph: tier.cph, costGold: tier.costGold
   })), [

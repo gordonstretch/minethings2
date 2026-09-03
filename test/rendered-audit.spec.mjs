@@ -946,6 +946,26 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.locator('#board .oil-rack-slot')).toHaveCount(0);
   await expect(page.locator('#board .oil-rack-label')).toHaveCount(2);
   await expect(page.locator('#board image.oil-rack-machine-icon')).toHaveCount(2);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.reload();
+  await expect(page.locator('#oil-center-board')).toBeVisible();
+  await expect(oilBoardShell).toHaveCSS('overflow-y', 'auto');
+  await expect.poll(() => oilBoardShell.evaluate((element) => ({
+    centred: element.scrollLeft > 0 && element.scrollTop > 0,
+    verticallyScrollable: element.scrollHeight > element.clientHeight
+  }))).toEqual({ centred: true, verticallyScrollable: true });
+  expect(await page.locator('.oil-board-controls').evaluate(
+    (element) => element.scrollWidth > element.clientWidth
+  )).toBe(true);
+  await oilBoardShell.evaluate((element) => element.scrollTo(0, 0));
+  await page.locator('#oil-center-board').click();
+  await expect(page.locator('#oil-board-status')).toContainText('Field centred on hex (0,0)');
+  await expect.poll(() => oilBoardShell.evaluate(
+    (element) => element.scrollLeft > 0 && element.scrollTop > 0
+  )).toBe(true);
+  await page.screenshot({ path: path.resolve('migration-audit-oil-field-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
   const escapedDirectionalName = oilDirectionalMachineName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const directionalCandidate = page.locator('#board').getByRole('button', {
     name: new RegExp(`^Select ${escapedDirectionalName}\\.`)

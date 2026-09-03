@@ -65,7 +65,7 @@ test('all Starter item SVGs have exact inventory, accessible metadata, and disti
 test('maps intact and damaged Starter finds to their object-specific artwork', () => {
   const catalog = loadLegacyCatalog();
   const intact = catalog.items.filter((item) => item.mineTypeId === 1
-    && item.repairedItemId === null);
+    && item.repairedItemId === null && item.canFind);
   const damaged = catalog.items.filter((item) => item.mineTypeId === 1
     && item.repairedItemId !== null);
   assert.equal(intact.length, 50);

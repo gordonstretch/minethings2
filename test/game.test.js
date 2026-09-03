@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   activeMineLimit, assignRobot, buyMine, claimMine, createPlayer, detonateExplosive, equipMine,
   expireRentalMines, findItem, mineBucketsPerHour, mineIntervalMs, oilMineBot, prioritizeMine, rentMine,
-  sellItem, sellMine, setMineMode,
+  sellItem, sellMine, setMineMode, synchronizeMineSchedules,
   unassignRobot, unequipMine
 } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
@@ -273,6 +273,46 @@ test('equips original mining gear and robots from city inventory', () => {
   unassignRobot(player, catalog, 1);
   assert.equal(player.inventory[51], 1);
   assert.equal(player.inventory[340], 1);
+});
+
+test('rebases the remaining mine cycle when its production rate changes', () => {
+  const now = 10_000;
+  const player = createPlayer('Rate Keeper', '', 'hash', catalog, 1000, predictableRandom);
+  const mine = player.mines[0];
+  const oldInterval = mine.cycleIntervalMs;
+  mine.nextFindAt = now + Math.round(oldInterval / 2);
+  player.inventoryByCity[player.cityId][51] = 1;
+
+  equipMine(player, catalog, mine.id, 51, now);
+
+  const fasterInterval = mineIntervalMs(catalog, mine, player, now);
+  assert.equal(mine.cycleIntervalMs, fasterInterval);
+  assert.equal(mine.nextFindAt - now, Math.round(fasterInterval / 2));
+
+  player.stoneCount = 2;
+  const beforeStone = mine.nextFindAt;
+  const beforeStoneInterval = mine.cycleIntervalMs;
+  synchronizeMineSchedules(player, catalog, now);
+  const stoneInterval = mineIntervalMs(catalog, mine, player, now);
+  assert.equal(mine.nextFindAt - now,
+    Math.round((beforeStone - now) * stoneInterval / beforeStoneInterval));
+});
+
+test('starts newly purchased mines on their actual production interval', () => {
+  const now = 20_000;
+  const player = createPlayer('Fast Buyer', '', 'hash', catalog, 1000, predictableRandom);
+  player.botPartIds = catalog.botParts.slice(0, 4).map((part) => part.id);
+  player.credits = 10_000;
+  const mineType = catalog.mineTypes.find((entry) =>
+    entry.creditCost > 0 && catalog.byMineType.has(entry.id)
+      && catalog.mineTypesByCity.get(player.cityId).some((offered) => offered.id === entry.id));
+
+  const mine = buyMine(player, catalog, mineType.id, now, predictableRandom);
+  const interval = mineIntervalMs(catalog, mine, player, now);
+
+  assert.equal(mine.cycleIntervalMs, interval);
+  assert.equal(mine.nextFindAt, now + interval);
+  assert.ok(interval < FIND_INTERVAL_MS);
 });
 
 test('detonates legacy explosives for immediate mine output', () => {

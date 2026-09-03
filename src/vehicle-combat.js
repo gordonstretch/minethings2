@@ -60,7 +60,7 @@ export function compatibleCargoAllowed({
 
   const arms = armsRarities(vehicleRarity, rules);
   const cargo = cargoRarities(vehicleRarity, rules);
-  if ((isVehicle || isAmmoBox) && !(itemRarity === 0 && cargo.includes(0))) return false;
+  if (isAmmoBox && !(itemRarity === 0 && cargo.includes(0))) return false;
   const weaponClass = arms.includes(itemRarity)
     && (isWeapon || (Number(routeType) === Number(routeTypes.sea) && isCannonball));
   const cargoClass = cargo.includes(itemRarity)

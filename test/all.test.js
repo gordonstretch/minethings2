@@ -10,6 +10,7 @@ import './chat-regions.test.js';
 import './council-sentencing.test.js';
 import './city-exploration.test.js';
 import './city-landmark-art.test.js';
+import './dwarf-park-art.test.js';
 import './crypto-market-analytics.test.js';
 import './email.test.js';
 import './fish-icons.test.js';

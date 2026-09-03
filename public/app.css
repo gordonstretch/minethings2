@@ -1158,6 +1158,9 @@ th { color: var(--muted); font: bold .75rem Arial, sans-serif; text-transform: u
 .oil-key-spill::before { background: #444; }
 .oil-key-closed::before { background: #ddd; opacity: .35; }
 .oil-board-status { min-height: 1.25rem; margin: .45rem 0 .75rem; padding-left: .1rem; color: #4a4032; font-size: .8rem; }
+.oil-board-navigation { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0 .65rem; padding: .55rem .65rem; color: #514a3e; background: #ede1ca; border: 1px solid #d3c19e; }
+.oil-board-navigation p { margin: 0; font-size: .74rem; line-height: 1.4; }
+.oil-board-navigation button { flex: 0 0 auto; min-height: 40px; }
 .oil-field-board-shell { width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid #4c504b; background-color: #171a18; background-image: radial-gradient(circle at 50% 56%, rgba(226,183,96,.14) 0, rgba(78,82,73,.08) 43%, transparent 43.2%), linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(145deg, #20241f, #101310); background-size: auto, 40px 40px, 40px 40px, auto; box-shadow: inset 0 0 48px rgba(0,0,0,.48); scrollbar-color: #777065 #171a18; }
 #board { width: 1000px; height: 900px; position: relative; margin: 0 auto; touch-action: none; user-select: none; }
 #board svg { display: block; width: 1000px; height: 900px; }
@@ -1797,16 +1800,36 @@ body.game-body::before { content: ''; position: fixed; inset: 0; z-index: 0; poi
   .oil-facts > div:nth-child(2), .oil-facts > div:last-child { border-bottom: 0; }
   .oil-facts dd { overflow: visible; font-size: .72rem; text-overflow: clip; white-space: normal; }
   .oil-briefing { grid-template-columns: 1fr; }
-  .oil-original-panel { min-width: 0; overflow: hidden; }
-  .oil-board-heading { min-width: 0; flex-direction: column; }
-  .oil-board-controls { width: 100%; min-width: 0; justify-content: flex-start; }
-  .oil-board-controls button { flex: 1 1 8rem; min-width: 0; }
-  .oil-field-board-shell { max-width: 100%; }
+  .oil-original-panel { min-width: 0; margin-inline: calc(0rem - clamp(.85rem, 4vw, 1.4rem)); padding: .75rem .65rem 1rem; overflow: hidden; border-inline: 0; }
+  .oil-board-heading { min-width: 0; align-items: stretch; flex-direction: column; margin: -.75rem -.65rem 0; padding: .9rem .75rem .7rem; }
+  .oil-board-controls { width: calc(100% + 1.5rem); min-width: 0; margin-inline: -.75rem; padding: .15rem .75rem .35rem; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: .75rem; scroll-snap-type: x proximity; }
+  .oil-board-controls button { flex: 0 0 auto; min-width: max-content; min-height: 44px; scroll-snap-align: start; }
+  .oil-legend { margin-inline: -.65rem; padding-inline: .65rem; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: .65rem; scroll-snap-type: x proximity; }
+  .oil-key { flex: 0 0 auto; scroll-snap-align: start; }
+  .oil-board-status { margin-bottom: .55rem; font-size: .75rem; line-height: 1.4; }
+  .oil-board-navigation { align-items: stretch; margin-inline: -.65rem; padding: .55rem .65rem; }
+  .oil-board-navigation p { align-self: center; }
+  .oil-board-navigation button { min-height: 44px; }
+  .oil-field-board-shell { width: calc(100% + 1.3rem); max-width: none; height: min(68dvh, 620px); min-height: 360px; margin-inline: -.65rem; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; -webkit-overflow-scrolling: touch; }
+  #board { margin: 0; touch-action: pan-x pan-y; }
+  #board .oil-rack-machine { touch-action: none; }
+  .oil-machine-tooltip { position: fixed; top: auto !important; right: .65rem; bottom: .65rem; left: .65rem !important; width: auto; max-height: min(42dvh, 18rem); overflow-y: auto; }
   .oil-instructions ol { grid-template-columns: 1fr; }
   .oil-events > header { align-items: flex-start; flex-direction: column; gap: .6rem; }
   .oil-events > header > p { max-width: none; text-align: left; }
 }
 @media (max-width: 480px) {
+  .oil-facts { grid-template-columns: 1fr; }
+  .oil-facts > div, .oil-facts > div:first-child { grid-column: auto; border-right: 0; border-bottom: 1px solid #414741; }
+  .oil-facts > div:nth-child(2) { border-bottom: 1px solid #414741; }
+  .oil-facts > div:last-child { border-bottom: 0; }
+  .oil-board-navigation { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .oil-board-navigation button { padding-inline: .7rem; }
+  .oil-hex-summary { width: calc(100vw - .5rem); max-height: calc(100dvh - .5rem); border-width: 1px; border-radius: 5px; }
+  .oil-hex-summary-header { align-items: flex-start; padding: .75rem .8rem; }
+  .oil-hex-summary-close { min-height: 44px; padding-inline: .65rem; }
+  .oil-hex-summary-content { gap: .6rem; padding: .7rem .75rem 1rem; }
+  .oil-hex-summary-content section { padding: .7rem; }
 }
 @media (max-width: 520px) { .item-stat-grid { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .vehicle-location-list li { grid-template-columns: 1fr; align-items: stretch; } }
@@ -2710,25 +2733,119 @@ body.home-dream-open { overflow: hidden; }
 .city-civic-copy p:last-child { margin-bottom: 0; line-height: 1.48; }
 .city-civic-note { padding: 1.25rem 1.4rem; background: rgba(255,252,244,.63); box-shadow: inset 0 0 0 1px #cfbea0; }
 .city-civic-note h2 { margin: .15rem 0 .4rem; }
-.park-sky, .landmark-sky { position: absolute; inset: 0 0 38%; background: linear-gradient(#758c88, #c9b77f); }
-.park-ground, .landmark-ground { position: absolute; inset: 57% 0 0; background: linear-gradient(167deg, #536c3a, #273b27 62%, #18271f); }
-.park-ground::after { content: ''; position: absolute; inset: 26% -5% auto; height: 3.6rem; border: .8rem solid #c9a96a; border-right-color: transparent; border-left-color: transparent; border-radius: 50%; transform: rotate(-3deg); opacity: .75; }
-.park-tree { position: absolute; z-index: 2; bottom: 7.5rem; width: 2rem; height: 10rem; background: #593a24; }
-.park-tree::before { content: ''; position: absolute; left: 50%; bottom: 6rem; width: 8rem; height: 8rem; border-radius: 46% 54% 41% 59%; background: #2f623b; transform: translateX(-50%) rotate(9deg); box-shadow: -2.6rem 2rem 0 #416f3b, 2.4rem 1.5rem 0 #254c37; }
-.park-tree-left { left: 7%; }
-.park-tree-right { right: 8%; transform: scale(.8); }
-.park-roundabout { position: absolute; z-index: 4; left: 34%; bottom: 5.4rem; width: 8rem; height: 2.3rem; border: .45rem solid #e59a26; border-radius: 50%; background: repeating-conic-gradient(#d54b37 0 8deg, #efbc39 8deg 16deg); box-shadow: 0 1.2rem 0 -.8rem #141a16; }
-.park-roundabout::after { content: ''; position: absolute; left: calc(50% - .28rem); top: -2.9rem; width: .56rem; height: 5.8rem; background: #e1d2a0; }
-.park-climbing-frame { position: absolute; z-index: 3; left: 17%; bottom: 7rem; width: 11rem; height: 7rem; border: .55rem solid #65b4c8; border-bottom: 0; transform: skew(-8deg); }
-.park-climbing-frame::before, .park-climbing-frame::after { content: ''; position: absolute; inset: .4rem 2.9rem; border-left: .25rem solid #eed26b; border-right: .25rem solid #eed26b; }
-.park-climbing-frame::after { inset: 2.3rem .3rem auto; height: .25rem; border: 0; background: #eed26b; box-shadow: 0 1.8rem #eed26b; }
-.park-young-dwarf { --dwarf-colour: #f0df35; position: absolute; z-index: 6; width: 2.2rem; height: 3rem; filter: drop-shadow(.18rem .3rem .1rem rgba(0,0,0,.35)); animation: park-dwarf-hop 1.8s ease-in-out infinite alternate; }
-.park-young-dwarf i { position: absolute; left: .55rem; top: .65rem; width: 1.1rem; height: 1rem; border-radius: 50%; background: #d6aa7d; }
-.park-young-dwarf i::before { content: ''; position: absolute; left: -.4rem; top: -.55rem; width: 1.9rem; height: .85rem; background: var(--dwarf-colour); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.park-young-dwarf b { position: absolute; left: .4rem; top: 1.5rem; width: 1.4rem; height: 1.35rem; background: var(--dwarf-colour); clip-path: polygon(10% 0, 90% 0, 72% 100%, 50% 70%, 28% 100%); }
-.park-young-dwarf.dwarf-green { --dwarf-colour: #78bd46; }.park-young-dwarf.dwarf-blue { --dwarf-colour: #66b9df; }.park-young-dwarf.dwarf-red { --dwarf-colour: #e75b4d; }.park-young-dwarf.dwarf-purple { --dwarf-colour: #bd79c9; }.park-young-dwarf.dwarf-orange { --dwarf-colour: #f49a28; }
-.park-young-dwarf.dwarf-1 { left: 24%; bottom: 5.2rem; }.park-young-dwarf.dwarf-2 { left: 31%; bottom: 10.5rem; animation-delay: -.5s; }.park-young-dwarf.dwarf-3 { left: 40%; bottom: 5.4rem; animation-delay: -1s; }.park-young-dwarf.dwarf-4 { left: 48%; bottom: 8.2rem; animation-delay: -.25s; }.park-young-dwarf.dwarf-5 { left: 14%; bottom: 5rem; animation-delay: -.75s; }.park-young-dwarf.dwarf-6 { left: 54%; bottom: 5.8rem; animation-delay: -1.25s; }
-@keyframes park-dwarf-hop { to { transform: translateY(-.55rem) rotate(3deg); } }
+.city-park-scene {
+  --park-sky-top: #415e65; --park-sky-bottom: #d4ad70;
+  --park-grass-light: #58733e; --park-grass-dark: #172b20;
+  --park-line: #18201c; --park-structure: #e7bc56; --park-structure-dark: #78452e;
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(18rem, .72fr);
+  min-height: 37rem;
+  border-top: .32rem solid var(--city-accent, #f3a01d);
+  background: #111a17;
+}
+.dwarf-park-art {
+  z-index: 2;
+  display: block;
+  align-self: center;
+  width: 100%;
+  height: auto;
+  padding: .8rem 0 .8rem .8rem;
+  overflow: visible;
+  filter: drop-shadow(.75rem 1rem .8rem rgba(0, 0, 0, .42));
+}
+.city-park-scene .city-civic-copy {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  align-self: end;
+  width: auto;
+  margin: 2rem 2rem 2rem .7rem;
+  border-top: 2px solid var(--city-accent, #f3a01d);
+}
+.city-park-scene .city-civic-copy .eyebrow { color: #f1ba4e; }
+.dwarf-park-art .park-sky-top { stop-color: var(--park-sky-top); }
+.dwarf-park-art .park-sky-bottom { stop-color: var(--park-sky-bottom); }
+.dwarf-park-art .park-grass-light { stop-color: var(--park-grass-light); }
+.dwarf-park-art .park-grass-dark { stop-color: var(--park-grass-dark); }
+.dwarf-park-art .park-sun { fill: #f2c95d; opacity: .82; }
+.dwarf-park-art .park-sun-ring { fill: none; stroke: #ffe89a; stroke-width: 3; opacity: .38; }
+.dwarf-park-art .park-clouds { fill: #f4ead1; opacity: .28; }
+.dwarf-park-art .park-skyline { fill: var(--park-line); opacity: .72; }
+.dwarf-park-art .park-skyline-building rect:not(:first-child) { fill: #efb94e; opacity: .34; }
+.dwarf-park-art .park-region-detail { fill: none; stroke: color-mix(in srgb, var(--city-accent) 75%, #f4dfb0); stroke-width: 5; opacity: .62; }
+.dwarf-park-art .park-distant-wall { fill: color-mix(in srgb, var(--park-line) 82%, #6b755c); opacity: .76; }
+.dwarf-park-art .park-path { fill: #b69c6a; opacity: .92; }
+.dwarf-park-art .park-path-line { fill: none; stroke: #e3ca91; stroke-width: 5; stroke-dasharray: 18 15; opacity: .55; }
+.dwarf-park-art .park-fence { fill: none; stroke: #141b18; stroke-width: 5; opacity: .88; }
+.dwarf-park-art .park-shadow { fill: #07100c; opacity: .38; }
+.dwarf-park-art .park-tree-trunk { fill: #4f3124; stroke: #201913; stroke-width: 4; }
+.dwarf-park-art .park-tree-branch { fill: none; stroke: #3c2b21; stroke-width: 17; stroke-linecap: round; }
+.dwarf-park-art .park-tree-crown { fill: #2f613c; stroke: #173823; stroke-width: 4; }
+.dwarf-park-art .park-tree-variant-1 .park-tree-crown { fill: #477444; }
+.dwarf-park-art .park-tree-variant-2 .park-tree-crown { fill: #356c58; }
+.dwarf-park-art .park-leaf-lines { fill: none; stroke: #8daf62; stroke-width: 5; opacity: .52; }
+.dwarf-park-art .park-play-fort { fill: none; stroke: var(--park-line); stroke-linecap: round; stroke-linejoin: round; }
+.dwarf-park-art .park-fort-platform { fill: var(--park-structure-dark); stroke-width: 8; }
+.dwarf-park-art .park-fort-post, .dwarf-park-art .park-fort-line { stroke: var(--park-structure-dark); stroke-width: 13; }
+.dwarf-park-art .park-fort-roof { fill: var(--park-structure); stroke-width: 8; }
+.dwarf-park-art .park-slide { fill: #54aabc; stroke-width: 7; }
+.dwarf-park-art .park-ladder, .dwarf-park-art .park-rope-bridge { stroke: #ecd690; stroke-width: 6; }
+.dwarf-park-art .park-pennant { fill: #e85838; stroke: var(--park-line); stroke-width: 6; }
+.dwarf-park-art .park-fort-bolt { fill: #f5d05a; stroke: var(--park-line); stroke-width: 4; }
+.dwarf-park-art .park-rule-sign { fill: #efe4c6; stroke: #33271d; stroke-width: 5; }
+.dwarf-park-art .park-rule-sign text { fill: #31271e; stroke: none; font: 900 14px/1 Arial, sans-serif; letter-spacing: 1px; }
+.dwarf-park-art .park-rule-vandalism { fill: none; stroke: #d94c33; stroke-width: 10; opacity: .86; }
+.dwarf-park-art .park-roundabout-art { fill: #e85039; stroke: #28231d; stroke-width: 8; }
+.dwarf-park-art .park-roundabout-art path { fill: none; stroke: #efd05d; stroke-width: 9; }
+.dwarf-park-art .park-bench { fill: #755039; stroke: #2c211b; stroke-width: 7; stroke-linejoin: round; }
+.dwarf-park-art .park-abandoned-coat { fill: #59646c; }
+.dwarf-park-art .park-pocket { fill: none; stroke: #e2ccb0; stroke-width: 4; }
+.dwarf-park-art .park-dwarf-action { transform-box: fill-box; transform-origin: center bottom; }
+.dwarf-park-art .park-dwarf-leg, .dwarf-park-art .park-dwarf-arm { fill: none; stroke: #302219; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; }
+.dwarf-park-art .park-dwarf-coat, .dwarf-park-art .park-dwarf-hat { stroke: #241a14; stroke-width: 5; stroke-linejoin: round; }
+.dwarf-park-art .park-dwarf-belt, .dwarf-park-art .park-dwarf-hat-band { fill: #33271e; }
+.dwarf-park-art .park-dwarf-head, .dwarf-park-art .park-dwarf-ear { fill: #d8a578; stroke: #38251c; stroke-width: 5; }
+.dwarf-park-art .park-dwarf-eye { fill: #111; }
+.dwarf-park-art .park-dwarf-brow { fill: none; stroke: #332018; stroke-width: 5; stroke-linecap: round; }
+.dwarf-park-art .park-dwarf-grin { fill: #311711; stroke: #311711; stroke-width: 3; }
+.dwarf-park-art .park-dwarf-teeth { fill: none; stroke: #fff6d8; stroke-width: 5; stroke-linejoin: round; }
+.dwarf-park-art .park-prop { fill: #9d7243; stroke: #251b14; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.dwarf-park-art .park-stolen-purse { fill: #efb92f; }
+.dwarf-park-art .park-club { fill: #875839; stroke-width: 9; }
+.dwarf-park-art .park-sling { fill: none; stroke: #633d27; stroke-width: 6; }
+.dwarf-park-art .park-action-burst { transform-box: fill-box; transform-origin: center; animation: park-burst-pulse 1.35s steps(2, end) infinite; }
+.dwarf-park-art .park-action-burst polygon { fill: #ffd84b; stroke: #281a12; stroke-width: 6; }
+.dwarf-park-art .park-action-burst text { fill: #20140d; stroke: none; font: 1000 17px/1 Arial Black, Arial, sans-serif; }
+.dwarf-park-art .is-lunging, .dwarf-park-art .is-gnawing { animation: park-dwarf-lunge .78s ease-in-out infinite; }
+.dwarf-park-art .is-sneaking { animation: park-dwarf-sneak 1.65s steps(3, end) infinite; }
+.dwarf-park-art .is-running { animation: park-dwarf-run .62s ease-in-out infinite; }
+.dwarf-park-art .is-brawling { animation: park-dwarf-brawl .72s ease-in-out infinite; }
+.dwarf-park-art .is-firing { animation: park-dwarf-fire 1.2s steps(2, end) infinite; }
+.dwarf-park-art .park-sling-stone { fill: #28231d; stroke: #f1d07d; stroke-width: 3; animation: park-stone-flight 1.2s linear infinite; }
+.dwarf-park-art .park-foreground-plants { fill: none; stroke: #83a950; stroke-width: 5; }
+.dwarf-park-art .park-foreground-plants circle { fill: #f4c346; stroke: #283c22; stroke-width: 2; }
+.dwarf-park-art .park-hatch-overlay { opacity: .055; pointer-events: none; }
+.dwarf-park-art .park-hatch-overlay + * { pointer-events: none; }
+.park-tendency-report { display: grid; grid-template-columns: minmax(16rem, .75fr) minmax(0, 1.4fr); gap: 1.4rem; border-top: .2rem solid var(--city-accent); }
+.park-tendency-report p { margin-bottom: 0; }
+.park-tendency-report ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.park-tendency-report li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .65rem; align-items: center; padding: .7rem .8rem; color: #eaddc5; background: #1d2621; }
+.park-tendency-report strong { color: #ffbd31; font: 1000 .8rem/1 Arial Black, Arial, sans-serif; }
+.park-tendency-report span { font-size: .72rem; line-height: 1.35; }
+.city-park-page.region-aso .city-park-scene { --park-sky-top: #263d43; --park-sky-bottom: #c9824a; --park-grass-light: #5f6736; --park-grass-dark: #17231b; --park-structure: #e89931; --park-structure-dark: #613927; }
+.city-park-page.region-bromo .city-park-scene { --park-sky-top: #4b5150; --park-sky-bottom: #c3b58c; --park-grass-light: #586342; --park-grass-dark: #20291f; --park-structure: #cfb75c; --park-structure-dark: #63584a; }
+.city-park-page.region-calbuco .city-park-scene { --park-sky-top: #32606c; --park-sky-bottom: #8eb5aa; --park-grass-light: #477a4d; --park-grass-dark: #12332b; --park-structure: #67bdc4; --park-structure-dark: #3e5d45; }
+.city-park-page.region-dempo .city-park-scene { --park-sky-top: #315b70; --park-sky-bottom: #c1e3df; --park-grass-light: #577865; --park-grass-dark: #1a3540; --park-structure: #9ce2e4; --park-structure-dark: #456578; }
+.city-park-page.region-ebeko .city-park-scene { --park-sky-top: #314c50; --park-sky-bottom: #bdb58c; --park-grass-light: #5f7047; --park-grass-dark: #1e3027; --park-structure: #c3a65a; --park-structure-dark: #545640; }
+.city-park-page.region-fogo .city-park-scene { --park-sky-top: #4d3430; --park-sky-bottom: #d28a52; --park-grass-light: #6f6035; --park-grass-dark: #2e251d; --park-structure: #ee9c3d; --park-structure-dark: #743f2e; }
+.city-park-page.region-gallego .city-park-scene { --park-sky-top: #24636b; --park-sky-bottom: #d5bd75; --park-grass-light: #458057; --park-grass-dark: #123a34; --park-structure: #6dd2c8; --park-structure-dark: #466543; }
+@keyframes park-dwarf-lunge { 50% { translate: 10px -3px; rotate: -3deg; } }
+@keyframes park-dwarf-sneak { 50% { translate: -8px 0; } }
+@keyframes park-dwarf-run { 50% { translate: 11px -5px; rotate: 4deg; } }
+@keyframes park-dwarf-brawl { 50% { translate: 0 -7px; rotate: -6deg; } }
+@keyframes park-dwarf-fire { 45% { translate: -7px 2px; rotate: -3deg; } }
+@keyframes park-burst-pulse { 50% { scale: 1.12; } }
+@keyframes park-stone-flight { from { translate: 116px -30px; opacity: 0; } 20% { opacity: 1; } to { translate: -70px -8px; opacity: 0; } }
 
 /* Each civic landmark is presented as a surveyed architectural plate. The SVG owns
    its draughtsmanship; this frame gives every region a distinct ink and atmosphere. */
@@ -2864,6 +2981,10 @@ body.home-dream-open { overflow: hidden; }
   .city-facility-scene, .city-facility-columns { grid-template-columns: 1fr; }
   .city-facility-scene dl { flex-wrap: wrap; }
   .city-civic-copy { right: 1rem; bottom: 1rem; left: 1rem; width: auto; }
+  .city-park-scene { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .dwarf-park-art { width: 100%; padding: .65rem .65rem 0; }
+  .city-park-scene .city-civic-copy { margin: .25rem 1rem 1rem; }
+  .park-tendency-report { grid-template-columns: 1fr; }
   .city-landmark-scene { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .city-landmark-art { width: 100%; max-height: none; padding: 1rem 1rem 0; }
   .city-landmark-scene .city-civic-copy { margin: .25rem 1rem 1rem; }
@@ -2890,6 +3011,8 @@ body.home-dream-open { overflow: hidden; }
   .city-street-burst span { padding: .7rem .8rem; font-size: .92rem; }
   .city-landmark-art { padding: .65rem .65rem 0; }
   .city-landmark-scene .city-civic-copy { margin: .15rem .65rem .65rem; padding: 1rem; }
+  .city-park-scene .city-civic-copy { margin: .15rem .65rem .65rem; padding: 1rem; }
+  .park-tendency-report ul { grid-template-columns: 1fr; }
   .bar-compose { grid-template-columns: 1fr; }
   .bar-compose button { width: 100%; }
   .bar-message { grid-template-columns: 1fr auto; gap: .25rem .7rem; }
@@ -2913,9 +3036,13 @@ body.home-dream-open { overflow: hidden; }
   .city-landmark-scene .city-civic-copy { color: CanvasText; background: Canvas; border: 2px solid CanvasText; }
   .city-landmark-scene .city-civic-copy h2,
   .city-landmark-scene .city-civic-copy p:last-child { color: CanvasText; }
+  .city-park-scene { --park-line: CanvasText; border: 2px solid CanvasText; }
+  .city-park-scene .city-civic-copy, .park-tendency-report li { color: CanvasText; background: Canvas; border: 2px solid CanvasText; }
 }
 @media (prefers-reduced-motion: reduce) {
   .city-street-burst { animation: none; }
-  .park-young-dwarf { animation: none; }
+  .dwarf-park-art .park-dwarf-action,
+  .dwarf-park-art .park-action-burst,
+  .dwarf-park-art .park-sling-stone { animation: none; }
   .home-dream-thing, .home-dream-stars, .home-dream-world::before, .home-dream-world::after { animation: none; }
 }

@@ -762,6 +762,40 @@ export const MANUFACTURED_TRANSPORT_CATALOG = Object.freeze({
     })
   ])
 });
+export const BOLT_BOX_CATALOG = Object.freeze({
+  boltItemId: 2,
+  boltsPerBox: 20,
+  items: Object.freeze([
+    Object.freeze({
+      id: 1588,
+      name: 'Box of 20 Bolts',
+      rarity: 0,
+      description: 'A factory-sealed box containing 20 Bolts. Break it down in local inventory to release the individual Bolts; opened boxes cannot be repacked.',
+      marketableId: null,
+      mineTypeId: 1,
+      repairedItemId: null,
+      canFind: false,
+      icon: '/node/starter/item-2.svg',
+      iconSource: 'starter-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: '/node/starter/item-2.svg',
+      hasLargeImage: true,
+      goldValueUnits: 1867
+    })
+  ]),
+  factoryActions: Object.freeze([
+    Object.freeze({
+      id: 22,
+      name: 'Box of 20 Bolts',
+      ore: 1,
+      components: 850,
+      actionKind: 'item',
+      outputItemId: 1588,
+      outputQuantity: 1
+    })
+  ])
+});
 const VEHICLE_CARGO_POLICIES = new Set(['standard', 'oil-only', 'any-item']);
 const VEHICLE_ROUTE_POLICIES = new Set(['standard', 'capital-link']);
 export const WORLD_CREATURE_TYPES = Object.freeze([
@@ -1538,6 +1572,9 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   factoryActions.push(...MANUFACTURED_TRANSPORT_CATALOG.factoryActions.map((action) => ({
     ...action
   })));
+  factoryActions.push(...BOLT_BOX_CATALOG.factoryActions.map((action) => ({
+    ...action
+  })));
   const machineTypes = tableRows(sql, 'machine_types').map((row) => {
     const presentation = LEGACY_MACHINE_TYPE_RULES[row[1]];
     const behavior = LEGACY_MACHINE_BEHAVIOR_RULES[row[1]];
@@ -1605,6 +1642,10 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       hasLargeImage
     };
   }));
+  items.push(...BOLT_BOX_CATALOG.items.map((item) => ({
+    ...item,
+    goldValue: item.goldValueUnits / 10000
+  })));
   items.push(...SHROOM_CATALOG.items.map((item) => {
     const icon = item.icon;
     return {
@@ -1871,7 +1912,9 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     oil_bomb_damage_minimum_multiplier: 0.5,
     oil_bomb_damage_random_span: 1,
     ore_item_id: 368,
-    bolt_item_id: 2,
+    bolt_item_id: BOLT_BOX_CATALOG.boltItemId,
+    bolt_box_item_id: BOLT_BOX_CATALOG.items[0].id,
+    bolts_per_box: BOLT_BOX_CATALOG.boltsPerBox,
     block_and_tackle_item_id: 1107,
     search_plane_item_id: 737,
     bomber_item_id: 738,
@@ -2485,10 +2528,14 @@ export function indexCatalog({
     }
   }
   const itemSettingKeys = [
-    'oil_item_id', 'ore_item_id', 'bolt_item_id', 'block_and_tackle_item_id',
+    'oil_item_id', 'ore_item_id', 'bolt_item_id', 'bolt_box_item_id', 'block_and_tackle_item_id',
     'search_plane_item_id', 'bomber_item_id', 'helicopter_item_id'
   ];
   for (const key of itemSettingKeys) requireItem(settings[key], `setting ${key}`);
+  if (!Number.isSafeInteger(Number(settings.bolts_per_box))
+    || Number(settings.bolts_per_box) < 1) {
+    throw new Error('Invalid catalog Bolt box settings.');
+  }
   const mineTypeSettingKeys = [
     'starter_mine_type_id', 'ore_mine_type_id', 'bait_mine_type_id', 'fish_mine_type_id'
   ];

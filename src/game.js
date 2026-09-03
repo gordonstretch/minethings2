@@ -117,7 +117,6 @@ export function giveFinds(player, catalog, mine, quantity, now = Date.now(), ran
 }
 
 export function createPlayer(name, email, passwordHash, catalog, now = Date.now(), random = Math.random) {
-  const findIntervalMs = Number(setting(catalog, 'find_interval_ms'));
   const configuredMaps = [...(catalog.maps ?? [])];
   const firstMap = configuredMaps.find((map) => String(map.slug).toLowerCase() === 'aso'
     || String(map.name).toLowerCase() === 'aso')
@@ -135,7 +134,8 @@ export function createPlayer(name, email, passwordHash, catalog, now = Date.now(
   const mine = {
     id: 1, mineTypeId: Number(setting(catalog, 'starter_mine_type_id')), cityId,
     active: true, mineThings: true,
-    priority: 1, oilExpiresAt: 0, rentalUntil: 0, nextFindAt: now + findIntervalMs, equipment: {}, robotItemId: null
+    priority: 1, oilExpiresAt: 0, rentalUntil: 0, nextFindAt: now,
+    cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };
   const player = {
     name, email, passwordHash, description: '',
@@ -148,6 +148,7 @@ export function createPlayer(name, email, passwordHash, catalog, now = Date.now(
     batteryExpiresAt: now + Number(setting(catalog, 'starter_battery_duration_ms')),
     mines: [mine], inventory: {}, discoveries: [], createdAt: now
   };
+  startMineSchedule(player, catalog, mine, now);
   giveFinds(player, catalog, mine, Number(setting(catalog, 'starter_find_count')), now, random);
   player.inventoryByCity = { [player.cityId]: player.inventory };
   return player;
@@ -214,6 +215,30 @@ export function mineIntervalMs(catalog, mine, player = null, now = Date.now()) {
   return Math.round((bucketsPerThing / mineBucketsPerHour(catalog, mine, player, now)) * 60 * 60 * 1000);
 }
 
+export function synchronizeMineSchedules(player, catalog, now = Date.now()) {
+  let changed = 0;
+  for (const mine of player.mines ?? []) {
+    const interval = mineIntervalMs(catalog, mine, player, now);
+    const previousInterval = Number(mine.cycleIntervalMs)
+      || Number(setting(catalog, 'find_interval_ms'));
+    const previousNextFindAt = Number(mine.nextFindAt);
+    if (mine.active && previousNextFindAt > now && previousInterval !== interval) {
+      const remainingFraction = Math.min(1,
+        Math.max(0, (previousNextFindAt - now) / previousInterval));
+      mine.nextFindAt = now + Math.max(1, Math.round(interval * remainingFraction));
+    }
+    mine.cycleIntervalMs = interval;
+    if (mine.nextFindAt !== previousNextFindAt || previousInterval !== interval) changed += 1;
+  }
+  return changed;
+}
+
+function startMineSchedule(player, catalog, mine, now) {
+  mine.cycleIntervalMs = mineIntervalMs(catalog, mine, player, now);
+  mine.nextFindAt = now + mine.cycleIntervalMs;
+  return mine;
+}
+
 export function claimMine(player, catalog, mineId, now = Date.now(), random = Math.random) {
   const mine = mineInCurrentCity(player, mineId);
   if (!mine.cryptoTypeId && Number.isFinite(player.itemCount) && Number.isFinite(player.itemLimit)
@@ -257,6 +282,7 @@ export function claimMine(player, catalog, mineId, now = Date.now(), random = Ma
   }
   mine.nextFindAt += quantity * interval;
   if (mine.nextFindAt <= now) mine.nextFindAt = now + interval;
+  mine.cycleIntervalMs = interval;
   return { finds, gold, crypto, capturedDwarf, moonPhase: phase.name };
 }
 
@@ -276,9 +302,13 @@ export function prioritizeMine(player, catalog, mineId, now = Date.now()) {
     const wasActive = mine.active;
     mine.priority = index + 1;
     mine.active = index < activeLimit;
-    if (!wasActive && mine.active) mine.nextFindAt = Math.max(mine.nextFindAt, now + mineIntervalMs(catalog, mine, player, now));
+    if (!wasActive && mine.active) {
+      mine.cycleIntervalMs = mineIntervalMs(catalog, mine, player, now);
+      mine.nextFindAt = now + mine.cycleIntervalMs;
+    }
   });
   player.mines = ordered;
+  synchronizeMineSchedules(player, catalog, now);
   return target;
 }
 
@@ -289,6 +319,7 @@ export function oilMineBot(player, catalog, mineId, now = Date.now()) {
   changeLocalItem(player, mine.cityId, oil.id, -1);
   mine.oilExpiresAt = Math.max(now, mine.oilExpiresAt ?? 0)
     + Number(setting(catalog, 'mine_oil_duration_ms'));
+  synchronizeMineSchedules(player, catalog, now);
   return mine;
 }
 
@@ -312,9 +343,10 @@ export function buyMine(player, catalog, mineTypeId, now = Date.now(), random = 
     active: player.mines.filter((candidate) => candidate.active).length
       < activeMineLimit(player, catalog, now),
     mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0, rentalUntil: 0,
-    nextFindAt: now + Number(setting(catalog, 'find_interval_ms')), equipment: {}, robotItemId: null
+    nextFindAt: now, cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };
   player.mines.push(mine);
+  startMineSchedule(player, catalog, mine, now);
   giveFinds(player, catalog, mine, Number(setting(catalog, 'starter_find_count')), now, random);
   return mine;
 }
@@ -337,9 +369,10 @@ export function rentMine(player, catalog, mineTypeId, now = Date.now(), random =
       < activeMineLimit(player, catalog, now),
     mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0,
     rentalUntil: now + Number(setting(catalog, 'mine_rental_duration_ms')),
-    nextFindAt: now + Number(setting(catalog, 'find_interval_ms')), equipment: {}, robotItemId: null
+    nextFindAt: now, cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };
   player.mines.push(mine);
+  startMineSchedule(player, catalog, mine, now);
   giveFinds(player, catalog, mine, Number(setting(catalog, 'starter_find_count')), now, random);
   return mine;
 }
@@ -407,7 +440,7 @@ function changeLocalItem(player, cityId, itemId, amount) {
   else delete inventory[itemId];
 }
 
-export function equipMine(player, catalog, mineId, itemId) {
+export function equipMine(player, catalog, mineId, itemId, now = Date.now()) {
   const mine = mineInCurrentCity(player, mineId);
   const equipment = catalog.equipmentByItemId.get(itemId);
   if (!equipment) throw new Error('That item is not mining equipment.');
@@ -416,15 +449,17 @@ export function equipMine(player, catalog, mineId, itemId) {
   const replacedItemId = mine.equipment[equipment.typeId];
   if (replacedItemId) changeLocalItem(player, mine.cityId, replacedItemId, 1);
   mine.equipment[equipment.typeId] = itemId;
+  synchronizeMineSchedules(player, catalog, now);
   return { mine, replacedItemId };
 }
 
-export function unequipMine(player, catalog, mineId, typeId) {
+export function unequipMine(player, catalog, mineId, typeId, now = Date.now()) {
   const mine = mineInCurrentCity(player, mineId);
   const itemId = mine.equipment?.[typeId];
   if (!itemId || catalog.equipmentByItemId.get(itemId)?.typeId !== typeId) throw new Error('That equipment slot is empty.');
   delete mine.equipment[typeId];
   changeLocalItem(player, mine.cityId, itemId, 1);
+  synchronizeMineSchedules(player, catalog, now);
   return itemId;
 }
 

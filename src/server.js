@@ -15,6 +15,7 @@ import { REGIONAL_CASINO_MACHINES, THING_O_MATIC_KEY } from './casino-machines.j
 import { machineIconSvg } from './item-icons.js';
 import { mineMapIconPath, OIL_FIELD_MAP_ICON_PATH } from './mine-icons.js';
 import { renderCityLandmarkArt } from './city-landmark-art.js';
+import { renderDwarfParkArt } from './dwarf-park-art.js';
 import {
   CITY_VEHICLE_REPAIR_DURATION_MS, SHUTTLE_OIL_CATEGORY_ID, SqliteStore,
   hashPasswordAsync, verifyPasswordAsync
@@ -256,11 +257,13 @@ function vehicleJourneyRouteGraph(player, catalog, vehicle) {
       );
       legs.push({
         routeId: route.id, originCityId, destinationCityId,
+        interMap: Boolean(route.interMap),
         label: `${destinationLabel} · ${Number(route.length).toLocaleString('en-GB')} km`
       });
     }
   }
   return legs.sort((first, second) => Number(first.originCityId) - Number(second.originCityId)
+    || Number(first.interMap) - Number(second.interMap)
     || first.label.localeCompare(second.label) || Number(first.routeId) - Number(second.routeId));
 }
 
@@ -2399,6 +2402,9 @@ function localItemGoldValue(item, catalog, cityId) {
 
 function inventoryPage(player, catalog, meldItemNeeds = {}) {
   const mapsById = new Map(catalog.maps.map((map) => [Number(map.id), map]));
+  const boltBoxItemId = Number(catalog.settings.bolt_box_item_id);
+  const boltsPerBox = Number(catalog.settings.bolts_per_box);
+  const boltItem = catalog.byId.get(Number(catalog.settings.bolt_item_id));
   const selectedCity = catalogCityForId(catalog, player.cityId);
   const selectedRegion = mapsById.get(Number(selectedCity.mapId));
   if (!selectedRegion) throw new Error(`Missing catalog region: ${selectedCity.mapId}.`);
@@ -2449,7 +2455,10 @@ function inventoryPage(player, catalog, meldItemNeeds = {}) {
         : protectedCount
           ? `${protectedCount} factory-made ${protectedCount === 1 ? 'copy is' : 'copies are'} protected.`
           : '';
-      action = `<a class="button inventory-market-link" href="/market/items/${item.id}">Open local market</a><form class="inventory-meld-form" method="post" action="/inventory/${item.id}/meld"><button class="secondary" title="${escapeHtml(meldTitle)}"${meldDisabled ? ' disabled' : ''}>Meld</button></form><form class="recycle-form" method="post" action="/inventory/${item.id}/recycle"><input aria-label="Number of ${escapeHtml(item.name)} to recycle" type="number" name="quantity" min="1" max="${Math.max(1, recyclableCount)}" value="1" required${recycleDisabled ? ' disabled' : ''}><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : recycleTitle ? ` title="${escapeHtml(recycleTitle)}"` : ''}>Recycle · ${scrapsEach.toLocaleString('en-GB')} scraps each</button></form><form class="recycle-all-form" method="post" action="/inventory/${item.id}/recycle"><input type="hidden" name="quantity" value="${recyclableCount}"><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : ''}>Recycle all · ${(recyclableCount * scrapsEach).toLocaleString('en-GB')} scraps</button></form>`;
+      const breakdownAction = item.id === boltBoxItemId
+        ? `<form class="bolt-box-breakdown-form" method="post" action="/inventory/${item.id}/break-down"><input aria-label="Number of ${escapeHtml(item.name)} to break down" type="number" name="quantity" min="1" max="${count}" value="1" required><button>Break down · ${boltsPerBox.toLocaleString('en-GB')} ${escapeHtml(boltItem.name)}s each</button></form>`
+        : '';
+      action = `${breakdownAction}<a class="button inventory-market-link" href="/market/items/${item.id}">Open local market</a><form class="inventory-meld-form" method="post" action="/inventory/${item.id}/meld"><button class="secondary" title="${escapeHtml(meldTitle)}"${meldDisabled ? ' disabled' : ''}>Meld</button></form><form class="recycle-form" method="post" action="/inventory/${item.id}/recycle"><input aria-label="Number of ${escapeHtml(item.name)} to recycle" type="number" name="quantity" min="1" max="${Math.max(1, recyclableCount)}" value="1" required${recycleDisabled ? ' disabled' : ''}><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : recycleTitle ? ` title="${escapeHtml(recycleTitle)}"` : ''}>Recycle · ${scrapsEach.toLocaleString('en-GB')} scraps each</button></form><form class="recycle-all-form" method="post" action="/inventory/${item.id}/recycle"><input type="hidden" name="quantity" value="${recyclableCount}"><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : ''}>Recycle all · ${(recyclableCount * scrapsEach).toLocaleString('en-GB')} scraps</button></form>`;
     }
     return itemCard(item, {
       count,
@@ -2857,7 +2866,7 @@ function adminAuditPage(entries) {
 
 function adminRoutesPage(routes, catalog) {
   const routeTypes = catalog.settings.map_route_types;
-  const rows = routes.map((route) => {
+  const routeRow = (route) => {
     const type = routeTypes[route.type]?.label ?? `Type ${route.type}`;
     const location = (mapName, cityName, cityId, capitalCityId) =>
       `<strong>${escapeHtml(cityName)}</strong><br><small>${escapeHtml(mapName)}${
@@ -2871,8 +2880,16 @@ function adminRoutesPage(routes, catalog) {
     return `<tr><td>${location(route.map1_name, route.city1_name, route.city1_id,
       route.map1_capital_city_id)}</td><td>${location(route.map2_name, route.city2_name,
       route.city2_id, route.map2_capital_city_id)}</td><td>${escapeHtml(type)}<br><small>${scope} · #${route.id}</small></td><td>${Number(route.length).toLocaleString('en-GB')} km</td><td><strong>${escapeHtml(status)}</strong>${route.activeJourneys ? `<br><small>${route.vehicle_journeys} vehicle · ${route.creature_journeys} creature</small>` : ''}</td><td><form method="post" action="/admin/routes/${route.id}"><input type="hidden" name="open" value="${route.open ? 0 : 1}"><button class="${route.open ? 'secondary' : ''}">${route.open ? 'Close route' : 'Open now'}</button></form></td></tr>`;
-  }).join('');
-  return `${adminTabs('routes')}<section class="page-title"><div><p class="eyebrow">Complete world network</p><h1>World routes</h1></div><p>Closing a route blocks every new departure immediately. Journeys already underway finish naturally, then the drained route reopens automatically.</p></section><div class="table-scroll"><table><thead><tr><th>From</th><th>To</th><th>Mode</th><th>Distance</th><th>Status</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6">No routes are configured.</td></tr>'}</tbody></table></div>`;
+  };
+  const routeTable = (selectedRoutes, emptyMessage) => {
+    const rows = selectedRoutes.map(routeRow).join('');
+    return `<div class="table-scroll"><table><thead><tr><th>From</th><th>To</th><th>Mode</th><th>Distance</th><th>Status</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6">${escapeHtml(emptyMessage)}</td></tr>`}</tbody></table></div>`;
+  };
+  const interRegionRoutes = routes.filter((route) => route.interMap);
+  const regionalRoutes = routes.filter((route) => !route.interMap);
+  return `${adminTabs('routes')}<section class="page-title"><div><p class="eyebrow">Complete world network</p><h1>World routes</h1></div><p>Closing a route blocks every new departure immediately. Journeys already underway finish naturally, then the drained route reopens automatically.</p></section>
+    <section class="admin-route-section" data-route-scope="regional"><p class="eyebrow">Within each region</p><h2>Regional and mission routes</h2>${routeTable(regionalRoutes, 'No regional routes are configured.')}</section>
+    <section class="admin-route-section" data-route-scope="inter-region"><p class="eyebrow">Between regional capitals</p><h2>Inter-region routes</h2>${routeTable(interRegionRoutes, 'No inter-region routes are configured.')}</section>`;
 }
 
 function adminWorldEventsPage(state, catalog, currentTime) {
@@ -4012,6 +4029,40 @@ function vehicleShuttlePanel(player, catalog, vehicle) {
   </section>`;
 }
 
+function readonlyVehicleCargo(vehicle, catalog) {
+  const rows = [...vehicle.cargo]
+    .map((entry) => {
+      const item = catalog.byId.get(Number(entry.itemId));
+      if (!item) throw new Error(`Missing catalog item: ${entry.itemId}.`);
+      return { item, quantity: Number(entry.quantity) };
+    })
+    .sort((first, second) => compareItemsByRarity(first.item, second.item))
+    .map(({ item, quantity }) => `<tr><td data-label="Thing">${itemCard(item, {
+      compact: true, showFixedValue: false
+    })}</td><td data-label="Loaded">${quantity.toLocaleString('en-GB')}</td></tr>`)
+    .join('');
+  return `<section class="vehicle-cargo-manifest" aria-labelledby="vehicle-cargo-manifest-heading"><h3 id="vehicle-cargo-manifest-heading">Transport cargo <small>Read-only</small></h3>${rows
+    ? `<div class="table-scroll"><table class="cargo-loadout-table"><thead><tr><th>Thing</th><th>Loaded</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : '<p>No cargo is loaded on this leg.</p>'}</section>`;
+}
+
+function vehicleCanDeactivate(vehicle, catalog) {
+  const hasAmmunition = vehicle.ship && Object.values(catalog.settings.ammunition_rules)
+    .some((rule) => Number(vehicle.ship[rule.storageField]) > 0);
+  const hullRepairing = vehicle.ship
+    && Number(vehicle.ship.hull) < Number(vehicle.ship.max_hull);
+  return vehicle.status === 'idle' && !vehicle.shuttle && !vehicle.damaged
+    && !vehicle.aircraftDestroyed && Number(vehicle.reinforcement) <= 0
+    && Number(vehicle.cargoSize) === 0 && vehicle.mods.length === 0
+    && vehicle.weapons.length === 0 && vehicle.cannons.length === 0
+    && !hasAmmunition && !hullRepairing
+    && Number(vehicle.oiledTrips) <= 0 && Number(vehicle.tripsStolen) <= 0;
+}
+
+function vehicleDeactivateForm(vehicle) {
+  return `<form method="post" action="/vehicles/${vehicle.id}/store"><button class="secondary">Deactivate</button></form>`;
+}
+
 function vehiclesPage(player, catalog, vehicles, now, activationAvailability = new Map()) {
   const availableItems = Object.entries(player.inventory)
     .map(([itemId, count]) => [catalog.byId.get(Number(itemId)), count])
@@ -4083,8 +4134,10 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
         ? ` · reinforcement ${vehicle.reinforcement}/${vehicle.reinforcementMax}` : ''}${shuttleSummary
         ? ` · SHUTTLE · ${escapeHtml(shuttleSummary.phaseDetail)}` : ''}`;
     const normalActions = `${vehicle.type === 'sea' ? `<a class="button secondary" href="/vehicles/${vehicle.id}/customize#ammunition">Load ammunition</a>` : ''}${routes ? `<form method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId"${vehicle.damaged ? ' disabled' : ''}>${routes}</select></label><button${vehicle.damaged ? ' disabled' : ''}>Send</button></form>` : '<span>No compatible route here.</span>'}`;
+    const deactivate = vehicleCanDeactivate(vehicle, catalog)
+      ? vehicleDeactivateForm(vehicle) : '';
     return itemCard(vehicleItem, { meta: vehicle.name, details: `<p class="item-card-status">${vehicle.shuttle ? '<span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span> ' : ''}${status}</p>`,
-      action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${vehicle.shuttle ? vehicleShuttleCancelForm(vehicle) : normalActions}` });
+      action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${deactivate}${vehicle.shuttle ? vehicleShuttleCancelForm(vehicle) : normalActions}` });
   };
   const localVehicles = vehicles.filter((vehicle) => vehicle.status !== 'traveling'
     && vehicle.cityId === player.cityId).sort(compareItemsByRarity).map(vehicleCard).join('');
@@ -4125,7 +4178,7 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
     return `<section class="vehicle-region" data-region-id="${region.id}"><header><div><p class="eyebrow">Region</p><h3>${escapeHtml(region.name)}</h3></div><p>${vehicleCount.toLocaleString('en-GB')} idle vehicle${vehicleCount === 1 ? '' : 's'} across ${locations.length.toLocaleString('en-GB')} cit${locations.length === 1 ? 'y' : 'ies'}</p></header><ul class="vehicle-location-list">${cityRows}</ul></section>`;
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">Fleet command</p><h1>Vehicles in ${escapeHtml(currentCity.name)}</h1></div><p>Idle vehicles and stored vehicle things are city-local. Traveling vehicles remain visible while underway.</p></section>
-    <section><h2>Idle vehicles in ${escapeHtml(currentCity.name)}</h2><div class="vehicle-list">${localVehicles || `<p>No idle vehicles in ${escapeHtml(currentCity.name)}.</p>`}</div></section>
+    <section><h2>Idle vehicles in ${escapeHtml(currentCity.name)}</h2><p>Unloaded, unfitted transports can be deactivated here and activated again from stored vehicle things.</p><div class="vehicle-list">${localVehicles || `<p>No idle vehicles in ${escapeHtml(currentCity.name)}.</p>`}</div></section>
     ${travelingVehicles ? `<section><h2>Vehicles underway</h2><div class="vehicle-list">${travelingVehicles}</div></section>` : ''}
     ${elsewhere ? `<section><h2>Vehicles in other cities</h2><p>Regions follow world-map order; cities are alphabetical within each region. Switch city to manage cargo and fittings stored there.</p><div class="vehicle-region-list">${elsewhere}</div></section>` : ''}
     <section id="stored-vehicle-things" class="stored-vehicle-section"><div class="stored-vehicle-heading"><div><h2>Stored vehicle things in ${escapeHtml(currentCity.name)}</h2>${storedVehicleCount ? `<p>${activatableVehicleCount.toLocaleString('en-GB')} of ${storedVehicleCount.toLocaleString('en-GB')} can be activated here.</p>` : ''}</div>${storedVehicleCount ? `<form method="post" action="/vehicles/activate-all"><button${activatableVehicleCount ? '' : ' disabled'}>Activate all${activatableVehicleCount ? ` (${activatableVehicleCount.toLocaleString('en-GB')})` : ''}</button></form>` : ''}</div><div class="item-grid stored-vehicle-grid">${activate || `<p>No stored vehicles in ${escapeHtml(currentCity.name)}.</p>`}</div></section>`;
@@ -4224,7 +4277,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     ? `This dedicated hold accepts only ${escapeHtml(catalogItemForSetting(catalog, 'oil_item_id').name)}. Choose up to ${Number(vehicle.capacityCap ?? vehicle.capacity).toLocaleString('en-GB')} barrels.`
     : vehicle.cargoPolicy === 'any-item'
       ? `This freight hold accepts any inventory thing, up to ${Number(vehicle.capacityCap ?? vehicle.capacity).toLocaleString('en-GB')} in total.`
-      : 'Choose the complete cargo manifest.';
+      : 'Choose the complete cargo manifest. Deactivated vehicles and ships are cargo Things and can be carried by a compatible transport.';
   const events = vehicle.events.map((event) => {
     const [label, detail] = vehicleEventPresentation(event, vehicle, catalog);
     const opponent = event.otherPlayerName
@@ -4258,7 +4311,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     ];
     const underwayCombat = vehicle.type === 'land'
       ? combatStatsPanel(vehicle.combatStats, 'Locked at departure') : '';
-    const underwayLoadout = `<section class="vehicle-loadout" aria-labelledby="vehicle-loadout-heading"><h2 id="vehicle-loadout-heading">Current loadout</h2>${capacityBudgetHtml(vehicle.capacityBreakdown, 'Capacity at departure')}<dl>${underwayRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>${underwayCombat}</section>`;
+    const underwayLoadout = `<section class="vehicle-loadout" aria-labelledby="vehicle-loadout-heading"><h2 id="vehicle-loadout-heading">Current loadout</h2>${capacityBudgetHtml(vehicle.capacityBreakdown, 'Capacity at departure')}<dl>${underwayRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>${readonlyVehicleCargo(vehicle, catalog)}${underwayCombat}</section>`;
     const journeyGadgets = [
       vehicle.turbo ? catalogGadgetForBehavior(catalog, 'turbo').displayName : '',
       vehicle.offenseBonusFactor ? catalogGadgetForBehavior(catalog, 'sharpener').displayName : '',
@@ -4528,13 +4581,15 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const unloadWarning = totalLooseShots
     ? `<label class="danger-confirm"><input type="checkbox" name="confirmLoss" value="yes" required> Discard ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} that cannot make a complete crate.</label>` : '';
   const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete cannon set you want fitted. Existing cannons can be kept, returned or replaced in one preview. Any removal consumes one ${escapeHtml(blockAndTackleItem.name)}; ammunition remains aboard. Commit cannon changes before loading ammunition.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached. Choose a proposed quantity below, preview the cannon loadout, then commit it to unlock ammunition loading. The commit button appears after a valid preview.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview cannon loadout</button>${commitButton}</div></form></div><div id="ammunition"><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p>Cannons draw from this ship's shared ammunition hold; shots do not need to be assigned to individual cannon portals. <a class="text-link" href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></div></section>` : '';
-  const hasStoredLoadout = vehicle.reinforcement > 0 || vehicle.cargoSize > 0 || vehicle.mods.length > 0
-    || vehicle.weapons.length > 0 || vehicle.cannons.length > 0 || totalLoadedShots > 0;
-  const storeBlocked = vehicle.damaged || hasStoredLoadout;
-  const storeWarning = vehicle.damaged
+  const deactivateBlocked = !vehicleCanDeactivate(vehicle, catalog);
+  const deactivateWarning = vehicle.damaged
     ? `${cityRepairStatus} A damaged vehicle cannot be stored as a thing.`
     : vehicle.reinforcement > 0
     ? `This vehicle still has ${vehicle.reinforcement}/${vehicle.reinforcementMax} reinforcement. It remains fitted until it absorbs that damage.`
+    : vehicle.oiledTrips > 0 || vehicle.tripsStolen > 0
+      ? 'Use all loaded and stolen oil trips before deactivating this vehicle.'
+      : shipHullRepairing
+        ? 'Let dockyard repairs restore the hull completely before deactivating this ship.'
     : 'Unload cargo and remove every fitting, cannon, and ammunition shot before storing this vehicle as a thing.';
   const pageTitle = `<section class="page-title"><div><p class="eyebrow">${escapeHtml(vehicle.type)} in ${escapeHtml(city.name)} ${rankBadge(vehicle.rank, 1, catalog)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="${view === 'status' ? '/vehicles' : `/vehicles/${vehicle.id}`}">${view === 'status' ? 'Back to vehicles' : 'Back to vehicle status'}</a></section>`;
   const hero = `<section class="vehicle-hero vehicle-hero-compact">${itemCard(vehicleItem, { compact: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p></div></section>`;
@@ -4563,7 +4618,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
         ? '<input type="hidden" name="travelOrder" value="peaceful"><p class="field-help"><strong>Order:</strong> Peaceful. Aircraft cannot take combat orders.</p>'
         : `<label>Order<select name="travelOrder"${vehicle.damaged ? ' disabled' : ''}>${travelOrderOptions}</select></label><p class="field-help">The chosen order applies on both the loaded outbound leg and the empty return leg.</p>`}<fieldset${vehicle.damaged ? ' disabled' : ''}><legend>Cargo categories</legend><p>Every category is selected. Untick anything this shuttle must leave behind; the rarest eligible things among the remaining categories load first.</p><div class="button-row vehicle-shuttle-category-actions"><button class="secondary" type="button" data-shuttle-deselect-all aria-controls="shuttle-categories-${vehicle.id}">Deselect all</button></div><div id="shuttle-categories-${vehicle.id}" class="vehicle-shuttle-categories">${shuttleCategoryOptions}</div></fieldset><button${vehicle.damaged ? ' disabled' : ''}>Start shuttle</button></form><script src="/node/vehicle-shuttle.js?v=20260901a" defer></script>`
       : '<p>No compatible shuttle destination from this city.</p>';
-  const shuttleSetupSection = vehicle.cargoSize === 0 ? `<section class="vehicle-send-panel vehicle-shuttle-setup"><p class="eyebrow">Automatic transport</p><h2>Set up a shuttle</h2><p>Each outbound trip loads as many eligible things as will fit, rarest first, unloads them at the destination, then returns empty and repeats until cancelled. Manufactured things are never loaded. Oil Field machine parts stay in their Oil Field home city.</p>${shuttleSetupControls}</section>` : '';
+  const shuttleSetupSection = vehicle.cargoSize === 0 ? `<section class="vehicle-send-panel vehicle-shuttle-setup"><p class="eyebrow">Automatic transport</p><h2>Set up a shuttle</h2><p>Each outbound trip loads as many eligible things as will fit, rarest first, unloads them at the destination, then returns empty and repeats until cancelled. Protected factory output is never loaded. Deactivated transports can travel as ordinary cargo when Vehicles or Ships are selected. Oil Field machine parts stay in their Oil Field home city.</p>${shuttleSetupControls}</section>` : '';
   const sendSection = vehicle.shuttle
     ? vehicleShuttlePanel(player, catalog, vehicle)
     : `${ordinarySendSection}${shuttleSetupSection}`;
@@ -4582,7 +4637,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     ${manageSection}
     ${vehicle.shuttle ? '' : `<section><h2>Oil</h2>${oilItem ? itemCard(oilItem, { count: local[oilItem.id] ?? 0, compact: true, meta: [`${vehicle.oiledTrips} boosted trips loaded`, `${vehicle.tripsStolen} stolen trips`], action: `<form method="post" action="/vehicles/${vehicle.id}/oil"><button ${vehicle.routeType === airRouteType || !(local[oilItem.id] ?? 0) ? 'disabled' : ''}>Load one barrel</button></form>${vehicle.tripsStolen ? `<form method="post" action="/vehicles/${vehicle.id}/oil/unload"><button class="secondary">Reclaim a barrel</button></form>` : ''}` }) : ''}</section>`}
     <section><h2>History</h2><table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No journeys yet.</td></tr>'}</tbody></table></section>
-    ${vehicle.shuttle ? '' : `<form method="post" action="/vehicles/${vehicle.id}/store">${storeBlocked ? `<p>${storeWarning}</p>` : ''}<button class="secondary"${storeBlocked ? ' disabled' : ''}>Store as item</button></form>`}`;
+    ${vehicle.shuttle ? '' : `<form method="post" action="/vehicles/${vehicle.id}/store"><p>${deactivateBlocked ? deactivateWarning : 'Return this unaltered transport to stored vehicle things. You can activate it again in this city later.'}</p><button class="secondary"${deactivateBlocked ? ' disabled' : ''}>Deactivate</button></form>`}`;
 }
 
 export function battlePage(report) {
@@ -4931,16 +4986,17 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
   return `<article class="oil-page"><section class="page-title"><div><p class="eyebrow">${escapeHtml(field.mapName)} regional operation</p><h1>Oil Field</h1></div><p>Pump, pipe, and pack ${formatGold(litersPerBarrel)} litres into each barrel of ${escapeHtml(labels.oil)}. Build a network, defend it, and bring the oil home.</p></section>
     <dl class="oil-facts"><div><dt>Field status</dt><dd><span class="oil-live-status"><i aria-hidden="true"></i><span class="active-state">Field access active</span></span></dd></div><div><dt>Regional base</dt><dd>${escapeHtml(field.mapName)} · ${escapeHtml(cityName)}</dd></div><div><dt>Machine board</dt><dd>${field.hexes.length} hexes · radius ${Number(catalog.settings.oil_field_max_radius)}</dd></div></dl>
     <section class="oil-briefing"><div><p class="eyebrow">Deployment brief</p><p>The field is based in <strong>${escapeHtml(cityName)}</strong>. Drag a machine from the rack onto a hex, rotate it, then deploy, replace, queue, or bomb.</p></div><dl class="oil-aircraft"><div><dt>${escapeHtml(labels.helicopter)}</dt><dd class="${field.hasHelicopter ? 'ready' : 'missing'}"><strong>${field.hasHelicopter ? 'Ready' : 'Missing'}</strong><small>Outer-row deployment</small></dd></div><div><dt>${escapeHtml(labels.searchPlane)}</dt><dd class="${field.hasSearchPlane ? 'ready' : 'limited'}"><strong>${field.hasSearchPlane ? 'All oil revealed' : 'Rival oil hidden'}</strong><small>Field intelligence</small></dd></div><div><dt>${escapeHtml(labels.bomber)}</dt><dd class="${field.hasBomber ? 'ready' : 'missing'}"><strong>${field.hasBomber ? 'Ready' : 'Missing'}</strong><small>Bomb delivery</small></dd></div></dl></section>
-    <section class="oil-original-panel" aria-labelledby="oil-board-heading"><div class="oil-board-heading"><div><p class="eyebrow">MT2 // Regional machine grid</p><h2 id="oil-board-heading">Machine field</h2><p>Original vector machines · live power, flow, packing, and combat effects</p></div><div class="oil-board-controls"><button type="button" id="oil-toggle-renderer" title="Switch Oil Field renderer">Renderer: SVG.js</button><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button><button type="button" id="oil-toggle-volume-labels" aria-pressed="false">Hide oil volume labels</button></div></div>
+    <section class="oil-original-panel" aria-labelledby="oil-board-heading"><div class="oil-board-heading"><div><p class="eyebrow">MT2 // Regional machine grid</p><h2 id="oil-board-heading">Machine field</h2><p>Original vector machines · live power, flow, packing, and combat effects</p></div><div class="oil-board-controls" role="group" aria-label="Oil Field display controls"><button type="button" id="oil-toggle-renderer" title="Switch Oil Field renderer">Renderer: SVG.js</button><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button><button type="button" id="oil-toggle-volume-labels" aria-pressed="false">Hide oil volume labels</button></div></div>
       <div class="oil-legend" aria-label="Board legend"><span class="oil-key oil-key-own">Your machine</span><span class="oil-key oil-key-rival">Other machine</span><span class="oil-key oil-key-build">Buildable</span><span class="oil-key oil-key-heli">${escapeHtml(labels.helicopter)} row</span><span class="oil-key oil-key-oil">${escapeHtml(labels.oil)}</span><span class="oil-key oil-key-spill">${escapeHtml(labels.oil)} spill</span><span class="oil-key oil-key-closed">Unavailable</span></div>
       <p id="oil-board-status" class="oil-board-status" role="status">Loading the original Oil Field…</p>
-      <div class="oil-field-board-shell" data-hex-count="${field.hexes.length}" data-machine-count="${field.hexes.filter((hex) => hex.machine).length}"><div id="board" aria-label="Interactive Oil Field hex board"></div></div>
+      <div id="oil-board-navigation" class="oil-board-navigation"><p id="oil-board-help">Pan or scroll to explore the field. Select a rack machine, then select a hex to deploy it.</p><button type="button" id="oil-center-board" class="secondary" aria-controls="board">Centre field</button></div>
+      <div class="oil-field-board-shell" data-hex-count="${field.hexes.length}" data-machine-count="${field.hexes.filter((hex) => hex.machine).length}"><div id="board" aria-label="Interactive Oil Field hex board" aria-describedby="oil-board-help"></div></div>
       <textarea id="oil-field-state" hidden>${serializedState}</textarea>
     </section>
     ${stats}
     <section class="oil-instructions"><p class="eyebrow">Operator handbook</p><h2>Instructions</h2><ol><li>Drag a machine onto a hex, or click it and then click its destination.</li><li>Use the on-board L and R controls before deploying. Once deployed or queued, it cannot be moved or rotated.</li><li>Blue hexes are buildable. The outer blue row requires a ${escapeHtml(labels.helicopter)} in ${escapeHtml(cityName)}.</li><li>Drop onto your own machine to replace it immediately or queue its successor.</li><li>Drop ${escapeHtml(bombNames)} bombs onto a machine or oil spill; a ${escapeHtml(labels.bomber)} is required.</li><li>Click any hex to open its full summary. Only ${escapeHtml(packerNames)} can release completed barrels. Barrels stolen by ${escapeHtml(craneNames)} remain on their hex when you replace the machine with one of those packing machines.</li></ol></section>
     <section class="oil-events"><header><div><p class="eyebrow">Local activity log</p><h2>Your field events</h2></div><p>Deployments, replacements, attacks, and machine failures from this regional board.</p></header><div class="table-scroll"><table><thead><tr><th>When</th><th>Event</th><th>Hex</th><th>Other miner</th><th>Details</th></tr></thead><tbody>${eventRows || '<tr><td colspan="5">No field events yet.</td></tr>'}</tbody></table></div></section>
-    <script src="/js/raphael2.1.2.js" defer></script><script src="/node/svgjs.min.js?v=3.2.7" defer></script><script src="/node/oil-field-renderers.js?v=20260827a" defer></script><script src="/js/machines11.js?v=20260827a" defer></script><script src="/node/oil-field.js?v=20260827a" defer></script></article>`;
+    <script src="/js/raphael2.1.2.js" defer></script><script src="/node/svgjs.min.js?v=3.2.7" defer></script><script src="/node/oil-field-renderers.js?v=20260827a" defer></script><script src="/js/machines11.js?v=20260827a" defer></script><script src="/node/oil-field.js?v=20260903a" defer></script></article>`;
 }
 
 function unavailableOilFieldPage(player) {
@@ -4981,13 +5037,13 @@ function cityCivicPlacePage(state, placeKey) {
   if (!point) throw new Error('That place is not part of this city.');
   const mapSlug = /^[a-z0-9-]+$/.test(state.city.mapSlug) ? state.city.mapSlug : 'aso';
   if (placeKey === 'dwarf-park') {
-    const youngDwarves = ['yellow', 'green', 'blue', 'red', 'purple', 'orange']
-      .map((colour, index) => `<span class="park-young-dwarf dwarf-${colour} dwarf-${index + 1}" aria-hidden="true"><i></i><b></b></span>`)
-      .join('');
+    const parkArt = renderDwarfParkArt({
+      cityName: state.city.cityName, mapSlug, appearance: state.interior.appearance
+    });
     return `<article class="city-civic-page city-park-page region-${escapeHtml(mapSlug)}" style="--city-accent:${escapeHtml(state.interior.appearance.accent)}">
       <section class="page-title"><div><p class="eyebrow">${escapeHtml(state.city.cityName)} · On foot</p><h1>${escapeHtml(point.label)}</h1></div><a class="text-link" href="/explore">Return to the streets →</a></section>
-      <section class="city-civic-scene city-park-scene" aria-label="Young Dwarves playing in ${escapeHtml(state.city.cityName)}"><div class="park-sky"></div><div class="park-ground"></div><span class="park-tree park-tree-left"></span><span class="park-tree park-tree-right"></span><span class="park-roundabout"></span><span class="park-climbing-frame"></span>${youngDwarves}<div class="city-civic-copy"><p class="eyebrow">Public green · All colours welcome</p><h2>The young ones make their own rules.</h2><p>Young Dwarves chase one another around the climbing frame, trade pebbles of doubtful value, and practise the ancient art of not coming in when called.</p></div></section>
-      <section class="city-civic-note"><p class="eyebrow">A safe corner</p><h2>Look, don’t interrupt.</h2><p>This is a civic park, not a hunting ground. The troublesome grown Dwarves out on the streets are another matter entirely.</p></section>
+      <section class="city-civic-scene city-park-scene" aria-label="Young Dwarves playing in ${escapeHtml(state.city.cityName)}">${parkArt}<div class="city-civic-copy"><p class="eyebrow">Public green · Supervision withdrawn</p><h2>The nursery of future public hazards.</h2><p>Under the respectable trees, young Dwarves rehearse the habits they will take onto the streets: biting whatever holds still, lifting purses, arranging ambushes, and fleeing with the evidence. The Council calls this unstructured play.</p></div></section>
+      <section class="city-civic-note park-tendency-report"><div><p class="eyebrow">Observed programme</p><h2>Viciousness begins at playtime.</h2><p>This remains a civic park, not a hunting ground. Keep your hands, pockets, and loose Things where you can see them.</p></div><ul><li><strong>CHOMP!</strong><span>Bite technique and structural gnawing</span></li><li><strong>YOINK!</strong><span>Pickpocket relays with immediate escape</span></li><li><strong>THWACK!</strong><span>Improvised weapons and elevated ambushes</span></li><li><strong>PING!</strong><span>Long-range disrespect for posted rules</span></li></ul></section>
     </article>`;
   }
   const landmark = state.interior.appearance.landmark;
@@ -5921,7 +5977,8 @@ function fieldGuideSystems(catalog, player = null) {
       description: 'An empty compatible transport can shuttle between two cities continuously. It loads at one end, unloads at the other, returns empty, and repeats until you cancel the contract. Land vehicles and ships can keep a Peaceful, Pillage, or Patrol order throughout the circuit.',
       facts: facts([
         ['Selection', 'Choose the travel order and any cargo categories, including Oil and Ore. All categories begin selected; eligible stock loads rarest first.'],
-        ['Exclusions', 'Manufactured things are never auto-loaded. Oil Field machine parts remain in their field city unless that city has no Oil Field.'],
+        ['Packed transports', 'Deactivate an empty, unfitted vehicle or ship to turn it back into a movable Thing. A compatible carrier or shuttle can take it to another city; activating it there still requires a valid route.'],
+        ['Exclusions', 'Protected factory output is never auto-loaded. Oil Field machine parts remain in their field city unless that city has no Oil Field.'],
         ['Interruptions', 'Snow, closed routes, inventory overage, or missing eligible stock pause the next leg without losing delivered cargo.']
       ]),
       href: '/vehicles', action: 'Set up a shuttle'
@@ -7947,8 +8004,8 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/vehicles\/\d+\/store$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         store.storeVehicle(player.id, Number(url.pathname.split('/')[2]));
-        setFlash('Vehicle returned to local inventory.');
-        redirect(response, '/vehicles');
+        setFlash('Vehicle deactivated. Activate it again from stored vehicle things.');
+        redirect(response, '/vehicles#stored-vehicle-things');
       } else if (request.method === 'GET' && /^\/battles\/\d+$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const report = store.battleReport(player.id, Number(url.pathname.split('/')[2]));
@@ -8773,16 +8830,20 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/mines\/\d+\/equipment\/\d+\/equip$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
+        const changedAt = now();
         const { result } = store.mutatePlayer(player.id, (current) =>
-          equipMine(current, catalog, Number(parts[2]), Number(parts[4])), null, now());
+          equipMine(current, catalog, Number(parts[2]), Number(parts[4]), changedAt),
+        null, changedAt);
         const item = catalog.byId.get(Number(parts[4]));
         setFlash(`${item.name} equipped${result.replacedItemId ? '; the previous item returned to local inventory' : ''}.`);
         redirect(response, `/mines/${parts[2]}/equipment`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/equipment\/\d+\/unequip$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
+        const changedAt = now();
         const { result: itemId } = store.mutatePlayer(player.id, (current) =>
-          unequipMine(current, catalog, Number(parts[2]), Number(parts[4])), null, now());
+          unequipMine(current, catalog, Number(parts[2]), Number(parts[4]), changedAt),
+        null, changedAt);
         setFlash(`${catalog.byId.get(itemId).name} returned to local inventory.`);
         redirect(response, `/mines/${parts[2]}/equipment`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/robots\/\d+\/assign$/.test(url.pathname)) {
@@ -9061,6 +9122,16 @@ export function createApp(options = {}) {
         const form = await readForm(request);
         const result = store.refineOreScraps(player.id, form.quantity);
         setFlash(`${result.scraps.toLocaleString('en-GB')} Ore scraps refined into ${result.ore.toLocaleString('en-GB')} Ore.`);
+        redirect(response, '/inventory');
+      } else if (request.method === 'POST' && /^\/inventory\/\d+\/break-down$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const itemId = Number(url.pathname.split('/')[2]);
+        if (itemId !== Number(catalog.settings.bolt_box_item_id)) {
+          throw new Error('That item cannot be broken down.');
+        }
+        const form = await readForm(request);
+        const result = store.breakDownBoltBoxes(player.id, form.quantity);
+        setFlash(`${result.boxes.toLocaleString('en-GB')} ${result.boxes === 1 ? 'box' : 'boxes'} broken down into ${result.bolts.toLocaleString('en-GB')} ${result.boltName}s.`);
         redirect(response, '/inventory');
       } else if (request.method === 'POST' && /^\/inventory\/\d+\/recycle$/.test(url.pathname)) {
         if (!requirePlayer()) return;

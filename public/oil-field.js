@@ -291,6 +291,7 @@
     if (this.draggedUntil && Date.now() < this.draggedUntil) return;
     if (hexSummaryDialog.open) hexSummaryDialog.close();
     originalClick.call(this, event);
+    hideRackTooltip(this);
   };
 
   let dragCandidate = null;
@@ -436,7 +437,29 @@
 
   window.drawboard();
   const boardElement = document.getElementById('board');
+  const boardShell = boardElement?.closest('.oil-field-board-shell');
+  const centerBoardButton = document.getElementById('oil-center-board');
   if (boardElement) boardElement.dataset.renderer = window.oilRendererMode;
+  const centreBoard = (behavior = 'smooth', announce = false) => {
+    const centerHex = boardElement?.querySelector(
+      '.oil-hex-shape[data-hex-x="0"][data-hex-y="0"]'
+    );
+    if (!boardShell || !centerHex) return;
+    const shellRect = boardShell.getBoundingClientRect();
+    const hexRect = centerHex.getBoundingClientRect();
+    boardShell.scrollTo({
+      left: boardShell.scrollLeft + hexRect.left + hexRect.width / 2
+        - shellRect.left - boardShell.clientWidth / 2,
+      top: boardShell.scrollTop + hexRect.top + hexRect.height / 2
+        - shellRect.top - boardShell.clientHeight / 2,
+      behavior
+    });
+    if (announce) status('Field centred on hex (0,0).');
+  };
+  centerBoardButton?.addEventListener('click', () => {
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    centreBoard(reducedMotion ? 'auto' : 'smooth', true);
+  });
 
   let visibleOilHexes = 0;
   let visibleOilSpills = 0;
@@ -696,6 +719,7 @@
   renderVolumeLabelPreference();
   if (animationButton) animationButton.textContent = window.animate ? 'Pause animation' : 'Play animation';
   status(`Oil Field ready with ${rendererLabel}: ${window.boardHexes.length} hexes, ${visibleOilHexes} containing visible oil, ${visibleOilSpills} oil spills marked, ${window.boardMachines.length} deployed machines, ${rackMachines.length} machine parts in the rack.`);
+  requestAnimationFrame(() => centreBoard('auto'));
   };
   initialize();
 })();

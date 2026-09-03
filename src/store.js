@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  activeMineLimit, claimMine, expireRentalMines, findGold, findItem, giveFinds, rentMine
+  activeMineLimit, claimMine, expireRentalMines, findGold, findItem, giveFinds, mineIntervalMs,
+  rentMine, synchronizeMineSchedules
 } from './game.js';
 import { itemGoldValueUnits } from './item-values.js';
 import {
@@ -11,6 +12,7 @@ import {
   LEGACY_MACHINE_BEHAVIOR_RULES,
   LEGACY_MACHINE_TYPE_RULES, LEGACY_SPECIALISATION_TITLES, LEGACY_STARTER_WELCOME_PACK,
   LEGACY_WORLD_EVENT_SETTINGS, EXPANDED_STONE_CATALOG, MANUFACTURED_TRANSPORT_CATALOG,
+  BOLT_BOX_CATALOG,
   PRESTIGE_SPECIALISATIONS, FACTORY_WORKER_BOT_TIERS, ASO_DISCOVERY_STONE,
   CITY_COMPLETION_STONE, HOME_DISPLAY_STONE, HOME_STONE, STARTER_BOT_STONE,
   INVENTORY_CAPACITY_RULES,
@@ -71,7 +73,7 @@ import {
 } from './city-exploration.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 130;
+const CURRENT_SCHEMA_VERSION = 131;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
 const GUILD_CREATION_COST_UNITS = 100 * GOLD_SCALE;
 const GUILD_BANK_CAPACITY = 1000;
@@ -401,6 +403,7 @@ export class SqliteStore {
       this.#migrateWisdomCatalog();
       this.#migrateElectronicsCatalog();
       this.#migrateRelicsCatalog();
+      this.#migrateBoltBoxCatalog();
       this.#migrateRegionalMineAvailability();
       this.#migrateAsoMineRentalVouchers();
       this.#migrateFactoryBuildCompletionMessages();
@@ -616,6 +619,7 @@ export class SqliteStore {
         priority INTEGER NOT NULL DEFAULT 1,
         oil_expires_at INTEGER NOT NULL DEFAULT 0,
         rental_until INTEGER NOT NULL DEFAULT 0,
+        cycle_interval_ms INTEGER NOT NULL DEFAULT 21600000 CHECK (cycle_interval_ms > 0),
         next_find_at INTEGER NOT NULL,
         PRIMARY KEY (player_id, id)
       );
@@ -2078,6 +2082,10 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 130) {
+      this.#migrateTo131();
+      return;
+    }
     if (schemaVersion === 129) {
       this.#migrateTo130();
       return;
@@ -6533,6 +6541,26 @@ export class SqliteStore {
       `).run(MAXIMUM_ITEM_LIMIT, STARTER_ITEM_LIMIT);
       this.database.exec('PRAGMA user_version = 130');
     });
+    this.#migrateTo131();
+  }
+
+  #migrateTo131() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 131) return;
+      if (currentVersion !== 130) {
+        throw new Error(`Cannot install rate-aware mine schedules at v${currentVersion}.`);
+      }
+      const columns = new Set(this.database.prepare('PRAGMA table_info(mines)').all()
+        .map((column) => column.name));
+      if (!columns.has('cycle_interval_ms')) {
+        this.database.exec(`
+          ALTER TABLE mines ADD COLUMN cycle_interval_ms INTEGER NOT NULL DEFAULT 21600000
+            CHECK (cycle_interval_ms > 0)
+        `);
+      }
+      this.database.exec('PRAGMA user_version = 131');
+    });
   }
 
   #insertPrestigeSpecialisations() {
@@ -6673,6 +6701,100 @@ export class SqliteStore {
       if (missing('catalog_factory_actions', action.id, fields)) {
         insertAction.run(action.id, ...Object.values(fields));
       }
+    }
+  }
+
+  #migrateBoltBoxCatalog(now = Date.now()) {
+    const migrationName = 'bolt-box-catalog-v1';
+    if (!this.hasCatalog()
+      || !this.database.prepare('SELECT 1 FROM catalog_items LIMIT 1').get()
+      || this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      this.#insertBoltBoxCatalog();
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        itemId: BOLT_BOX_CATALOG.items[0].id,
+        actionId: BOLT_BOX_CATALOG.factoryActions[0].id,
+        boltsPerBox: BOLT_BOX_CATALOG.boltsPerBox
+      }));
+      migrated = true;
+    });
+    return migrated;
+  }
+
+  #insertBoltBoxCatalog() {
+    const item = BOLT_BOX_CATALOG.items[0];
+    const action = BOLT_BOX_CATALOG.factoryActions[0];
+    const boltItemId = BOLT_BOX_CATALOG.boltItemId;
+    if (!this.database.prepare('SELECT 1 FROM catalog_items WHERE id = ?').get(boltItemId)) {
+      throw new Error('Cannot install Bolt boxes without the Bolt catalog item.');
+    }
+    const assertAvailable = (table, id, fields) => {
+      const stored = this.database.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+      if (!stored) return true;
+      for (const [column, value] of Object.entries(fields)) {
+        if ((stored[column] ?? null) !== (value ?? null)) {
+          throw new Error(`Cannot install Bolt box ${id}: ${table}.${column} is already occupied by different catalog data.`);
+        }
+      }
+      return false;
+    };
+    const itemFields = {
+      name: item.name, rarity: item.rarity, description: item.description,
+      marketable_id: item.marketableId ?? null, mine_type_id: item.mineTypeId,
+      repaired_item_id: item.repairedItemId ?? null, can_find: item.canFind ? 1 : 0,
+      icon: item.icon, icon_source: item.iconSource, is_damaged: item.damaged ? 1 : 0,
+      large_image_filename: item.largeImageFilename ?? null, large_image: item.largeImage,
+      has_large_image: item.hasLargeImage ? 1 : 0,
+      gold_value_units: item.goldValueUnits
+    };
+    if (assertAvailable('catalog_items', item.id, itemFields)) {
+      this.database.prepare(`
+        INSERT INTO catalog_items
+          (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+           can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+           has_large_image, gold_value_units)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(item.id, ...Object.values(itemFields));
+    }
+    const actionFields = {
+      name: action.name, ore: action.ore, components: action.components,
+      action_kind: action.actionKind, output_item_id: action.outputItemId,
+      output_quantity: action.outputQuantity, meld_id: null,
+      award_stone_behavior_key: null
+    };
+    if (assertAvailable('catalog_factory_actions', action.id, actionFields)) {
+      this.database.prepare(`
+        INSERT INTO catalog_factory_actions
+          (id, name, ore, components, action_kind, output_item_id, output_quantity,
+           meld_id, award_stone_behavior_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(action.id, ...Object.values(actionFields));
+    }
+    const settings = {
+      bolt_box_item_id: item.id,
+      bolts_per_box: BOLT_BOX_CATALOG.boltsPerBox
+    };
+    const insertSetting = this.database.prepare(
+      'INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)'
+    );
+    for (const [key, value] of Object.entries(settings)) {
+      const valueJson = JSON.stringify(value);
+      const stored = this.database.prepare(
+        'SELECT value_json FROM catalog_settings WHERE key = ?'
+      ).get(key);
+      if (stored && stored.value_json !== valueJson) {
+        throw new Error(`Cannot install Bolt boxes: catalog setting ${key} differs.`);
+      }
+      if (!stored) insertSetting.run(key, valueJson);
     }
   }
 
@@ -9637,6 +9759,8 @@ export class SqliteStore {
     const mines = player.mines.map((mine) => ({
       id: Number(mine.id), mine_type_id: Number(mine.mineTypeId), city_id: Number(mine.cityId),
       active: mine.active ? 1 : 0, next_find_at: Number(mine.nextFindAt),
+      cycle_interval_ms: Number(mine.cycleIntervalMs
+        ?? this.#setting('find_interval_ms')),
       mine_things: mine.mineThings === false ? 0 : 1,
       priority: Number(mine.priority ?? mine.id), oil_expires_at: Number(mine.oilExpiresAt ?? 0),
       rental_until: Number(mine.rentalUntil ?? 0),
@@ -9645,7 +9769,8 @@ export class SqliteStore {
         ? null : Number(mine.cryptoTypeId)
     }));
     this.#syncPlayerRows('mines', player.id, ['id'], [
-      'mine_type_id', 'city_id', 'active', 'next_find_at', 'mine_things', 'priority',
+      'mine_type_id', 'city_id', 'active', 'next_find_at', 'cycle_interval_ms',
+      'mine_things', 'priority',
       'oil_expires_at', 'rental_until', 'source_kind', 'crypto_type_id'
     ], mines);
 
@@ -9719,7 +9844,7 @@ export class SqliteStore {
     );
     const mines = this.database.prepare(`
       SELECT id, mine_type_id, city_id, active, mine_things, crypto_type_id, priority,
-        oil_expires_at, rental_until, source_kind, next_find_at
+        oil_expires_at, rental_until, source_kind, next_find_at, cycle_interval_ms
       FROM mines WHERE player_id = ? ORDER BY priority, id
     `).all(row.id).map((mine) => ({
       id: mine.id,
@@ -9733,6 +9858,7 @@ export class SqliteStore {
       rentalUntil: mine.rental_until,
       sourceKind: mine.source_kind,
       nextFindAt: mine.next_find_at,
+      cycleIntervalMs: mine.cycle_interval_ms,
       equipment: {},
       robotItemId: null
     }));
@@ -12716,26 +12842,30 @@ export class SqliteStore {
     const grantedAt = Number(player.createdAt);
     const rentalDurationMs = Number(this.#setting('mine_rental_duration_ms'));
     const rentalUntil = grantedAt + rentalDurationMs;
-    const nextFindAt = grantedAt + Number(this.#setting('find_interval_ms'));
+    const catalog = this.loadCatalog();
     const activeLimit = this.#activeMineLimit(player.id, grantedAt);
     let activeCount = player.mines.filter((mine) => mine.active).length;
     const insertMine = this.database.prepare(`
       INSERT INTO mines
         (player_id, id, mine_type_id, city_id, active, mine_things, priority,
-         oil_expires_at, rental_until, next_find_at)
-      VALUES (?, ?, ?, ?, ?, 1, ?, 0, ?, ?)
+         oil_expires_at, rental_until, cycle_interval_ms, next_find_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?, 0, ?, ?, ?)
     `);
     const rentalMines = rentalMineTypes.map((mineType) => {
       const mine = {
         id: player.nextMineId++, mineTypeId: Number(mineType.id), cityId: player.cityId,
         active: activeCount < activeLimit, mineThings: true,
-        priority: player.mines.length + 1, oilExpiresAt: 0, rentalUntil, nextFindAt,
+        priority: player.mines.length + 1, oilExpiresAt: 0, rentalUntil,
+        cycleIntervalMs: 0, nextFindAt: grantedAt,
         equipment: {}, robotItemId: null
       };
       if (mine.active) activeCount += 1;
-      insertMine.run(player.id, mine.id, mine.mineTypeId, mine.cityId,
-        mine.active ? 1 : 0, mine.priority, mine.rentalUntil, mine.nextFindAt);
       player.mines.push(mine);
+      mine.cycleIntervalMs = mineIntervalMs(catalog, mine, player, grantedAt);
+      mine.nextFindAt = grantedAt + mine.cycleIntervalMs;
+      insertMine.run(player.id, mine.id, mine.mineTypeId, mine.cityId,
+        mine.active ? 1 : 0, mine.priority, mine.rentalUntil,
+        mine.cycleIntervalMs, mine.nextFindAt);
       return {
         mineId: mine.id, mineTypeId: mine.mineTypeId, mineTypeName: mineType.name,
         active: mine.active, rentalUntil: mine.rentalUntil
@@ -13065,7 +13195,10 @@ Compliance is compulsory. Enjoy your new life.
     const mineOwners = this.database.prepare(
       'SELECT DISTINCT player_id FROM mines ORDER BY player_id'
     ).all();
-    for (const owner of mineOwners) this.#refreshMinePriorities(owner.player_id, settledAt);
+    for (const owner of mineOwners) {
+      this.#refreshMinePriorities(owner.player_id, settledAt);
+      this.#synchronizePlayerMineSchedules(owner.player_id, settledAt);
+    }
     const candidateIds = this.database.prepare(`
       SELECT players.id AS player_id FROM players
       WHERE EXISTS (
@@ -13186,6 +13319,9 @@ Compliance is compulsory. Enjoy your new life.
         this.#savePlayerState(player, {
           source: 'mine', findings, recordedAt: settledAt
         });
+        // A find can clear a Stone and change the top regional mine's rate. The
+        // in-memory claim began before that award, so rebase its saved schedule now.
+        this.#synchronizePlayerMineSchedules(playerId, settledAt, catalog);
         return { mines, findings: findings.length, gold, dwarves };
       });
       if (!result) continue;
@@ -13467,6 +13603,7 @@ Compliance is compulsory. Enjoy your new life.
         && Number(progress.owned) === Number(progress.required);
       const stone = botCompleted
         ? this.awardStone(playerId, 'Assembled', now) : null;
+      this.#synchronizePlayerMineSchedules(playerId, now);
       return {
         ...part,
         botPartNumber: Number(progress.owned),
@@ -13707,6 +13844,9 @@ Compliance is compulsory. Enjoy your new life.
         ON CONFLICT (player_id, gadget_id) DO UPDATE SET expires_at = excluded.expires_at
       `).run(playerId, gadget.id, expiresAt);
       if (gadget.behavior_key === 'control') this.#refreshMinePriorities(playerId, now);
+      if (gadget.behavior_key === 'control' || gadget.behavior_key === 'hammer') {
+        this.#synchronizePlayerMineSchedules(playerId, now);
+      }
       return { id: gadget.id, name: gadget.name, behaviorKey: gadget.behavior_key,
         displayName: gadget.display_name, expiresAt,
         activatedInCityId: location.capitalCityId };
@@ -18047,18 +18187,41 @@ Compliance is compulsory. Enjoy your new life.
   #refreshMinePriorities(playerId, now) {
     const maxActive = this.#activeMineLimit(playerId, now);
     const mines = this.database.prepare(
-      'SELECT id, priority, active FROM mines WHERE player_id = ? ORDER BY priority, id'
+      `SELECT id, priority, active, next_find_at, cycle_interval_ms
+       FROM mines WHERE player_id = ? ORDER BY priority, id`
     ).all(playerId);
     const update = this.database.prepare(
-      'UPDATE mines SET priority = ?, active = ? WHERE player_id = ? AND id = ?'
+      `UPDATE mines SET priority = ?, active = ?, next_find_at = ?
+       WHERE player_id = ? AND id = ?`
     );
     mines.forEach((mine, index) => {
       const priority = index + 1;
       const active = index < maxActive ? 1 : 0;
       if (mine.priority !== priority || mine.active !== active) {
-        update.run(priority, active, playerId, mine.id);
+        const nextFindAt = !mine.active && active
+          ? now + Number(mine.cycle_interval_ms)
+          : mine.next_find_at;
+        update.run(priority, active, nextFindAt, playerId, mine.id);
       }
     });
+  }
+
+  #synchronizePlayerMineSchedules(playerId, now, catalog = null) {
+    const row = this.database.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
+    if (!row) return 0;
+    const liveCatalog = catalog ?? this.loadCatalog();
+    if (!liveCatalog) return 0;
+    const player = this.#hydratePlayer(row);
+    const changed = synchronizeMineSchedules(player, liveCatalog, now);
+    if (!changed) return 0;
+    const update = this.database.prepare(`
+      UPDATE mines SET next_find_at = ?, cycle_interval_ms = ?
+      WHERE player_id = ? AND id = ?
+    `);
+    for (const mine of player.mines) {
+      update.run(mine.nextFindAt, mine.cycleIntervalMs, playerId, mine.id);
+    }
+    return changed;
   }
 
   #transferMarketMine(sellerId, buyerId, cityId, mineTypeId, now) {
@@ -18101,6 +18264,8 @@ Compliance is compulsory. Enjoy your new life.
     this.database.prepare('UPDATE players SET next_mine_id = next_mine_id + 1 WHERE id = ?').run(buyerId);
     this.#refreshMinePriorities(sellerId, now);
     this.#refreshMinePriorities(buyerId, now);
+    this.#synchronizePlayerMineSchedules(sellerId, now);
+    this.#synchronizePlayerMineSchedules(buyerId, now);
     return buyerMineId;
   }
 
@@ -23758,6 +23923,7 @@ Compliance is compulsory. Enjoy your new life.
           : { changes: 0 };
         if (cityDiscovery.changes) {
           this.#refreshMinePriorities(playerId, settledAt);
+          this.#synchronizePlayerMineSchedules(playerId, settledAt);
           this.#awardAsoMapStoneIfComplete(playerId, settledAt);
         }
         if (!crossesRegions || gatewayArrival) {
@@ -24509,7 +24675,7 @@ Compliance is compulsory. Enjoy your new life.
       JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
       WHERE catalog_routes.is_open = 1 AND catalog_routes.type = ?
         AND (catalog_routes.city1_id = ? OR catalog_routes.city2_id = ?)
-      ORDER BY catalog_routes.id
+      ORDER BY catalog_routes.is_inter_map, catalog_routes.id
     `).all(routeType, cityId, cityId);
     routes = routes.filter((route) => Number(route.map1_id) === Number(route.map2_id)
       || Boolean(route.is_inter_map));
@@ -24660,6 +24826,12 @@ Compliance is compulsory. Enjoy your new life.
       `).get(vehicleId, vehicleId)) throw new Error('That vehicle is reserved for work in a mill.');
       if (vehicle.aircraft_destroyed) throw new Error('A shot-down aircraft cannot be returned to inventory.');
       const loadout = this.#vehicleLoadout(this.#vehicleRecord(vehicleId, playerId));
+      if (Number(vehicle.oiled_trips) > 0 || Number(vehicle.trips_stolen) > 0) {
+        throw new Error('Use all loaded and stolen oil trips before deactivating this vehicle.');
+      }
+      if (loadout.ship && Number(loadout.ship.hull) < Number(loadout.ship.max_hull)) {
+        throw new Error('A ship must finish its dockyard hull repairs before it can be deactivated.');
+      }
       const hasAmmunition = loadout.ship && Object.values(this.#ammunitionRules())
         .some((rule) => loadout.ship[rule.storageField] > 0);
       if (loadout.cargoSize || loadout.mods.length || loadout.weapons.length || loadout.cannons.length
@@ -25125,6 +25297,52 @@ Compliance is compulsory. Enjoy your new life.
       this.#changeInventory(playerId, player.city_id, box.item_id, -boxes);
       this.#changeInventory(playerId, player.city_id, ammo.item_id, crates);
       return { itemId: ammo.item_id, boxes, crates };
+    });
+  }
+
+  breakDownBoltBoxes(playerId, quantity = 1) {
+    const boxes = orderQuantity(quantity);
+    return this.#transaction(() => {
+      const player = this.database.prepare('SELECT city_id FROM players WHERE id = ?').get(playerId);
+      if (!player) throw new Error('Player not found.');
+      const boxItemId = this.#itemIdSetting('bolt_box_item_id');
+      const boltItemId = this.#itemIdSetting('bolt_item_id');
+      const boltsPerBox = this.#positiveIntegerSetting('bolts_per_box');
+      const bolts = boxes * boltsPerBox;
+      if (!Number.isSafeInteger(bolts)) throw new Error('That breakdown quantity is too large.');
+      const boxItem = this.database.prepare(
+        'SELECT name FROM catalog_items WHERE id = ?'
+      ).get(boxItemId);
+      const boltItem = this.database.prepare(
+        'SELECT name FROM catalog_items WHERE id = ?'
+      ).get(boltItemId);
+      if (!boxItem || !boltItem) throw new Error('Bolt box catalog data is incomplete.');
+      const owned = this.database.prepare(`
+        SELECT inventory.quantity,
+          COALESCE(protected_inventory.quantity, 0) AS protected_quantity
+        FROM inventory
+        LEFT JOIN protected_inventory
+          ON protected_inventory.player_id = inventory.player_id
+          AND protected_inventory.city_id = inventory.city_id
+          AND protected_inventory.item_id = inventory.item_id
+        WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.item_id = ?
+      `).get(playerId, player.city_id, boxItemId);
+      if ((owned?.quantity ?? 0) < boxes) {
+        throw new Error(`You do not own enough ${boxItem.name} in this city.`);
+      }
+      const unprotectedBoxes = owned.quantity - owned.protected_quantity;
+      const protectedBoxesOpened = Math.max(0, boxes - unprotectedBoxes);
+      this.#changeInventory(playerId, player.city_id, boxItemId, -boxes);
+      this.#changeInventory(playerId, player.city_id, boltItemId, bolts);
+      if (protectedBoxesOpened) {
+        this.#changeProtectedInventory(playerId, player.city_id, boltItemId,
+          protectedBoxesOpened * boltsPerBox);
+      }
+      this.#trimItemListings(playerId, player.city_id, boxItemId);
+      return {
+        boxItemId, boxName: boxItem.name, boltItemId, boltName: boltItem.name,
+        boxes, bolts, boltsPerBox
+      };
     });
   }
 
@@ -26617,6 +26835,7 @@ Compliance is compulsory. Enjoy your new life.
             ? route.city2_id : route.city1_id,
           length: route.length,
           type: route.type,
+          interMap: Boolean(route.is_inter_map),
           mission: route.city1_id === route.city2_id
         };
         if (radarActive) {
@@ -27287,6 +27506,7 @@ Compliance is compulsory. Enjoy your new life.
           { label: 'Explore cities', path: '/explore' }
         ]
       });
+    this.#synchronizePlayerMineSchedules(playerId, now);
     return {
       id: stone.id, name: stone.name, behaviorKey: stone.behavior_key,
       description: stone.description, rank: stone.rank, rarity: stone.rarity,
@@ -27866,6 +28086,7 @@ Compliance is compulsory. Enjoy your new life.
           { label: 'View mines', path: '/' }
         ]
       });
+    this.#synchronizePlayerMineSchedules(playerId, now);
     return {
       id: stone.id, name: stone.name, behaviorKey: stone.behavior_key,
       description: stone.description, rank: stone.rank, rarity: stone.rarity
@@ -28490,11 +28711,13 @@ Compliance is compulsory. Enjoy your new life.
             cityId: Number(component.city_id), active: activeCount < mineLimit,
             mineThings: true, priority: player.mines.length + 1,
             oilExpiresAt: 0, rentalUntil: 0, sourceKind: 'profession-kit',
-            nextFindAt: now + Number(catalog.settings.find_interval_ms),
+            nextFindAt: now, cycleIntervalMs: 0,
             equipment: {}, robotItemId: null
           };
           if (mine.active) activeCount += 1;
           player.mines.push(mine);
+          mine.cycleIntervalMs = mineIntervalMs(catalog, mine, player, now);
+          mine.nextFindAt = now + mine.cycleIntervalMs;
           findings.push(...giveFinds(
             player, catalog, mine, Number(catalog.settings.starter_find_count), now, random
           ));

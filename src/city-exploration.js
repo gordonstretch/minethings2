@@ -780,7 +780,7 @@ function pointDefinitions(context) {
   points.push({
     key: 'dwarf-park', label: `${context.cityName} Young Dwarves’ Park`,
     shortLabel: 'park', glyph: '♣', href: '/explore/park',
-    description: 'A pocket of grass, climbing frames, and young Dwarves inventing games with no agreed rules.'
+    description: 'A pocket of grass where young Dwarves practise biting, pickpocketing, ambushes, and games with no agreed rules.'
   });
   points.push({
     key: 'city-landmark', label: landmark.name, shortLabel: 'landmark', glyph: '◆',

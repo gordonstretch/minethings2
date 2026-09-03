@@ -43,7 +43,8 @@
   state.powerUntilStep ??= 0;
 
   const pointAt = (x, y) => state.interior.points.find((point) => point.x === x && point.y === y);
-  const signAt = (x, y) => state.interior.signs.find((sign) => sign.x === x && sign.y === y);
+  const signAt = (x, y) => state.interior.signs.find((sign) =>
+    sign.x === x && sign.y === y && !readSigns.has(sign.key));
   const scrapAt = (x, y) => state.interior.scraps.find((scrap) =>
     scrap.x === x && scrap.y === y && !collectedScraps.has(scrap.key));
   const powerUpAt = (x, y) => state.interior.powerUps.find((powerUp) =>
@@ -88,7 +89,7 @@
     if (point) {
       locationNode.innerHTML = `<p class="eyebrow">${visitedLocations.has(point.key) ? 'Location visited' : 'Destination reached'}</p><h3>${escapeHtml(point.label)}</h3><p>${escapeHtml(point.description)}</p><a class="text-link city-enter-link" href="${encodeURI(point.href)}">Enter ${escapeHtml(point.shortLabel)} →</a>`;
     } else if (sign) {
-      locationNode.innerHTML = `<p class="eyebrow">${readSigns.has(sign.key) ? 'Notice read' : 'Street notice'}</p><h3>${escapeHtml(sign.title)}</h3><button class="secondary" type="button" data-read-current-sign>${readSigns.has(sign.key) ? 'Read again' : 'Read sign'}</button>`;
+      locationNode.innerHTML = `<p class="eyebrow">Street notice</p><h3>${escapeHtml(sign.title)}</h3><button class="secondary" type="button" data-read-current-sign>Read sign</button>`;
       locationNode.querySelector('[data-read-current-sign]').addEventListener('click', () => showSign(sign));
     } else {
       locationNode.innerHTML = '<p class="eyebrow">Current position</p><h3>Between the streets</h3><p>Choose a marked destination, notice, or open passage.</p>';
@@ -504,6 +505,7 @@
         ? `City complete — ${result.stone.name} Stone cleared for ${result.stone.cityName}.`
         : reward ? `Notice circuit complete — ${reward.label}.`
         : result.firstRead ? 'Notice added to your city record.' : 'You read the notice again.';
+      draw();
       setLocation();
     } catch (error) {
       signProgress.textContent = error.message;

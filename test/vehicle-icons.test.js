@@ -303,7 +303,7 @@ test('existing catalogs migrate representative vehicle art and preserve custom a
       intactChanges: representativePairs.length,
       damagedChanges: representativePairs.length
     });
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 131);
 
     store.close();
     store = null;

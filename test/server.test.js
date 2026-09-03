@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { createPlayer } from '../src/game.js';
 import {
-  ELECTRONICS_CATALOG, LEGACY_STARTER_WELCOME_PACK, loadLegacyCatalog, RELICS_CATALOG,
+  BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, LEGACY_STARTER_WELCOME_PACK, loadLegacyCatalog, RELICS_CATALOG,
   SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
 import { LEGAL_VERSION, sellerConfiguration } from '../src/legal.js';
@@ -1307,6 +1307,20 @@ test('secures and operates the modern administration console', async (context) =
   const routesHtml = await routesPage.text();
   assert.match(routesHtml, /Complete world network/);
   assert.match(routesHtml, /Mission · #/);
+  const interRegionStart = routesHtml.indexOf('data-route-scope="inter-region"');
+  const regionalStart = routesHtml.indexOf('data-route-scope="regional"');
+  assert.ok(regionalStart >= 0 && interRegionStart > regionalStart,
+    'inter-region routes should have the final route section');
+  const regionalHtml = routesHtml.slice(regionalStart, interRegionStart);
+  const interRegionHtml = routesHtml.slice(interRegionStart);
+  for (const route of allRoutes.filter((candidate) => candidate.interMap)) {
+    assert.match(interRegionHtml, new RegExp(`action="/admin/routes/${route.id}"`));
+    assert.doesNotMatch(regionalHtml, new RegExp(`action="/admin/routes/${route.id}"`));
+  }
+  for (const route of allRoutes.filter((candidate) => !candidate.interMap)) {
+    assert.match(regionalHtml, new RegExp(`action="/admin/routes/${route.id}"`));
+    assert.doesNotMatch(interRegionHtml, new RegExp(`action="/admin/routes/${route.id}"`));
+  }
 
   const worldControls = store.adminWorldEventControls(2000);
   const seaType = liveCatalog.settings.map_route_types.findIndex((type) => type.name === 'sea');
@@ -1974,6 +1988,87 @@ test('renders an armed ship on an inter-map voyage without treating its null cit
   assert.match(await failed.text(), /Vehicle page failure/);
 });
 
+test('lists inter-region vehicle routes last and cycles unaltered transports through storage', async (context) => {
+  const bootstrapCatalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(bootstrapCatalog);
+  store.ensureWorldMaps(1000);
+  const capitals = store.database.prepare(`
+    SELECT capital_city_id FROM world_maps ORDER BY sort_order, id LIMIT 2
+  `).all();
+  store.database.prepare(`
+    INSERT INTO catalog_routes
+      (city1_id, city2_id, length, type, is_open, is_inter_map)
+    VALUES (?, ?, 10500, 0, 1, 1)
+  `).run(capitals[0].capital_city_id, capitals[1].capital_city_id);
+  const catalog = store.loadCatalog();
+  const password = 'fleet deactivation password';
+  const region = catalog.maps.find((entry) => entry.slug === 'aso');
+  const capitalId = Number(region.capitalCityId);
+  const routeType = [...new Set(catalog.routes.filter((route) => route.open
+    && [route.city1Id, route.city2Id].includes(capitalId)).map((route) => route.type))]
+    .find((type) => {
+      const routes = catalog.routes.filter((route) => route.open && route.type === type
+        && [route.city1Id, route.city2Id].includes(capitalId));
+      return routes.some((route) => route.interMap) && routes.some((route) => !route.interMap)
+        && catalog.vehicles.some((vehicle) => vehicle.routeType === type
+          && vehicle.routePolicy !== 'capital-link');
+    });
+  const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType === routeType
+    && vehicle.routePolicy !== 'capital-link');
+  assert.ok(region && Number.isSafeInteger(routeType) && vehicleType);
+  const player = createPlayer('Fleet Deactivator', '', hashPassword(password), catalog, 1000,
+    () => 0.5);
+  player.cityId = capitalId;
+  player.knownCityIds = [capitalId];
+  player.inventoryByCity = { [capitalId]: { [vehicleType.itemId]: 1 } };
+  player.inventory = player.inventoryByCity[capitalId];
+  const saved = store.addPlayer(player);
+  const vehicleId = store.activateVehicle(saved.id, vehicleType.itemId, 1000);
+  const routes = store.routesForVehicle(saved.id, vehicleId, 2000);
+  const firstInterRegion = routes.findIndex((route) => route.interMap);
+  const finalRegional = routes.findLastIndex((route) => !route.interMap);
+  assert.ok(firstInterRegion > finalRegional && finalRegional >= 0,
+    'every regional route should precede every inter-region route');
+
+  const server = createApp({ store, catalog, now: () => 2000 });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/login`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: player.name, password })
+  });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const fleetHtml = await (await fetch(`${base}/vehicles`, { headers: { cookie } })).text();
+  assert.match(fleetHtml, new RegExp(
+    `action="/vehicles/${vehicleId}/store"><button class="secondary">Deactivate</button>`
+  ));
+  const regionalPosition = fleetHtml.indexOf(`value="${routes[finalRegional].id}"`);
+  const interRegionPosition = fleetHtml.indexOf(`value="${routes[firstInterRegion].id}"`);
+  assert.ok(regionalPosition >= 0 && interRegionPosition > regionalPosition);
+
+  const deactivate = await fetch(`${base}/vehicles/${vehicleId}/store`, {
+    method: 'POST', redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(deactivate.status, 303);
+  assert.equal(deactivate.headers.get('location'), '/vehicles#stored-vehicle-things');
+  assert.equal(store.vehiclesForPlayer(saved.id, 2000, { settle: false }).length, 0);
+  assert.equal(store.playerById(saved.id, 2000, { settle: false }).inventory[vehicleType.itemId], 1);
+  const storedHtml = await (await fetch(`${base}/vehicles`, { headers: { cookie } })).text();
+  assert.match(storedHtml, new RegExp(`action="/vehicles/activate/${vehicleType.itemId}"`));
+
+  const reactivate = await fetch(`${base}/vehicles/activate/${vehicleType.itemId}`, {
+    method: 'POST', redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(reactivate.status, 303);
+  assert.equal(store.vehiclesForPlayer(saved.id, 2000, { settle: false }).length, 1);
+});
+
 test('renders cannon controls for an idle ship in port', async (context) => {
   const catalog = loadLegacyCatalog();
   const store = new SqliteStore(':memory:');
@@ -2410,7 +2505,8 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
   assert.ok(shuttleCategoryInputs.every((input) => /\schecked(?:\s|>)/u.test(input)),
     'every available shuttle mine category starts selected');
   assert.match(setupHtml, /Every category is selected\. Untick anything/u);
-  assert.match(setupHtml, /Manufactured things are never loaded/u);
+  assert.match(setupHtml, /Protected factory output is never loaded/u);
+  assert.match(setupHtml, /Deactivated transports can travel as ordinary cargo/u);
   assert.match(setupHtml, /Oil Field machine parts stay in their Oil Field home city/u);
 
   store.database.prepare(`
@@ -2465,6 +2561,18 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
   assert.match(activeHtml,
     /<dt>Cargo categories<\/dt><dd>Wood and Wisdom<\/dd>/u);
   assert.match(activeHtml, /<dt>Order<\/dt><dd>Pillage<\/dd>/u);
+  const loadedCargo = active.cargo.find((entry) => entry.itemId === cargoThing.id);
+  assert.ok(loadedCargo);
+  assert.match(activeHtml,
+    /<h3 id="vehicle-cargo-manifest-heading">Transport cargo <small>Read-only<\/small><\/h3>/u);
+  assert.match(activeHtml, new RegExp(
+    `data-item-id="${cargoThing.id}"[\\s\\S]*?<td data-label="Loaded">${loadedCargo.quantity}<\\/td>`,
+    'u'
+  ));
+  const cargoManifest = /<section class="vehicle-cargo-manifest"[\s\S]*?<\/section>/u
+    .exec(activeHtml)?.[0];
+  assert.ok(cargoManifest);
+  assert.doesNotMatch(cargoManifest, /<input/u);
   assert.match(activeHtml, /SHUTTLE · Outbound/u);
   assert.match(activeHtml,
     new RegExp(`action="/vehicles/${vehicleId}/shuttle/cancel"[\\s\\S]*?Cancel shuttle after this leg`, 'u'));
@@ -2892,6 +3000,62 @@ test('opens the original local order book from Your Things and preserves listed 
     assert.match(detailHtml, new RegExp(`href="${path.replace('/', '\\/')}"`));
   }
   assert.equal(store.recentMessages(liveStarter.id, 'unread', 'Admin').length, 0);
+});
+
+test('breaks factory-made Bolt boxes down from local inventory', async (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(catalog);
+  const password = 'bolt box password';
+  const box = BOLT_BOX_CATALOG.items[0];
+  const player = createPlayer(
+    'Bolt Box Opener', '', hashPassword(password), catalog, 1000, () => 0.5
+  );
+  player.inventory[box.id] = 2;
+  player.inventoryByCity = { [player.cityId]: player.inventory };
+  const saved = store.addPlayer(player);
+  store.database.prepare(`
+    INSERT INTO protected_inventory (player_id, city_id, item_id, quantity)
+    VALUES (?, ?, ?, 2)
+  `).run(saved.id, saved.cityId, box.id);
+  const server = createApp({ store, now: () => 2000 });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/login`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: player.name, password })
+  });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const beforeHtml = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
+  assert.match(beforeHtml, new RegExp(
+    `class="bolt-box-breakdown-form" method="post" action="/inventory/${box.id}/break-down"`
+  ));
+  assert.match(beforeHtml, /max="2" value="1" required><button>Break down · 20 Bolts each/u);
+
+  const response = await fetch(`${base}/inventory/${box.id}/break-down`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie,
+      referer: `${base}/inventory`,
+      'content-type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({ quantity: '2' })
+  });
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get('location'), '/inventory');
+  const restored = store.playerById(saved.id);
+  assert.equal(restored.inventory[box.id], undefined);
+  assert.equal(restored.inventory[BOLT_BOX_CATALOG.boltItemId], 40);
+  assert.equal(restored.protectedInventoryByCity[saved.cityId][BOLT_BOX_CATALOG.boltItemId], 40);
+  const afterHtml = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
+  assert.match(afterHtml, /2 boxes broken down into 40 Bolts/u);
 });
 
 test('disables city and crypto Sell now tickets without local stock and renders a price line', async (context) => {
@@ -4165,7 +4329,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(publicGuideHtml, /Kraken.*Land Whale.*White Whale.*Orca Pod.*Elephant Herd.*T-Rex/su);
   assert.match(publicGuideHtml,
     /Destroyed road vehicles and sunken ships remain as route wrecks/u);
-  assert.match(publicGuideHtml, /<strong>1,554 things<\/strong>/u);
+  assert.match(publicGuideHtml, /<strong>1,555 things<\/strong>/u);
   const expectedGuideCategories = 18 + catalog.mineTypes.length;
   assert.match(publicGuideHtml,
     new RegExp(`<span>Categories<\\/span><strong>${expectedGuideCategories}<\\/strong>`, 'u'));
@@ -4534,6 +4698,9 @@ test('supports registration and authenticated play pages', async (context) => {
   const oilFieldHtml = await oilField.text();
   assert.match(oilFieldHtml, /Pump, pipe, and pack 159 litres/);
   assert.match(oilFieldHtml, /class="oil-field-board-shell" data-hex-count="469"/);
+  assert.match(oilFieldHtml, /id="oil-board-navigation" class="oil-board-navigation"/);
+  assert.match(oilFieldHtml, /id="oil-center-board" class="secondary" aria-controls="board">Centre field/);
+  assert.match(oilFieldHtml, /aria-describedby="oil-board-help"/);
   assert.match(oilFieldHtml, /id="oil-toggle-renderer"/);
   assert.match(oilFieldHtml, /\/node\/svgjs\.min\.js\?v=3\.2\.7/);
   assert.match(oilFieldHtml, /\/node\/oil-field-renderers\.js/);
@@ -4576,7 +4743,9 @@ test('supports registration and authenticated play pages', async (context) => {
     restorePlayerRegionDatabase.close();
   }
   const oilFieldClient = await fetch(`${base}/node/oil-field.js`);
-  assert.match(await oilFieldClient.text(), /the barrels will remain here and can then be claimed/);
+  const oilFieldClientText = await oilFieldClient.text();
+  assert.match(oilFieldClientText, /the barrels will remain here and can then be claimed/);
+  assert.match(oilFieldClientText, /Field centred on hex \(0,0\)/);
   const rendererClient = await fetch(`${base}/node/oil-field-renderers.js`);
   assert.equal(rendererClient.status, 200);
   assert.match(await rendererClient.text(), /SvgJsRenderer/);

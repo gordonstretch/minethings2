@@ -14,7 +14,7 @@ test('applies the optional vehicle cargo policy without changing standard compat
     oil_cargo_vehicle_rarities: [],
     oil_item_id: 8127,
     arms_rarities_by_vehicle_rarity: [[1]],
-    cargo_rarities_by_vehicle_rarity: [[0]]
+    cargo_rarities_by_vehicle_rarity: [[0, 6]]
   };
   const ordinaryCargo = {
     routeType: 2, vehicleRarity: 0, itemId: 99, itemRarity: 0
@@ -35,6 +35,15 @@ test('applies the optional vehicle cargo policy without changing standard compat
     ...ordinaryCargo, itemId: 901, itemRarity: 6, isVehicle: true,
     cargoPolicy: 'any-item'
   }, rules), true);
+  assert.equal(compatibleCargoAllowed({
+    ...ordinaryCargo, itemId: 901, itemRarity: 6, isVehicle: true
+  }, rules), true, 'a packed transport follows ordinary cargo rarity compatibility');
+  assert.equal(compatibleCargoAllowed({
+    ...ordinaryCargo, itemId: 902, itemRarity: 5, isVehicle: true
+  }, rules), false, 'a packed transport cannot bypass carrier rarity compatibility');
+  assert.equal(compatibleCargoAllowed({
+    ...ordinaryCargo, itemId: 903, itemRarity: 6, isAmmoBox: true
+  }, rules), false, 'ammunition boxes retain their special transport restriction');
   assert.throws(() => compatibleCargoAllowed({
     ...ordinaryCargo, cargoPolicy: 'anything-goes'
   }, rules), /Unknown vehicle cargo policy anything-goes/);

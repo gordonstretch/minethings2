@@ -493,7 +493,7 @@ test('street Ore, landmark visits, and notice reading persist and award completi
   `).get(player.id, initial.city.cityId).quantity;
   assert.equal(balance, progress.scrapsCollected
     + CITY_LOCATION_REWARD_SCRAPS + CITY_NOTICE_REWARD_SCRAPS);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 130);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 131);
   store.close();
 });
 
@@ -714,7 +714,14 @@ test('the authenticated city page exposes a centered mouse-driven street plan', 
     assert.equal(civicPlace.status, 200);
     assert.match(civicHtml, expected);
     assert.match(civicHtml, /Return to the streets/);
-    if (path === '/explore/landmark') {
+    if (path === '/explore/park') {
+      assert.match(civicHtml,
+        /<svg class="dwarf-park-art dwarf-park-art-[a-z]+"[^>]+role="img"/u);
+      assert.equal((civicHtml.match(/data-tendency=/gu) ?? []).length, 6);
+      assert.match(civicHtml, /The nursery of future public hazards/u);
+      assert.match(civicHtml, /CHOMP![\s\S]*YOINK![\s\S]*THWACK![\s\S]*PING!/u);
+      assert.doesNotMatch(civicHtml, /class="park-young-dwarf/u);
+    } else {
       assert.match(civicHtml,
         /<svg class="city-landmark-art city-landmark-art-[a-z]+"[^>]+role="img"/u);
       assert.match(civicHtml, /data-architectural-form="[a-z-]+"/u);
@@ -728,6 +735,9 @@ test('the authenticated city page exposes a centered mouse-driven street plan', 
   assert.match(source, /canvas\.addEventListener\('click'/);
   assert.match(source, /showSign\(sign\)/);
   assert.match(source, /postJson\('\/explore\/sign'/);
+  assert.match(source, /sign\.y === y && !readSigns\.has\(sign\.key\)/,
+    'read notices must disappear from the street plan and its interactions');
+  assert.doesNotMatch(source, /Read again|Notice read/);
   assert.match(source, /Picked up \$\{result\.pickup\.label\}/);
   const dreamScript = await fetch(`${base}/node/home-dream.js`);
   assert.equal(dreamScript.status, 200);
