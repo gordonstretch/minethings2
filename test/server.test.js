@@ -1168,9 +1168,14 @@ test('signs in and registers miners through the local Google OAuth flow', async 
   });
   const base = `http://127.0.0.1:${server.address().port}`;
   const landing = await (await fetch(base)).text();
-  assert.match(landing, /href="\/auth\/google"/);
-  assert.match(landing, /Continue with Google/);
+  assert.equal((landing.match(/href="\/auth\/google"/gu) ?? []).length, 2);
+  assert.equal((landing.match(/src="\/node\/google-sign-in\.png"/gu) ?? []).length, 2);
+  assert.equal((landing.match(/alt="Sign in with Google"/gu) ?? []).length, 2);
+  assert.match(landing, /Google verifies your email first, then you choose your unique miner name\./u);
   assert.match(landing, /Green Dwarf/);
+  const googleButtonAsset = await fetch(`${base}/node/google-sign-in.png`);
+  assert.equal(googleButtonAsset.status, 200);
+  assert.equal(googleButtonAsset.headers.get('content-type'), 'image/png');
 
   const beginExisting = await fetch(`${base}/auth/google`, { redirect: 'manual' });
   assert.equal(beginExisting.status, 303);
@@ -4916,7 +4921,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(chatHtml, /&lt;b&gt;Hello miners&lt;\/b&gt;/);
   assert.doesNotMatch(chatHtml, /<b>Hello miners<\/b>/);
   assert.match(chatHtml, /maxlength="37"/);
-  assert.match(chatHtml, /Showing the latest 24 hours/);
+  assert.match(chatHtml, /Showing the latest 72 hours/);
   assert.match(chatHtml, /class="chat-page"/);
   assert.match(chatHtml, /class="page-title"[^>]*><div><p class="eyebrow">Discovered regions/);
   assert.doesNotMatch(chatHtml, /chat-page-title|chat-title-mark/);

@@ -1078,6 +1078,7 @@ function landingPage(catalog, googleLoginEnabled = false) {
   const nameMaximum = Number(catalog.settings.miner_name_max_length);
   const passwordMinimum = Number(catalog.settings.password_min_length);
   const welcomePack = starterWelcomePackDetails(catalog);
+  const googleSignInButton = '<a class="landing-google-button" href="/auth/google"><img src="/node/google-sign-in.png" width="360" height="80" alt="Sign in with Google"></a>';
   return `<div class="rebirth-landing">
     <header class="landing-masthead">
       <a class="landing-wordmark" href="/" aria-label="MineThings 2 home"><span class="landing-mark" aria-hidden="true"></span><span><strong>Mine Things</strong><small>Second life · same strange world</small></span><b aria-hidden="true">2</b></a>
@@ -1128,6 +1129,7 @@ function landingPage(catalog, googleLoginEnabled = false) {
       <div class="landing-auth-grid">
         <form class="landing-auth-card landing-register-card" method="post" action="/register" aria-labelledby="landing-register-title">
           <p class="landing-card-label"><span>01</span> New miner</p><h3 id="landing-register-title">Enter the world</h3><p>Your name will be part of the economy—and perhaps its history.</p>
+          ${googleLoginEnabled ? `${googleSignInButton}<p class="landing-google-note">New here? Google verifies your email first, then you choose your unique miner name.</p><div class="landing-auth-divider"><span>or register with email</span></div>` : ''}
           <label><span>Miner name</span><input name="name" minlength="${nameMinimum}" maxlength="${nameMaximum}" pattern="[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S} ]+" autocomplete="username" aria-describedby="miner-name-help" required></label><small id="miner-name-help">${nameMinimum}–${nameMaximum} characters. Unicode names are welcome.</small>
           <label><span>Email</span><input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" autocomplete="email" aria-describedby="miner-email-help" required></label><small id="miner-email-help">Verification is mandatory. Your mine remains locked until you confirm this address.</small>
           <label><span>Password</span><input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label>
@@ -1139,7 +1141,7 @@ function landingPage(catalog, googleLoginEnabled = false) {
           <label><span>Miner name</span><input name="name" autocomplete="username" required></label>
           <label><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
           <button class="landing-submit">Return to my mine <span aria-hidden="true">→</span></button>
-          ${googleLoginEnabled ? '<div class="landing-auth-divider"><span>or</span></div><a class="landing-google-button" href="/auth/google"><span class="google-mark" aria-hidden="true">G</span>Continue with Google</a>' : ''}
+          ${googleLoginEnabled ? `<div class="landing-auth-divider"><span>or</span></div>${googleSignInButton}` : ''}
           <p class="landing-login-note">No daily streaks. No energy panic. MineThings was built for patient obsession.</p>
         </form>
       </div>
@@ -6696,6 +6698,10 @@ export function createApp(options = {}) {
     }
     if (url.pathname === '/node/map-background.png') {
       if (!staticFile(request, response, PUBLIC_ROOT, '/img/map-background.png')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/google-sign-in.png') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/img/google-sign-in.png')) response.writeHead(404).end('Not found');
       return;
     }
     if (/^\/node\/maps\/[a-z0-9-]+\.png$/.test(url.pathname)) {

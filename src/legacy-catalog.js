@@ -2040,7 +2040,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     ],
     chat_page_size: 50,
     chat_query_max_limit: 100,
-    chat_history_window_ms: 24 * 60 * 60 * 1000,
+    chat_history_window_ms: 72 * 60 * 60 * 1000,
     achievement_high_rarity_minimum: 4,
     achievement_demolished_find_count: 100,
     achievement_basic_vehicle_rarity: 1,

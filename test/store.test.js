@@ -1455,7 +1455,7 @@ test('migrates legacy state and all live catalog data to the current schema', (c
   const migratedFindingSources = JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'finding_source_names'
   `).get().value_json);
-  assert.equal(migratedChatWindow, 24 * 60 * 60 * 1000);
+  assert.equal(migratedChatWindow, 72 * 60 * 60 * 1000);
   assert.equal(migratedFindingSources['dwarf-capture'], 'Dwarf capture');
   for (const key of [
     'finding_debounce_ms', 'finding_lease_ms', 'finding_lease_token_max_length',
@@ -5136,7 +5136,38 @@ test('supports public chat while disabling player-to-player gold gifts', (contex
   assert.throws(() => store.addChat(sender.id, 'Rate', 5001), /Too many messages/);
 });
 
-test('returns every visible chat entry from the exact 24-hour history window', (context) => {
+test('migrates the default chat history to 72 hours without replacing operator edits', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-chat-history-'));
+  const databaseFile = path.join(directory, 'chat-history.sqlite');
+  let store = new SqliteStore(databaseFile);
+  context.after(() => {
+    try { store.close(); } catch {}
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  store.seedCatalog(catalog);
+  const setting = () => JSON.parse(store.database.prepare(`
+    SELECT value_json FROM catalog_settings WHERE key = 'chat_history_window_ms'
+  `).get().value_json);
+  store.database.prepare(`
+    UPDATE catalog_settings SET value_json = '86400000'
+    WHERE key = 'chat_history_window_ms'
+  `).run();
+  store.close();
+
+  store = new SqliteStore(databaseFile);
+  assert.equal(setting(), 72 * 60 * 60 * 1000);
+  store.database.exec(`
+    UPDATE catalog_settings SET value_json = '172800000'
+    WHERE key = 'chat_history_window_ms';
+    DELETE FROM schema_migrations WHERE name = 'chat-history-window-72-hours-v1';
+  `);
+  store.close();
+
+  store = new SqliteStore(databaseFile);
+  assert.equal(setting(), 48 * 60 * 60 * 1000);
+});
+
+test('returns every visible chat entry from the exact 72-hour history window', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
   store.seedCatalog(catalog);

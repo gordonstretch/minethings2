@@ -74,6 +74,7 @@ import {
 
 const GOLD_SCALE = 10000;
 const CURRENT_SCHEMA_VERSION = 131;
+const CHAT_HISTORY_WINDOW_MS = 72 * 60 * 60 * 1000;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
 const GUILD_CREATION_COST_UNITS = 100 * GOLD_SCALE;
 const GUILD_BANK_CAPACITY = 1000;
@@ -441,6 +442,7 @@ export class SqliteStore {
       this.#migrateCasinoGlobalSpinCount();
       this.#migrateMachineItemDescriptions();
       this.#migrateEventThreats();
+      this.#migrateChatHistoryWindow();
       this.#migrateFrequentDwarfAndCreatureRolls();
       this.#migrateRegionalCreatureRollsAndFasterDwarves();
       this.#migrateShipFiringRounds();
@@ -2889,7 +2891,7 @@ export class SqliteStore {
         ('chat_color_thresholds', '[{"minimumMelds":140,"color":"ff033e"},{"minimumMelds":120,"color":"be6a02"},{"minimumMelds":100,"color":"73375c"},{"minimumMelds":80,"color":"731212"},{"minimumMelds":60,"color":"486690"},{"minimumMelds":40,"color":"397126"},{"minimumMelds":20,"color":"6c6c00"},{"minimumMelds":0,"color":"55666b"}]'),
         ('chat_page_size', '50'),
         ('chat_query_max_limit', '100'),
-        ('chat_history_window_ms', '86400000'),
+        ('chat_history_window_ms', '259200000'),
         ('achievement_high_rarity_minimum', '4'),
         ('achievement_demolished_find_count', '100'),
         ('achievement_basic_vehicle_rarity', '1'),
@@ -4310,7 +4312,7 @@ export class SqliteStore {
       `).run(JSON.stringify(mergedSourceNames));
       this.database.exec(`
         INSERT OR IGNORE INTO catalog_settings (key, value_json)
-        VALUES ('chat_history_window_ms', '86400000');
+        VALUES ('chat_history_window_ms', '259200000');
 
         DROP TRIGGER IF EXISTS rare_finding_chat_announcement;
         CREATE TRIGGER rare_finding_chat_announcement
@@ -8657,6 +8659,30 @@ export class SqliteStore {
         pursuitInitiators: true, ghostAttackForceRatio: 0.85, iconsUpdated
       }));
     });
+  }
+
+  #migrateChatHistoryWindow(now = Date.now()) {
+    const migrationName = 'chat-history-window-72-hours-v1';
+    if (!this.hasCatalog() || this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      const changed = Number(this.database.prepare(`
+        UPDATE catalog_settings SET value_json = ?
+        WHERE key = 'chat_history_window_ms' AND value_json = '86400000'
+      `).run(JSON.stringify(CHAT_HISTORY_WINDOW_MS)).changes);
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json) VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        changed, historyWindowMs: CHAT_HISTORY_WINDOW_MS
+      }));
+      migrated = true;
+    });
+    return migrated;
   }
 
   #migrateFrequentDwarfAndCreatureRolls(now = Date.now()) {

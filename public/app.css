@@ -1574,9 +1574,11 @@ body.game-body::before { content: ''; position: fixed; inset: 0; z-index: 0; poi
 .landing-submit span { font-size: 1.15rem; }
 .landing-auth-divider { display: flex; align-items: center; gap: .75rem; margin: 1.15rem 0; color: #8b8173; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .landing-auth-divider::before, .landing-auth-divider::after { content: ""; flex: 1; border-top: 1px solid #c8bcaa; }
-.landing-google-button { display: flex; align-items: center; justify-content: center; gap: .7rem; min-height: 50px; padding: .8rem 1rem; color: #28241f; background: #fff; border: 1px solid #918778; font-weight: 800; text-decoration: none; }
-.landing-google-button:hover { color: #15120e; background: #f7f4ed; }
-.google-mark { display: inline-grid; place-items: center; width: 1.55rem; height: 1.55rem; color: #4285f4; background: #fff; border: 1px solid #d8d8d8; border-radius: 50%; font: 900 1rem/1 Arial, sans-serif; }
+.landing-google-button { display: block; width: min(100%, 360px); margin: 1.15rem auto 0; border-radius: 4px; line-height: 0; text-decoration: none; }
+.landing-google-button img { display: block; width: 100%; height: auto; }
+.landing-google-button:hover { box-shadow: 0 0 0 2px rgba(240,154,36,.36); }
+.landing-google-button:focus-visible { outline: 3px solid var(--landing-orange); outline-offset: 3px; }
+.landing-google-note { margin: .7rem 0 0; text-align: center; }
 .oauth-registration-shell { display: grid; min-height: calc(100vh - 10rem); place-items: center; padding: clamp(1rem, 5vw, 4rem); background: #eae3d5; }
 .oauth-registration-card { width: min(100%, 34rem); color: #28241f; background: #f7f2e7; }
 .oauth-registration-card h1 { margin: 0 0 .65rem; font: 900 clamp(2rem, 5vw, 3.2rem)/.95 "Arial Narrow", Impact, Arial, sans-serif; text-transform: uppercase; }
