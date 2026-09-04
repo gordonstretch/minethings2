@@ -9,6 +9,11 @@ a:hover { text-decoration: none; }
 a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #155d72; outline-offset: 3px; }
 .skip-link { position: fixed; top: .5rem; left: .5rem; z-index: 10000; padding: .75rem 1rem; color: #17120b; background: #fff1ad; border: 2px solid var(--brand-dark); border-radius: 0; transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
+.maintenance-banner { position: sticky; top: 0; z-index: 9500; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: clamp(.8rem, 2vw, 1.35rem); width: 100%; padding: clamp(.85rem, 2vw, 1.25rem) max(4vw, 1rem); color: #fff8e8; background: linear-gradient(105deg, #781d17, #a92b1d 62%, #6f1714); border-top: 4px solid #ffc14d; border-bottom: 4px solid #38100e; box-shadow: 0 10px 30px rgba(20,4,3,.42); }
+.maintenance-banner[hidden] { display: none; }
+.maintenance-banner-mark { display: grid; width: clamp(2.5rem, 5vw, 3.7rem); height: clamp(2.5rem, 5vw, 3.7rem); place-items: center; color: #35100c; background: #ffc14d; border: 3px solid #fff0bf; border-radius: 50%; box-shadow: 0 0 0 4px rgba(255,193,77,.2); font: 900 clamp(1.45rem, 3vw, 2.1rem)/1 Arial, sans-serif; }
+.maintenance-banner strong { display: block; color: #fff; font: 900 clamp(1.05rem, 2.6vw, 1.65rem)/1.05 "Arial Narrow", Impact, Arial, sans-serif; letter-spacing: .035em; text-transform: uppercase; }
+.maintenance-banner p { margin: .3rem 0 0; color: #ffe9c6; font-size: clamp(.82rem, 1.7vw, 1rem); line-height: 1.35; }
 .game-header, .page-title { min-height: 96px; display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 0 5vw; border-bottom: 1px solid var(--line); }
 nav { font-family: Arial, sans-serif; font-size: .9rem; }
 .balance { color: var(--muted); border-left: 1px solid var(--line); padding-left: 1.2rem; }
@@ -240,8 +245,25 @@ button.link { padding: 0; color: var(--gold); background: none; border: 0; box-s
 .admin-metrics article { display: flex; flex-direction: column; gap: .35rem; padding: 1.1rem; border: 1px solid var(--line); background: rgba(255,255,255,.04); }
 .admin-metrics strong { font-size: 1.45rem; }
 .admin-metrics span { color: var(--muted); }
+.admin-metrics small { color: var(--muted); font-size: .7rem; line-height: 1.25; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .admin-actions form { margin: 0; }
+.maintenance-control { display: grid; grid-template-columns: minmax(220px, .85fr) minmax(300px, 1.15fr); gap: 1.5rem 2rem; padding: clamp(1.1rem, 3vw, 2rem); background: #f6eddb; border: 1px solid var(--line); border-top: 6px solid #8c4b00; }
+.maintenance-control.is-active { background: #fff0e4; border-color: #b24a35; border-top-color: #a42b20; box-shadow: 0 12px 30px rgba(86,29,18,.12); }
+.maintenance-control h2 { margin: .25rem 0 .75rem; }
+.maintenance-control p:last-child { margin-bottom: 0; }
+.maintenance-control-status { color: var(--muted); }
+.maintenance-control.is-active .maintenance-control-status { color: #7b1e18; }
+.maintenance-control-form { display: grid; align-content: start; grid-template-columns: minmax(120px, .35fr) minmax(220px, 1fr); gap: 0 1rem; }
+.maintenance-control-form label { margin-top: 0; }
+.maintenance-control-form button { grid-column: 1 / -1; justify-self: start; }
+.maintenance-control > form:last-child { grid-column: 1 / -1; margin: 0; padding-top: 1rem; border-top: 1px solid var(--line); }
+@media (max-width: 700px) {
+  .maintenance-banner { position: relative; grid-template-columns: 2.7rem minmax(0, 1fr); border-top-width: 3px; border-bottom-width: 3px; }
+  .maintenance-banner-mark { width: 2.35rem; height: 2.35rem; border-width: 2px; font-size: 1.35rem; }
+  .maintenance-control, .maintenance-control-form { grid-template-columns: 1fr; }
+  .maintenance-control-form button { grid-column: 1; width: 100%; }
+}
 .world-map-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
 .world-map-tabs a { padding: .45rem .8rem; border: 1px solid var(--line); color: var(--muted); text-decoration: none; }
 .world-map-tabs a.active { color: #fff; background: #6b4822; border-color: #b98a49; }

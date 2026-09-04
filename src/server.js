@@ -42,7 +42,7 @@ const APP_CSS_VERSION = crypto.createHash('sha256')
   .digest('hex').slice(0, 12);
 const BOT_BUILD_COMIC_LINES = Object.freeze([
   Object.freeze({ shout: 'SPARK!',
-    text: "Don't be fooled. Minecraft is a pretty complicated game.", colour: '#f3c33b' }),
+    text: 'MineThings 2 is a pretty complicated game.', colour: '#f3c33b' }),
   Object.freeze({ shout: 'CLANK!',
     text: 'It starts slow. Speed it up by making Stones.', colour: '#6ee5ff' }),
   Object.freeze({ shout: 'SYSTEMS!',
@@ -702,12 +702,16 @@ function layout(title, content, player, flash) {
   const liveRevision = typeof player?.liveUpdateRevision === 'function'
     ? player.liveUpdateRevision() : Number(player?.liveUpdateRevision ?? 0);
   const liveUpdates = player
-    ? `<script src="/node/live-updates.js?v=20260831b" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
+    ? `<script src="/node/live-updates.js?v=20260904a" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
+  const maintenanceNotice = player?.maintenanceNotice ?? null;
+  const maintenanceBanner = player
+    ? `<aside id="maintenance-banner" class="maintenance-banner" role="status" aria-live="assertive" data-shutdown-at="${Number(maintenanceNotice?.shutdownAt ?? 0)}"${maintenanceNotice ? '' : ' hidden'}><span class="maintenance-banner-mark" aria-hidden="true">!</span><div><strong>Maintenance shutdown <span data-maintenance-countdown>${escapeHtml(maintenanceNotice?.countdownLabel ?? '')}</span></strong><p data-maintenance-message>${escapeHtml(maintenanceNotice?.message ?? '')}</p></div></aside>`
+    : '';
   const shellClass = isLandingPage ? 'landing-shell' : `game-shell${player ? ' authenticated-shell' : ' public-shell'}`;
   const bodyClass = isLandingPage ? 'landing-body' : `game-body${player ? ' authenticated-body' : ' public-body'}`;
   const wordmark = `<a id="logo" class="site-wordmark" href="/" aria-label="MineThings 2 home"><span class="site-mark" aria-hidden="true"></span><span><strong>Mine Things</strong><small>The world digs back</small></span><b aria-hidden="true">2</b></a>`;
   const footer = `<footer class="site-footer"><div class="footer-brand"><span class="site-mark" aria-hidden="true"></span><div><strong>MineThings 2</strong><span>Persistent since 2009. Reborn in 2026.</span></div></div><p>The patient economic and social experiment, alive again.</p><nav aria-label="Footer"><a class="text-link" href="/history">History</a><a class="text-link" href="/legal">Legal</a><a class="text-link" href="/guide">Field guide</a></nav></footer>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${description}"><meta name="theme-color" content="#0b0d0c"><title>${documentTitle}</title><link rel="icon" href="/node/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/app.css?v=${APP_CSS_VERSION}"></head><body class="${bodyClass}"><a class="skip-link" href="#content">Skip to main content</a><div id="wrapper" class="node-wrapper ${shellClass}"><header class="game-header">${wordmark}${login}</header>${topNavigation}<div id="divwrapper" class="node-content-wrap${player ? '' : ' guest-content'}">${sideNavigation}<main id="content" tabindex="-1">${quietNotice}${content}</main></div>${footer}</div>${flashDialog}${botBuildBurst}${meldDialog}${welcomeMailPrompt}${liveUpdates}${player ? '<script src="/node/navigation.js?v=20260823a" defer></script>' : ''}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${description}"><meta name="theme-color" content="#0b0d0c"><title>${documentTitle}</title><link rel="icon" href="/node/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/app.css?v=${APP_CSS_VERSION}"></head><body class="${bodyClass}"><a class="skip-link" href="#content">Skip to main content</a>${maintenanceBanner}<div id="wrapper" class="node-wrapper ${shellClass}"><header class="game-header">${wordmark}${login}</header>${topNavigation}<div id="divwrapper" class="node-content-wrap${player ? '' : ' guest-content'}">${sideNavigation}<main id="content" tabindex="-1">${quietNotice}${content}</main></div>${footer}</div>${flashDialog}${botBuildBurst}${meldDialog}${welcomeMailPrompt}${liveUpdates}${player ? '<script src="/node/navigation.js?v=20260823a" defer></script>' : ''}</body></html>`;
 }
 
 function itemCard(item, countOrOptions = null, legacyAction = '') {
@@ -2833,13 +2837,23 @@ function adminTabs(active = 'dashboard') {
 
 function adminDashboardPage(data) {
   const cards = [
+    ['Active now', data.activeUsers, 'active-users'],
     ['Miners', data.players], ['Active batteries', data.active], ['Suspended', data.suspended],
     ['Credits in circulation', data.credits], ['Gold in circulation', `${formatGold(data.gold)}g`],
     ['Item orders', data.item_orders], ['Mine orders', data.mine_orders],
     ['Factory orders', data.factory_orders], ['Recorded item sales', data.item_sales]
   ].sort(([first], [second]) => first.localeCompare(second))
-    .map(([label, value]) => `<article><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>`).join('');
-  return `${adminTabs('dashboard')}<section class="page-title"><div><p class="eyebrow">Operations</p><h1>Administration</h1></div><p>The useful legacy controls, rebuilt against the live SQLite game with an audit trail.</p></section><div class="admin-metrics">${cards}</div>`;
+    .map(([label, value, key]) => `<article><strong${key ? ` data-${key}` : ''}>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span>${key === 'active-users' ? '<small>Seen in the last 5 minutes</small>' : ''}</article>`).join('');
+  const notice = data.maintenanceNotice;
+  const minutes = notice ? Math.max(1, Math.ceil((notice.shutdownAt - data.currentTime) / 60000)) : 30;
+  const message = notice?.message
+    ?? 'You will be temporarily logged out. Please finish anything time-sensitive.';
+  const status = notice
+    ? `<p class="maintenance-control-status" role="status"><strong>Warning is live.</strong> Shutdown is planned for <time datetime="${new Date(notice.shutdownAt).toISOString()}">${new Date(notice.shutdownAt).toLocaleString('en-GB')}</time>.</p>`
+    : '<p class="maintenance-control-status">No maintenance warning is currently displayed.</p>';
+  const cancel = notice
+    ? '<form method="post" action="/admin/maintenance/cancel"><button class="secondary">Remove warning</button></form>' : '';
+  return `${adminTabs('dashboard')}<section class="page-title"><div><p class="eyebrow">Operations</p><h1>Administration</h1></div><p>The useful legacy controls, rebuilt against the live SQLite game with an audit trail.</p></section><div class="admin-metrics">${cards}</div><section class="maintenance-control${notice ? ' is-active' : ''}"><div><p class="eyebrow">Site-wide warning</p><h2>Maintenance shutdown</h2>${status}<p>This displays a prominent live countdown to every signed-in miner. It does not restart the server itself.</p></div><form class="maintenance-control-form" method="post" action="/admin/maintenance"><label>Minutes until shutdown<input type="number" name="minutes" min="1" max="1440" step="1" value="${minutes}" required></label><label>Message<input name="message" maxlength="240" value="${escapeHtml(message)}" required></label><button>${notice ? 'Update warning' : 'Publish warning'}</button></form>${cancel}</section>`;
 }
 
 function adminPlayersPage(players, query = '') {
@@ -6117,6 +6131,25 @@ export function createApp(options = {}) {
   const previewBindings = new PreviewBindingRegistry({ now });
   store.expireMessages(now());
   const sessions = new Map();
+  const activeUserWindowMs = Math.max(60000, Math.min(60 * 60 * 1000,
+    Math.round(Number(options.activeUserWindowMs ?? 5 * 60 * 1000)) || 5 * 60 * 1000));
+  const sessionRecord = (playerId, details = {}, seenAt = now()) => ({
+    ...details, playerId, createdAt: seenAt, lastSeenAt: seenAt
+  });
+  const activeUserCount = (currentTime = now()) => new Set([...sessions.values()]
+    .filter((entry) => Number(entry.lastSeenAt) >= currentTime - activeUserWindowMs)
+    .map((entry) => Number(entry.playerId))).size;
+  let maintenanceNotice = null;
+  const maintenanceSnapshot = (currentTime = now()) => {
+    if (!maintenanceNotice) return null;
+    const remainingMinutes = Math.max(0,
+      Math.ceil((maintenanceNotice.shutdownAt - currentTime) / 60000));
+    return {
+      ...maintenanceNotice,
+      countdownLabel: remainingMinutes
+        ? `in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}` : 'now'
+    };
+  };
   const googleAuthAttempts = new Map();
   const pendingGoogleSignups = new Map();
   const pruneTemporaryAuth = (records, currentTime) => {
@@ -6295,6 +6328,19 @@ export function createApp(options = {}) {
       return false;
     }
   };
+  const sendMaintenanceEvent = (client) => sendLiveEvent(client, 'maintenance',
+    maintenanceNotice
+      ? { active: true, shutdownAt: maintenanceNotice.shutdownAt, message: maintenanceNotice.message }
+      : { active: false });
+  const sendPresenceEvent = (client, currentTime = now()) => {
+    if (client.all) sendLiveEvent(client, 'presence', {
+      activeUsers: activeUserCount(currentTime),
+      windowMinutes: Math.round(activeUserWindowMs / 60000)
+    });
+  };
+  const broadcastMaintenance = () => {
+    for (const client of liveClients) sendMaintenanceEvent(client);
+  };
   const relevantLiveScopes = (client, events) => [...new Set(events
     .map((entry) => entry.scope)
     .filter((scope) => client.all || client.changeScopes.has(scope)))];
@@ -6391,10 +6437,15 @@ export function createApp(options = {}) {
   // Close the tiny startup gap between taking the cursor and installing both wake sources.
   scheduleLiveDrain(0);
   const liveHeartbeatTimer = setInterval(() => {
+    const heartbeatAt = now();
     for (const client of liveClients) {
       if (client.response.destroyed || client.response.writableEnded) liveClients.delete(client);
-      else client.response.write(': keep-alive\n\n');
+      else {
+        client.session.lastSeenAt = heartbeatAt;
+        client.response.write(': keep-alive\n\n');
+      }
     }
+    for (const client of liveClients) sendPresenceEvent(client, heartbeatAt);
   }, 20000);
   liveHeartbeatTimer.unref();
 
@@ -6432,12 +6483,14 @@ export function createApp(options = {}) {
     if (!requestedTopics.includes('market')) changeScopes.add(playerScope);
     const client = {
       response,
+      session,
       playerId: session.playerId,
       playerScope,
       scopes: new Set([playerScope, ...topicScopes]),
       changeScopes,
       all: requestedTopics.includes('all') && player?.authority > 0
     };
+    session.lastSeenAt = now();
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-store',
@@ -6468,6 +6521,8 @@ export function createApp(options = {}) {
     } while (missed.length >= 10000);
     const revision = store.latestLiveUpdateId();
     sendLiveEvent(client, 'ready', { revision }, revision);
+    sendMaintenanceEvent(client);
+    sendPresenceEvent(client);
     const remove = () => liveClients.delete(client);
     request.once('close', remove);
     response.once('close', remove);
@@ -6847,6 +6902,7 @@ export function createApp(options = {}) {
     const requestCookies = cookies(request);
     const sessionId = requestCookies.mt_session;
     const session = sessions.get(sessionId);
+    if (session) session.lastSeenAt = now();
     if (request.method === 'GET' && url.pathname === '/api/live-updates') {
       openLiveUpdates(request, response, session, url);
       return;
@@ -6956,6 +7012,7 @@ export function createApp(options = {}) {
       }
       if (player) {
         player.currentPath = url.pathname;
+        player.maintenanceNotice = maintenanceSnapshot();
         const activeCity = catalogCityForId(catalog, player.cityId);
         const activeMap = catalog.maps.find((map) => map.id === activeCity.mapId);
         if (!activeMap) throw new Error(`Missing map for city ${activeCity.id}.`);
@@ -7032,7 +7089,7 @@ export function createApp(options = {}) {
       }
     };
     const createLoginSession = (playerId, details = {}) => {
-      const loginSession = { ...details, playerId };
+      const loginSession = sessionRecord(playerId, details);
       const catchup = store.claimLoginFindings(playerId);
       const items = findingNoticeItems(catchup.findings, catalog);
       if (items.length) {
@@ -7204,10 +7261,10 @@ export function createApp(options = {}) {
         ), { version: LEGAL_VERSION, acceptedAt: registeredAt }, pending.identity, registeredAt);
         pendingGoogleSignups.delete(signupId);
         const id = crypto.randomBytes(32).toString('base64url');
-        const newSession = {
+        const newSession = sessionRecord(saved.id, {
           playerId: saved.id,
           quietNotice: 'Miner created and verified with Google.'
-        };
+        }, registeredAt);
         const starterItems = findingNoticeItems(saved.discoveries, catalog, {
           source: 'new-mine', cityId: saved.cityId, foundAt: registeredAt
         });
@@ -7302,7 +7359,8 @@ export function createApp(options = {}) {
             meldReveal: player.meldReveal,
             botBuildNotice: player.botBuildNotice,
             findingNotice: player.findingNotice,
-            registrationWelcomeMail: player.registrationWelcomeMail
+            registrationWelcomeMail: player.registrationWelcomeMail,
+            maintenanceNotice: player.maintenanceNotice
           };
           let battery = { expiresAt: player.batteryExpiresAt };
           if (!liveFragment) {
@@ -7349,7 +7407,8 @@ export function createApp(options = {}) {
           name, email, await hashPasswordAsync(form.password), catalog, registeredAt, random
         ), { version: LEGAL_VERSION, acceptedAt: registeredAt });
         const id = crypto.randomBytes(32).toString('base64url');
-        const newSession = { playerId: saved.id, flash: 'Check your email to unlock this miner.' };
+        const newSession = sessionRecord(saved.id,
+          { flash: 'Check your email to unlock this miner.' }, registeredAt);
         const starterItems = findingNoticeItems(saved.discoveries, catalog, {
           source: 'new-mine', cityId: saved.cityId, foundAt: registeredAt
         });
@@ -8456,7 +8515,51 @@ export function createApp(options = {}) {
         responseHtml(response, 200, layout('Server Stats', statsPage(store.publicStats(now())), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/admin') {
         if (!requireAdmin()) return;
-        responseHtml(response, 200, layout('Administration', adminDashboardPage(store.adminOverview(now())), player, flash));
+        const adminTime = now();
+        responseHtml(response, 200, layout('Administration', adminDashboardPage({
+          ...store.adminOverview(adminTime),
+          activeUsers: activeUserCount(adminTime),
+          maintenanceNotice: maintenanceSnapshot(adminTime),
+          currentTime: adminTime
+        }), player, flash));
+      } else if (request.method === 'POST' && url.pathname === '/admin/maintenance') {
+        if (!requireAdmin()) return;
+        const form = await readForm(request);
+        const minutes = Number(form.minutes);
+        const message = String(form.message ?? '').trim().replace(/\s+/gu, ' ');
+        if (!Number.isSafeInteger(minutes) || minutes < 1 || minutes > 1440) {
+          throw new Error('Maintenance warning time must be from 1 to 1,440 whole minutes.');
+        }
+        if (!message || message.length > 240) {
+          throw new Error('Maintenance warning message must contain 1 to 240 characters.');
+        }
+        const publishedAt = now();
+        const nextNotice = {
+          publishedAt,
+          shutdownAt: publishedAt + minutes * 60 * 1000,
+          message,
+          administratorId: player.id
+        };
+        store.adminRecordMaintenance(player.id, 'maintenance-warning-published',
+          `${minutes} minutes; ${message}`, publishedAt);
+        maintenanceNotice = nextNotice;
+        broadcastMaintenance();
+        setFlash(`Maintenance warning published for ${minutes} minute${minutes === 1 ? '' : 's'} from now.`);
+        redirect(response, '/admin');
+      } else if (request.method === 'POST' && url.pathname === '/admin/maintenance/cancel') {
+        if (!requireAdmin()) return;
+        if (maintenanceNotice) {
+          const removedAt = now();
+          store.adminRecordMaintenance(player.id, 'maintenance-warning-removed',
+            `Previously scheduled for ${new Date(maintenanceNotice.shutdownAt).toISOString()}`,
+            removedAt);
+          maintenanceNotice = null;
+          broadcastMaintenance();
+          setFlash('Maintenance warning removed.');
+        } else {
+          setFlash('There was no maintenance warning to remove.');
+        }
+        redirect(response, '/admin');
       } else if (request.method === 'GET' && url.pathname === '/admin/payments') {
         if (!requireAdmin()) return;
         const paymentAdminTime = now();

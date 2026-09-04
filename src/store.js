@@ -29066,6 +29066,13 @@ Compliance is compulsory. Enjoy your new life.
     `).all(safeLimit);
   }
 
+  adminRecordMaintenance(administratorId, action, details, now = Date.now()) {
+    if (!['maintenance-warning-published', 'maintenance-warning-removed'].includes(action)) {
+      throw new Error('Unknown maintenance audit action.');
+    }
+    return this.#adminAudit(administratorId, action, null, details, now);
+  }
+
   adminSetModeration(administratorId, playerId, field, enabled, now = Date.now()) {
     const columns = { suspended: 'suspended', chat: 'chat_banned', pm: 'pm_banned' };
     const column = columns[field];

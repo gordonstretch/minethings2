@@ -38,7 +38,7 @@ async function verifyDevelopmentEmail(base, cookie) {
 
 test('gives all thirteen miner-bot purchases their ordered comic lesson', () => {
   const lines = [
-    "Don't be fooled. Minecraft is a pretty complicated game.",
+    'MineThings 2 is a pretty complicated game.',
     'It starts slow. Speed it up by making Stones.',
     'It is a socioeconomic simulation, really.',
     'With shinies.',
@@ -103,7 +103,7 @@ test('shows the city-style comic burst only after a successful bot-part purchase
     const reveal = await (await fetch(base, { headers: { cookie } })).text();
     assert.match(reveal, /id="bot-build-burst"[^>]+data-active="1"/u);
     assert.match(reveal, /SPARK!/u);
-    assert.match(reveal, /Don&#39;t be fooled\. Minecraft is a pretty complicated game\./u);
+    assert.match(reveal, /MineThings 2 is a pretty complicated game\./u);
     assert.match(reveal, /Part 1 of 13/u);
     assert.match(reveal, /Chest installed/u);
     assert.match(reveal, /\/node\/bot-build-burst\.js\?v=20260902a/u);
@@ -638,6 +638,8 @@ test('streams scoped database changes to live pages without reload code', async 
   assert.match(client, /addEventListener\('session-ended'/u);
   assert.match(client, /stream\.close\(\)/u);
   assert.match(client, /window\.location\.assign\(destination\)/u);
+  assert.match(client, /addEventListener\('maintenance'/u);
+  assert.match(client, /addEventListener\('presence'/u);
 });
 
 test('server listening does not synchronously advance gameplay state', async (context) => {
@@ -1434,6 +1436,119 @@ test('secures and operates the modern administration console', async (context) =
     ['broadcast', 'chat-enabled', 'grant-credits',
       'world-creature-spawned', 'world-creature-spawned', 'weather-overridden']);
 });
+
+test('publishes live maintenance warnings and counts recently active signed-in miners',
+  async (context) => {
+    const catalog = loadLegacyCatalog();
+    const store = new SqliteStore(':memory:');
+    store.seedCatalog(catalog);
+    store.ensureWorldMaps(1000);
+    const password = 'maintenance console password';
+    const administrator = store.addPlayer(createPlayer(
+      'Maintenance Admin', '', hashPassword(password), catalog, 1000, () => 0.5
+    ));
+    const subject = store.addPlayer(createPlayer(
+      'Maintenance Miner', '', hashPassword(password), catalog, 1000, () => 0.5
+    ));
+    let currentTime = 100000;
+    const server = createApp({
+      store, catalog: store.loadCatalog(), now: () => currentTime,
+      adminNames: administrator.name
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    context.after(async () => {
+      await new Promise((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()));
+      store.close();
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = async (name) => {
+      const response = await fetch(`${base}/login`, {
+        method: 'POST', redirect: 'manual',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ name, password })
+      });
+      return response.headers.get('set-cookie').split(';')[0];
+    };
+    const adminCookie = await login(administrator.name);
+    const subjectCookie = await login(subject.name);
+
+    const initialDashboard = await (await fetch(`${base}/admin`, {
+      headers: { cookie: adminCookie }
+    })).text();
+    assert.match(initialDashboard, /<strong data-active-users>2<\/strong>/u);
+    assert.match(initialDashboard, /Seen in the last 5 minutes/u);
+    assert.match(initialDashboard, /value="30"/u);
+
+    const forbidden = await fetch(`${base}/admin/maintenance`, {
+      method: 'POST', redirect: 'manual', headers: {
+        cookie: subjectCookie, 'content-type': 'application/x-www-form-urlencoded'
+      }, body: new URLSearchParams({ minutes: '30', message: 'Not authorised' })
+    });
+    assert.equal(forbidden.status, 404);
+
+    const controller = new AbortController();
+    const stream = await fetch(`${base}/api/live-updates?topics=catalog`, {
+      headers: { cookie: subjectCookie }, signal: controller.signal
+    });
+    const reader = stream.body.getReader();
+    const decoder = new TextDecoder();
+    let events = '';
+    const readUntil = async (pattern) => {
+      const deadline = Date.now() + 3000;
+      while (!pattern.test(events) && Date.now() < deadline) {
+        const result = await Promise.race([
+          reader.read(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Maintenance SSE timeout')), 500))
+        ]);
+        if (result.done) break;
+        events += decoder.decode(result.value, { stream: true });
+      }
+      assert.match(events, pattern);
+    };
+    await readUntil(/event: maintenance\ndata: \{"active":false\}/u);
+
+    const message = 'You will be temporarily logged out. Finish <important> work.';
+    const warning = await fetch(`${base}/admin/maintenance`, {
+      method: 'POST', redirect: 'manual', headers: {
+        cookie: adminCookie, 'content-type': 'application/x-www-form-urlencoded'
+      }, body: new URLSearchParams({ minutes: '30', message })
+    });
+    assert.equal(warning.status, 303);
+    assert.equal(warning.headers.get('location'), '/admin');
+    await readUntil(/event: maintenance\ndata: \{"active":true,"shutdownAt":1900000/u);
+    controller.abort();
+
+    const minerPage = await (await fetch(`${base}/inventory`, {
+      headers: { cookie: subjectCookie }
+    })).text();
+    assert.match(minerPage,
+      /id="maintenance-banner"[^>]*data-shutdown-at="1900000"(?![^>]*hidden)/u);
+    assert.match(minerPage, /Maintenance shutdown <span data-maintenance-countdown>in 30 minutes/u);
+    assert.match(minerPage,
+      /You will be temporarily logged out\. Finish &lt;important&gt; work\./u);
+    assert.doesNotMatch(minerPage, /Finish <important> work/u);
+
+    currentTime += 6 * 60 * 1000;
+    const laterDashboard = await (await fetch(`${base}/admin`, {
+      headers: { cookie: adminCookie }
+    })).text();
+    assert.match(laterDashboard, /<strong data-active-users>1<\/strong>/u,
+      'the viewing administrator remains active while the idle miner expires from presence');
+
+    const cancelled = await fetch(`${base}/admin/maintenance/cancel`, {
+      method: 'POST', redirect: 'manual', headers: { cookie: adminCookie }
+    });
+    assert.equal(cancelled.status, 303);
+    const clearedPage = await (await fetch(`${base}/inventory`, {
+      headers: { cookie: subjectCookie }
+    })).text();
+    assert.match(clearedPage, /id="maintenance-banner"[^>]*hidden/u);
+    assert.doesNotMatch(clearedPage, /Finish &lt;important&gt; work/u);
+    assert.deepEqual(store.adminAuditLog(2).map((entry) => entry.action),
+      ['maintenance-warning-removed', 'maintenance-warning-published']);
+  });
 
 test('renders moving creatures and sends vehicles to future interception points', async (context) => {
   const catalog = loadLegacyCatalog();

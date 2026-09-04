@@ -5,6 +5,39 @@
     ?? document.querySelector('script[src^="/node/live-updates.js"]');
   if (!script || typeof window.EventSource !== 'function') return;
 
+  const maintenanceBanner = document.querySelector('#maintenance-banner');
+  let maintenanceCountdownTimer = null;
+  const updateMaintenanceCountdown = () => {
+    if (!maintenanceBanner || maintenanceBanner.hidden) return;
+    const shutdownAt = Number(maintenanceBanner.dataset.shutdownAt);
+    const remainingMinutes = Math.max(0, Math.ceil((shutdownAt - Date.now()) / 60000));
+    const countdown = maintenanceBanner.querySelector('[data-maintenance-countdown]');
+    if (countdown) countdown.textContent = remainingMinutes
+      ? `in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}` : 'now';
+  };
+  const renderMaintenance = (notice) => {
+    if (!maintenanceBanner) return;
+    if (!notice?.active) {
+      maintenanceBanner.hidden = true;
+      maintenanceBanner.dataset.shutdownAt = '0';
+      if (maintenanceCountdownTimer) clearInterval(maintenanceCountdownTimer);
+      maintenanceCountdownTimer = null;
+      return;
+    }
+    maintenanceBanner.dataset.shutdownAt = String(Number(notice.shutdownAt) || 0);
+    const message = maintenanceBanner.querySelector('[data-maintenance-message]');
+    if (message) message.textContent = String(notice.message ?? '');
+    maintenanceBanner.hidden = false;
+    updateMaintenanceCountdown();
+    if (!maintenanceCountdownTimer) {
+      maintenanceCountdownTimer = window.setInterval(updateMaintenanceCountdown, 15000);
+    }
+  };
+  if (maintenanceBanner && !maintenanceBanner.hidden) {
+    updateMaintenanceCountdown();
+    maintenanceCountdownTimer = window.setInterval(updateMaintenanceCountdown, 15000);
+  }
+
   // These pages have client-owned transient state that a server snapshot cannot safely restore.
   const contentMorphEnabled = !/^\/(?:casino|oil-field|explore)(?:\/|$)/
     .test(window.location.pathname);
@@ -313,6 +346,22 @@
     revision = Math.max(revision, Number(payload.revision) || 0);
     appliedRevision = Math.max(appliedRevision, revision);
     setStatus('Live', 'ready');
+  });
+  stream.addEventListener('maintenance', (event) => {
+    try {
+      renderMaintenance(JSON.parse(event.data));
+    } catch {
+      // A malformed warning cannot replace the last valid maintenance state.
+    }
+  });
+  stream.addEventListener('presence', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      const activeUsers = document.querySelector('[data-active-users]');
+      if (activeUsers) activeUsers.textContent = String(Number(payload.activeUsers) || 0);
+    } catch {
+      // The dashboard will retain its server-rendered presence count.
+    }
   });
   stream.addEventListener('change', (event) => {
     const payload = JSON.parse(event.data);
