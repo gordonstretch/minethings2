@@ -17,7 +17,7 @@
     "audit:item-cards": "playwright test test/item-card-audit.spec.mjs --workers=1"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.16"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0"

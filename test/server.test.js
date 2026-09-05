@@ -10,6 +10,7 @@ import {
   SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
 import { LEGAL_VERSION, sellerConfiguration } from '../src/legal.js';
+import { listDatabaseBackups } from '../src/database-backups.js';
 import {
   battlePage, botBuildComicNotice, casinoPage, createApp, findingNoticeItems
 } from '../src/server.js';
@@ -1465,6 +1466,117 @@ test('secures and operates the modern administration console', async (context) =
     ['broadcast', 'chat-enabled', 'grant-credits',
       'world-creature-spawned', 'world-creature-spawned', 'weather-overridden']);
 });
+
+test('lets administrators create, update from, restore, and delete database backups',
+  async (context) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-admin-backups-'));
+    const databaseFile = path.join(directory, 'live.sqlite');
+    const backupDirectory = path.join(directory, 'backups');
+    const catalog = loadLegacyCatalog();
+    const store = new SqliteStore(databaseFile);
+    store.seedCatalog(catalog);
+    store.ensureWorldMaps(1000);
+    const password = 'database admin password';
+    const administrator = store.addPlayer(createPlayer(
+      'Database Admin', '', hashPassword(password), catalog, 1000, () => 0.5
+    ));
+    const subject = store.addPlayer(createPlayer(
+      'Database Subject', '', hashPassword(password), catalog, 1000, () => 0.5
+    ));
+    const updateCalls = [];
+    const restartReasons = [];
+    const server = createApp({
+      store,
+      now: () => 5000,
+      adminNames: administrator.name,
+      backupDirectory,
+      repositoryRoot: directory,
+      updateRunner: async (repositoryRoot) => {
+        updateCalls.push(repositoryRoot);
+        return { git: 'Already up to date.', npm: 'up to date' };
+      },
+      scheduleRestart: (reason) => restartReasons.push(reason)
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    context.after(async () => {
+      await new Promise((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()));
+      store.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = async (name) => {
+      const response = await fetch(`${base}/login`, {
+        method: 'POST', redirect: 'manual',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ name, password })
+      });
+      return response.headers.get('set-cookie').split(';')[0];
+    };
+    const adminCookie = await login(administrator.name);
+    const subjectCookie = await login(subject.name);
+    assert.equal((await fetch(`${base}/admin/backups`, {
+      headers: { cookie: subjectCookie }
+    })).status, 404);
+    assert.equal((await fetch(`${base}/admin/backups`, {
+      method: 'POST', redirect: 'manual', headers: { cookie: subjectCookie }
+    })).status, 404);
+
+    const initialPage = await (await fetch(`${base}/admin/backups`, {
+      headers: { cookie: adminCookie }
+    })).text();
+    assert.match(initialPage, /Backups and updates/u);
+    assert.match(initialPage, /Create backup/u);
+    assert.match(initialPage, /Back up and update/u);
+    assert.match(initialPage, /No backups have been created yet/u);
+
+    const manual = await fetch(`${base}/admin/backups`, {
+      method: 'POST', redirect: 'manual', headers: { cookie: adminCookie }
+    });
+    assert.equal(manual.status, 303);
+    assert.equal(manual.headers.get('location'), '/admin/backups');
+    const manualBackup = listDatabaseBackups(backupDirectory)[0];
+    assert.equal(manualBackup.reason, 'Manual admin backup');
+
+    const update = await fetch(`${base}/admin/backups/update`, {
+      method: 'POST', headers: {
+        cookie: adminCookie, 'content-type': 'application/x-www-form-urlencoded'
+      }, body: new URLSearchParams({ confirm: 'update' })
+    });
+    assert.equal(update.status, 200);
+    assert.match(await update.text(), /Server update installed/u);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(updateCalls, [directory]);
+    assert.deepEqual(restartReasons, ['server update']);
+    const updateBackup = listDatabaseBackups(backupDirectory)
+      .find((entry) => entry.reason === 'Automatic backup before server update');
+    assert.ok(updateBackup);
+
+    const restore = await fetch(`${base}/admin/backups/restore`, {
+      method: 'POST', headers: {
+        cookie: adminCookie, 'content-type': 'application/x-www-form-urlencoded'
+      }, body: new URLSearchParams({ confirm: 'restore', fileName: manualBackup.fileName })
+    });
+    assert.equal(restore.status, 200);
+    assert.match(await restore.text(), /Database restore scheduled/u);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(restartReasons,
+      ['server update', `restore database backup ${manualBackup.fileName}`]);
+
+    const deleted = await fetch(`${base}/admin/backups/delete`, {
+      method: 'POST', redirect: 'manual', headers: {
+        cookie: adminCookie, 'content-type': 'application/x-www-form-urlencoded'
+      }, body: new URLSearchParams({ confirm: 'delete', fileName: updateBackup.fileName })
+    });
+    assert.equal(deleted.status, 303);
+    assert.equal(listDatabaseBackups(backupDirectory).some((entry) =>
+      entry.fileName === updateBackup.fileName), false);
+    const auditActions = store.adminAuditLog(20).map((entry) => entry.action);
+    for (const action of [
+      'database-backup-created', 'database-update-completed',
+      'database-restore-requested', 'database-backup-deleted'
+    ]) assert.ok(auditActions.includes(action), `${action} should be audited`);
+  });
 
 test('publishes live maintenance warnings and counts recently active signed-in miners',
   async (context) => {

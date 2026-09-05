@@ -30930,6 +30930,15 @@ Compliance is compulsory. Enjoy your new life.
     return this.#adminAudit(administratorId, action, null, details, now);
   }
 
+  adminRecordDatabaseOperation(administratorId, action, details, now = Date.now()) {
+    const allowed = new Set([
+      'database-backup-created', 'database-backup-deleted',
+      'database-restore-requested', 'database-update-completed', 'database-update-failed'
+    ]);
+    if (!allowed.has(action)) throw new Error('Unknown database administration action.');
+    return this.#adminAudit(administratorId, action, null, details, now);
+  }
+
   adminSetModeration(administratorId, playerId, field, enabled, now = Date.now()) {
     const columns = { suspended: 'suspended', chat: 'chat_banned', pm: 'pm_banned' };
     const column = columns[field];

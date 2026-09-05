@@ -32,6 +32,11 @@ import { PreviewBindingRegistry } from './preview-bindings.js';
 import {
   PayPalClient, paypalConfiguration, paypalOrderSummary, paypalReadiness
 } from './paypal.js';
+import {
+  applyPendingDatabaseRestore, createDatabaseBackup, defaultBackupDirectory,
+  deleteDatabaseBackup, listDatabaseBackups, pendingDatabaseRestore,
+  stageDatabaseRestore, updateRepository
+} from './database-backups.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_ROOT = path.join(ROOT, 'public');
@@ -2931,6 +2936,7 @@ function statsPage(stats) {
 function adminTabs(active = 'dashboard') {
   const links = [
     ['dashboard', '/admin', 'Dashboard'], ['announcement', '/admin/announcement', 'Announcement'],
+    ['backups', '/admin/backups', 'Backups and updates'],
     ['audit', '/admin/audit', 'Audit log'], ['players', '/admin/players', 'Miners'],
     ['payments', '/admin/payments', 'Payments'],
     ['travelling', '/admin/travelling', 'Travelling things'],
@@ -2959,6 +2965,33 @@ function adminDashboardPage(data) {
   const cancel = notice
     ? '<form method="post" action="/admin/maintenance/cancel"><button class="secondary">Remove warning</button></form>' : '';
   return `${adminTabs('dashboard')}<section class="page-title"><div><p class="eyebrow">Operations</p><h1>Administration</h1></div><p>The useful legacy controls, rebuilt against the live SQLite game with an audit trail.</p></section><div class="admin-metrics">${cards}</div><section class="maintenance-control${notice ? ' is-active' : ''}"><div><p class="eyebrow">Site-wide warning</p><h2>Maintenance shutdown</h2>${status}<p>This displays a prominent live countdown to every signed-in miner. It does not restart the server itself.</p></div><form class="maintenance-control-form" method="post" action="/admin/maintenance"><label>Minutes until shutdown<input type="number" name="minutes" min="1" max="1440" step="1" value="${minutes}" required></label><label>Message<input name="message" maxlength="240" value="${escapeHtml(message)}" required></label><button>${notice ? 'Update warning' : 'Publish warning'}</button></form>${cancel}</section>`;
+}
+
+function formatFileSize(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${value.toLocaleString('en-GB')} B`;
+  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  return `${(value / 1024 ** 3).toFixed(2)} GB`;
+}
+
+function adminBackupsPage(state) {
+  const pending = state.pendingRestore
+    ? `<section class="error"><h2>Restore pending</h2><p><strong>${escapeHtml(state.pendingRestore.fileName)}</strong> will replace the live database when the server restarts.</p></section>` : '';
+  const unavailable = state.available ? ''
+    : '<section class="error"><h2>Backups unavailable</h2><p>This server is using an in-memory database. Start it with a persistent DATABASE_FILE to manage backups.</p></section>';
+  const rows = state.backups.map((backup) => `<tr>
+    <td><strong>${new Date(backup.createdAt).toLocaleString('en-GB')}</strong><br><small>${escapeHtml(backup.fileName)}</small></td>
+    <td>${formatFileSize(backup.size)}</td><td>${escapeHtml(backup.reason)}${backup.createdBy ? `<br><small>By ${escapeHtml(backup.createdBy)}</small>` : ''}</td>
+    <td><div class="admin-backup-actions"><form method="post" action="/admin/backups/restore"><input type="hidden" name="fileName" value="${escapeHtml(backup.fileName)}"><label class="danger-confirm"><input type="checkbox" name="confirm" value="restore" required><span>Replace the live database and restart</span></label><button${state.restartAvailable ? '' : ' disabled'}>Restore</button></form><form method="post" action="/admin/backups/delete"><input type="hidden" name="fileName" value="${escapeHtml(backup.fileName)}"><label class="danger-confirm"><input type="checkbox" name="confirm" value="delete" required><span>Permanently delete this backup</span></label><button class="secondary">Delete</button></form></div></td>
+  </tr>`).join('');
+  return `${adminTabs('backups')}<section class="page-title"><div><p class="eyebrow">Database safety</p><h1>Backups and updates</h1></div><p>Create consistent SQLite backups, deploy the latest checked-in code, or return the game to an earlier backup.</p></section>${pending}${unavailable}
+    <section class="admin-backup-controls"><div><h2>Back up now</h2><p>The live database remains available while SQLite makes a consistent snapshot.</p><form method="post" action="/admin/backups"><button${state.available ? '' : ' disabled'}>Create backup</button></form></div><div><h2>Back up and update</h2><p>Creates a backup, pulls the current Git branch with fast-forward only, refreshes production dependencies, and gracefully restarts the service. Signed-in sessions will end.</p><form method="post" action="/admin/backups/update"><label class="danger-confirm"><input type="checkbox" name="confirm" value="update" required><span>I have published a maintenance warning</span></label><button${state.updateAvailable ? '' : ' disabled'}>Back up and update</button></form>${state.updateAvailable ? '' : '<p><small>Automatic update and restart are not configured for this process.</small></p>'}</div></section>
+    <section><div class="section-heading"><div><h2>Previous backups</h2><p>${state.backups.length.toLocaleString('en-GB')} stored in <code>${escapeHtml(state.backupDirectory)}</code>.</p></div></div><div class="table-scroll"><table><thead><tr><th>Created</th><th>Size</th><th>Reason</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No backups have been created yet.</td></tr>'}</tbody></table></div><p><small>Restore is applied during a graceful restart. An extra safety backup of the database being replaced is made automatically.</small></p></section>`;
+}
+
+function adminRestartPage(title, message) {
+  return `<section class="page-title"><div><p class="eyebrow">Administration</p><h1>${escapeHtml(title)}</h1></div></section><section><p>${escapeHtml(message)}</p><p>The server is restarting gracefully. This page will not update automatically; wait a few seconds, then <a class="text-link" href="/">open MineThings 2</a> and sign in again.</p></section>`;
 }
 
 function adminPlayersPage(players, query = '') {
@@ -6249,6 +6282,26 @@ export function createApp(options = {}) {
   const store = options.store ?? new SqliteStore(options.databaseFile ?? path.join(ROOT, 'data', 'minethings.sqlite'), {
     legacyJsonFile: options.legacyJsonFile ?? path.join(ROOT, 'data', 'players.json')
   });
+  const databaseFile = typeof store.filename === 'string' ? store.filename : '';
+  const databaseAdministrationAvailable = databaseFile !== '' && databaseFile !== ':memory:';
+  const backupDirectory = options.backupDirectory
+    ?? (databaseAdministrationAvailable ? defaultBackupDirectory(databaseFile) : 'Not available');
+  const scheduleRestart = typeof options.scheduleRestart === 'function'
+    ? options.scheduleRestart : null;
+  const repositoryUpdate = typeof options.updateRunner === 'function'
+    ? options.updateRunner : null;
+  let databaseAdministrationOperation = null;
+  const runDatabaseAdministrationOperation = async (label, operation) => {
+    if (databaseAdministrationOperation) {
+      throw new Error(`${databaseAdministrationOperation} is already in progress.`);
+    }
+    databaseAdministrationOperation = label;
+    try {
+      return await operation();
+    } finally {
+      databaseAdministrationOperation = null;
+    }
+  };
   let initialCatalog = store.loadCatalog();
   if (!initialCatalog) {
     store.seedCatalog(options.catalog ?? loadLegacyCatalog(options.sqlPath));
@@ -8715,6 +8768,113 @@ export function createApp(options = {}) {
           maintenanceNotice: maintenanceSnapshot(adminTime),
           currentTime: adminTime
         }), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/admin/backups') {
+        if (!requireAdmin()) return;
+        responseHtml(response, 200, layout('Admin · Backups and updates', adminBackupsPage({
+          available: databaseAdministrationAvailable,
+          backupDirectory,
+          backups: databaseAdministrationAvailable ? listDatabaseBackups(backupDirectory) : [],
+          pendingRestore: databaseAdministrationAvailable
+            ? pendingDatabaseRestore(backupDirectory) : null,
+          restartAvailable: Boolean(scheduleRestart),
+          updateAvailable: Boolean(databaseAdministrationAvailable
+            && scheduleRestart && repositoryUpdate)
+        }), player, flash));
+      } else if (request.method === 'POST' && url.pathname === '/admin/backups') {
+        if (!requireAdmin()) return;
+        if (!databaseAdministrationAvailable) {
+          throw new Error('Database backups require a persistent SQLite database.');
+        }
+        const backup = await runDatabaseAdministrationOperation('A database backup', () =>
+          createDatabaseBackup({
+            database: store.database, databaseFile, backupDirectory,
+            reason: 'Manual admin backup', createdBy: player.name, createdAt: now()
+          }));
+        store.adminRecordDatabaseOperation(player.id, 'database-backup-created',
+          `${backup.fileName}; ${backup.size} bytes; manual`, now());
+        setFlash(`Database backup ${backup.fileName} created.`);
+        redirect(response, '/admin/backups');
+      } else if (request.method === 'POST' && url.pathname === '/admin/backups/delete') {
+        if (!requireAdmin()) return;
+        if (!databaseAdministrationAvailable) {
+          throw new Error('Database backups require a persistent SQLite database.');
+        }
+        const form = await readForm(request);
+        if (form.confirm !== 'delete') throw new Error('Confirm that the backup should be deleted.');
+        await runDatabaseAdministrationOperation('A database backup operation', async () => {
+          deleteDatabaseBackup(backupDirectory, form.fileName);
+        });
+        store.adminRecordDatabaseOperation(player.id, 'database-backup-deleted',
+          String(form.fileName), now());
+        setFlash(`Database backup ${form.fileName} deleted.`);
+        redirect(response, '/admin/backups');
+      } else if (request.method === 'POST' && url.pathname === '/admin/backups/restore') {
+        if (!requireAdmin()) return;
+        if (!databaseAdministrationAvailable || !scheduleRestart) {
+          throw new Error('Database restore and graceful restart are not configured for this process.');
+        }
+        const form = await readForm(request);
+        if (form.confirm !== 'restore') throw new Error('Confirm that the live database should be replaced.');
+        const selectedName = String(form.fileName ?? '');
+        const safetyBackup = await runDatabaseAdministrationOperation('A database restore', async () => {
+          const backup = await createDatabaseBackup({
+            database: store.database, databaseFile, backupDirectory,
+            reason: `Safety backup before restoring ${selectedName}`,
+            createdBy: player.name, createdAt: now()
+          });
+          stageDatabaseRestore({
+            backupDirectory, fileName: selectedName,
+            requestedBy: player.name, requestedAt: now()
+          });
+          return backup;
+        });
+        store.adminRecordDatabaseOperation(player.id, 'database-backup-created',
+          `${safetyBackup.fileName}; ${safetyBackup.size} bytes; pre-restore safety backup`, now());
+        store.adminRecordDatabaseOperation(player.id, 'database-restore-requested',
+          `${selectedName}; safety backup ${safetyBackup.fileName}`, now());
+        response.once('finish', () => scheduleRestart(`restore database backup ${selectedName}`));
+        responseHtml(response, 200, layout('Database restore scheduled', adminRestartPage(
+          'Database restore scheduled',
+          `${selectedName} has been verified and staged. A safety backup of the current database was created first.`
+        ), player));
+      } else if (request.method === 'POST' && url.pathname === '/admin/backups/update') {
+        if (!requireAdmin()) return;
+        if (!databaseAdministrationAvailable || !scheduleRestart || !repositoryUpdate) {
+          throw new Error('Automatic update and graceful restart are not configured for this process.');
+        }
+        const form = await readForm(request);
+        if (form.confirm !== 'update') throw new Error('Confirm that the server should be updated.');
+        let backup;
+        try {
+          const result = await runDatabaseAdministrationOperation('A server update', async () => {
+            backup = await createDatabaseBackup({
+              database: store.database, databaseFile, backupDirectory,
+              reason: 'Automatic backup before server update',
+              createdBy: player.name, createdAt: now()
+            });
+            return repositoryUpdate(options.repositoryRoot ?? ROOT);
+          });
+          store.adminRecordDatabaseOperation(player.id, 'database-backup-created',
+            `${backup.fileName}; ${backup.size} bytes; pre-update`, now());
+          const gitSummary = String(result?.git ?? '').split(/\r?\n/u).filter(Boolean).at(-1)
+            ?? 'Git update completed';
+          store.adminRecordDatabaseOperation(player.id, 'database-update-completed',
+            `${backup.fileName}; ${gitSummary}`.slice(0, 1000), now());
+          response.once('finish', () => scheduleRestart('server update'));
+          responseHtml(response, 200, layout('Server update installed', adminRestartPage(
+            'Server update installed',
+            `Backup ${backup.fileName} was created and the update completed successfully.`
+          ), player));
+        } catch (error) {
+          if (backup) {
+            store.adminRecordDatabaseOperation(player.id, 'database-backup-created',
+              `${backup.fileName}; ${backup.size} bytes; failed update safety backup`, now());
+          }
+          store.adminRecordDatabaseOperation(player.id, 'database-update-failed',
+            String(error.message).slice(0, 1000), now());
+          setFlash(`Update failed; the server was not restarted. ${error.message}`);
+          redirect(response, '/admin/backups');
+        }
       } else if (request.method === 'POST' && url.pathname === '/admin/maintenance') {
         if (!requireAdmin()) return;
         const form = await readForm(request);
@@ -9499,12 +9659,37 @@ export function createApp(options = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? 3000);
   const host = process.env.HOST ?? '127.0.0.1';
+  const databaseFile = path.resolve(process.env.DATABASE_FILE
+    ?? path.join(ROOT, 'data', 'minethings.sqlite'));
+  const backupDirectory = path.resolve(process.env.DATABASE_BACKUP_DIRECTORY
+    ?? process.env.BACKUP_DIRECTORY
+    ?? defaultBackupDirectory(databaseFile));
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT must be a whole number between 1 and 65535.');
   }
-  const server = createApp({ databaseFile: process.env.DATABASE_FILE });
+  const restoreResult = await applyPendingDatabaseRestore({ databaseFile, backupDirectory });
+  if (restoreResult?.applied) {
+    console.log(`Restored database backup ${restoreResult.fileName}.`);
+  } else if (restoreResult && !restoreResult.applied) {
+    console.error(`Database restore was not applied: ${restoreResult.error}`);
+  }
+  const managedRestart = process.env.MINETHINGS_MANAGED_RESTART === '1'
+    || Boolean(process.env.INVOCATION_ID);
+  let shutdown = () => {};
+  let restartScheduled = false;
+  const server = createApp({
+    databaseFile,
+    backupDirectory,
+    updateRunner: managedRestart ? updateRepository : null,
+    scheduleRestart: managedRestart ? (reason) => {
+      if (restartScheduled) return;
+      restartScheduled = true;
+      const restartTimer = setTimeout(() => shutdown(`Administrator requested ${reason}`), 750);
+      restartTimer.unref();
+    } : null
+  });
   let shuttingDown = false;
-  const shutdown = (signal) => {
+  shutdown = (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`${signal} received; finishing active requests.`);

@@ -4,7 +4,7 @@ This repository contains a runnable Node.js version of the MineThings game. Revi
 
 ## Run it
 
-Requirements: Node.js 22.13 or newer. The running game uses Node's built-in SQLite driver; install development dependencies only when running the rendered browser audit.
+Requirements: Node.js 22.16 or newer. The running game uses Node's built-in SQLite driver and online backup API; install development dependencies only when running the rendered browser audit.
 
 ```powershell
 npm start
@@ -72,7 +72,21 @@ $env:MINETHINGS_ADMINS = 'Miner Name,Second Admin'
 npm start
 ```
 
-The console at `/admin` includes operational totals, miner search and moderation, credit/gold/item grants, global inbox announcements, world-event controls, and an action log. Administrators can override the current weather on each map and spawn a Kraken or Land Whale on a compatible open route. Suspensions and chat/private-message bans are enforced by the server.
+The console at `/admin` includes operational totals, miner search and moderation, credit/gold/item grants, global inbox announcements, database backups and updates, world-event controls, and an action log. Administrators can override the current weather on each map and spawn a Kraken or Land Whale on a compatible open route. Suspensions and chat/private-message bans are enforced by the server.
+
+The **Backups and updates** page uses SQLite's online backup API, so a manual backup does not
+require downtime and includes committed WAL data. Backups default to a `backups` directory beside
+`DATABASE_FILE`; set `DATABASE_BACKUP_DIRECTORY` to keep them elsewhere. Files and their directory
+are restricted to the server account. Restore verifies the selected file, makes another safety
+backup, and stages the replacement for the next graceful restart.
+
+**Back up and update** performs a fixed `git pull --ff-only`, runs
+`npm install --omit=dev --no-audit --no-fund`, and then gracefully exits. The production service
+must run from a writable Git checkout and have a systemd restart policy such as `Restart=always`.
+The controls are enabled automatically in a systemd service (or explicitly with
+`MINETHINGS_MANAGED_RESTART=1`) and remain disabled for an ordinary local `npm start` process.
+It does not accept commands or paths from the browser. Publish the maintenance warning first,
+because update and restore restarts end the in-memory login sessions.
 
 ### PayPal credit checkout
 
