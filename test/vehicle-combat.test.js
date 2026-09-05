@@ -142,6 +142,43 @@ test('vehicle reinforcement absorbs structural damage before it is destroyed', (
   assert.deepEqual(ships.shots.map((shots) => shots[0].absorbed), [2, 2]);
 });
 
+test('lets captured Dwarves damage their land NPC captor every combat round', () => {
+  const catalog = loadLegacyCatalog();
+  const unarmed = { attack: 0, armor: 5, offense: 0, defense: 0, dodge: 0 };
+  const result = fightLand(unarmed, false, unarmed, true, () => 0,
+    catalog.settings, [[], [{ id: 41, itemId: 1431, name: 'Blue Dwarf', rarity: 3 }]]);
+
+  assert.equal(result.winner, 1);
+  assert.equal(result.rounds, 2);
+  assert.deepEqual(result.ending.map((vehicle) => vehicle.armor), [5, 0]);
+  assert.deepEqual(result.captiveRounds.map((round) => round.round), [1, 2]);
+  assert.deepEqual(result.captiveRounds.map((round) => round.strikes[0].damage), [3, 3]);
+  assert.equal(result.captiveRounds[1].strikes[0].structureBefore, 2);
+  assert.equal(result.captiveRounds[1].strikes[0].structureAfter, 0);
+  assert.equal(result.captiveRounds[0].strikes[0].dwarves[0].name, 'Blue Dwarf');
+});
+
+test('lets captured Dwarves damage their ship NPC captor once per cannon round', () => {
+  const catalog = loadLegacyCatalog();
+  const unarmed = {
+    speed: 10, hull: 5, crew: 0, reinforcement: 0,
+    massives: 0, chainShots: 0, grapeShots: 0,
+    cannons: [], crewWeapons: [], critChance: 0
+  };
+  const result = fightShips(unarmed, false, structuredClone(unarmed), true, () => 0,
+    catalog.settings.ammunition_rules, catalog.settings,
+    [[], [{ id: 42, itemId: 1348, name: 'Green Dwarf', rarity: 2 }]]);
+
+  assert.equal(result.winner, 1);
+  assert.deepEqual(result.ships.map((ship) => ship.hull), [5, 0]);
+  assert.deepEqual(result.captiveRounds.map((round) =>
+    [round.phase, round.round, round.strikes[0].damage]), [
+    ['cannon', 1, 2], ['cannon', 2, 2], ['cannon', 3, 2]
+  ]);
+  assert.equal(result.portalRounds.length, 0);
+  assert.equal(result.boardingRounds.length, 0);
+});
+
 test('records simultaneous cannon damage, running state, and mutual sinking', () => {
   const catalog = loadLegacyCatalog();
   const ammunition = {

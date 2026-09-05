@@ -1388,7 +1388,8 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
     .toBeLessThanOrEqual(1);
   await expect(page.locator('.chat-row-player')).toHaveCount(2);
   expect(await page.locator('.chat-row-world').count()).toBeGreaterThanOrEqual(3);
-  await expect(page.getByText('Restless dead', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('[data-chat-hide-world-events]')).toBeChecked();
+  await expect(page.getByText('Restless dead', { exact: true }).first()).toBeHidden();
   await expect(page.locator('.chat-row-rare, .chat-rare-item')).toHaveCount(0);
   await expect(page.getByText(/ResponsiveAudit found a Fabled/)).toHaveCount(0);
   await expect(page.locator('.chat-row-dwarf')).toHaveCount(1);

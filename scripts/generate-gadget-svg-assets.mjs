@@ -16,7 +16,8 @@ const PALETTES = Object.freeze({
   Iron: { main: '#59635f', light: '#aeb8b2', dark: '#343735', signal: '#c36d37' },
   Aluminum: { main: '#d7e0dd', light: '#f4f7f2', dark: '#799c9c', signal: '#5aa66a' },
   Titanium: { main: '#9fc5cc', light: '#e3f0ef', dark: '#4184a8', signal: '#3d94c5' },
-  Tungsten: { main: '#4b5050', light: '#899693', dark: '#242827', signal: '#a64891' }
+  Tungsten: { main: '#4b5050', light: '#899693', dark: '#242827', signal: '#a64891' },
+  Legendary: { main: '#9b651e', light: '#fff1a6', dark: '#553816', signal: '#66e3ff' }
 });
 
 const CONCEPTS = Object.freeze({
@@ -35,14 +36,17 @@ const CONCEPTS = Object.freeze({
     Titanium: 'an armored vault door shielding crossed weapon silhouettes',
     Tungsten: 'a sealed fortress locker with a shielded privacy eye'
   },
-  ledger: {
+  autoloader: {
     Aluminum: 'an open ruled account book with a coin and balance ticks',
     Titanium: 'a clasped metal ledger beside balanced coin stacks',
-    Tungsten: 'a chained account book embossed with scales and index tabs'
+    Tungsten: 'a chained account book embossed with scales and index tabs',
+    Legendary: 'a radiant ammunition conveyor serving a ten-berth ship console'
   },
-  calculator: {
+  autolister: {
     Aluminum: 'a pocket calculator with a tally display and large keypad',
-    Titanium: 'a desktop adding machine with a crank and curling receipt tape'
+    Titanium: 'a desktop adding machine with a crank and curling receipt tape',
+    Tungsten: 'a hardened market terminal with an illuminated price tape',
+    Legendary: 'a golden ten-line market terminal issuing luminous price tickets'
   },
   sharpener: {
     Tin: 'a hand whetstone honing a small blade and throwing sparks',
@@ -64,15 +68,17 @@ const CONCEPTS = Object.freeze({
     Iron: 'a rotating receiver dish with a boxy sweep display',
     Tungsten: 'a faceted phased-array scanner with sweep rings and route blips'
   },
-  spreadsheet: {
+  automaker: {
     Tin: 'a gridded clipboard sheet with a pencil and highlighted cell',
     Iron: 'a bound tabular folio with a ruler and marked totals',
-    Tungsten: 'a rugged data board showing a rising trade graph and coin markers'
+    Tungsten: 'a rugged data board showing a rising trade graph and coin markers',
+    Legendary: 'a radiant ten-job fabrication sequencer surrounding a factory core'
   },
-  medal_detector: {
+  automelder: {
     Tin: 'a handheld detector coil scanning a small meld medallion',
     Iron: 'a twin-coil detector with an analog meter and ping arcs',
-    Tungsten: 'a rugged scanner with a glowing meld glyph, detector stem, and search coil'
+    Tungsten: 'a rugged scanner with a glowing meld glyph, detector stem, and search coil',
+    Legendary: 'a golden ten-recipe carousel orbiting an active Meld core'
   },
   binoculars: {
     Aluminum: 'compact straight binocular barrels with a focus wheel and strap',
@@ -399,18 +405,31 @@ function control(material, p) {
   <path d="M83 19q20 7 27 25m-19-34q25 8 34 29" fill="none" stroke="${ORANGE}" stroke-width="5" stroke-linecap="round"/>`;
 }
 
+function automationArt(render, variant) {
+  return (material, palette) => {
+    const base = render(material === 'Legendary' ? 'Tungsten' : material, palette);
+    if (material !== 'Legendary') return base;
+    const y = 111 - variant;
+    const indicators = Array.from({ length: 10 }, (_, index) =>
+      `<circle cx="${19 + index * 10}" cy="${y}" r="3" fill="${index === variant ? ORANGE : palette.signal}"/>`
+    ).join('');
+    return `${base}
+  <path d="M12 ${y - 7}h104v14H12z" fill="${palette.dark}" stroke="${OUTLINE}" stroke-width="3"/>${indicators}`;
+  };
+}
+
 const ART = Object.freeze({
   hammer,
   warehouse,
   armory,
-  ledger,
-  calculator,
+  autoloader: automationArt(ledger, 0),
+  autolister: automationArt(calculator, 1),
   sharpener,
   shield,
   turbo,
   radar,
-  spreadsheet,
-  medal_detector: medalDetector,
+  automaker: automationArt(spreadsheet, 2),
+  automelder: automationArt(medalDetector, 3),
   binoculars,
   control
 });

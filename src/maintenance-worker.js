@@ -20,7 +20,7 @@ parentPort.on('message', (message) => {
   const started = performance.now();
   const results = {
     mines: null, dwarf: null, world: null, vehicles: null,
-    factories: null, oil: null, findingDigests: null, messages: null
+    factories: null, gadgets: null, oil: null, findingDigests: null, messages: null
   };
   let failure = null;
   try {
@@ -31,6 +31,7 @@ parentPort.on('message', (message) => {
     results.dwarf = store.runDwarfUpdate(message.now, Math.random);
     results.vehicles = store.settleVehicles(message.now);
     results.factories = store.settleFactories(message.now);
+    results.gadgets = store.settleGadgetAutomations(message.now);
     // Field views project continuous rates and mutating actions settle exactly.
     // Persisting the background snapshot once a minute avoids five-second write churn.
     results.oil = store.settleOilField(message.now, { minimumIntervalMs: 60000 });

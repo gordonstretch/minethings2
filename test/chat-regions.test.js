@@ -240,7 +240,7 @@ test('v96 migration preserves legacy chat rows without assigning regions', (cont
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 131);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
   assert.deepEqual({ ...store.database.prepare(
     "SELECT body, map_id FROM chats WHERE body = 'Unscoped v95 chat'"
   ).get() }, { body: 'Unscoped v95 chat', map_id: null });
@@ -274,7 +274,7 @@ test('v127 migration baselines existing chat history as already read', (context)
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 131);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
   assert.deepEqual(store.chatUnseenCounts(viewer.id, 2001), { chat: 0, guildChat: 0 });
   store.addChat(speaker.id, 'New channel history', 2002);
   assert.deepEqual(store.chatUnseenCounts(viewer.id, 2003), { chat: 1, guildChat: 0 });

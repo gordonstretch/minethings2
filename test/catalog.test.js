@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
 import {
-  BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog, parseValues,
+  BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog,
+  MAGNET_CATALOG, parseValues,
   RELICS_CATALOG, SHROOM_CATALOG,
   WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
@@ -16,8 +17,8 @@ test('parses MySQL values including escaped apostrophes and nulls', () => {
 
 test('loads the playable catalog from the legacy dump', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(catalog.items.length, 1555);
-  assert.equal(catalog.discoverableItems.length, 844);
+  assert.equal(catalog.items.length, 1564);
+  assert.equal(catalog.discoverableItems.length, 848);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
   assert.deepEqual(catalog.mineTypes.filter((type) => [1, 4, 5].includes(type.id))
@@ -92,7 +93,7 @@ test('loads the playable catalog from the legacy dump', () => {
   const damagedEquipment = catalog.items.find((item) => item.repairedItemId === 51);
   assert.equal(damagedEquipment.icon, catalog.byId.get(51).icon);
   assert.equal(damagedEquipment.damaged, true);
-  assert.equal(catalog.damagedItems.length, 694);
+  assert.equal(catalog.damagedItems.length, 698);
   assert.ok(catalog.items.every((item) => Number.isFinite(item.goldValue) && item.goldValue > 0));
   assert.ok(catalog.byId.get(catalog.machineById.get(6).itemId).goldValue
     > catalog.items.find((item) => item.name === 'Tin Pipe200').goldValue,
@@ -116,8 +117,37 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.melds.length, 221);
   assert.equal(catalog.meldRequirements.length, 782);
   assert.equal(catalog.gadgets.length, 13);
-  assert.equal(catalog.gadgetItems.length, 38);
-  assert.equal(catalog.factoryActions.length, 21);
+  assert.equal(catalog.gadgetItems.length, 42);
+  assert.deepEqual([5, 6, 11, 12].map((id) => {
+    const gadget = catalog.gadgetById.get(id);
+    return [gadget.behaviorKey, gadget.displayName];
+  }), [
+    ['autoloader', 'Autoloader'],
+    ['autolister', 'Autolister'],
+    ['automaker', 'Automaker'],
+    ['automelder', 'Automelder']
+  ]);
+  assert.deepEqual([1408, 276, 1414, 1415].map((itemId) => {
+    const item = catalog.byId.get(itemId);
+    return [item.name, item.rarity, catalog.gadgetItemByItemId.get(itemId).gadget.behaviorKey];
+  }), [
+    ['Tungsten Autoloader', 5, 'autoloader'],
+    ['Tungsten Autolister', 5, 'autolister'],
+    ['Tungsten Automaker', 5, 'automaker'],
+    ['Tungsten Automelder', 5, 'automelder']
+  ]);
+  assert.deepEqual([1589, 1590, 1591, 1592].map((itemId) => {
+    const item = catalog.byId.get(itemId);
+    return [item.name, item.rarity, catalog.gadgetItemByItemId.get(itemId).gadget.behaviorKey];
+  }), [
+    ['Legendary Autoloader', 6, 'autoloader'],
+    ['Legendary Autolister', 6, 'autolister'],
+    ['Legendary Automaker', 6, 'automaker'],
+    ['Legendary Automelder', 6, 'automelder']
+  ]);
+  assert.equal(catalog.settings.gadget_automation_max_tasks, 10);
+  assert.equal(catalog.settings.gadget_lifespan_days[6], 1920);
+  assert.equal(catalog.factoryActions.length, 22);
   const boltBox = catalog.byId.get(catalog.settings.bolt_box_item_id);
   const boltBoxAction = catalog.factoryActions.find((action) =>
     action.outputItemId === boltBox.id);
@@ -125,6 +155,11 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(boltBox.canFind, false);
   assert.equal(boltBoxAction.outputQuantity, 1);
   assert.equal(catalog.settings.bolts_per_box, 20);
+  const magnet = catalog.byId.get(catalog.settings.magnet_item_id);
+  assert.equal(magnet.name, MAGNET_CATALOG.items[0].name);
+  assert.equal(magnet.canFind, false);
+  assert.equal(catalog.factoryActions.find((action) =>
+    action.outputItemId === magnet.id)?.id, MAGNET_CATALOG.factoryActions[0].id);
   assert.deepEqual(catalog.settings.factory_worker_bot_tiers.map((tier) => ({
     id: tier.id, cph: tier.cph, costGold: tier.costGold
   })), [

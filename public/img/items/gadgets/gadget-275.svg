@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Aluminum Calculator</title>
-  <desc id="desc">Aluminum Calculator, depicted as a pocket calculator with a tally display and large keypad.</desc>
+  <title id="title">Aluminum Autolister</title>
+  <desc id="desc">Aluminum Autolister, depicted as a pocket market controller with a price display and large keypad.</desc>
   <rect x="23" y="10" width="82" height="108" rx="9" fill="#d7e0dd" stroke="#292d29" stroke-width="7"/>
   <rect x="35" y="23" width="58" height="25" rx="3" fill="#263936" stroke="#292d29" stroke-width="5"/>
   <path d="M45 36h10m8 0h20" stroke="#5aa66a" stroke-width="5" stroke-linecap="round"/>

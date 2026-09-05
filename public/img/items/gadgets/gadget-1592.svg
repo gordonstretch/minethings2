@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Legendary Automelder</title>
+  <desc id="desc">Legendary Automelder, depicted as a levitating ten-point ingredient ring feeding a brilliant Meld crucible.</desc>
+  <defs>
+    <radialGradient id="core"><stop offset="0" stop-color="#ffffff"/><stop offset="0.4" stop-color="#66e3ff"/><stop offset="1" stop-color="#6940a5"/></radialGradient>
+  </defs>
+  <circle cx="64" cy="57" r="38" fill="none" stroke="#d8be32" stroke-width="5" stroke-dasharray="7 5"/>
+  <g fill="#f8dc62" stroke="#292d29" stroke-width="2">
+    <circle cx="64" cy="16" r="5"/><circle cx="88" cy="24" r="5"/><circle cx="103" cy="44" r="5"/><circle cx="103" cy="69" r="5"/><circle cx="88" cy="90" r="5"/>
+    <circle cx="40" cy="90" r="5"/><circle cx="25" cy="69" r="5"/><circle cx="25" cy="44" r="5"/><circle cx="40" cy="24" r="5"/>
+  </g>
+  <path d="M49 48h30l-4 31H53z" fill="#4b5050" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="64" cy="57" r="13" fill="url(#core)" stroke="#292d29" stroke-width="3"/>
+  <path d="M45 80h38l10 31H35z" fill="#9b651e" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M47 94h34M43 104h42" stroke="#66e3ff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M28 113h72" stroke="#f8dc62" stroke-width="5" stroke-linecap="round"/>
+</svg>

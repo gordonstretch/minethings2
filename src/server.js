@@ -17,7 +17,7 @@ import { mineMapIconPath, OIL_FIELD_MAP_ICON_PATH } from './mine-icons.js';
 import { renderCityLandmarkArt } from './city-landmark-art.js';
 import { renderDwarfParkArt } from './dwarf-park-art.js';
 import {
-  CITY_VEHICLE_REPAIR_DURATION_MS, SHUTTLE_OIL_CATEGORY_ID, SqliteStore,
+  CITY_VEHICLE_REPAIR_DURATION_MS, FACTORY_QUEUE_MAX_JOBS, SHUTTLE_OIL_CATEGORY_ID, SqliteStore,
   hashPasswordAsync, verifyPasswordAsync
 } from './store.js';
 import { specialisationMultiplier } from './specialisations.js';
@@ -666,7 +666,7 @@ function layout(title, content, player, flash) {
     ${sideGroup('Extraction', [sideLink('/', countedSideLabel('Mines', 'mines'), ['/'], true), sideLink('/inventory', countedSideLabel('Things', 'things'), ['/inventory', '/items']), sideLink('/dwarves', countedSideLabel('Dwarves', 'dwarves')), sideLink('/gadgets', countedSideLabel('Gadgets', 'gadgets')), sideLink('/melds', countedSideLabel('Melds', 'melds'))])}
     ${sideGroup('Industry', [sideLink('/vehicles', countedSideLabel('Fleet', 'fleet')), sideLink('/factories', countedSideLabel('Factories', 'factories')), sideLink('/mills', countedSideLabel('Mills', 'mills')), sideLink('/oil-field', countedSideLabel('Oil Field', 'oilFields')), sideLink('/containers', 'Containers'), sideLink('/market', 'Mine shop', ['/market'], true)])}
     ${sideGroup('World', [sideLink('/explore', 'Explore city'), sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/mines', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events')])}
-    ${sideGroup('Network', [sideLink('/chat', unseenLabel('Chat', player.unseenChatMessages)), sideLink('/casino', 'Casino'), sideLink('/guilds', unseenLabel('Guilds', player.unseenGuildChatMessages)), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', 'Miners', ['/miners'], true), sideLink('/ratings', 'Ratings')])}
+    ${sideGroup('Network', [sideLink('/chat', unseenLabel('Chat', player.unseenChatMessages)), sideLink('/casino', 'Casino'), sideLink('/guilds', unseenLabel('Guilds', player.unseenGuildChatMessages)), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', `Miners (${Number(player.minerCount).toLocaleString('en-GB')})`, ['/miners'], true), sideLink('/ratings', 'Ratings')])}
     ${sideGroup('Miner', [sideLink('/professions', 'Specialisation'), sideLink(`/miners/${encodeURIComponent(player.name)}`, 'Profile', [`/miners/${encodeURIComponent(player.name)}`], true), sideLink('/account', 'Account'), sideLink('/stats', 'Server stats'), sideLink('/guide', 'Field guide'), sideLink('/credits', 'Buy credits')])}
     ${player.authority > 0 ? sideGroup('Command', [sideLink('/admin', 'Administration')]) : ''}
   </nav></div></aside>` : '';
@@ -1418,6 +1418,86 @@ function gadgetsPage(player, catalog, currentTime) {
     <section class="gadget-status-section"><p class="eyebrow">Stored activators and catalogue</p><h2>Other gadgets</h2><div class="gadget-list">${inactiveRows || '<p class="muted">Every gadget is active.</p>'}</div></section>`;
 }
 
+function gadgetAutomationPage(report, catalog) {
+  const intervalOptions = report.intervalOptions.map((minutes) => {
+    const label = minutes < 60 ? `${minutes} minutes`
+      : minutes < 1440 ? `${minutes / 60} hour${minutes === 60 ? '' : 's'}` : '24 hours';
+    return `<option value="${minutes}"${Number(report.intervalMinutes) === Number(minutes)
+      ? ' selected' : ''}>${label}</option>`;
+  }).join('');
+  const interval = `<label>Run interval<select name="intervalMinutes">${intervalOptions}</select></label>`;
+  let controls = '';
+  let hasChoices = true;
+  if (report.behaviorKey === 'autoloader') {
+    const ships = report.ships.map((ship) => `<option value="${ship.id}">${
+      escapeHtml(ship.name)} · ${escapeHtml(ship.cityName)} · ${ship.cannons} cannon${ship.cannons === 1 ? '' : 's'} · ${escapeHtml(ship.status)}</option>`).join('');
+    const ammunition = report.ammunition.map((ammo) => `<option value="${ammo.type}">${escapeHtml(ammo.name)}</option>`).join('');
+    hasChoices = Boolean(ships && ammunition);
+    controls = `<label>Ship<select name="vehicleId" required>${ships || '<option value="">No ships owned</option>'}</select></label><label>Cannon fodder<select name="ammoType" required>${ammunition}</select></label><label>Crates to load<input type="number" name="quantity" min="1" max="${report.maxLoadQuantity}" step="1" value="1" required></label>${interval}<p class="field-help">Each scheduled turn loads up to the chosen number of crates from stock in the configured port, then advances to the next task. Configured shuttles use the same quantity after landing and before their immediate next departure.</p>`;
+  } else if (report.behaviorKey === 'autolister') {
+    const stock = report.stockTypes.map((mineType) => {
+      const city = report.cities.find(
+        (candidate) => Number(candidate.id) === Number(mineType.cityId)
+      );
+      const value = `${mineType.cityId}:${mineType.id}`;
+      return `<option value="${value}">${
+        escapeHtml(mineType.name)} · ${escapeHtml(city?.name ?? `City ${mineType.cityId}`)} · ${
+        Number(mineType.quantity).toLocaleString('en-GB')} Thing${Number(mineType.quantity) === 1 ? '' : 's'} across ${
+        Number(mineType.itemCount).toLocaleString('en-GB')} kind${Number(mineType.itemCount) === 1 ? '' : 's'}</option>`;
+    }).join('');
+    hasChoices = Boolean(stock);
+    controls = `<label>Thing type and location<select name="stockType" required>${stock || '<option value="">No marketable stock owned</option>'}</select></label><label>Markup over each Thing's local reference price (%)<input type="number" name="markupPercent" min="0" max="${report.maxMarkupPercent}" step="0.1" value="25" required></label>${interval}<p class="field-help">Each turn lists every unlisted Thing in one type-location task, then advances. Each kind is priced separately and rounded upward to the next valid market tick; existing listings keep their price.</p>`;
+  } else if (report.behaviorKey === 'automaker') {
+    const factories = report.factories.map((factory) => `<option value="${factory.id}">Factory #${factory.id} · ${
+      escapeHtml(factory.cityName)} · ${factory.queuedJobs} queued</option>`).join('');
+    const actions = report.actions.map((action) => `<option value="${action.id}">${
+      escapeHtml(action.outputName)} · ${action.ore} Ore · ${action.outputQuantity} per job</option>`).join('');
+    hasChoices = Boolean(factories && actions);
+    controls = `<label>Factory<select name="factoryId" required>${factories || '<option value="">No completed owner-operated factories</option>'}</select></label><label>Product<select name="actionId" required>${actions || '<option value="">No manufactured products</option>'}</select></label>${interval}<p class="field-help">The Automaker reserves Ore and starts or queues one new job every interval. The task remains active after each job and repeats until you disable it. It waits when the ten-job queue is full, the factory limit is reached, or local Ore runs out.</p>`;
+  } else {
+    const capitals = report.cities.filter((city) => city.isCapital).map((city) => `<option value="${city.id}">${escapeHtml(city.name)}</option>`).join('');
+    const melds = report.melds.map((meld) => `<option value="${meld.id}">${
+      escapeHtml(meld.name)} · ${escapeHtml(catalogRarityName(catalog, meld.rarity))}</option>`).join('');
+    hasChoices = Boolean(capitals && melds);
+    controls = `<label>Regional capital<select name="cityId" required>${capitals || '<option value="">No known regional capital</option>'}</select></label><label>Target Meld<select name="meldId" required>${melds || '<option value="">No incomplete Melds</option>'}</select></label>${interval}<p class="field-help">The Automelder stages one locally available recipe thing per interval into global Meld storage. Normal automatic recipe completion still applies, so another ready Meld may assemble along the way.</p>`;
+  }
+  const taskSummary = (task) => {
+    const city = report.cities.find((entry) => Number(entry.id) === Number(task.cityId));
+    const cityName = city?.name ?? `City ${task.cityId}`;
+    if (report.behaviorKey === 'autoloader') {
+      const ship = report.ships.find((entry) => Number(entry.id) === Number(task.vehicleId));
+      const ammo = report.ammunition.find((entry) => Number(entry.type) === Number(task.ammoType));
+      const quantity = task.quantity === undefined
+        ? 'fill available capacity'
+        : `up to ${Number(task.quantity).toLocaleString('en-GB')} crate${Number(task.quantity) === 1 ? '' : 's'}`;
+      return `${ship?.name ?? `Ship #${task.vehicleId}`} · ${cityName} · ${ammo?.name ?? `ammunition ${task.ammoType}`} · ${quantity}`;
+    }
+    if (report.behaviorKey === 'autolister') {
+      const mineType = catalog.mineTypes.find(
+        (entry) => Number(entry.id) === Number(task.mineTypeId)
+      );
+      return `${mineType?.name ?? `Thing type ${task.mineTypeId}`} · ${cityName} · ${task.markupPercent}% markup`;
+    }
+    if (report.behaviorKey === 'automaker') {
+      const action = report.actions.find((entry) => Number(entry.id) === Number(task.actionId));
+      return `Factory #${task.factoryId} · ${cityName} · ${action?.outputName ?? `product ${task.actionId}`}`;
+    }
+    return `${catalog.meldById.get(Number(task.meldId))?.name ?? `Meld ${task.meldId}`} · ${cityName}`;
+  };
+  const tasks = report.tasks.map((task, index) => `<li><div><strong>${index + 1}.</strong> ${escapeHtml(taskSummary(task))}${index === report.configuration?.cursor ? ' <span class="automation-next">Next</span>' : ''}</div><form method="post" action="/gadgets/${report.behaviorKey}/tasks/${index}/remove"><button class="secondary">Remove</button></form></li>`).join('');
+  const queue = `<section class="gadget-automation-queue"><p class="eyebrow">Round-robin queue</p><h2>${report.tasks.length} of ${report.taskLimit} tasks</h2>${tasks ? `<ol>${tasks}</ol>` : '<p>No tasks configured yet.</p>'}</section>`;
+  const stateAction = report.enabled
+    ? `<form method="post" action="/gadgets/${report.behaviorKey}/disable"><button class="secondary">Disable automation</button></form>`
+    : report.tasks.length
+      ? `<form method="post" action="/gadgets/${report.behaviorKey}/enable"><button>Enable automation</button></form>`
+      : '';
+  const state = report.configuration
+    ? `<section class="gadget-automation-state"><p class="eyebrow">Automation state</p><h2>${report.enabled ? 'Running' : 'Disabled'}</h2><dl><div><dt>Last attempt</dt><dd>${report.lastRunAt ? escapeHtml(formatDuration(report.generatedAt - report.lastRunAt)) + ' ago' : 'Not yet run'}</dd></div><div><dt>Next attempt</dt><dd>${report.enabled && report.nextRunAt ? escapeHtml(formatDuration(report.nextRunAt - report.generatedAt)) : 'Not scheduled'}</dd></div><div><dt>Result</dt><dd>${escapeHtml(report.lastStatus || 'Waiting for the first run.')}</dd></div></dl>${stateAction}</section>`
+    : '<section class="gadget-automation-state"><p class="eyebrow">Automation state</p><h2>Not configured</h2><p>Choose what this gadget should operate below.</p></section>';
+  const queueFull = report.tasks.length >= report.taskLimit;
+  return `<section class="page-title"><div><p class="eyebrow">Active gadget machinery</p><h1>${escapeHtml(report.displayName)}</h1></div><a class="text-link" href="/gadgets">Back to gadgets</a></section><p>${escapeHtml(report.description)} One task runs per interval, in queue order.</p>${state}${queue}<section class="gadget-automation-config"><h2>Add a task</h2><form method="post" action="/gadgets/${report.behaviorKey}/configure">${controls}<button${hasChoices && !queueFull ? '' : ' disabled'}>${queueFull ? 'Queue full' : 'Add task'}</button></form></section>`;
+}
+
 function ledgerPage(report, catalog) {
   const gadgetName = catalogGadgetForBehavior(catalog, 'ledger').displayName;
   const months = report.months.map((month) => `<option value="${month.offset}"${month.offset === report.offset ? ' selected' : ''}>${month.label}</option>`).join('');
@@ -1482,30 +1562,52 @@ function meldRequirements(meld, player, catalog) {
   }).join('');
 }
 
+function meldStashProgress(meld, storage = {}) {
+  const requiredByItemId = new Map();
+  for (const requirement of meld.requirements) {
+    requiredByItemId.set(requirement.itemId,
+      (requiredByItemId.get(requirement.itemId) ?? 0) + requirement.count);
+  }
+  let required = 0;
+  let staged = 0;
+  for (const [itemId, quantity] of requiredByItemId) {
+    required += quantity;
+    staged += Math.min(quantity, Number(storage[itemId] ?? 0));
+  }
+  return { required, staged };
+}
+
 function meldsPage(player, catalog, query = '', leaders = []) {
   const needle = query.trim().toLocaleLowerCase('en');
   const owned = new Set(player.meldIds);
   const broken = new Set(player.brokenMeldIds);
-  const matching = catalog.melds.filter((meld) => meld.public && (!needle || meld.name.toLocaleLowerCase('en').includes(needle)))
-    .sort(compareItemsByRarity);
-  const resultLimit = Number(catalog.settings.meld_search_result_limit);
-  const cards = matching.slice(0, resultLimit).map((meld) => `<article class="meld-card rarity-${meld.rarity}"><div><h3><a class="text-link" href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></h3><small>${escapeHtml(catalogRarityName(catalog, meld.rarity))} · ${meld.requirements.reduce((sum, requirement) => sum + requirement.count, 0)} things</small></div>${owned.has(meld.id) ? '<strong class="active-state">Owned</strong>' : broken.has(meld.id) ? '<strong class="capacity-warning">Broken · dismantle</strong>' : '<a class="button secondary" href="/melds/' + meld.id + '">View recipe</a>'}</article>`).join('');
-  const storedCards = Object.entries(player.meldStash ?? {})
-    .map(([itemId, quantity]) => {
-      const item = catalog.byId.get(Number(itemId));
-      if (!item) throw new Error(`Missing catalog item: ${itemId}.`);
-      return [item, quantity];
-    })
-    .sort(([first], [second]) => compareItemsByRarity(first, second))
-    .map(([item, quantity]) => itemCard(item, {
-      count: quantity, meta: 'Stored outside inventory capacity'
-    })).join('');
+  const matching = catalog.melds.map((meld) => ({
+    meld,
+    progress: meldStashProgress(meld, player.meldStash)
+  })).filter(({ meld, progress }) => meld.public
+    && (owned.has(meld.id) || broken.has(meld.id)
+      || (progress.staged > 0 && progress.staged < progress.required))
+    && (!needle || meld.name.toLocaleLowerCase('en').includes(needle)))
+    .sort((first, second) => Number(first.meld.rarity) - Number(second.meld.rarity)
+      || first.meld.name.localeCompare(second.meld.name, 'en')
+      || Number(first.meld.id) - Number(second.meld.id));
+  const cards = matching.map(({ meld, progress }) => {
+    const state = owned.has(meld.id)
+      ? '<strong class="active-state">Owned</strong>'
+      : broken.has(meld.id)
+        ? '<strong class="capacity-warning">Broken · dismantle</strong>'
+        : `<a class="button secondary" href="/melds/${meld.id}">Continue meld</a>`;
+    const progressText = owned.has(meld.id) || broken.has(meld.id)
+      ? `${progress.required} things`
+      : `${progress.staged} of ${progress.required} things staged`;
+    return `<article class="meld-card rarity-${meld.rarity}"><div><h3><a class="text-link" href="/melds/${meld.id}">${escapeHtml(meld.name)}</a></h3><small>${escapeHtml(catalogRarityName(catalog, meld.rarity))} · ${progressText}</small></div>${state}</article>`;
+  }).join('');
   const leaderCards = leaders.map((miner) => `<li style="--miner-chat-color:#${miner.chatColor}"><span class="meld-leader-rank">#${miner.meldRank}</span><a class="text-link" href="/miners/${encodeURIComponent(miner.name)}">${escapeHtml(miner.name)}</a><span class="meld-leader-total"><strong>${miner.meldCount.toLocaleString('en-GB')}</strong><small>Melds</small></span></li>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">Collections</p><h1>Melds</h1></div><p>You own <strong>${owned.size}</strong> melds${broken.size ? ` and have <strong>${broken.size}</strong> broken melds` : ''}. Use the Meld button in Your Things to stage recipe items. Completed melds are created automatically.</p></section>
     <section class="meld-reputation"><div><p class="eyebrow">Reputation is forged</p><h2>If you want to be respected around here, you are going to need Melds.</h2><p>Lots of Melds. Make them, climb the ranks, and become famous.</p></div><aside><h3>Glowing examples</h3><p>The five most prolific Meld makers.</p><ol>${leaderCards || '<li>Nobody has made a Meld yet. The first legend could be you.</li>'}</ol></aside></section>
-    <section class="meld-storage"><h2>Meld storage</h2><p>These things do not count toward inventory capacity.</p><div class="item-grid">${storedCards || '<p>No things are staged for melds.</p>'}</div></section>
-    <form class="market-search" method="get" action="/melds"><label>Find a meld<input name="q" value="${escapeHtml(query)}" placeholder="Meld name"></label><button>Search</button></form>
-    <div class="meld-list">${cards || '<p>No matching melds.</p>'}</div>${matching.length > resultLimit ? `<p>Showing the first ${resultLimit} matches.</p>` : ''}`;
+    <section><h2>Your Melds</h2><p>Owned, broken, and partially made Melds appear here. Unstarted recipes stay hidden. Because Meld storage is shared, a staged Thing can contribute to more than one recipe until a Meld consumes it.</p>
+    <form class="market-search" method="get" action="/melds"><label>Filter your melds<input name="q" value="${escapeHtml(query)}" placeholder="Meld name"></label><button>Filter</button></form>
+    <div class="meld-list">${cards || `<p>${needle ? 'No matching owned or started Melds.' : 'You do not own or have any Melds in progress yet.'}</p>`}</div></section>`;
 }
 
 function meldDetailPage(player, catalog, meld) {
@@ -1767,7 +1869,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
       const message = item
         ? `<a class="chat-world-message chat-dwarf-item rarity-${item.rarity}" href="/items/${item.id}"><img src="${escapeHtml(item.icon)}" alt=""><span>${escapeHtml(chat.body)}</span></a>`
         : `<a class="chat-world-message" href="${escapeHtml(chat.path)}">${escapeHtml(chat.body)}</a>`;
-      return `<article id="${rowId}" class="chat-row ${classes}" data-chat-created-at="${Number(chat.createdAt)}"${rowMetadata}><span class="chat-identity chat-world-identity"><i aria-hidden="true"></i>${label}</span>${message}${timestamp}</article>`;
+      return `<article id="${rowId}" class="chat-row ${classes}" data-chat-created-at="${Number(chat.createdAt)}"${rowMetadata}${chat.kind === 'world' ? ' hidden' : ''}><span class="chat-identity chat-world-identity"><i aria-hidden="true"></i>${label}</span>${message}${timestamp}</article>`;
     }
     const color = /^[0-9a-f]{6}$/i.test(String(chat.color))
       ? String(chat.color).toLowerCase() : '55666b';
@@ -1794,15 +1896,16 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
   const ownedTiers = new Set(fleetTiers);
   const ratingTierFilters = Array.from({ length: 6 }, (_, index) => index + 1)
     .map((tier) => `<label><input type="checkbox" value="${tier}" data-chat-rating-tier> <span>Rank ${tier}${ownedTiers.has(tier) ? ' <small>Yours</small>' : ''}</span></label>`).join('');
-  const filterPanel = `<section id="chat-filters" class="chat-filter-card" data-chat-filters data-chat-player-id="${Number(player.id)}"><p class="chat-side-label">Filter traffic</p><fieldset><legend>Rating tiers</legend><p>Select any combination. No selection shows every tier.</p><div class="chat-tier-filters">${ratingTierFilters}</div></fieldset><label class="chat-filter-toggle"><input type="checkbox" data-chat-hide-world-events><span><strong>Hide world events</strong><small>Keep miner chat and Dwarf captures.</small></span></label><fieldset><legend>Hide regions</legend><div class="chat-region-filters">${regionFilters || '<span>No discovered regions.</span>'}</div></fieldset><footer><span data-chat-filter-summary>Showing all traffic.</span><button class="link" type="button" data-chat-filter-reset>Reset</button></footer></section>`;
-  const transmissionCount = chats.length.toLocaleString('en-GB');
-  const transmissionLabel = chats.length === 1 ? 'transmission' : 'transmissions';
+  const defaultVisibleCount = chats.filter((chat) => chat.kind !== 'world').length;
+  const filterPanel = `<section id="chat-filters" class="chat-filter-card" data-chat-filters data-chat-player-id="${Number(player.id)}"><p class="chat-side-label">Filter traffic</p><fieldset><legend>Rating tiers</legend><p>Select any combination. No selection shows every tier.</p><div class="chat-tier-filters">${ratingTierFilters}</div></fieldset><label class="chat-filter-toggle"><input type="checkbox" data-chat-hide-world-events checked><span><strong>Hide world events</strong><small>Keep miner chat and Dwarf captures.</small></span></label><fieldset><legend>Hide regions</legend><div class="chat-region-filters">${regionFilters || '<span>No discovered regions.</span>'}</div></fieldset><footer><span data-chat-filter-summary>${defaultVisibleCount.toLocaleString('en-GB')} of ${chats.length.toLocaleString('en-GB')} visible.</span><button class="link" type="button" data-chat-filter-reset>Reset</button></footer></section>`;
+  const transmissionCount = `${defaultVisibleCount.toLocaleString('en-GB')} of ${chats.length.toLocaleString('en-GB')}`;
+  const transmissionLabel = defaultVisibleCount === 1 ? 'transmission' : 'transmissions';
   return `<article class="chat-page">
     <section class="page-title"><div><p class="eyebrow">Discovered regions · open record</p><h1>Public chat</h1></div><p>This frequency combines miner talk and world events from the regions you have discovered.</p></section>
     <dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Traffic in view</dt><dd id="chat-traffic-count">${transmissionCount} ${transmissionLabel}</dd></div></dl>
     <div class="chat-workspace"><section class="chat-console" aria-labelledby="chat-console-title"><header class="chat-console-header"><div><p>MT2 // Worldwire</p><h2 id="chat-console-title">Open frequency</h2></div><p>Showing the latest ${historyHours.toLocaleString('en-GB')} hours. New traffic arrives live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Public chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty" data-chat-unfiltered-empty><span aria-hidden="true">◇</span><h3>The frequency is quiet.</h3><p>Be the first miner to break the silence.</p></div>'}<div id="chat-filter-empty" class="chat-empty chat-filter-empty" hidden><span aria-hidden="true">◇</span><h3>No matching traffic.</h3><p>Change or reset your chat filters.</p></div></div>${composer}</section>
     <aside class="chat-sidecar" aria-label="Public chat controls">${filterPanel}<section class="chat-signal-card" style="--chat-preview:#${appearanceColor}"><p class="chat-side-label">Your signal</p><div><i aria-hidden="true"></i><strong>${escapeHtml(player.name)}</strong></div><p>${appearance.canChooseColor ? 'Custom colour unlocked. Choose it when you transmit.' : `Meld tier colour · ${appearance.meldCount}/${appearance.customMinimumMelds} melds`}</p></section><details class="chat-ignores"><summary><span><b>Channel controls</b><small>Ignored miners</small></span><strong>${ignores.length}</strong></summary><ul>${ignoredRows || '<li>Nobody ignored.</li>'}</ul></details><section class="chat-channel-note"><p class="chat-side-label">On this channel</p><p>World events and captured Dwarves from your discovered regions are public record.</p></section></aside></div>
-  </article><script src="/node/chat-filters.js?v=20260826a" defer></script>`;
+  </article><script src="/node/chat-filters.js?v=20260905a" defer></script>`;
 }
 
 function legacyCasinoPage(state) {
@@ -2525,7 +2628,7 @@ function dwarvesPage(report, catalog, currentTime) {
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">${catalog.dwarfTiers.length} rarity tiers</p><h1>Dwarves</h1></div><p>Stored Dwarves comb the mines of their city and return with finds befitting their colour.</p></section>
     <section class="dwarf-rules"><h2>Your working Dwarves</h2><div class="item-grid">${dwarfRows || '<p>You do not have a Dwarf stored in a city.</p>'}</div><p>${escapeHtml(tierRules)}.</p></section>
-    <section><h2>Stowaways</h2><p>Dwarves of every rarity may stow away on a departing land or sea vehicle with free cargo space and a matching combat class. Higher-rarity stowaways are progressively rarer. An uncaptured Dwarf leaves at arrival or escapes if its road vehicle is destroyed; one pillaged by an opponent stays with its captor. Dwarves drown with a sinking ship.</p></section>`;
+    <section><h2>Stowaways</h2><p>Dwarves of every rarity may stow away on a departing land or sea vehicle with free cargo space and a matching combat class. Higher-rarity stowaways are progressively rarer. An uncaptured Dwarf leaves at arrival or escapes if its road vehicle is destroyed; one pillaged by a miner stays with its captor. A Dwarf captured by an NPC fights back once per combat round, dealing damage equal to its rarity, and escapes when that NPC is defeated. Other Dwarves drown with a sinking ship.</p></section>`;
 }
 
 function autoRecyclePage(report, catalog) {
@@ -2949,7 +3052,7 @@ function adminWorldEventsPage(state, catalog, currentTime) {
     <section><div class="section-heading"><div><h2>Current weather period</h2><p>${new Date(state.slotAt).toLocaleString('en-GB')} - ${new Date(state.nextWeatherAt).toLocaleString('en-GB')} | ${formatDuration(state.nextWeatherAt - currentTime)} remaining</p></div></div><p>Choosing another weather type fills in a practical temperature, wind, and precipitation starting point. You can adjust any value before applying it.</p><div class="trade-forms">${weatherForms}</div></section>
     <section><div class="section-heading"><div><h2>Ghost-hunter test fleet</h2><p>${Number(state.hunterFleets.players)} miners currently hold ${Number(state.hunterFleets.vehicles)} provisioned craft.</p></div></div><p>Give every real account one fully armed land vehicle and ship at each of the six tiers, distributed among random compatible cities. The operation is idempotent.</p><form method="post" action="/admin/world/ghost-fleets"><button>Provision all hunter fleets</button></form></section>
     <section><h2>Release a world creature</h2><p>Choose a sea or land species and an explicit Common-through-Legendary rarity. Every creature follows the same open-route movement, combat-class interception, live transit, and killer-only reward process.</p><div class="trade-forms">${creatureForm('Sea creature', 'sea')}${creatureForm('Land creature', 'land')}</div></section>
-    <section><h2>The restless dead</h2><p>Route wrecks from destroyed vehicles and sunken ships are scanned once and may rise according to the moon-adjusted chance. Administrative ghosts use the same route movement, combat classes, patrol orders, and spectral bounty.</p><div class="trade-forms">${ghostForm('rider', 'Ghost Rider', 'land')}${ghostForm('ship', 'Ghost Ship', 'sea')}</div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Tier</th><th>Route</th><th>Risen</th></tr></thead><tbody>${ghostRows || '<tr><td colspan="5">No ghosts currently haunt the routes.</td></tr>'}</tbody></table></div></section>
+    <section><h2>The restless dead</h2><p>Route wrecks and defeated event-creature remains are scanned once and may rise according to the moon-adjusted chance. Administrative ghosts use the same route movement, combat classes, patrol orders, and spectral bounty.</p><div class="trade-forms">${ghostForm('rider', 'Ghost Rider', 'land')}${ghostForm('ship', 'Ghost Ship', 'sea')}</div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Tier</th><th>Route</th><th>Risen</th></tr></thead><tbody>${ghostRows || '<tr><td colspan="5">No ghosts currently haunt the routes.</td></tr>'}</tbody></table></div></section>
     <script src="/node/admin-weather.js?v=20260831a" defer></script>`;
 }
 
@@ -3395,6 +3498,14 @@ function conciseMessageBody(message) {
   return body;
 }
 
+function captiveDwarfCombatEntries(result) {
+  return (Array.isArray(result?.captiveRounds) ? result.captiveRounds : [])
+    .flatMap((round) => (Array.isArray(round?.strikes) ? round.strikes : [])
+      .map((strike) => ({
+        phase: String(round.phase ?? 'combat'), round: Number(round.round), ...strike
+      })));
+}
+
 function messageCombatReportHtml(message, catalog) {
   const details = message.details && typeof message.details === 'object' ? message.details : {};
   const format = (value) => {
@@ -3683,6 +3794,19 @@ function messageCombatReportHtml(message, catalog) {
   const side = Number(details.side);
   const opponentSide = (side + 1) % 2;
   const stance = `<p><strong>Encounter:</strong> ${format(details.encounterLocation)} km along the route; combat lasted ${formatDuration(Number(details.combatDuration ?? 0))}. Your vehicle was ${details.aggressive ? 'aggressive' : 'defensive'}; the opponent was ${details.opponentAggressive ? 'aggressive' : 'defensive'}.</p>`;
+  const captiveRows = captiveDwarfCombatEntries(result).map((strike) => {
+    const phase = `${strike.phase.charAt(0).toLocaleUpperCase('en-GB')}${
+      strike.phase.slice(1)} round ${format(strike.round)}`;
+    const dwarves = (Array.isArray(strike.dwarves) ? strike.dwarves : [])
+      .map((dwarf) => `${dwarf.name ?? 'Dwarf'} (${format(dwarf.damage)} damage)`)
+      .join(', ');
+    return `<tr><td>${escapeHtml(phase)}</td><td>${combatant(strike.side, side)}</td><td>${escapeHtml(dwarves || 'Dwarf')}</td><td>${format(strike.penetratingDamage ?? strike.damage)}${strike.absorbed ? ` (${format(strike.absorbed)} absorbed)` : ''}</td><td>${format(strike.structureBefore)} → ${format(strike.structureAfter)} ${escapeHtml(strike.structure ?? 'structure')}</td></tr>`;
+  }).join('');
+  const freedCaptives = Array.isArray(result.freedCaptiveDwarves)
+    ? result.freedCaptiveDwarves.length : 0;
+  const captiveSection = captiveRows
+    ? `<section class="message-combat-phase"><h3>Captive Dwarf resistance</h3><p>Captured Dwarves strike their NPC captor once per combat round, dealing damage equal to their rarity.${freedCaptives ? ` ${format(freedCaptives)} ${freedCaptives === 1 ? 'Dwarf escaped' : 'Dwarves escaped'} when the NPC was defeated.` : ''}</p><div class="table-scroll"><table><thead><tr><th>Round</th><th>Captor</th><th>Dwarves</th><th>Damage reaching structure</th><th>Captor structure</th></tr></thead><tbody>${captiveRows}</tbody></table></div></section>`
+    : '';
   let phases = '';
   if (details.battleType === 'ship') {
     const yourStart = result.starting?.[side] ?? {};
@@ -3737,7 +3861,7 @@ function messageCombatReportHtml(message, catalog) {
   const pillage = details.pillage;
   const pillageText = pillage
     ? `<p><strong>Pillage:</strong> ${pillage.direction === 'taken' ? 'taken from the opponent' : 'lost to the opponent'}${pillage.kind === 'oil' ? ` (${format(pillage.trips)} oil trips)` : ''}.</p>` : '';
-  return `<section class="message-combat-report" aria-label="Complete combat report"><h2>Combat phases</h2>${stance}${phases}<section class="message-combat-phase"><h3>Outcome</h3><p>${details.outcome === 'won' ? 'Victory' : details.outcome === 'lost' ? 'Defeat' : 'Draw'}. Rating ${format(details.ratingBefore)} → ${format(details.ratingAfter)}.</p>${pillageText}</section></section>`;
+  return `<section class="message-combat-report" aria-label="Complete combat report"><h2>Combat phases</h2>${stance}${phases}${captiveSection}<section class="message-combat-phase"><h3>Outcome</h3><p>${details.outcome === 'won' ? 'Victory' : details.outcome === 'lost' ? 'Defeat' : 'Draw'}. Rating ${format(details.ratingBefore)} → ${format(details.ratingAfter)}.</p>${pillageText}</section></section>`;
 }
 
 function messageItemGroupsHtml(message, catalog) {
@@ -3879,13 +4003,19 @@ function radarText(route, catalog) {
     route.radar.map((entry) => `${entry.label} ${entry.count}`).join(', ')}`;
 }
 
-function oreThiefMissionDefinition(catalog) {
+function oreThiefMissionDefinition(catalog, cityId = null) {
   const airRouteType = catalogRoleId(catalog, 'route_type_ids', 'air');
   const routes = catalog.routes.filter((route) => Number(route.type) === airRouteType
     && Number(route.city1Id) === Number(route.city2Id));
-  const route = routes.find((entry) => entry.open) ?? routes[0];
+  const selectedCity = cityId === null ? null : catalogCityForId(catalog, cityId);
+  const regionalRoutes = selectedCity
+    ? routes.filter((entry) => Number(catalogCityForId(catalog, entry.city1Id).mapId)
+      === Number(selectedCity.mapId))
+    : routes;
+  const route = regionalRoutes.find((entry) => entry.open) ?? regionalRoutes[0];
   if (!route) return null;
   const city = catalogCityForId(catalog, route.city1Id);
+  const map = catalog.maps.find((entry) => Number(entry.id) === Number(city.mapId));
   const stages = [
     {
       key: 'search', number: '01', title: 'Find the base', setting: 'search_plane_item_id',
@@ -3903,7 +4033,7 @@ function oreThiefMissionDefinition(catalog) {
       instruction: 'Once the base is destroyed, recover stolen Ore up to the helicopter cargo capacity.'
     }
   ].map((stage) => ({ ...stage, item: catalogItemForSetting(catalog, stage.setting) }));
-  return { route, city, stages };
+  return { route, city, map, stages };
 }
 
 function oreThiefAircraftMissionCopy(vehicle, catalog) {
@@ -3930,7 +4060,7 @@ function oreThiefAircraftMissionCopy(vehicle, catalog) {
 }
 
 function oreThiefOperationPanel(player, catalog, vehicles, thiefBase) {
-  const operation = oreThiefMissionDefinition(catalog);
+  const operation = oreThiefMissionDefinition(catalog, player.cityId);
   if (!operation || !thiefBase) return '';
   const ore = Math.max(0, Number(thiefBase.ore) || 0);
   const states = !thiefBase.discovered
@@ -3966,7 +4096,7 @@ function oreThiefOperationPanel(player, catalog, vehicles, thiefBase) {
     : knownMissionCity
       ? `<form method="post" action="/cities/${operation.city.id}/select"><button>Switch to ${escapeHtml(operation.city.name)}</button></form>`
       : '<a class="button" href="/map">Find the launch city</a>';
-  return `<section class="ore-thief-operation" aria-labelledby="ore-thief-operation-heading"><header><div><p class="eyebrow">Pilot operation &middot; three stages</p><h2 id="ore-thief-operation-heading">Ore-thief base</h2><p>Search it out, destroy it, then lift the stolen Ore home. Every sortie launches and returns through <strong>${escapeHtml(operation.city.name)}</strong>, the Ore city.</p></div><dl><div><dt>Intelligence</dt><dd>${escapeHtml(intel[0])}</dd></div><div><dt>Report</dt><dd>${escapeHtml(intel[1])}</dd></div><div><dt>Mission route</dt><dd>${operation.route.open ? 'Open' : 'Closed'}</dd></div></dl></header><ol>${stageRows}</ol><footer><p>Aircraft that approach the base can be shot down. Defensive gadgets apply globally when activated from a regional capital.</p>${controls}</footer></section>`;
+  return `<section class="ore-thief-operation" aria-labelledby="ore-thief-operation-heading"><header><div><p class="eyebrow">${escapeHtml(operation.map?.name ?? thiefBase.mapName ?? 'Regional')} pilot operation &middot; three stages</p><h2 id="ore-thief-operation-heading">Ore-thief base</h2><p>Search it out, destroy it, then lift the stolen Ore home. Every sortie launches and returns through <strong>${escapeHtml(operation.city.name)}</strong>, this region's mission airfield.</p></div><dl><div><dt>Intelligence</dt><dd>${escapeHtml(intel[0])}</dd></div><div><dt>Report</dt><dd>${escapeHtml(intel[1])}</dd></div><div><dt>Mission route</dt><dd>${operation.route.open ? 'Open' : 'Closed'}</dd></div></dl></header><ol>${stageRows}</ol><footer><p>Aircraft that approach the base can be shot down. Defensive gadgets apply globally when activated from a regional capital.</p>${controls}</footer></section>`;
 }
 
 function selectableShuttleCategories(catalog) {
@@ -4256,13 +4386,17 @@ function vehicleEventPresentation(event, vehicle, catalog) {
       return ['Landing refused', 'The base was still intact. Bombers must destroy it first.'];
     case 'recovered-ore':
       return ['Ore recovered', `${number(details.quantity)} stolen Ore crate${Number(details.quantity) === 1 ? '' : 's'} lifted out by helicopter.`];
+    case 'magnet-salvage':
+      return details.outcome === 'cargo'
+        ? ['Magnet salvage', `${catalog.byId.get(Number(details.itemId))?.name ?? 'Wreckage'} was attracted into cargo${details.wreckCleared ? '; the empty wreck was cleared' : ''}.`]
+        : ['Magnet salvage', `${catalog.byId.get(Number(details.itemId))?.name ?? 'Wreckage'} broke down into ${number(details.scraps)} Ore scraps${details.wreckCleared ? '; the empty wreck was cleared' : ''}.`];
     case 'base-empty':
       return ['Recovery complete', 'No stolen Ore remained at the base.'];
     case 'shot-down':
       return ['Shot down', 'Ore-thief defences brought down this aircraft.'];
     case 'departed':
       return details.mission
-        ? [`${mission.route} launched`, 'The aircraft left on the Kemet mission circuit.']
+        ? [`${mission.route} launched`, 'The aircraft left on its regional mission circuit.']
         : ['Departed', 'The vehicle left the city.'];
     case 'arrived':
       return ['Arrived', details.continuesJourney
@@ -4681,6 +4815,19 @@ export function battlePage(report) {
   const side = report.details.vehicleIds.indexOf(report.vehicleId);
   if (side < 0) throw new Error('Battle report does not identify your vehicle.');
   const enemyAggressive = Boolean(report.opponent.aggressive);
+  const captiveRows = captiveDwarfCombatEntries(result).map((strike) => {
+    const phase = `${strike.phase.charAt(0).toLocaleUpperCase('en-GB')}${
+      strike.phase.slice(1)} round ${reportNumber(strike.round, 'captive Dwarf round')}`;
+    const dwarves = (Array.isArray(strike.dwarves) ? strike.dwarves : [])
+      .map((dwarf) => `${dwarf.name ?? 'Dwarf'} (${
+        reportNumber(dwarf.damage, 'captive Dwarf damage')} damage)`).join(', ');
+    return `<tr><td>${escapeHtml(phase)}</td><td>${Number(strike.side) === side ? 'Your vehicle' : 'Opponent'}</td><td>${escapeHtml(dwarves || 'Dwarf')}</td><td>${reportNumber(strike.penetratingDamage ?? strike.damage, 'captive Dwarf penetrating damage')}${strike.absorbed ? ` (${reportNumber(strike.absorbed, 'absorbed captive Dwarf damage')} absorbed)` : ''}</td><td>${reportNumber(strike.structureBefore, 'captor structure before strike')} → ${reportNumber(strike.structureAfter, 'captor structure after strike')} ${escapeHtml(strike.structure ?? 'structure')}</td></tr>`;
+  }).join('');
+  const freedCaptives = Array.isArray(result.freedCaptiveDwarves)
+    ? result.freedCaptiveDwarves.length : 0;
+  const captiveSection = captiveRows
+    ? `<h3>Captive Dwarf resistance</h3><p>Captured Dwarves strike their NPC captor once per combat round, dealing damage equal to their rarity.${freedCaptives ? ` ${reportNumber(freedCaptives, 'freed captive Dwarves')} ${freedCaptives === 1 ? 'Dwarf escaped' : 'Dwarves escaped'} when the NPC was defeated.` : ''}</p><div class="table-scroll"><table><thead><tr><th>Round</th><th>Captor</th><th>Dwarves</th><th>Damage reaching structure</th><th>Captor structure</th></tr></thead><tbody>${captiveRows}</tbody></table></div>`
+    : '';
   let details = '';
   if (report.details.type === 'land2') {
     const start = report.details.starting?.[side];
@@ -4695,7 +4842,7 @@ export function battlePage(report) {
     const roundTable = roundRows
       ? `<h3>Combat rounds</h3><div class="table-scroll"><table><thead><tr><th>Round</th><th>Attacker</th><th>Stance</th><th>Base attack after defensive power</th><th>Damage reaching armour</th><th>Target armour</th></tr></thead><tbody>${roundRows}</tbody></table></div>`
       : '<h3>Combat rounds</h3><p>No attack was made.</p>';
-    details = `<h2>Land battle</h2><p>Your vehicle started with ${reportCombatNumber(start.attack, 'starting base attack')} base attack, ${reportCombatNumber(start.armor, 'starting armour')} armour, ${reportCombatNumber(start.offense, 'starting aggressive power')} aggressive power, ${reportCombatNumber(start.defense, 'starting defensive power')} defensive power, and ${reportCombatNumber(start.dodge, 'starting dodge')} dodge. Base attack always applies; aggressive power is added only while pillaging, while defensive power reduces the opponent’s base attack when patrolling. After ${reportNumber(result.rounds, 'round count')} rounds, it had ${reportCombatNumber(end.attack, 'ending base attack')} base attack and ${reportCombatNumber(end.armor, 'ending armour')} armour. The final blow dealt ${reportCombatNumber(result.finalBlow, 'final blow')} damage.</p>${roundTable}`;
+    details = `<h2>Land battle</h2><p>Your vehicle started with ${reportCombatNumber(start.attack, 'starting base attack')} base attack, ${reportCombatNumber(start.armor, 'starting armour')} armour, ${reportCombatNumber(start.offense, 'starting aggressive power')} aggressive power, ${reportCombatNumber(start.defense, 'starting defensive power')} defensive power, and ${reportCombatNumber(start.dodge, 'starting dodge')} dodge. Base attack always applies; aggressive power is added only while pillaging, while defensive power reduces the opponent’s base attack when patrolling. After ${reportNumber(result.rounds, 'round count')} rounds, it had ${reportCombatNumber(end.attack, 'ending base attack')} base attack and ${reportCombatNumber(end.armor, 'ending armour')} armour. The final blow dealt ${reportCombatNumber(result.finalBlow, 'final blow')} damage.</p>${roundTable}${captiveSection}`;
   } else if (report.details.type === 'ship') {
     const ship = result.ships?.[side];
     const shots = result.shots?.[side];
@@ -4780,7 +4927,7 @@ export function battlePage(report) {
         repairText = `<p>After combat, ${recoveryClauses.join('; ')}. The ship resumed with ${reportNumber(repair.ending.hull, 'repaired hull')} hull, ${reportNumber(repair.ending.speed, 'repaired speed')} speed, and ${reportNumber(repair.ending.crew, 'repaired crew')} crew.</p>`;
       }
     }
-    details = `<h2>Cannon and crew battle</h2><p>${startingText}Your ship fired ${shotText} and landed ${hitText}. It finished combat with ${reportNumber(ship.hull, 'ending hull')} hull, ${reportNumber(ship.speed, 'ending speed')} speed, and ${reportNumber(ship.crew, 'ending crew')} crew. ${crewLossText}${ship.hull === 0 ? ' The ship sank.' : ''}</p>${cannonTable}${boarding}${repairText}`;
+    details = `<h2>Cannon and crew battle</h2><p>${startingText}Your ship fired ${shotText} and landed ${hitText}. It finished combat with ${reportNumber(ship.hull, 'ending hull')} hull, ${reportNumber(ship.speed, 'ending speed')} speed, and ${reportNumber(ship.crew, 'ending crew')} crew. ${crewLossText}${ship.hull === 0 ? ' The ship sank.' : ''}</p>${cannonTable}${boarding}${captiveSection}${repairText}`;
   } else {
     throw new Error(`Unknown battle report type: ${report.details.type}.`);
   }
@@ -5002,8 +5149,8 @@ function originalOilFieldPage(player, field, catalog, currentTime) {
   return `<article class="oil-page"><section class="page-title"><div><p class="eyebrow">${escapeHtml(field.mapName)} regional operation</p><h1>Oil Field</h1></div><p>Pump, pipe, and pack ${formatGold(litersPerBarrel)} litres into each barrel of ${escapeHtml(labels.oil)}. Build a network, defend it, and bring the oil home.</p></section>
     <dl class="oil-facts"><div><dt>Field status</dt><dd><span class="oil-live-status"><i aria-hidden="true"></i><span class="active-state">Field access active</span></span></dd></div><div><dt>Regional base</dt><dd>${escapeHtml(field.mapName)} · ${escapeHtml(cityName)}</dd></div><div><dt>Machine board</dt><dd>${field.hexes.length} hexes · radius ${Number(catalog.settings.oil_field_max_radius)}</dd></div></dl>
     <section class="oil-briefing"><div><p class="eyebrow">Deployment brief</p><p>The field is based in <strong>${escapeHtml(cityName)}</strong>. Drag a machine from the rack onto a hex, rotate it, then deploy, replace, queue, or bomb.</p></div><dl class="oil-aircraft"><div><dt>${escapeHtml(labels.helicopter)}</dt><dd class="${field.hasHelicopter ? 'ready' : 'missing'}"><strong>${field.hasHelicopter ? 'Ready' : 'Missing'}</strong><small>Outer-row deployment</small></dd></div><div><dt>${escapeHtml(labels.searchPlane)}</dt><dd class="${field.hasSearchPlane ? 'ready' : 'limited'}"><strong>${field.hasSearchPlane ? 'All oil revealed' : 'Rival oil hidden'}</strong><small>Field intelligence</small></dd></div><div><dt>${escapeHtml(labels.bomber)}</dt><dd class="${field.hasBomber ? 'ready' : 'missing'}"><strong>${field.hasBomber ? 'Ready' : 'Missing'}</strong><small>Bomb delivery</small></dd></div></dl></section>
-    <section class="oil-original-panel" aria-labelledby="oil-board-heading"><div class="oil-board-heading"><div><p class="eyebrow">MT2 // Regional machine grid</p><h2 id="oil-board-heading">Machine field</h2><p>Original vector machines · live power, flow, packing, and combat effects</p></div><div class="oil-board-controls" role="group" aria-label="Oil Field display controls"><button type="button" id="oil-toggle-renderer" title="Switch Oil Field renderer">Renderer: SVG.js</button><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button><button type="button" id="oil-toggle-volume-labels" aria-pressed="false">Hide oil volume labels</button></div></div>
-      <div class="oil-legend" aria-label="Board legend"><span class="oil-key oil-key-own">Your machine</span><span class="oil-key oil-key-rival">Other machine</span><span class="oil-key oil-key-build">Buildable</span><span class="oil-key oil-key-heli">${escapeHtml(labels.helicopter)} row</span><span class="oil-key oil-key-oil">${escapeHtml(labels.oil)}</span><span class="oil-key oil-key-spill">${escapeHtml(labels.oil)} spill</span><span class="oil-key oil-key-closed">Unavailable</span></div>
+    <section class="oil-original-panel" aria-labelledby="oil-board-heading"><aside class="oil-legend" aria-labelledby="oil-legend-heading"><strong id="oil-legend-heading" class="oil-legend-title">Legend</strong><div class="oil-legend-items"><span class="oil-key oil-key-own">Red = your machines</span><span class="oil-key oil-key-rival">Green = other miners&rsquo; machines</span><span class="oil-key oil-key-build">Blue = buildable</span><span class="oil-key oil-key-heli">${escapeHtml(labels.helicopter)} row</span><span class="oil-key oil-key-oil">${escapeHtml(labels.oil)}</span><span class="oil-key oil-key-spill">${escapeHtml(labels.oil)} spill</span><span class="oil-key oil-key-closed">Unavailable</span></div></aside>
+      <div class="oil-board-heading"><div><p class="eyebrow">MT2 // Regional machine grid</p><h2 id="oil-board-heading">Machine field</h2><p>Original vector machines · live power, flow, packing, and combat effects</p></div><div class="oil-board-controls" role="group" aria-label="Oil Field display controls"><button type="button" id="oil-toggle-renderer" title="Switch Oil Field renderer">Renderer: SVG.js</button><button type="button" id="oil-toggle-queued">Show queued</button><button type="button" id="oil-toggle-animation">Pause animation</button><button type="button" id="oil-toggle-colors">Rarity colours</button><button type="button" id="oil-toggle-volume-labels" aria-pressed="false">Hide oil volume labels</button></div></div>
       <p id="oil-board-status" class="oil-board-status" role="status">Loading the original Oil Field…</p>
       <div id="oil-board-navigation" class="oil-board-navigation"><p id="oil-board-help">Pan or scroll to explore the field. Select a rack machine, then select a hex to deploy it.</p><button type="button" id="oil-center-board" class="secondary" aria-controls="board">Centre field</button></div>
       <div class="oil-field-board-shell" data-hex-count="${field.hexes.length}" data-machine-count="${field.hexes.filter((hex) => hex.machine).length}"><div id="board" aria-label="Interactive Oil Field hex board" aria-describedby="oil-board-help"></div></div>
@@ -5508,22 +5655,29 @@ function ghostEventDetailPage(ghost, catalog, currentTime) {
     : '';
   const origin = ghost.sourcePlayerName
     ? `<div><dt>Former keeper</dt><dd>${escapeHtml(ghost.sourcePlayerName)}</dd></div>` : '';
-  const sourceDescription = ghost.sourceItemDescription
+  const creatureOrigin = Boolean(ghost.sourceCreatureId);
+  const sourceDescription = !creatureOrigin && ghost.sourceItemDescription
     ? `<p>${escapeHtml(ghost.sourceItemDescription)}</p>` : '';
   const bounty = (ghost.bounty ?? []).map((reward) => {
     const item = catalog.byId.get(Number(reward.itemId));
     if (!item) return '';
     return `<li><a class="ghost-bounty-item thing-link rarity-${item.rarity}" href="/items/${item.id}"><img src="${escapeHtml(item.icon)}" alt=""><span><strong>${Number(reward.quantity).toLocaleString('en-GB')} &times; ${escapeHtml(item.name)}</strong><small>${escapeHtml(item.rarityName)}</small></span></a></li>`;
   }).join('');
-  const description = ghost.kind === 'ship'
-    ? `A drowned transport has returned as a spectral vessel. It works the ${ghost.routeName} passage without a crew, carrying its old shape and a hostile memory of the sea.`
-    : `A destroyed road vehicle has returned as a Wraith rider. It patrols the ${ghost.routeName} road, turning at each city and challenging living transports in its combat class.`;
+  const description = creatureOrigin
+    ? `A defeated ${ghost.sourceCreatureName} has refused to stay dead. It now patrols the ${ghost.routeName} route in a hostile spectral form.`
+    : ghost.kind === 'ship'
+      ? `A drowned transport has returned as a spectral vessel. It works the ${ghost.routeName} passage without a crew, carrying its old shape and a hostile memory of the sea.`
+      : `A destroyed road vehicle has returned as a Wraith rider. It patrols the ${ghost.routeName} road, turning at each city and challenging living transports in its combat class.`;
+  const sourceRecord = creatureOrigin
+    ? `The haunting rose from the remains of <a class="text-link" href="/events/creatures/${ghost.sourceCreatureId}">${escapeHtml(ghost.sourceCreatureName)}</a>.`
+    : `The haunting retains the form of <a class="thing-link rarity-${ghost.rarity}" href="/items/${ghost.sourceItemId}">${escapeHtml(ghost.sourceItemName)}</a>, once recorded as ${escapeHtml(ghost.sourceVehicleName)}.`;
+  const sourceAlt = creatureOrigin ? ghost.sourceCreatureName : ghost.sourceItemName;
   return `<section class="page-title"><div><p class="eyebrow">Restless-dead record #${ghost.id}</p><h1>${escapeHtml(ghost.name)}</h1></div><a class="text-link" href="/events">Back to world events</a></section>
     <article class="ghost-record rarity-${ghost.rarity}">
       <div class="ghost-record-hero"><div class="ghost-record-spectre spectral-transport spectral-${ghost.kind}"><img src="${escapeHtml(ghost.icon)}" alt="${escapeHtml(kindName)}"></div><div><p class="eyebrow">${escapeHtml(ghost.rarityName)} ${escapeHtml(kindName)} &middot; ${escapeHtml(ghost.regionName)} region</p><h2>${escapeHtml(ghost.baseName)}</h2><p>${escapeHtml(description)}</p>${outcome}</div></div>
       <dl class="ghost-record-facts"><div><dt>Rarity</dt><dd>${escapeHtml(ghost.rarityName)}</dd></div><div><dt>Region</dt><dd>${escapeHtml(ghost.regionName)}</dd></div><div><dt>State</dt><dd>${escapeHtml(state)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)} &middot; ${escapeHtml(routeType)} &middot; ${Number(ghost.length).toLocaleString('en-GB')} km</dd></div><div><dt>Heading</dt><dd>${heading}</dd></div><div><dt>Position</dt><dd>${position}</dd></div><div><dt>Speed</dt><dd>${ghost.speed === null || ghost.speed === undefined ? 'No longer moving' : `${Number(ghost.speed).toFixed(1)} km/h`}</dd></div><div><dt>Timing</dt><dd>${escapeHtml(timing)}</dd></div><div><dt>Risen</dt><dd>${new Date(ghost.risenAt).toLocaleString('en-GB')}</dd></div></dl>
       ${ghostHuntForm(ghost)}
-      <section class="ghost-origin"><div><p class="eyebrow">Wreck record</p><h2>What came back</h2><p>The haunting retains the form of <a class="thing-link rarity-${ghost.rarity}" href="/items/${ghost.sourceItemId}">${escapeHtml(ghost.sourceItemName)}</a>, once recorded as ${escapeHtml(ghost.sourceVehicleName)}.</p>${sourceDescription}</div><img src="${escapeHtml(ghost.sourceIcon)}" alt="${escapeHtml(ghost.sourceItemName)}">${origin ? `<dl>${origin}</dl>` : ''}</section>
+      <section class="ghost-origin"><div><p class="eyebrow">${creatureOrigin ? 'Remains record' : 'Wreck record'}</p><h2>What came back</h2><p>${sourceRecord}</p>${sourceDescription}</div><img src="${escapeHtml(ghost.sourceIcon)}" alt="${escapeHtml(sourceAlt)}">${origin ? `<dl>${origin}</dl>` : ''}</section>
       <section class="ghost-bounty"><p class="eyebrow">Spectral manifest</p><h2>${ghost.defeatedAt ? 'Recovered bounty' : 'Reported bounty'}</h2><ul>${bounty || '<li>No recoverable cargo is recorded.</li>'}</ul></section>
     </article>`;
 }
@@ -5918,7 +6072,7 @@ function fieldGuideSystems(catalog, player = null) {
       description: `Factories turn city-local Ore and worker time into repairs, robots, aircraft, ammunition, Oil Field parts, Meld products, and ${factoryProducts.length.toLocaleString('en-GB')} configured manufactured outputs. Inputs are reserved as soon as a job is queued.`,
       facts: facts([
         ['Build', `${factoryBuild?.ore ?? 0} Ore in a regional capital. Construction needs ${(factoryBuild?.components ?? 0).toLocaleString('en-GB')} worker components.`],
-        ['Capacity', `Up to ${Number(settings.max_active_factories).toLocaleString('en-GB')} owner-operated factories may run at once. Each factory holds ${Number(settings.factory_queue_limit).toLocaleString('en-GB')} queued jobs and ${Number(settings.factory_max_workers).toLocaleString('en-GB')} workers.`],
+        ['Capacity', `Up to ${Number(settings.max_active_factories).toLocaleString('en-GB')} owner-operated factories may run at once. Each factory holds ${Math.min(FACTORY_QUEUE_MAX_JOBS, Number(settings.factory_queue_limit)).toLocaleString('en-GB')} queued jobs and ${Number(settings.factory_max_workers).toLocaleString('en-GB')} workers.`],
         ['Markets', 'Built idle factories can be sold or rented. A rental lasts ten days, performs repairs only, and returns unfinished inputs when it expires.']
       ]),
       href: '/factories', action: 'Open factories'
@@ -5949,9 +6103,9 @@ function fieldGuideSystems(catalog, player = null) {
       anchor: 'guide-ore-thief-operations', label: 'Ore-thief operations',
       eyebrow: 'Pilot missions',
       art: `<span class="guide-system-art-trio">${oreThiefAircraftArt}</span>`,
-      description: `Ore thieves keep a moving base beyond ${oreThiefOperation?.city.name ?? 'the Ore city'}. Pilots work through one visible operation: locate the base, destroy its defences, and bring the stolen Ore back by helicopter.`,
+      description: 'Ore thieves keep one moving base in every region. Pilots work through the local operation: locate the base, destroy its defences, and bring the stolen Ore back by helicopter.',
       facts: facts([
-        ['Search', `Launch ${catalogItemForSetting(catalog, 'search_plane_item_id').name}s from ${oreThiefOperation?.city.name ?? 'the Ore city'}. A search may fail, and discoveries are personal to each miner.`],
+        ['Search', `Launch ${catalogItemForSetting(catalog, 'search_plane_item_id').name}s from the region's mission airfield. A search may fail, and discoveries are personal to each miner and base.`],
         ['Bomb', `Once located, load a ${catalogItemForSetting(catalog, 'bomber_item_id').name} with bombs. Every bomb aboard is dropped; their combined bucket damage reduces the shared base defences.`],
         ['Recover', `After destruction, a ${catalogItemForSetting(catalog, 'helicopter_item_id').name} carries stolen Ore home up to its capacity. A fresh hidden base forms after the recovered stock is emptied.`],
         ['Risk', 'Aircraft that approach the base may be shot down. Capital-activated defensive gadgets apply to these sorties globally.']
@@ -6007,7 +6161,7 @@ function fieldGuideSystems(catalog, player = null) {
         ['Living threats', `${listFormatter.format(creatureNames('land'))} roam land routes; ${listFormatter.format(creatureNames('sea'))} roam sea routes. Each can appear from ${tierRange}.`],
         ['Hunting', 'Launch any operational transport of the matching combat class and route type from either endpoint. Hunter and creature move to a real interception point, creatures counterattack, and only the killer receives the bounty.'],
         ['Rewards', `${listFormatter.format(rewardNames('treasure'))} carry treasure matching their own rarity tier. ${listFormatter.format(rewardNames('ore'))} drop tier-scaled Ore.`],
-        ['Restless dead', 'Destroyed road vehicles and sunken ships remain as route wrecks. The world periodically scans each wreck once; moon-adjusted chance may raise a Wraith Rider, a Ghost Ship, both kinds from the same batch of losses, or nothing at all. Those that rise patrol, attack peaceful traffic, and can be hunted from the same World events board.']
+        ['Restless dead', 'Destroyed road vehicles, sunken ships, and defeated event creatures leave remains on their routes. The world scans each set of remains once; moon-adjusted chance may raise a Wraith Rider, a Ghost Ship, both kinds from the same batch of losses, or nothing at all. Those that rise patrol, attack peaceful traffic, and can be hunted from the same World events board.']
       ]),
       href: '/events', action: 'Open World events'
     }
@@ -7006,6 +7160,7 @@ export function createApp(options = {}) {
         store.runBumUpdate(now(), random);
         store.runDwarfUpdate(now(), random);
         store.settleFactories(now());
+        store.settleGadgetAutomations(now());
         store.sendDailyFindingDigests(now());
         store.expireMessages(now());
       }
@@ -7026,6 +7181,7 @@ export function createApp(options = {}) {
         player.mapId = activeMap.id;
         player.mapName = activeMap.name;
         player.mapSlug = activeMap.slug;
+        player.minerCount = store.countPlayers();
         player.cityOperationCounts = store.cityOperationCounts(player.id, now());
         const unseenChats = store.chatUnseenCounts(player.id, now());
         player.unseenChatMessages = unseenChats.chat;
@@ -7487,30 +7643,61 @@ export function createApp(options = {}) {
         }
         setFlash(`${gadget.displayName} active globally for ${formatDuration(gadget.expiresAt - now())}.`);
         redirect(response, '/gadgets');
+      } else if (request.method === 'GET'
+        && /^\/gadgets\/(autoloader|autolister|automaker|automelder)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const behaviorKey = url.pathname.split('/')[2];
+        const gadget = catalogGadgetForBehavior(catalog, behaviorKey);
+        responseHtml(response, 200, layout(gadget.displayName,
+          gadgetAutomationPage(store.gadgetAutomationReport(player.id, behaviorKey, now()), catalog),
+          player, flash));
+      } else if (request.method === 'POST'
+        && /^\/gadgets\/(autoloader|autolister|automaker|automelder)\/configure$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const behaviorKey = url.pathname.split('/')[2];
+        const form = await readForm(request);
+        if (behaviorKey === 'autolister') {
+          const [cityId, mineTypeId] = String(form.stockType ?? '').split(':');
+          form.cityId = cityId;
+          form.mineTypeId = mineTypeId;
+        }
+        store.configureGadgetAutomation(player.id, behaviorKey, form, now());
+        setFlash(`${catalogGadgetForBehavior(catalog, behaviorKey).displayName} task queued. Its next round-robin turn is due now.`);
+        redirect(response, `/gadgets/${behaviorKey}`);
+      } else if (request.method === 'POST'
+        && /^\/gadgets\/(autoloader|autolister|automaker|automelder)\/tasks\/\d+\/remove$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const segments = url.pathname.split('/');
+        const behaviorKey = segments[2];
+        store.removeGadgetAutomationTask(player.id, behaviorKey, Number(segments[4]), now());
+        setFlash(`${catalogGadgetForBehavior(catalog, behaviorKey).displayName} task removed.`);
+        redirect(response, `/gadgets/${behaviorKey}`);
+      } else if (request.method === 'POST'
+        && /^\/gadgets\/(autoloader|autolister|automaker|automelder)\/disable$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const behaviorKey = url.pathname.split('/')[2];
+        store.disableGadgetAutomation(player.id, behaviorKey, now());
+        setFlash(`${catalogGadgetForBehavior(catalog, behaviorKey).displayName} automation disabled.`);
+        redirect(response, `/gadgets/${behaviorKey}`);
+      } else if (request.method === 'POST'
+        && /^\/gadgets\/(autoloader|autolister|automaker|automelder)\/enable$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const behaviorKey = url.pathname.split('/')[2];
+        store.enableGadgetAutomation(player.id, behaviorKey, now());
+        setFlash(`${catalogGadgetForBehavior(catalog, behaviorKey).displayName} automation enabled. Its next round-robin turn is due now.`);
+        redirect(response, `/gadgets/${behaviorKey}`);
       } else if (request.method === 'GET' && url.pathname === '/gadgets/ledger') {
         if (!requirePlayer()) return;
-        const gadget = catalogGadgetForBehavior(catalog, 'ledger');
-        responseHtml(response, 200, layout(gadget.displayName,
-          ledgerPage(store.ledgerReport(player.id, url.searchParams.get('month'), now()), catalog), player, flash));
+        redirect(response, '/gadgets/autoloader');
       } else if (request.method === 'GET' && url.pathname === '/gadgets/medal-detector') {
         if (!requirePlayer()) return;
-        const gadget = catalogGadgetForBehavior(catalog, 'medal_detector');
-        responseHtml(response, 200, layout(gadget.displayName,
-          medalDetectorPage(store.medalDetectorReport(player.id, now()), catalog), player, flash));
+        redirect(response, '/gadgets/automelder');
       } else if (request.method === 'GET' && url.pathname === '/gadgets/spreadsheet') {
         if (!requirePlayer()) return;
-        const cityIds = url.searchParams.getAll('city');
-        const rarities = url.searchParams.getAll('rarity');
-        const sort = url.searchParams.get('sort') === 'percent' ? 'percent' : 'profit';
-        const report = store.spreadsheetReport(player.id, { cityIds, rarities, sort }, now());
-        const gadget = catalogGadgetForBehavior(catalog, 'spreadsheet');
-        responseHtml(response, 200, layout(gadget.displayName,
-          spreadsheetPage(report, cityIds, rarities, sort, catalog), player, flash));
+        redirect(response, '/gadgets/automaker');
       } else if (request.method === 'GET' && url.pathname === '/gadgets/calculator') {
         if (!requirePlayer()) return;
-        const gadget = catalogGadgetForBehavior(catalog, 'calculator');
-        responseHtml(response, 200, layout(gadget.displayName,
-          calculatorPage(store.calculatorReport(player.id, now()), catalog), player, flash));
+        redirect(response, '/gadgets/autolister');
       } else if (request.method === 'GET' && url.pathname === '/melds') {
         if (requirePlayer()) responseHtml(response, 200,
           layout('Melds', meldsPage(player, catalog, url.searchParams.get('q') ?? '',

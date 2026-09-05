@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Tungsten Spreadsheet</title>
-  <desc id="desc">Tungsten Spreadsheet, depicted as a rugged data board showing a rising trade graph and coin markers.</desc>
+  <title id="title">Tungsten Automaker</title>
+  <desc id="desc">Tungsten Automaker, depicted as a rugged factory data board showing a rising production graph and job markers.</desc>
   <path d="m18 25 78-12 15 91-78 12z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
   <path d="m29 35 58-9 10 67-58 9z" fill="#4b5050" stroke="#d8be32" stroke-width="4"/>
   <path d="m41 83 12-20 13 8 15-29 11 7" fill="none" stroke="#f28c28" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>

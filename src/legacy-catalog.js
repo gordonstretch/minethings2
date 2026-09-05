@@ -28,6 +28,13 @@ import { oreIconPath } from './ore-icons.js';
 import { modIconPath } from './mod-icons.js';
 import { equipmentIconPath } from './equipment-icons.js';
 import { avatarIconPath } from './avatar-icons.js';
+import {
+  applyGadgetAutomationCatalog,
+  DEFAULT_GADGET_AUTOMATION_INTERVAL_MINUTES,
+  GADGET_AUTOMATION_INTERVAL_MINUTES,
+  GADGET_AUTOMATION_MAX_TASKS,
+  MAX_AUTOLISTER_MARKUP_PERCENT
+} from './gadget-automations.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_SQL = path.join(ROOT, 'gallegodb_copy.sql');
@@ -659,7 +666,7 @@ export const MANUFACTURED_TRANSPORT_CATALOG = Object.freeze({
       largeImageFilename: null,
       largeImage: '/node/vehicles/vehicle-1584.svg',
       hasLargeImage: true,
-      goldValueUnits: 280000
+      goldValueUnits: 146860000
     }),
     Object.freeze({
       id: 1585,
@@ -676,7 +683,7 @@ export const MANUFACTURED_TRANSPORT_CATALOG = Object.freeze({
       largeImageFilename: null,
       largeImage: '/node/vehicles/vehicle-1585.svg',
       hasLargeImage: true,
-      goldValueUnits: 310000
+      goldValueUnits: 293220000
     }),
     Object.freeze({
       id: 1586,
@@ -693,7 +700,7 @@ export const MANUFACTURED_TRANSPORT_CATALOG = Object.freeze({
       largeImageFilename: null,
       largeImage: '/node/vehicles/vehicle-1584.svg',
       hasLargeImage: true,
-      goldValueUnits: 80000
+      goldValueUnits: 44050000
     }),
     Object.freeze({
       id: 1587,
@@ -710,7 +717,7 @@ export const MANUFACTURED_TRANSPORT_CATALOG = Object.freeze({
       largeImageFilename: null,
       largeImage: '/node/vehicles/vehicle-1585.svg',
       hasLargeImage: true,
-      goldValueUnits: 90000
+      goldValueUnits: 87960000
     })
   ]),
   vehicles: Object.freeze([
@@ -781,7 +788,7 @@ export const BOLT_BOX_CATALOG = Object.freeze({
       largeImageFilename: null,
       largeImage: '/node/starter/item-2.svg',
       hasLargeImage: true,
-      goldValueUnits: 1867
+      goldValueUnits: 2130000
     })
   ]),
   factoryActions: Object.freeze([
@@ -795,6 +802,39 @@ export const BOLT_BOX_CATALOG = Object.freeze({
       outputQuantity: 1
     })
   ])
+});
+export const MAGNET_CATALOG = Object.freeze({
+  items: Object.freeze([
+    Object.freeze({
+      id: 1597,
+      name: 'Magnet',
+      rarity: 0,
+      description: 'Carry Magnets in a surface vehicle. Each Magnet can pull one thing from wreckage passed during a journey. Most pulls become Ore scraps at the destination, while some survive as cargo, including a wrecked vehicle\'s damaged chassis.',
+      marketableId: null,
+      mineTypeId: 4,
+      repairedItemId: null,
+      canFind: false,
+      icon: '/node/equipment/magnet.svg',
+      iconSource: 'equipment-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: '/node/equipment/magnet.svg',
+      hasLargeImage: true,
+      goldValueUnits: 6160000
+    })
+  ]),
+  factoryActions: Object.freeze([
+    Object.freeze({
+      id: 23,
+      name: 'Magnet',
+      ore: 2,
+      components: 2500,
+      actionKind: 'item',
+      outputItemId: 1597,
+      outputQuantity: 1
+    })
+  ]),
+  intactSalvageChance: 0.35
 });
 const VEHICLE_CARGO_POLICIES = new Set(['standard', 'oil-only', 'any-item']);
 const VEHICLE_ROUTE_POLICIES = new Set(['standard', 'capital-link']);
@@ -846,6 +886,7 @@ const MAX_EXPLOSIVES_PER_DETONATION = [0, 4000, 1000, 250, 50, 15, 4];
 export const LEGACY_ITEM_VALUE_RULES = Object.freeze({
   rarityMinimumGold: [0.01, 0.5833, 4.0833, 28.5833, 200.0833, 1400.5833, 8403.5],
   oilBarrelGold: 100,
+  oreCrateGold: 10,
   oilLitersPerBarrel: 159,
   utilityGoldByItemId: { 368: 5 },
   recipe: {
@@ -855,7 +896,7 @@ export const LEGACY_ITEM_VALUE_RULES = Object.freeze({
     soleIngredient: 0.35,
     singleUnitSoleMultiplier: 1.5
   },
-  factory: { ore: 0.12, components: 1 / 15000 },
+  factory: { oreInputValueShare: 1, workerCostShare: 1 },
   equipmentBucketsPerHour: 0.15,
   explosiveBuckets: 1 / 3600,
   robotModel: 0.04,
@@ -1575,6 +1616,9 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
   factoryActions.push(...BOLT_BOX_CATALOG.factoryActions.map((action) => ({
     ...action
   })));
+  factoryActions.push(...MAGNET_CATALOG.factoryActions.map((action) => ({
+    ...action
+  })));
   const machineTypes = tableRows(sql, 'machine_types').map((row) => {
     const presentation = LEGACY_MACHINE_TYPE_RULES[row[1]];
     const behavior = LEGACY_MACHINE_BEHAVIOR_RULES[row[1]];
@@ -1643,6 +1687,10 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     };
   }));
   items.push(...BOLT_BOX_CATALOG.items.map((item) => ({
+    ...item,
+    goldValue: item.goldValueUnits / 10000
+  })));
+  items.push(...MAGNET_CATALOG.items.map((item) => ({
     ...item,
     goldValue: item.goldValueUnits / 10000
   })));
@@ -1726,6 +1774,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
       goldValue: item.goldValueUnits / 10000
     };
   }));
+  applyGadgetAutomationCatalog(gadgets, gadgetItems, items);
   const dwarfDescription = (tier) => {
     const range = dwarfFindRange(tier.rarity, LEGACY_DWARF_TIERS);
     const quality = range.minimum === range.maximum
@@ -1915,6 +1964,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     bolt_item_id: BOLT_BOX_CATALOG.boltItemId,
     bolt_box_item_id: BOLT_BOX_CATALOG.items[0].id,
     bolts_per_box: BOLT_BOX_CATALOG.boltsPerBox,
+    magnet_item_id: MAGNET_CATALOG.items[0].id,
+    magnet_intact_salvage_chance: MAGNET_CATALOG.intactSalvageChance,
     block_and_tackle_item_id: 1107,
     search_plane_item_id: 737,
     bomber_item_id: 738,
@@ -2064,6 +2115,10 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     dwarf_findings_feed_limit: 20,
     dwarf_findings_poll_interval_ms: 5000,
     gadget_report_result_limit: 10,
+    gadget_automation_interval_minutes: GADGET_AUTOMATION_INTERVAL_MINUTES,
+    gadget_automation_default_interval_minutes: DEFAULT_GADGET_AUTOMATION_INTERVAL_MINUTES,
+    gadget_automation_max_tasks: GADGET_AUTOMATION_MAX_TASKS,
+    gadget_autolister_max_markup_percent: MAX_AUTOLISTER_MARKUP_PERCENT,
     factory_market_history_limit: 15,
     item_market_history_limit: 15,
     mine_market_history_limit: 15,
@@ -2083,7 +2138,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     route_type_ids: { land: 0, sea: 1, air: 2 },
     aircraft_role_ids: { search: 0, bomber: 1, helicopter: 2 },
     map_city_positions: { 1: { x: 161, y: 275 }, 2: { x: 269, y: 85 }, 3: { x: 483, y: 287 }, 4: { x: 738, y: 88 }, 5: { x: 732, y: 530 } },
-    gadget_lifespan_days: [0, 0.5, 3.5, 20, 120, 480],
+    gadget_lifespan_days: [0, 0.5, 3.5, 20, 120, 480, 1920],
     machine_life_days: [0, 0.5, 3, 6, 9, 12, 15],
     machine_power: [0, 1, 1, 2, 2, 3, 3]
   };

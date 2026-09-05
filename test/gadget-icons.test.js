@@ -14,12 +14,14 @@ const GADGET_ASSET_DIRECTORY = path.join(ROOT, 'public', 'img', 'items', 'gadget
 const EXPECTED_GADGET_ITEM_IDS = [
   ...Array.from({ length: 24 }, (_, index) => 253 + index),
   742, 743,
-  ...Array.from({ length: 12 }, (_, index) => 1404 + index)
+  ...Array.from({ length: 12 }, (_, index) => 1404 + index),
+  1589, 1590, 1591, 1592
 ];
 const EXPECTED_DAMAGED_PAIRS = [
   ...Array.from({ length: 24 }, (_, index) => [611 + index, 253 + index]),
   [759, 742], [760, 743],
-  ...Array.from({ length: 12 }, (_, index) => [1418 + index, 1404 + index])
+  ...Array.from({ length: 12 }, (_, index) => [1418 + index, 1404 + index]),
+  [1593, 1589], [1594, 1590], [1595, 1591], [1596, 1592]
 ];
 
 function gadgetGeometrySignature(svg) {
@@ -33,7 +35,7 @@ function gadgetGeometrySignature(svg) {
     .trim();
 }
 
-test('gadget icon paths cover the exact 38-item catalogue allowlist', () => {
+test('gadget icon paths cover the exact 42-item catalogue allowlist', () => {
   assert.deepEqual(GADGET_ICON_ITEM_IDS, EXPECTED_GADGET_ITEM_IDS);
   assert.equal(Object.isFrozen(GADGET_ICON_ITEM_IDS), true);
   for (const itemId of EXPECTED_GADGET_ITEM_IDS) {
@@ -41,7 +43,7 @@ test('gadget icon paths cover the exact 38-item catalogue allowlist', () => {
   }
   assert.equal(gadgetIconPath('253'), '/node/gadgets/gadget-253.svg');
   for (const invalid of [
-    null, undefined, '', 0, 252, 277, 741, 744, 1403, 1416,
+    null, undefined, '', 0, 252, 277, 741, 744, 1403, 1416, 1588, 1593,
     253.5, NaN, Infinity, 'Tin Whetting Stone'
   ]) assert.equal(gadgetIconPath(invalid), null, String(invalid));
 });
@@ -164,7 +166,7 @@ test('serves every gadget SVG, supports HEAD and item details, and rejects gaps'
     assert.equal(await head.text(), '');
 
     for (const itemId of [253, 255, 257, 259, 261, 263, 265, 267, 269, 271,
-      273, 275, 742, 1404, 1415]) {
+      273, 275, 742, 1404, 1415, 1589, 1592]) {
       const response = await fetch(`${base}/items/${itemId}`);
       assert.equal(response.status, 200, String(itemId));
       const html = await response.text();
@@ -173,7 +175,9 @@ test('serves every gadget SVG, supports HEAD and item details, and rejects gaps'
       assert.ok(html.includes('data-large-image="original"'), String(itemId));
     }
 
-    for (const [damagedItemId, intactItemId] of [[611, 253], [759, 742], [1429, 1415]]) {
+    for (const [damagedItemId, intactItemId] of [
+      [611, 253], [759, 742], [1429, 1415], [1593, 1589], [1596, 1592]
+    ]) {
       const response = await fetch(`${base}/items/${damagedItemId}`);
       assert.equal(response.status, 200, String(damagedItemId));
       const html = await response.text();

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Iron Meldal Detector</title>
-  <desc id="desc">Iron Meldal Detector, depicted as a twin-coil detector with an analog meter and ping arcs.</desc>
+  <title id="title">Iron Automelder</title>
+  <desc id="desc">Iron Automelder, depicted as a twin-coil Meld controller with an analog meter and staging signals.</desc>
   <path d="m27 104 45-63 13 10-43 61" fill="#59635f" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
   <ellipse cx="27" cy="104" rx="20" ry="11" fill="none" stroke="#292d29" stroke-width="7"/>
   <ellipse cx="47" cy="91" rx="15" ry="8" fill="none" stroke="#aeb8b2" stroke-width="5"/>

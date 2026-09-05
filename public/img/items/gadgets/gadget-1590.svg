@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Legendary Autolister</title>
+  <desc id="desc">Legendary Autolister, depicted as a golden ten-line market terminal issuing luminous price tickets.</desc>
+  <defs>
+    <radialGradient id="screen"><stop offset="0" stop-color="#e6ffff"/><stop offset="1" stop-color="#38a6ba"/></radialGradient>
+  </defs>
+  <path d="M23 13h67l15 16v79H23z" fill="#9b651e" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M31 22h52l13 13v29H31z" fill="url(#screen)" stroke="#292d29" stroke-width="3"/>
+  <path d="M37 54l11-10 10 5 13-17 17 18" fill="none" stroke="#d94a36" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#f8dc62" stroke="#292d29" stroke-width="2">
+    <circle cx="38" cy="75" r="6"/><circle cx="55" cy="75" r="6"/><circle cx="72" cy="75" r="6"/><circle cx="89" cy="75" r="6"/>
+    <circle cx="38" cy="92" r="6"/><circle cx="55" cy="92" r="6"/><circle cx="72" cy="92" r="6"/><circle cx="89" cy="92" r="6"/>
+  </g>
+  <path d="M91 18h15v14H91z" fill="#d8be32" stroke="#292d29" stroke-width="3"/>
+  <path d="M104 45h13v59l-7 10-6-10z" fill="#fff1a6" stroke="#292d29" stroke-width="3"/>
+  <path d="M108 56h5m-5 9h5m-5 9h5m-5 9h5m-5 9h5" stroke="#b26b16" stroke-width="2"/>
+  <path d="M17 108h94" stroke="#f8dc62" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -153,6 +153,15 @@ test('renders chain-escape battle reports with accurate counts and clean numbers
         ],
         casualties: [[], []],
         boardingRounds: [],
+        captiveRounds: [{
+          phase: 'cannon', round: 1,
+          strikes: [{
+            side: 0, damage: 2, penetratingDamage: 2, absorbed: 0,
+            structure: 'hull', structureBefore: 188, structureAfter: 186,
+            dwarves: [{ name: 'Green Dwarf', rarity: 2, damage: 2 }]
+          }]
+        }],
+        freedCaptiveDwarves: [{ id: 7, name: 'Green Dwarf', rarity: 2 }],
         repairs: [null, {
           hull: 0, speed: 0, crew: 0,
           ending: { hull: 144, speed: 56, crew: 65 }
@@ -166,6 +175,9 @@ test('renders chain-escape battle reports with accurate counts and clean numbers
   assert.match(html, /188 hull \/ 44\.8 speed \/ 65 crew/);
   assert.match(html, /No crew were lost\./);
   assert.match(html, /Your faster ship escaped the pursuing enemy before boarding could begin\./);
+  assert.match(html, /<h3>Captive Dwarf resistance<\/h3>/);
+  assert.match(html, /Green Dwarf \(2 damage\)/);
+  assert.match(html, /1 Dwarf escaped when the NPC was defeated\./);
   assert.match(html, /You won\./);
   assert.doesNotMatch(html, /44\.800000000000004|Chain-shot damage|repairs restored 0/);
 });
@@ -277,10 +289,13 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
   store.ensureWorldMaps(1000);
   const catalog = store.loadCatalog();
   const password = 'ore thief briefing password';
+  const aso = catalog.maps.find((map) => map.slug === 'aso');
   const operationRoute = catalog.routes.find((route) => route.open
     && route.type === catalog.settings.route_type_ids.air
-    && route.city1Id === route.city2Id);
+    && route.city1Id === route.city2Id
+    && catalog.cities.find((city) => city.id === route.city1Id)?.mapId === aso.id);
   const missionCity = catalog.cities.find((city) => city.id === operationRoute.city1Id);
+  assert.equal(missionCity.name, 'Cinderwake');
   const draft = createPlayer(
     'Ore Thief Briefer', '', hashPassword(password), catalog, 1000, () => 0.5
   );
@@ -293,6 +308,11 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
   };
   draft.inventory = draft.inventoryByCity[missionCity.id];
   const player = store.addPlayer(draft);
+  const addMeld = store.database.prepare(
+    'INSERT INTO player_melds (player_id, meld_id, created_at) VALUES (?, ?, 1000)'
+  );
+  for (const meld of catalog.melds.slice(0, 10)) addMeld.run(player.id, meld.id);
+  store.activateVehicle(player.id, catalog.settings.search_plane_item_id);
 
   store.database.prepare('DELETE FROM thief_bases').run();
   assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM thief_bases').get().count, 0);
@@ -329,6 +349,10 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
   assert.match(hiddenHtml, /SEARCH OPEN/);
   assert.match(hiddenHtml, /Search Plane[\s\S]*Bomber[\s\S]*Helicopter/);
   assert.match(hiddenHtml, /Every bomb aboard is dropped/);
+  assert.match(hiddenHtml, /Aso pilot operation/);
+  assert.match(hiddenHtml, /Cinderwake[\s\S]*this region's mission airfield/);
+  const readyFleetHtml = await getHtml('/vehicles');
+  assert.match(readyFleetHtml, /Search for the ore-thief base/);
 
   const baseId = store.database.prepare('SELECT id FROM thief_bases ORDER BY id DESC LIMIT 1')
     .get().id;
@@ -727,7 +751,7 @@ test('creates unique world maps and lets an administrator open their varied gate
     assert.equal(live.routes.filter((candidate) => !candidate.interMap
       && cities.some((city) => city.id === candidate.city1Id)
       && cities.some((city) => city.id === candidate.city2Id)).length,
-    map.name === 'Gallego' ? 12 : map.name === 'Aso' ? 13 : 11,
+    map.name === 'Gallego' ? 12 : map.name === 'Aso' ? 14 : 12,
     `${map.name} should have a local travel network`);
   }
   store.ensureWorldMaps(1500);
@@ -3330,6 +3354,98 @@ test('keeps an unneeded Meld-button item in Things and explains why', async (con
   ));
 });
 
+test('lists every owned, broken, or partially staged Meld without revealing unstarted recipes',
+  async (context) => {
+    const catalog = loadLegacyCatalog();
+    const store = new SqliteStore(':memory:');
+    store.seedCatalog(catalog);
+    const publicMelds = catalog.melds.filter((meld) => meld.public);
+    const itemIds = [...new Set(publicMelds.flatMap((meld) =>
+      meld.requirements.map((requirement) => requirement.itemId)))];
+    const stagedItemId = itemIds.find((itemId) => {
+      const partials = publicMelds.filter((meld) => {
+        const required = meld.requirements.reduce(
+          (sum, requirement) => sum + requirement.count, 0
+        );
+        const staged = meld.requirements.reduce((sum, requirement) =>
+          sum + (requirement.itemId === itemId ? Math.min(1, requirement.count) : 0), 0);
+        return staged > 0 && staged < required;
+      });
+      const unrelated = publicMelds.filter((meld) =>
+        !meld.requirements.some((requirement) => requirement.itemId === itemId));
+      return partials.length > 0 && unrelated.length >= 3;
+    });
+    assert.ok(stagedItemId);
+    const partialMelds = publicMelds.filter((meld) => {
+      const required = meld.requirements.reduce((sum, requirement) => sum + requirement.count, 0);
+      const staged = meld.requirements.reduce((sum, requirement) =>
+        sum + (requirement.itemId === stagedItemId ? Math.min(1, requirement.count) : 0), 0);
+      return staged > 0 && staged < required;
+    });
+    const unrelated = publicMelds.filter((meld) =>
+      !meld.requirements.some((requirement) => requirement.itemId === stagedItemId));
+    const [ownedMeld, brokenMeld, hiddenMeld] = unrelated;
+    const password = 'private meld list password';
+    const draft = createPlayer(
+      'Private Meld List', '', hashPassword(password), catalog, 1000, () => 0.5
+    );
+    const player = store.addPlayer(draft);
+    store.database.prepare(
+      'INSERT INTO player_melds (player_id, meld_id, created_at) VALUES (?, ?, 1)'
+    ).run(player.id, ownedMeld.id);
+    store.database.prepare(
+      'INSERT INTO broken_melds (player_id, meld_id, broken_at) VALUES (?, ?, 1)'
+    ).run(player.id, brokenMeld.id);
+    store.database.prepare(
+      'INSERT INTO meld_stash (player_id, item_id, quantity, stored_at) VALUES (?, ?, 1, 1)'
+    ).run(player.id, stagedItemId);
+
+    const server = createApp({ store, catalog, now: () => 2000 });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    context.after(async () => {
+      await new Promise((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()));
+      store.close();
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = await fetch(`${base}/login`, {
+      method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ name: draft.name, password })
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    const html = await (await fetch(`${base}/melds`, { headers: { cookie } })).text();
+
+    assert.equal((html.match(/class="meld-card rarity-/gu) ?? []).length,
+      partialMelds.length + 2);
+    for (const meld of partialMelds) {
+      assert.match(html, new RegExp(`href="/melds/${meld.id}"`));
+    }
+    assert.match(html, new RegExp(`href="/melds/${ownedMeld.id}"`));
+    assert.match(html, new RegExp(`href="/melds/${brokenMeld.id}"`));
+    assert.doesNotMatch(html, new RegExp(`href="/melds/${hiddenMeld.id}"`));
+    assert.match(html, /1 of \d+ things staged/u);
+    assert.match(html, />Owned<\/strong>/u);
+    assert.match(html, />Broken · dismantle<\/strong>/u);
+    assert.match(html, /Unstarted recipes stay hidden/u);
+    assert.doesNotMatch(html, /<h2>Meld storage<\/h2>|Stored outside inventory capacity/u);
+    assert.doesNotMatch(html, /View recipe|Showing the first/u);
+    const listedMelds = [...partialMelds, ownedMeld, brokenMeld].sort((first, second) =>
+      Number(first.rarity) - Number(second.rarity)
+        || first.name.localeCompare(second.name, 'en')
+        || Number(first.id) - Number(second.id));
+    for (let index = 1; index < listedMelds.length; index += 1) {
+      assert.ok(html.indexOf(`href="/melds/${listedMelds[index - 1].id}"`)
+        < html.indexOf(`href="/melds/${listedMelds[index].id}"`));
+    }
+
+    const filtered = await (await fetch(
+      `${base}/melds?q=${encodeURIComponent(hiddenMeld.name)}`, { headers: { cookie } }
+    )).text();
+    assert.doesNotMatch(filtered, new RegExp(`href="/melds/${hiddenMeld.id}"`));
+    assert.match(filtered, /No matching owned or started Melds/u);
+  });
+
 test('keeps Meld storage quiet and gives every created Meld a detailed occasion reveal', async (context) => {
   const catalog = loadLegacyCatalog();
   const store = new SqliteStore(':memory:');
@@ -3974,7 +4090,16 @@ test('provides a typed inbox and safe full views for system messages', async (co
               { side: 1, opponent: 0, attackBefore: 12, attackAfter: 12 }
             ],
             blows: [{ side: 0, opponent: 1, damage: 12, armorBefore: 10, armorAfter: 0 }]
-          }]
+          }],
+          captiveRounds: [{
+            phase: 'land', round: 1,
+            strikes: [{
+              side: 1, damage: 3, penetratingDamage: 3, absorbed: 0,
+              structure: 'armor', structureBefore: 10, structureAfter: 7,
+              dwarves: [{ name: 'Blue Dwarf', rarity: 3, damage: 3 }]
+            }]
+          }],
+          freedCaptiveDwarves: [{ id: 8, name: 'Blue Dwarf', rarity: 3 }]
         },
         actions: [
           { label: 'Manage the Wayfarer', path: '/vehicles/41' },
@@ -4007,6 +4132,8 @@ test('provides a typed inbox and safe full views for system messages', async (co
   assert.doesNotMatch(inboxHtml, /Private messages/);
   assert.match(inboxHtml,
     /<aside id="left"[\s\S]*?<a class="text-link" href="\/vehicles">Fleet \(\d+\)<\/a>/u);
+  assert.match(inboxHtml,
+    /<aside id="left"[\s\S]*?<a class="text-link" href="\/miners">Miners \(2\)<\/a>/u);
   assert.doesNotMatch(inboxHtml, /<aside id="left"[\s\S]*?<a class="text-link" href="\/vehicles">Vehicles<\/a>/u);
   assert.match(inboxHtml, /data-message-select-all[^>]*aria-label="Select all visible messages"/u);
   assert.match(inboxHtml, /data-message-select[^>]*aria-label="Select message from/u);
@@ -4079,6 +4206,9 @@ test('provides a typed inbox and safe full views for system messages', async (co
   assert.doesNotMatch(detailHtml, /-2\.55 aggressive power|-12 defensive power|-15 dodge/u);
   assert.match(detailHtml, /<td>Your vehicle<\/td><td>Aggressive<\/td>/);
   assert.match(detailHtml, /<td>12<\/td><td>10 → 0<\/td>/);
+  assert.match(detailHtml, /<h3>Captive Dwarf resistance<\/h3>/);
+  assert.match(detailHtml, /Blue Dwarf \(3 damage\)/);
+  assert.match(detailHtml, /1 Dwarf escaped when the NPC was defeated\./);
   assert.match(detailHtml, /Rating 1,600 → 1,612/);
   assert.doesNotMatch(detailHtml, /href="\/\/example\.test/);
   assert.doesNotMatch(detailHtml, /href="https:\/\/example\.test/);
@@ -4448,8 +4578,8 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(publicGuideHtml, /Every region receives its own creature roll every 1m to 10m/u);
   assert.match(publicGuideHtml, /Kraken.*Land Whale.*White Whale.*Orca Pod.*Elephant Herd.*T-Rex/su);
   assert.match(publicGuideHtml,
-    /Destroyed road vehicles and sunken ships remain as route wrecks/u);
-  assert.match(publicGuideHtml, /<strong>1,555 things<\/strong>/u);
+    /Destroyed road vehicles, sunken ships, and defeated event creatures leave remains/u);
+  assert.match(publicGuideHtml, /<strong>1,564 things<\/strong>/u);
   const expectedGuideCategories = 18 + catalog.mineTypes.length;
   assert.match(publicGuideHtml,
     new RegExp(`<span>Categories<\\/span><strong>${expectedGuideCategories}<\\/strong>`, 'u'));
@@ -4818,6 +4948,10 @@ test('supports registration and authenticated play pages', async (context) => {
   const oilFieldHtml = await oilField.text();
   assert.match(oilFieldHtml, /Pump, pipe, and pack 159 litres/);
   assert.match(oilFieldHtml, /class="oil-field-board-shell" data-hex-count="469"/);
+  assert.match(oilFieldHtml, /class="oil-legend"[^>]*><strong[^>]*>Legend<\/strong>/u);
+  assert.match(oilFieldHtml, /Green = other miners&rsquo; machines/u);
+  assert.ok(oilFieldHtml.indexOf('class="oil-legend"')
+    < oilFieldHtml.indexOf('class="oil-board-heading"'));
   assert.match(oilFieldHtml, /id="oil-board-navigation" class="oil-board-navigation"/);
   assert.match(oilFieldHtml, /id="oil-center-board" class="secondary" aria-controls="board">Centre field/);
   assert.match(oilFieldHtml, /aria-describedby="oil-board-help"/);
@@ -4934,7 +5068,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.equal(chatHtml.match(/<input[^>]+data-chat-rating-tier/g)?.length, 6);
   assert.match(chatHtml, /Rating tiers/);
   assert.match(chatHtml, /No selection shows every tier/);
-  assert.match(chatHtml, /data-chat-hide-world-events/);
+  assert.match(chatHtml, /data-chat-hide-world-events checked/);
   assert.match(chatHtml, /Hide world events/);
   assert.match(chatHtml, /data-chat-hidden-region/);
   assert.match(chatHtml, /Hide regions/);
@@ -4976,6 +5110,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.equal(chatFiltersClient.status, 200);
   const chatFiltersSource = await chatFiltersClient.text();
   assert.match(chatFiltersSource, /ratingTiers\.size > 0/);
+  assert.match(chatFiltersSource, /hideWorldEvents: true/);
   assert.match(chatFiltersSource, /data-chat-hide-world-events/);
   assert.match(chatFiltersSource, /data-chat-hidden-region/);
 
@@ -5514,6 +5649,157 @@ test('activates capital-local gadget stock only while the miner is in that capit
   assert.match(after, new RegExp(`href="/items/${item.id}"`));
   assert.match(after, new RegExp(`0 in ${capital.name}[^0-9]+2 elsewhere`));
   assert.match(after, new RegExp(`action="/gadgets/${itemId}/activate"[\\s\\S]*?<button disabled>`));
+});
+
+test('configures and disables the new gadget machinery through its web page', async (context) => {
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(loadLegacyCatalog());
+  store.ensureWorldMaps(1000);
+  const catalog = store.loadCatalog();
+  const password = 'automation gadget password';
+  const stock = catalog.items.find((item) => item.marketableId && item.rarity === 1);
+  const autolister = catalog.gadgetByName.get('autolister');
+  const autoloader = catalog.gadgetByName.get('autoloader');
+  const shipDefinition = catalog.ships.find((ship) => ship.cannonPortals > 0);
+  const shipType = catalog.vehicles.find((vehicle) => vehicle.id === shipDefinition?.vehicleId);
+  const allowedCannonRarities = catalog.settings.arms_rarities_by_vehicle_rarity[
+    catalog.byId.get(shipType?.itemId)?.rarity
+  ] ?? [];
+  const cannon = catalog.cannons.find((entry) =>
+    allowedCannonRarities.includes(catalog.byId.get(entry.itemId).rarity));
+  const ammunition = catalog.cannonballs[0];
+  assert.ok(stock && autolister && autoloader && shipType && cannon && ammunition);
+  const player = createPlayer(
+    'Web Automator', '', hashPassword(password), catalog, 1000, () => 0.5
+  );
+  player.inventoryByCity[player.cityId][stock.id] = 3;
+  player.inventoryByCity[player.cityId][shipType.itemId] = 1;
+  player.inventoryByCity[player.cityId][cannon.itemId] = 1;
+  player.inventoryByCity[player.cityId][ammunition.itemId] = 5;
+  player.inventory = player.inventoryByCity[player.cityId];
+  const saved = store.addPlayer(player);
+  const vehicleId = store.activateVehicle(saved.id, shipType.itemId);
+  store.attachShipCannon(saved.id, vehicleId, cannon.id);
+  store.database.prepare(`
+    INSERT INTO player_gadgets (player_id, gadget_id, expires_at)
+    VALUES (?, ?, 60000), (?, ?, 60000)
+  `).run(saved.id, autolister.id, saved.id, autoloader.id);
+  const server = createApp({ store, catalog, now: () => 2000 });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) => server.close(
+      (error) => error ? reject(error) : resolve()
+    ));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/login`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: saved.name, password })
+  });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+
+  const gadgetList = await (await fetch(`${base}/gadgets`, { headers: { cookie } })).text();
+  assert.match(gadgetList, /href="\/gadgets\/autolister">Open Autolister<\/a>/u);
+  const page = await fetch(`${base}/gadgets/autolister`, { headers: { cookie } });
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /<h1>Autolister<\/h1>/u);
+  assert.match(html, /Markup over each Thing's local reference price/u);
+  assert.match(html, /0 of 10 tasks/u);
+  assert.match(html, new RegExp(`value="${saved.cityId}:${stock.mineTypeId}"`));
+
+  const configure = await fetch(`${base}/gadgets/autolister/configure`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      stockType: `${saved.cityId}:${stock.mineTypeId}`,
+      markupPercent: '37.5', intervalMinutes: '15'
+    })
+  });
+  assert.equal(configure.status, 303);
+  assert.equal(configure.headers.get('location'), '/gadgets/autolister');
+  const automation = store.database.prepare(`
+    SELECT city_id, configuration_json, interval_ms, enabled
+    FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+  `).get(saved.id, autolister.id);
+  assert.equal(automation.city_id, saved.cityId);
+  assert.deepEqual(JSON.parse(automation.configuration_json), {
+    tasks: [{
+      cityId: saved.cityId, mineTypeId: stock.mineTypeId, markupPercent: 37.5
+    }], cursor: 0
+  });
+  assert.equal(automation.interval_ms, 15 * 60 * 1000);
+  assert.equal(automation.enabled, 1);
+
+  const configuredHtml = await (await fetch(`${base}/gadgets/autolister`, {
+    headers: { cookie }
+  })).text();
+  assert.match(configuredHtml, /1 of 10 tasks/u);
+  assert.match(configuredHtml, /action="\/gadgets\/autolister\/tasks\/0\/remove"/u);
+
+  const disable = await fetch(`${base}/gadgets/autolister/disable`, {
+    method: 'POST', redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(disable.status, 303);
+  assert.equal(store.database.prepare(`
+    SELECT enabled FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+  `).get(saved.id, autolister.id).enabled, 0);
+  const disabledHtml = await (await fetch(`${base}/gadgets/autolister`, {
+    headers: { cookie }
+  })).text();
+  assert.match(disabledHtml, /<h2>Disabled<\/h2>/u);
+  assert.match(disabledHtml, /action="\/gadgets\/autolister\/enable"/u);
+  const enable = await fetch(`${base}/gadgets/autolister/enable`, {
+    method: 'POST', redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(enable.status, 303);
+  assert.equal(store.database.prepare(`
+    SELECT enabled FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+  `).get(saved.id, autolister.id).enabled, 1);
+
+  const remove = await fetch(`${base}/gadgets/autolister/tasks/0/remove`, {
+    method: 'POST', redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(remove.status, 303);
+  assert.deepEqual(JSON.parse(store.database.prepare(`
+    SELECT configuration_json FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+  `).get(saved.id, autolister.id).configuration_json), { tasks: [], cursor: 0 });
+
+  const autoloaderPage = await (await fetch(`${base}/gadgets/autoloader`, {
+    headers: { cookie }
+  })).text();
+  assert.match(autoloaderPage,
+    /name="quantity" min="1" max="1000" step="1" value="1" required/u);
+  const configureAutoloader = await fetch(`${base}/gadgets/autoloader/configure`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      vehicleId: String(vehicleId), ammoType: String(ammunition.type),
+      quantity: '3', intervalMinutes: '15'
+    })
+  });
+  assert.equal(configureAutoloader.status, 303);
+  assert.deepEqual(JSON.parse(store.database.prepare(`
+    SELECT configuration_json FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+  `).get(saved.id, autoloader.id).configuration_json), {
+    tasks: [{
+      cityId: saved.cityId, vehicleId, ammoType: ammunition.type, quantity: 3
+    }], cursor: 0
+  });
+  const configuredAutoloaderPage = await (await fetch(`${base}/gadgets/autoloader`, {
+    headers: { cookie }
+  })).text();
+  assert.match(configuredAutoloaderPage, /up to 3 crates/u);
+
+  const retired = await fetch(`${base}/gadgets/calculator`, {
+    redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(retired.status, 303);
+  assert.equal(retired.headers.get('location'), '/gadgets/autolister');
 });
 
 test('hides arms from public profiles while the Armory gadget is active', async (context) => {

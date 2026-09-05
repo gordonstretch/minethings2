@@ -218,5 +218,5 @@ test('existing catalogs migrate legacy weapon art without replacing custom datab
       intactChanges: 1,
       damagedChanges: 1
     });
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 131);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
   });

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Tungsten Meldal Detector</title>
-  <desc id="desc">Tungsten Meldal Detector, depicted as a rugged scanner with a glowing meld glyph, detector stem, and search coil.</desc>
+  <title id="title">Tungsten Automelder</title>
+  <desc id="desc">Tungsten Automelder, depicted as a rugged controller with a glowing Meld glyph, staging stem, and ingredient coil.</desc>
   <path d="M39 24 55 10h35l18 16-7 54-28 13-31-14z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
   <path d="M51 31 62 21h20l13 11-5 39-18 9-19-9z" fill="#4b5050" stroke="#d8be32" stroke-width="5"/>
   <path d="M73 21v58M51 32l39 39M95 32 53 71" fill="none" stroke="#899693" stroke-width="4"/>

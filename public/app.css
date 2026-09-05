@@ -703,6 +703,18 @@ th { color: var(--muted); font: bold .75rem Arial, sans-serif; text-transform: u
 .gadget-activators { display: grid; align-content: center; gap: .5rem; }
 .gadget-activators form { display: flex; align-items: center; justify-content: space-between; gap: .7rem; padding: .55rem; background: rgba(255,255,255,.55); border: 1px solid var(--line); }
 .gadget-activators .item-card-actions form { display: block; padding: 0; background: none; border: 0; }
+.gadget-automation-state, .gadget-automation-queue, .gadget-automation-config { margin-top: 1.25rem; padding: 1.2rem; background: rgba(255,255,255,.72); border: 1px solid var(--line); }
+.gadget-automation-state dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
+.gadget-automation-state dl div { padding: .75rem; background: rgba(255,255,255,.6); border: 1px solid var(--line); }
+.gadget-automation-state dt { color: var(--muted); font-size: .8rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.gadget-automation-state dd { margin: .25rem 0 0; line-height: 1.4; }
+.gadget-automation-config form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: end; }
+.gadget-automation-config label { display: grid; gap: .35rem; }
+.gadget-automation-config .field-help { grid-column: 1 / -1; margin: 0; color: var(--muted); line-height: 1.5; }
+.gadget-automation-config form > button { justify-self: start; }
+.gadget-automation-queue ol { display: grid; gap: .55rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+.gadget-automation-queue li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .65rem .75rem; background: rgba(255,255,255,.65); border: 1px solid var(--line); }
+.automation-next { display: inline-block; margin-left: .35rem; padding: .16rem .4rem; color: #fff; background: var(--green); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .active-state { color: #477d3e; }
 .meld-reputation { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr); gap: 0; margin: 1.5rem 0; color: #eee9df; background: #171a18; border-top: 4px solid var(--brand-orange); box-shadow: 0 12px 28px rgba(49,38,23,.18); }
 .meld-reputation > div { display: grid; align-content: center; padding: clamp(1.4rem, 4vw, 2.5rem); }
@@ -1162,18 +1174,21 @@ th { color: var(--muted); font: bold .75rem Arial, sans-serif; text-transform: u
 .oil-advanced { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .oil-advanced .oil-deploy { grid-template-columns: 1fr; }
 .oil-original-panel { margin: 1.25rem 0 2.4rem; padding: 1rem; overflow: hidden; border: 1px solid #4b504b; border-top: 0; background: #f8f0e1; box-shadow: 0 18px 42px rgba(56,43,26,.18); }
-.oil-board-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin: -1rem -1rem 0; padding: 1rem 1.15rem; color: #f0ece3; background: #101310; border-top: 5px solid var(--brand-orange); border-bottom: 1px solid #3b403b; }
+.oil-board-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin: 0 -1rem; padding: 1rem 1.15rem; color: #f0ece3; background: #101310; border-top: 5px solid var(--brand-orange); border-bottom: 1px solid #3b403b; }
 .oil-board-heading h2, .oil-board-heading p { margin: 0; }
 .oil-board-heading h2 { margin-top: .35rem; color: #f0ece3; font: 900 1.25rem/1 "Arial Narrow", Impact, Arial, sans-serif; letter-spacing: .07em; text-transform: uppercase; }
 .oil-board-heading .eyebrow { color: var(--brand-orange); font-size: .53rem; }
 .oil-board-heading div > p:last-child { margin-top: .4rem; color: #90958e; font-size: .68rem; }
 .oil-board-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
 .oil-board-controls button { min-width: 8.5rem; min-height: 40px; padding: .65rem .8rem; }
-.oil-legend { display: flex; flex-wrap: wrap; gap: .55rem .9rem; margin: .9rem 0 .45rem; padding: .7rem .8rem; color: #494941; background: #fffaf0; border: 1px solid #d8cbb4; font-size: .72rem; }
-.oil-key { display: inline-flex; align-items: center; gap: .35rem; }
-.oil-key::before { width: .85rem; height: .85rem; border: 2px solid #fff; content: ''; transform: rotate(30deg); }
+.oil-legend { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .75rem; margin: -1rem -1rem 0; padding: .82rem 1rem; color: #3f3e38; background: #fffaf0; border: 2px solid #c8b384; box-shadow: inset 0 -1px 0 rgba(72,54,27,.08); font-size: .8rem; }
+.oil-legend-title { align-self: stretch; display: flex; align-items: center; padding-right: .8rem; color: #493514; border-right: 2px solid #d8c49b; font: 900 .68rem/1 Arial, sans-serif; letter-spacing: .13em; text-transform: uppercase; }
+.oil-legend-items { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1rem; min-width: 0; }
+.oil-key { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+.oil-key::before { flex: 0 0 auto; width: .95rem; height: .95rem; border: 2px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); content: ''; transform: rotate(30deg); }
 .oil-key-own::before { background: #f00; }
 .oil-key-rival::before { background: #0f0; }
+.oil-key-rival { padding: .25rem .42rem; color: #174b1d; background: #e5f6e5; border: 1px solid #98d19a; font-weight: 900; }
 .oil-key-build::before { background: #44f; }
 .oil-key-heli::before { background: #44f; border-color: #00f; opacity: .65; }
 .oil-key-oil::before { height: .45rem; background: #11100d; border-color: #29271f; border-radius: 50%; transform: none; }
@@ -1755,7 +1770,8 @@ body.game-body::before { content: ''; position: fixed; inset: 0; z-index: 0; poi
 .profession-kit-admin-table { min-width: 1050px; }
 .profession-kit-admin-table td { vertical-align: top; }
 .profession-kit-admin-table td > small { display: block; max-width: 18rem; margin-top: .35rem; color: var(--muted); }
-@media (max-width: 760px) { .game-shell .page-title { align-items: flex-start; grid-template-columns: 1fr; } .auth-grid, .item-grid, .trade-forms, .loadout-list, .detonator-grid, .gadget-card, .meld-recipe ul, .profession-grid, .worker-market, .factory-action, .chat-row, .oil-deploy, .oil-advanced, .report-filter, .container-grid, .fitting-grid, .vehicle-send, .ratings-grid, .account-grid, .stone-grid, .stone-progress, .profile-inventory-filter, .item-picker-grid, .oil-form-fields { grid-template-columns: 1fr; } .factory-action .item-picker, .factory-action > button { grid-column: 1; } .mine, .shop-card, .vehicle-card { grid-template-columns: 96px 1fr; } .mine-actions, .shop-card form, .vehicle-actions { grid-column: 2; } .mine-actions, .vehicle-actions { flex-wrap: wrap; } .detail, .loadout-layout { grid-template-columns: 1fr; } .item, .item-card-actions, .item-actions { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; } .message-row { grid-template-columns: auto 1fr; } .message-row time, .message-actions { grid-column: 2; } .miner-card, .worker-card, .oil-summary, .container-card, .vehicle-hero { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 760px) { .game-shell .page-title { align-items: flex-start; grid-template-columns: 1fr; } .auth-grid, .item-grid, .trade-forms, .loadout-list, .detonator-grid, .gadget-card, .gadget-automation-state dl, .gadget-automation-config form, .meld-recipe ul, .profession-grid, .worker-market, .factory-action, .chat-row, .oil-deploy, .oil-advanced, .report-filter, .container-grid, .fitting-grid, .vehicle-send, .ratings-grid, .account-grid, .stone-grid, .stone-progress, .profile-inventory-filter, .item-picker-grid, .oil-form-fields { grid-template-columns: 1fr; } .factory-action .item-picker, .factory-action > button { grid-column: 1; } .mine, .shop-card, .vehicle-card { grid-template-columns: 96px 1fr; } .mine-actions, .shop-card form, .vehicle-actions { grid-column: 2; } .mine-actions, .vehicle-actions { flex-wrap: wrap; } .detail, .loadout-layout { grid-template-columns: 1fr; } .item, .item-card-actions, .item-actions { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; } .message-row { grid-template-columns: auto 1fr; } .message-row time, .message-actions { grid-column: 2; } .miner-card, .worker-card, .oil-summary, .container-card, .vehicle-hero { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 760px) { .gadget-automation-queue li { align-items: stretch; flex-direction: column; } .gadget-automation-queue li form, .gadget-automation-queue li button { width: 100%; } }
 @media (max-width: 760px) { .meld-reputation { grid-template-columns: 1fr; } .meld-reputation aside { border-top: 1px solid #3e453e; border-left: 0; } }
 @media (max-width: 760px) { .credit-bundles, .profession-kits, .profession-kits-section .section-heading, .legal-identity, .receipt-grid { grid-template-columns: 1fr; } .profession-kit { grid-template-columns: 1fr; } .profession-kit-offer { align-items: flex-start; text-align: left; } .legal-identity dd, .receipt-grid dd { margin-bottom: .55rem; } }
 @media (max-width: 760px) {
@@ -1825,10 +1841,12 @@ body.game-body::before { content: ''; position: fixed; inset: 0; z-index: 0; poi
   .oil-facts dd { overflow: visible; font-size: .72rem; text-overflow: clip; white-space: normal; }
   .oil-briefing { grid-template-columns: 1fr; }
   .oil-original-panel { min-width: 0; margin-inline: calc(0rem - clamp(.85rem, 4vw, 1.4rem)); padding: .75rem .65rem 1rem; overflow: hidden; border-inline: 0; }
-  .oil-board-heading { min-width: 0; align-items: stretch; flex-direction: column; margin: -.75rem -.65rem 0; padding: .9rem .75rem .7rem; }
+  .oil-board-heading { min-width: 0; align-items: stretch; flex-direction: column; margin: 0 -.65rem; padding: .9rem .75rem .7rem; }
   .oil-board-controls { width: calc(100% + 1.5rem); min-width: 0; margin-inline: -.75rem; padding: .15rem .75rem .35rem; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: .75rem; scroll-snap-type: x proximity; }
   .oil-board-controls button { flex: 0 0 auto; min-width: max-content; min-height: 44px; scroll-snap-align: start; }
-  .oil-legend { margin-inline: -.65rem; padding-inline: .65rem; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: .65rem; scroll-snap-type: x proximity; }
+  .oil-legend { grid-template-columns: auto minmax(0, 1fr); margin: -.75rem -.65rem 0; padding: .7rem .65rem; }
+  .oil-legend-title { padding-right: .6rem; }
+  .oil-legend-items { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: .2rem; scroll-snap-type: x proximity; }
   .oil-key { flex: 0 0 auto; scroll-snap-align: start; }
   .oil-board-status { margin-bottom: .55rem; font-size: .75rem; line-height: 1.4; }
   .oil-board-navigation { align-items: stretch; margin-inline: -.65rem; padding: .55rem .65rem; }

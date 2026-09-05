@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Legendary Automaker</title>
+  <desc id="desc">Legendary Automaker, depicted as a radiant articulated factory arm serving a ten-job production carousel.</desc>
+  <path d="M12 99h104v16H12z" fill="#292d29"/>
+  <circle cx="64" cy="91" r="28" fill="#b26b16" stroke="#292d29" stroke-width="5"/>
+  <circle cx="64" cy="91" r="12" fill="#66e3ff" stroke="#292d29" stroke-width="4"/>
+  <g fill="#f8dc62" stroke="#292d29" stroke-width="2">
+    <circle cx="64" cy="68" r="5"/><circle cx="78" cy="72" r="5"/><circle cx="86" cy="84" r="5"/><circle cx="84" cy="99" r="5"/><circle cx="73" cy="109" r="5"/>
+    <circle cx="55" cy="109" r="5"/><circle cx="44" cy="99" r="5"/><circle cx="42" cy="84" r="5"/><circle cx="50" cy="72" r="5"/>
+  </g>
+  <path d="M25 92V48l18-13 14 10-10 14-9-5v38" fill="#d8be32" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="44" cy="45" r="8" fill="#66e3ff" stroke="#292d29" stroke-width="4"/>
+  <path d="M52 44l23-19 18 7-6 17-14-5-13 16" fill="#9b651e" stroke="#292d29" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="84" cy="36" r="7" fill="#d94a36" stroke="#292d29" stroke-width="3"/>
+  <path d="M87 48l13 11-7 13-15-8" fill="#f8dc62" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M17 115h94" stroke="#f8dc62" stroke-width="5" stroke-linecap="round"/>
+</svg>

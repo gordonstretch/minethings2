@@ -253,9 +253,14 @@ test('filters chat by multiple rating tiers, regions, and world events', async (
   await page.goto(`${base}/chat`);
   const rankOne = page.locator('[data-chat-rating-tier][value="1"]');
   const rankSix = page.locator('[data-chat-rating-tier][value="6"]');
+  const hideWorldEvents = page.locator('[data-chat-hide-world-events]');
   await expect(page.locator('input[data-chat-rating-tier]')).toHaveCount(6);
   await expect(rankOne.locator('xpath=..')).toContainText('Yours');
   await expect(rankSix.locator('xpath=..')).toContainText('Yours');
+  await expect(hideWorldEvents).toBeChecked();
+  await expect(page.getByText('Rank 1 combat notice.', { exact: true })).toBeHidden();
+  await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeVisible();
+  await hideWorldEvents.uncheck();
 
   await rankOne.check();
   await expect(page.getByText('Rank 1 combat notice.', { exact: true })).toBeVisible();
@@ -266,7 +271,6 @@ test('filters chat by multiple rating tiers, regions, and world events', async (
 
   await rankOne.uncheck();
   await rankSix.uncheck();
-  const hideWorldEvents = page.locator('[data-chat-hide-world-events]');
   await hideWorldEvents.check();
   await expect(page.getByText('Rank 1 combat notice.', { exact: true })).toBeHidden();
   await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeVisible();
@@ -276,6 +280,7 @@ test('filters chat by multiple rating tiers, regions, and world events', async (
   await hideRegion.check();
   await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeHidden();
   await page.locator('[data-chat-filter-reset]').click();
+  await expect(hideWorldEvents).toBeChecked();
   await expect(page.getByText('Regional miner chatter.', { exact: true })).toBeVisible();
 
   await rankOne.check();
@@ -303,6 +308,7 @@ test('follows live chat at the bottom without yanking a reader who scrolled up',
   external.close();
   await page.goto(`${base}/chat`);
   const chatLog = page.locator('#chat-log');
+  await page.locator('[data-chat-hide-world-events]').uncheck();
   await expect(page.locator('.chat-page > .page-title')).toBeVisible();
   await expect(page.locator('.chat-console')).toBeVisible();
   await expect(page.locator('#chat-live-status')).toContainText('Live');

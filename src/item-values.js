@@ -16,6 +16,12 @@ function requiredNumber(value, label) {
   return number;
 }
 
+function requiredPositiveNumber(value, label) {
+  const number = requiredNumber(value, label);
+  if (number <= 0) throw new Error(`Invalid item valuation rule: ${label}.`);
+  return number;
+}
+
 function requiredCollection(catalog, key) {
   const value = catalog?.[key];
   if (!Array.isArray(value)) throw new Error(`Missing catalog collection for item valuation: ${key}.`);
@@ -66,13 +72,52 @@ function recipeDemandGold(catalog, itemId, rules) {
     + soleIngredientDemand * requiredNumber(rules.recipe.soleIngredient, 'recipe.soleIngredient');
 }
 
-function factoryCostGold(catalog, item, rules) {
-  const action = requiredCollection(catalog, 'factoryActions').find(
+function minimumWorkerGoldPerComponent(catalog) {
+  const tiers = catalog.settings?.factory_worker_bot_tiers;
+  if (!Array.isArray(tiers) || !tiers.length) {
+    throw new Error('Missing catalog setting: factory_worker_bot_tiers.');
+  }
+  const contractHours = requiredPositiveNumber(
+    catalog.settings?.factory_worker_bot_contract_duration_ms,
+    'factory_worker_bot_contract_duration_ms'
+  ) / 3600000;
+  return Math.min(...tiers.map((tier, index) => {
+    const cph = requiredPositiveNumber(tier?.cph, `factory_worker_bot_tiers[${index}].cph`);
+    const costGold = requiredPositiveNumber(
+      tier?.costGold, `factory_worker_bot_tiers[${index}].costGold`
+    );
+    return costGold / (cph * contractHours);
+  }));
+}
+
+export function factoryProductionFloorGold(catalog, action) {
+  const rules = itemValueRules(catalog);
+  const oreGold = requiredPositiveNumber(rules.oreCrateGold, 'oreCrateGold');
+  const oreShare = requiredNumber(rules.factory?.oreInputValueShare,
+    'factory.oreInputValueShare');
+  const workerShare = requiredNumber(rules.factory?.workerCostShare,
+    'factory.workerCostShare');
+  if (oreShare < 0 || workerShare < 0) {
+    throw new Error('Invalid item valuation rule: factory cost shares.');
+  }
+  const outputQuantity = requiredNumber(action?.outputQuantity ?? 1, 'factory.outputQuantity');
+  if (!Number.isSafeInteger(outputQuantity) || outputQuantity < 1) {
+    throw new Error('Invalid item valuation rule: factory.outputQuantity.');
+  }
+  const ore = requiredNumber(action?.ore, 'factory.ore');
+  const components = requiredNumber(action?.components, 'factory.components');
+  if (ore < 0 || components < 0) throw new Error('Invalid factory production cost.');
+  const batchCost = ore * oreGold * oreShare
+    + components * minimumWorkerGoldPerComponent(catalog) * workerShare;
+  return Math.ceil(batchCost / outputQuantity);
+}
+
+function factoryCostGold(catalog, item) {
+  const actions = requiredCollection(catalog, 'factoryActions').filter(
     (candidate) => candidate.outputItemId === item.id
   );
-  return action
-    ? action.ore * requiredNumber(rules.factory.ore, 'factory.ore')
-      + action.components * requiredNumber(rules.factory.components, 'factory.components')
+  return actions.length
+    ? Math.min(...actions.map((action) => factoryProductionFloorGold(catalog, action)))
     : 0;
 }
 
@@ -113,9 +158,11 @@ function directItemGoldValue(catalog, item, rules) {
   if (item.id === Number(catalog.settings.oil_item_id)) {
     return requiredNumber(rules.oilBarrelGold, 'oilBarrelGold');
   }
+  if (item.id === Number(catalog.settings.ore_item_id)) {
+    return requiredPositiveNumber(rules.oreCrateGold, 'oreCrateGold');
+  }
   let value = rarityMinimumGold(rules, item.rarity);
   value += recipeDemandGold(catalog, item.id, rules);
-  value += factoryCostGold(catalog, item, rules);
   if (Object.prototype.hasOwnProperty.call(rules.utilityGoldByItemId, item.id)) {
     value += requiredNumber(rules.utilityGoldByItemId[item.id], `utilityGoldByItemId[${item.id}]`);
   }
@@ -201,7 +248,7 @@ function directItemGoldValue(catalog, item, rules) {
       : requiredNumber(rules.avatar.other, 'avatar.other');
   }
 
-  return roundedGold(value);
+  return roundedGold(Math.max(value, factoryCostGold(catalog, item)));
 }
 
 function averageGoldValue(items) {

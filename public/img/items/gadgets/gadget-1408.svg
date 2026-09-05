@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Tungsten Ledger</title>
-  <desc id="desc">Tungsten Ledger, depicted as a chained account book embossed with scales and index tabs.</desc>
+  <title id="title">Tungsten Autoloader</title>
+  <desc id="desc">Tungsten Autoloader, depicted as a chained ship-loading console with balance scales and indexed controls.</desc>
   <path d="M17 16h83l13 15v86H17z" fill="#242827" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
   <path d="M24 109V23h72l10 11v75z" fill="none" stroke="#899693" stroke-width="3" stroke-linejoin="round"/>
   <path d="M30 28h58v76H30z" fill="#4b5050" stroke="#292d29" stroke-width="5"/>

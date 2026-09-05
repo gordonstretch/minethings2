@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Iron Spreadsheet</title>
-  <desc id="desc">Iron Spreadsheet, depicted as a bound tabular folio with a ruler and marked totals.</desc>
+  <title id="title">Iron Automaker</title>
+  <desc id="desc">Iron Automaker, depicted as a bound production controller with a ruler and marked job totals.</desc>
   <path d="M15 21h87l11 11v84H15z" fill="#59635f" stroke="#292d29" stroke-width="7"/>
   <path d="M29 35h68v67H29z" fill="#aeb8b2" stroke="#292d29" stroke-width="5"/>
   <path d="M29 51h68M29 68h68M29 85h68M50 35v67m25-67v67" stroke="#343735" stroke-width="4"/>

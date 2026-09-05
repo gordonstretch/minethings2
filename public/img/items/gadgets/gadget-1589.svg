@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Legendary Autoloader</title>
+  <desc id="desc">Legendary Autoloader, depicted as a radiant ammunition conveyor feeding a ten-berth ship console.</desc>
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a6"/><stop offset="1" stop-color="#b26b16"/></linearGradient>
+  </defs>
+  <path d="M14 91h100v17H14z" fill="#292d29"/>
+  <path d="M20 86h88l-9 16H29z" fill="url(#body)" stroke="#292d29" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="35" cy="94" r="6" fill="#553816"/><circle cx="64" cy="94" r="6" fill="#553816"/><circle cx="93" cy="94" r="6" fill="#553816"/>
+  <path d="M17 72h75v14H17z" fill="#d8be32" stroke="#292d29" stroke-width="4"/>
+  <path d="M25 57h10v15H25zm18 0h10v15H43zm18 0h10v15H61zm18 0h10v15H79z" fill="#d94a36" stroke="#292d29" stroke-width="3"/>
+  <path d="M92 47h17v39H92z" fill="#4b5050" stroke="#292d29" stroke-width="4"/>
+  <path d="M97 53h7v7h-7zm0 11h7v7h-7zm0 11h7v7h-7z" fill="#66e3ff"/>
+  <path d="M31 47V25h42v22M41 25l6-10h10l6 10" fill="none" stroke="#292d29" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38 47V32h28v15" fill="#66e3ff" stroke="#d8be32" stroke-width="3"/>
+  <path d="M21 109h86" stroke="#f8dc62" stroke-width="5" stroke-linecap="round"/>
+</svg>

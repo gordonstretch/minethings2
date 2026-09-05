@@ -6,13 +6,13 @@ import {
   activeMineLimit, claimMine, expireRentalMines, findGold, findItem, giveFinds, mineIntervalMs,
   rentMine, synchronizeMineSchedules
 } from './game.js';
-import { itemGoldValueUnits } from './item-values.js';
+import { factoryProductionFloorGold, itemGoldValueUnits } from './item-values.js';
 import {
   indexCatalog, LEGACY_CASINO_SLOT_RULES, LEGACY_COMBAT_SEASON_SETTINGS, LEGACY_ITEM_VALUE_RULES,
   LEGACY_MACHINE_BEHAVIOR_RULES,
   LEGACY_MACHINE_TYPE_RULES, LEGACY_SPECIALISATION_TITLES, LEGACY_STARTER_WELCOME_PACK,
   LEGACY_WORLD_EVENT_SETTINGS, EXPANDED_STONE_CATALOG, MANUFACTURED_TRANSPORT_CATALOG,
-  BOLT_BOX_CATALOG,
+  BOLT_BOX_CATALOG, MAGNET_CATALOG,
   PRESTIGE_SPECIALISATIONS, FACTORY_WORKER_BOT_TIERS, ASO_DISCOVERY_STONE,
   CITY_COMPLETION_STONE, HOME_DISPLAY_STONE, HOME_STONE, STARTER_BOT_STONE,
   INVENTORY_CAPACITY_RULES,
@@ -64,6 +64,14 @@ import { mineShopIconPath, SHOP_MINE_TYPE_IDS } from './mine-icons.js';
 import { generateCouncilDocket } from './council-sentencing.js';
 import { generateWorldChatAnnouncement } from './world-chat-announcements.js';
 import {
+  GADGET_AUTOMATION_INTERVAL_MINUTES,
+  GADGET_AUTOMATION_LEGENDARY_ITEMS,
+  GADGET_AUTOMATION_MAX_TASKS,
+  GADGET_AUTOMATION_REPLACEMENTS,
+  MAX_AUTOLOADER_CRATES_PER_TASK,
+  MAX_AUTOLISTER_MARKUP_PERCENT
+} from './gadget-automations.js';
+import {
   CITY_ENCOUNTER_CHANCE, CITY_ENCOUNTER_COOLDOWN_STEPS, CITY_ENCOUNTER_GRACE_STEPS,
   CITY_EATEN_ACTOR_RESPAWN_STEPS,
   CITY_LOCATION_REWARD_SCRAPS, CITY_NOTICE_REWARD_SCRAPS, CITY_STREET_DEAD_PAUSE_MS,
@@ -73,7 +81,7 @@ import {
 } from './city-exploration.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 131;
+const CURRENT_SCHEMA_VERSION = 136;
 const CHAT_HISTORY_WINDOW_MS = 72 * 60 * 60 * 1000;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
 const GUILD_CREATION_COST_UNITS = 100 * GOLD_SCALE;
@@ -101,6 +109,7 @@ const SHUTTLE_RETRY_INTERVAL_MS = 5 * 60 * 1000;
 export const SHUTTLE_OIL_CATEGORY_ID = -1;
 export const CITY_VEHICLE_REPAIR_DURATION_MS = 24 * 60 * 60 * 1000;
 export const CITY_BAR_PRESENCE_TTL_MS = 60 * 1000;
+export const FACTORY_QUEUE_MAX_JOBS = 10;
 const CITY_BAR_MESSAGE_LIMIT = 100;
 const CITY_BAR_MESSAGE_RETENTION_MS = 24 * 60 * 60 * 1000;
 // The legacy field stored oil on whole-second ticks. Sub-millilitre residues are below that
@@ -405,6 +414,7 @@ export class SqliteStore {
       this.#migrateElectronicsCatalog();
       this.#migrateRelicsCatalog();
       this.#migrateBoltBoxCatalog();
+      this.#migrateMagnetCatalog();
       this.#migrateRegionalMineAvailability();
       this.#migrateAsoMineRentalVouchers();
       this.#migrateFactoryBuildCompletionMessages();
@@ -454,6 +464,7 @@ export class SqliteStore {
       this.catalogRevisionStatement = this.database.prepare(
         'SELECT revision FROM catalog_cache_revision WHERE id = 1'
       );
+      this.#migrateManufacturingMinimumPrices();
     } catch (error) {
       // A failed startup or migration must not leave an unreachable connection
       // holding file handles or a transaction until the garbage collector runs.
@@ -1197,6 +1208,23 @@ export class SqliteStore {
         expires_at INTEGER NOT NULL,
         PRIMARY KEY (player_id, gadget_id)
       );
+
+      CREATE TABLE IF NOT EXISTS gadget_automations (
+        player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        gadget_id INTEGER NOT NULL,
+        city_id INTEGER NOT NULL,
+        configuration_json TEXT NOT NULL,
+        interval_ms INTEGER NOT NULL CHECK (interval_ms > 0),
+        next_run_at INTEGER NOT NULL,
+        last_run_at INTEGER,
+        last_status TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (player_id, gadget_id)
+      );
+      CREATE INDEX IF NOT EXISTS gadget_automations_due
+        ON gadget_automations (enabled, next_run_at, player_id, gadget_id);
 
       CREATE TABLE IF NOT EXISTS factories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2084,6 +2112,26 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 135) {
+      this.#migrateTo136();
+      return;
+    }
+    if (schemaVersion === 134) {
+      this.#migrateTo135();
+      return;
+    }
+    if (schemaVersion === 133) {
+      this.#migrateTo134();
+      return;
+    }
+    if (schemaVersion === 132) {
+      this.#migrateTo133();
+      return;
+    }
+    if (schemaVersion === 131) {
+      this.#migrateTo132();
+      return;
+    }
     if (schemaVersion === 130) {
       this.#migrateTo131();
       return;
@@ -3677,7 +3725,7 @@ export class SqliteStore {
       const directPlayerTables = [
         'broken_melds', 'chat_ignores', 'credit_ledger', 'credit_purchases',
         'discoveries', 'dwarf_trashings', 'finding_queue', 'inventory', 'known_cities',
-        'legal_acceptances', 'market_orders', 'meld_stash', 'mine_equipment',
+        'gadget_automations', 'legal_acceptances', 'market_orders', 'meld_stash', 'mine_equipment',
         'mine_market_orders', 'mine_robots', 'mines', 'oil_events', 'oil_machine_queue',
         'oil_machines', 'oil_uses', 'player_avatar_elements', 'player_bot_parts',
         'player_containers', 'player_gadgets', 'player_melds',
@@ -6563,6 +6611,428 @@ export class SqliteStore {
       }
       this.database.exec('PRAGMA user_version = 131');
     });
+    this.#migrateTo132();
+  }
+
+  #migrateTo132() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 132) return;
+      if (currentVersion !== 131) {
+        throw new Error(`Cannot install gadget automations at v${currentVersion}.`);
+      }
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS gadget_automations (
+          player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+          gadget_id INTEGER NOT NULL,
+          city_id INTEGER NOT NULL,
+          configuration_json TEXT NOT NULL,
+          interval_ms INTEGER NOT NULL CHECK (interval_ms > 0),
+          next_run_at INTEGER NOT NULL,
+          last_run_at INTEGER,
+          last_status TEXT NOT NULL DEFAULT '',
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (player_id, gadget_id)
+        );
+        CREATE INDEX IF NOT EXISTS gadget_automations_due
+          ON gadget_automations (enabled, next_run_at, player_id, gadget_id);
+        CREATE TRIGGER IF NOT EXISTS live_update_gadget_automations_insert
+        AFTER INSERT ON gadget_automations BEGIN
+          INSERT INTO live_update_events (scope, changed_at)
+          VALUES ('player:' || NEW.player_id, CAST(unixepoch('subsec') * 1000 AS INTEGER));
+        END;
+        CREATE TRIGGER IF NOT EXISTS live_update_gadget_automations_update
+        AFTER UPDATE ON gadget_automations BEGIN
+          INSERT INTO live_update_events (scope, changed_at)
+          VALUES ('player:' || OLD.player_id, CAST(unixepoch('subsec') * 1000 AS INTEGER));
+          INSERT INTO live_update_events (scope, changed_at)
+          SELECT 'player:' || NEW.player_id, CAST(unixepoch('subsec') * 1000 AS INTEGER)
+          WHERE NEW.player_id <> OLD.player_id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS live_update_gadget_automations_delete
+        AFTER DELETE ON gadget_automations BEGIN
+          INSERT INTO live_update_events (scope, changed_at)
+          VALUES ('player:' || OLD.player_id, CAST(unixepoch('subsec') * 1000 AS INTEGER));
+        END;
+      `);
+      const updateGadget = this.database.prepare(`
+        UPDATE catalog_gadgets SET name = ?, behavior_key = ?, display_name = ?,
+          description = ?, has_page = 1 WHERE id = ?
+      `);
+      const gadgetItemIds = this.database.prepare(
+        'SELECT item_id FROM catalog_gadget_items WHERE gadget_id = ?'
+      );
+      const selectItem = this.database.prepare(
+        'SELECT id, name, rarity, gold_value_units FROM catalog_items WHERE id = ?'
+      );
+      const updateItem = this.database.prepare(
+        'UPDATE catalog_items SET name = ?, rarity = ?, gold_value_units = ? WHERE id = ?'
+      );
+      for (const replacement of GADGET_AUTOMATION_REPLACEMENTS) {
+        updateGadget.run(replacement.behaviorKey, replacement.behaviorKey,
+          replacement.displayName, replacement.description, replacement.gadgetId);
+        const intactIds = gadgetItemIds.all(replacement.gadgetId).map((row) => Number(row.item_id));
+        const itemIds = new Set(intactIds);
+        if (intactIds.length) {
+          const placeholders = intactIds.map(() => '?').join(', ');
+          for (const row of this.database.prepare(`
+            SELECT id FROM catalog_items WHERE repaired_item_id IN (${placeholders})
+          `).all(...intactIds)) itemIds.add(Number(row.id));
+        }
+        for (const itemId of itemIds) {
+          const item = selectItem.get(itemId);
+          if (!item) continue;
+          const damagedPrefix = item.name.startsWith('Damaged ') ? 'Damaged ' : '';
+          const cleanName = damagedPrefix ? item.name.slice(damagedPrefix.length) : item.name;
+          const material = cleanName.endsWith(replacement.legacyDisplayName)
+            ? cleanName.slice(0, -replacement.legacyDisplayName.length).trim()
+            : cleanName.split(' ')[0];
+          const promotedCalculator = [276, 634].includes(Number(item.id));
+          const name = `${damagedPrefix}${promotedCalculator ? 'Tungsten' : material} ${replacement.displayName}`;
+          const rarity = promotedCalculator ? 5 : item.rarity;
+          const goldValueUnits = promotedCalculator
+            ? (Number(item.id) === 276 ? 14010000 : 14000000)
+            : item.gold_value_units;
+          updateItem.run(name, rarity, goldValueUnits, item.id);
+        }
+      }
+      const upsertSetting = this.database.prepare(`
+        INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)
+        ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+      `);
+      upsertSetting.run('gadget_automation_interval_minutes',
+        JSON.stringify(GADGET_AUTOMATION_INTERVAL_MINUTES));
+      upsertSetting.run('gadget_automation_default_interval_minutes', '15');
+      upsertSetting.run('gadget_autolister_max_markup_percent',
+        String(MAX_AUTOLISTER_MARKUP_PERCENT));
+      this.database.exec('PRAGMA user_version = 132');
+    });
+    this.#migrateTo133();
+  }
+
+  #migrateTo133() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 133) return;
+      if (currentVersion !== 132) {
+        throw new Error(`Cannot install gadget automation queues at v${currentVersion}.`);
+      }
+
+      const selectAutomations = this.database.prepare(`
+        SELECT player_id, gadget_id, city_id, configuration_json FROM gadget_automations
+      `);
+      const updateAutomation = this.database.prepare(`
+        UPDATE gadget_automations SET configuration_json = ?
+        WHERE player_id = ? AND gadget_id = ?
+      `);
+      for (const row of selectAutomations.all()) {
+        let configuration;
+        try {
+          configuration = JSON.parse(row.configuration_json);
+        } catch (error) {
+          throw new Error('Cannot migrate an invalid gadget automation configuration.', {
+            cause: error
+          });
+        }
+        if (Array.isArray(configuration?.tasks)) continue;
+        if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) {
+          throw new Error('Cannot migrate an invalid gadget automation configuration.');
+        }
+        updateAutomation.run(JSON.stringify({
+          tasks: [{ cityId: Number(row.city_id), ...configuration }], cursor: 0
+        }), row.player_id, row.gadget_id);
+      }
+
+      const upsertSetting = this.database.prepare(`
+        INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)
+        ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+      `);
+      upsertSetting.run('gadget_automation_max_tasks',
+        JSON.stringify(GADGET_AUTOMATION_MAX_TASKS));
+      const lifespanRow = this.database.prepare(`
+        SELECT value_json FROM catalog_settings WHERE key = 'gadget_lifespan_days'
+      `).get();
+      if (lifespanRow) {
+        let lifespans;
+        try {
+          lifespans = JSON.parse(lifespanRow.value_json);
+        } catch (error) {
+          throw new Error('Cannot extend invalid gadget lifespan data.', { cause: error });
+        }
+        if (!Array.isArray(lifespans) || lifespans.length < 6) {
+          throw new Error('Cannot extend invalid gadget lifespan data.');
+        }
+        if (lifespans.length === 6) {
+          upsertSetting.run('gadget_lifespan_days', JSON.stringify([...lifespans, 1920]));
+        }
+      }
+
+      const insertItem = this.database.prepare(`
+        INSERT INTO catalog_items
+          (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+           can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+           has_large_image, gold_value_units)
+        VALUES (?, ?, 6, ?, ?, ?, ?, 1, ?, ?, ?, NULL, ?, 1, ?)
+      `);
+      const insertLink = this.database.prepare(`
+        INSERT INTO catalog_gadget_items (id, gadget_id, item_id) VALUES (?, ?, ?)
+      `);
+      const damagedDescription = 'This is a damaged item. It cannot be used or sold in its current state. It must be repaired at a factory.';
+      for (const specification of GADGET_AUTOMATION_LEGENDARY_ITEMS) {
+        const replacement = GADGET_AUTOMATION_REPLACEMENTS.find(
+          (candidate) => candidate.gadgetId === specification.gadgetId
+        );
+        const gadgetExists = this.database.prepare(
+          'SELECT 1 FROM catalog_gadgets WHERE id = ?'
+        ).get(specification.gadgetId);
+        if (!gadgetExists) continue;
+        const icon = gadgetIconPath(specification.itemId);
+        const definitions = [
+          {
+            id: specification.itemId,
+            name: `Legendary ${replacement.displayName}`,
+            description: `${replacement.description} Legendary machinery can sustain the full ten-task round-robin queue.`,
+            marketableId: specification.marketableId,
+            repairedItemId: null,
+            iconSource: 'gadget-svg',
+            damaged: 0,
+            goldValueUnits: 84045000
+          },
+          {
+            id: specification.damagedItemId,
+            name: `Damaged Legendary ${replacement.displayName}`,
+            description: damagedDescription,
+            marketableId: null,
+            repairedItemId: specification.itemId,
+            iconSource: 'damaged-gadget-svg',
+            damaged: 1,
+            goldValueUnits: 84035000
+          }
+        ];
+        for (const definition of definitions) {
+          const existing = this.database.prepare(`
+            SELECT name, rarity, repaired_item_id FROM catalog_items WHERE id = ?
+          `).get(definition.id);
+          if (existing) {
+            if (existing.name !== definition.name || Number(existing.rarity) !== 6
+              || Number(existing.repaired_item_id ?? 0) !== Number(definition.repairedItemId ?? 0)) {
+              throw new Error(`Cannot install Legendary gadget item ${definition.id}: the catalog id is occupied.`);
+            }
+            continue;
+          }
+          insertItem.run(definition.id, definition.name, definition.description,
+            definition.marketableId, specification.mineTypeId, definition.repairedItemId,
+            icon, definition.iconSource, definition.damaged, icon, definition.goldValueUnits);
+        }
+        const existingLink = this.database.prepare(`
+          SELECT id, gadget_id, item_id FROM catalog_gadget_items
+          WHERE id = ? OR item_id = ?
+        `).get(specification.gadgetItemId, specification.itemId);
+        if (existingLink) {
+          if (Number(existingLink.id) !== specification.gadgetItemId
+            || Number(existingLink.gadget_id) !== specification.gadgetId
+            || Number(existingLink.item_id) !== specification.itemId) {
+            throw new Error(`Cannot link Legendary gadget item ${specification.itemId}: the catalog id is occupied.`);
+          }
+        } else {
+          insertLink.run(specification.gadgetItemId, specification.gadgetId, specification.itemId);
+        }
+      }
+      this.database.exec('PRAGMA user_version = 133');
+    });
+    this.#migrateTo134();
+  }
+
+  #migrateTo134() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 134) return;
+      if (currentVersion !== 133) {
+        throw new Error(`Cannot make defeated creatures eligible for the restless dead at v${currentVersion}.`);
+      }
+      const ghostVehicleColumns = new Set(this.database.prepare(
+        'PRAGMA table_info(ghost_vehicles)'
+      ).all().map((column) => column.name));
+      this.database.exec(`
+        DROP TRIGGER IF EXISTS live_update_ghost_wrecks_insert;
+        DROP TRIGGER IF EXISTS live_update_ghost_wrecks_update;
+        DROP TRIGGER IF EXISTS live_update_ghost_wrecks_delete;
+        DROP INDEX IF EXISTS ghost_wrecks_pending;
+        ALTER TABLE ghost_wrecks RENAME TO ghost_wrecks_v133;
+        CREATE TABLE ghost_wrecks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          source_vehicle_id INTEGER UNIQUE,
+          source_creature_id INTEGER UNIQUE,
+          source_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+          vehicle_type_id INTEGER NOT NULL,
+          source_item_id INTEGER NOT NULL,
+          source_vehicle_name TEXT NOT NULL,
+          ghost_kind TEXT NOT NULL CHECK (ghost_kind IN ('rider', 'ship')),
+          route_id INTEGER NOT NULL,
+          location REAL NOT NULL,
+          rarity INTEGER NOT NULL,
+          loadout_json TEXT NOT NULL DEFAULT '{}',
+          cause TEXT NOT NULL,
+          wrecked_at INTEGER NOT NULL,
+          processed_at INTEGER,
+          outcome TEXT CHECK (outcome IS NULL OR outcome IN ('quiet', 'risen')),
+          ghost_id INTEGER REFERENCES ghost_vehicles(id) ON DELETE SET NULL,
+          CHECK ((source_vehicle_id IS NULL) <> (source_creature_id IS NULL)),
+          CHECK ((processed_at IS NULL AND outcome IS NULL AND ghost_id IS NULL)
+            OR (processed_at IS NOT NULL AND outcome = 'quiet' AND ghost_id IS NULL)
+            OR (processed_at IS NOT NULL AND outcome = 'risen' AND ghost_id IS NOT NULL))
+        );
+        INSERT INTO ghost_wrecks
+          (id, source_vehicle_id, source_player_id, vehicle_type_id, source_item_id,
+           source_vehicle_name, ghost_kind, route_id, location, rarity, loadout_json,
+           cause, wrecked_at, processed_at, outcome, ghost_id)
+        SELECT id, source_vehicle_id, source_player_id, vehicle_type_id, source_item_id,
+          source_vehicle_name, ghost_kind, route_id, location, rarity, loadout_json,
+          cause, wrecked_at, processed_at, outcome, ghost_id
+        FROM ghost_wrecks_v133;
+        DROP TABLE ghost_wrecks_v133;
+        CREATE INDEX ghost_wrecks_pending
+          ON ghost_wrecks (processed_at, ghost_kind, wrecked_at, id);
+        CREATE TRIGGER live_update_ghost_wrecks_insert AFTER INSERT ON ghost_wrecks BEGIN
+          INSERT INTO live_update_events (scope, changed_at)
+          SELECT 'player:' || NEW.source_player_id,
+            CAST(unixepoch('subsec') * 1000 AS INTEGER)
+          WHERE NEW.source_player_id IS NOT NULL;
+          INSERT INTO live_update_events (scope, changed_at) VALUES
+            ('topic:vehicles', CAST(unixepoch('subsec') * 1000 AS INTEGER)),
+            ('topic:world', CAST(unixepoch('subsec') * 1000 AS INTEGER));
+        END;
+        CREATE TRIGGER live_update_ghost_wrecks_update AFTER UPDATE ON ghost_wrecks BEGIN
+          INSERT INTO live_update_events (scope, changed_at)
+          SELECT 'player:' || NEW.source_player_id,
+            CAST(unixepoch('subsec') * 1000 AS INTEGER)
+          WHERE NEW.source_player_id IS NOT NULL;
+          INSERT INTO live_update_events (scope, changed_at) VALUES
+            ('topic:vehicles', CAST(unixepoch('subsec') * 1000 AS INTEGER)),
+            ('topic:world', CAST(unixepoch('subsec') * 1000 AS INTEGER));
+        END;
+        CREATE TRIGGER live_update_ghost_wrecks_delete AFTER DELETE ON ghost_wrecks BEGIN
+          INSERT INTO live_update_events (scope, changed_at)
+          SELECT 'player:' || OLD.source_player_id,
+            CAST(unixepoch('subsec') * 1000 AS INTEGER)
+          WHERE OLD.source_player_id IS NOT NULL;
+          INSERT INTO live_update_events (scope, changed_at) VALUES
+            ('topic:vehicles', CAST(unixepoch('subsec') * 1000 AS INTEGER)),
+            ('topic:world', CAST(unixepoch('subsec') * 1000 AS INTEGER));
+        END;
+      `);
+      if (!ghostVehicleColumns.has('source_creature_id')) {
+        this.database.exec(`
+          ALTER TABLE ghost_vehicles
+            ADD COLUMN source_creature_id INTEGER
+        `);
+      }
+      this.database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ghost_vehicles_source_creature
+          ON ghost_vehicles (source_creature_id) WHERE source_creature_id IS NOT NULL;
+        PRAGMA user_version = 134;
+      `);
+    });
+    this.#migrateTo135();
+  }
+
+  #migrateTo135() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 135) return;
+      if (currentVersion !== 134) {
+        throw new Error(`Cannot regionalise ore-thief bases at v${currentVersion}.`);
+      }
+      const columns = new Set(this.database.prepare(
+        'PRAGMA table_info(thief_bases)'
+      ).all().map((column) => column.name));
+      if (!columns.has('map_id')) {
+        this.database.exec(`
+          ALTER TABLE thief_bases
+            ADD COLUMN map_id INTEGER REFERENCES world_maps(id) ON DELETE CASCADE;
+        `);
+      }
+      this.database.exec(`
+        CREATE INDEX IF NOT EXISTS thief_bases_map_recent
+          ON thief_bases (map_id, id DESC);
+        PRAGMA user_version = 135;
+      `);
+    });
+    this.#migrateTo136();
+  }
+
+  #migrateTo136() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 136) return;
+      if (currentVersion !== 135) {
+        throw new Error(`Cannot make Autolister tasks type-based at v${currentVersion}.`);
+      }
+      const replacement = GADGET_AUTOMATION_REPLACEMENTS.find(
+        (candidate) => candidate.behaviorKey === 'autolister'
+      );
+      const rows = this.database.prepare(`
+        SELECT player_id, gadget_id, city_id, configuration_json
+        FROM gadget_automations WHERE gadget_id = ?
+      `).all(replacement.gadgetId);
+      const mineTypeForItem = this.database.prepare(
+        'SELECT mine_type_id FROM catalog_items WHERE id = ?'
+      );
+      const mineTypeExists = this.database.prepare(
+        'SELECT 1 FROM catalog_mine_types WHERE id = ?'
+      );
+      const updateAutomation = this.database.prepare(`
+        UPDATE gadget_automations SET configuration_json = ?
+        WHERE player_id = ? AND gadget_id = ?
+      `);
+      for (const row of rows) {
+        let configuration;
+        try {
+          configuration = JSON.parse(row.configuration_json);
+        } catch (error) {
+          throw new Error('Cannot migrate an invalid Autolister configuration.', { cause: error });
+        }
+        if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) {
+          throw new Error('Cannot migrate an invalid Autolister configuration.');
+        }
+        const queue = Array.isArray(configuration.tasks)
+          ? configuration
+          : { tasks: [{ cityId: Number(row.city_id), ...configuration }], cursor: 0 };
+        if (!Array.isArray(queue.tasks)) {
+          throw new Error('Cannot migrate an invalid Autolister task queue.');
+        }
+        const cursor = queue.tasks.length
+          ? Math.max(0, Number(queue.cursor) || 0) % queue.tasks.length : 0;
+        const orderedTasks = queue.tasks.length
+          ? [...queue.tasks.slice(cursor), ...queue.tasks.slice(0, cursor)] : [];
+        const keys = new Set();
+        const tasks = [];
+        for (const task of orderedTasks) {
+          const cityId = Number(task?.cityId ?? row.city_id);
+          const legacyMineTypeId = task?.itemId === undefined
+            ? undefined : mineTypeForItem.get(Number(task.itemId))?.mine_type_id;
+          const mineTypeId = Number(task?.mineTypeId ?? legacyMineTypeId);
+          if (!Number.isSafeInteger(cityId) || !Number.isSafeInteger(mineTypeId)
+            || !mineTypeExists.get(mineTypeId)) {
+            throw new Error('Cannot migrate an invalid Autolister task.');
+          }
+          const key = `${cityId}:${mineTypeId}`;
+          if (keys.has(key)) continue;
+          keys.add(key);
+          const migrated = { ...task, cityId, mineTypeId };
+          delete migrated.itemId;
+          tasks.push(migrated);
+        }
+        updateAutomation.run(JSON.stringify({ tasks, cursor: 0 }),
+          row.player_id, row.gadget_id);
+      }
+      this.database.prepare(`
+        UPDATE catalog_gadgets SET description = ? WHERE id = ?
+      `).run(replacement.description, replacement.gadgetId);
+      this.database.exec('PRAGMA user_version = 136');
+    });
   }
 
   #insertPrestigeSpecialisations() {
@@ -6795,6 +7265,111 @@ export class SqliteStore {
       ).get(key);
       if (stored && stored.value_json !== valueJson) {
         throw new Error(`Cannot install Bolt boxes: catalog setting ${key} differs.`);
+      }
+      if (!stored) insertSetting.run(key, valueJson);
+    }
+  }
+
+  #migrateMagnetCatalog(now = Date.now()) {
+    const migrationName = 'magnet-catalog-v1';
+    if (!this.hasCatalog()
+      || !this.database.prepare('SELECT 1 FROM catalog_items LIMIT 1').get()
+      || this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      this.#insertMagnetCatalog();
+      const backfilledWreckParts = this.database.prepare(`
+        INSERT INTO sunken_items
+          (item_id, route_id, location, source_vehicle_id, created_at)
+        SELECT damaged.id, ghost_wrecks.route_id, ghost_wrecks.location,
+          ghost_wrecks.source_vehicle_id, ghost_wrecks.wrecked_at
+        FROM ghost_wrecks
+        JOIN catalog_items AS damaged
+          ON damaged.repaired_item_id = ghost_wrecks.source_item_id
+        WHERE ghost_wrecks.source_vehicle_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM sunken_items
+            WHERE sunken_items.source_vehicle_id = ghost_wrecks.source_vehicle_id
+              AND sunken_items.item_id = damaged.id
+          )
+      `).changes;
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        itemId: MAGNET_CATALOG.items[0].id,
+        actionId: MAGNET_CATALOG.factoryActions[0].id,
+        backfilledWreckParts
+      }));
+      migrated = true;
+    });
+    return migrated;
+  }
+
+  #insertMagnetCatalog() {
+    const item = MAGNET_CATALOG.items[0];
+    const action = MAGNET_CATALOG.factoryActions[0];
+    const assertAvailable = (table, id, fields) => {
+      const stored = this.database.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+      if (!stored) return true;
+      for (const [column, value] of Object.entries(fields)) {
+        if ((stored[column] ?? null) !== (value ?? null)) {
+          throw new Error(`Cannot install Magnet ${id}: ${table}.${column} is already occupied by different catalog data.`);
+        }
+      }
+      return false;
+    };
+    const itemFields = {
+      name: item.name, rarity: item.rarity, description: item.description,
+      marketable_id: item.marketableId ?? null, mine_type_id: item.mineTypeId,
+      repaired_item_id: item.repairedItemId ?? null, can_find: item.canFind ? 1 : 0,
+      icon: item.icon, icon_source: item.iconSource, is_damaged: item.damaged ? 1 : 0,
+      large_image_filename: item.largeImageFilename ?? null, large_image: item.largeImage,
+      has_large_image: item.hasLargeImage ? 1 : 0,
+      gold_value_units: item.goldValueUnits
+    };
+    if (assertAvailable('catalog_items', item.id, itemFields)) {
+      this.database.prepare(`
+        INSERT INTO catalog_items
+          (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+           can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+           has_large_image, gold_value_units)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(item.id, ...Object.values(itemFields));
+    }
+    const actionFields = {
+      name: action.name, ore: action.ore, components: action.components,
+      action_kind: action.actionKind, output_item_id: action.outputItemId,
+      output_quantity: action.outputQuantity, meld_id: null,
+      award_stone_behavior_key: null
+    };
+    if (assertAvailable('catalog_factory_actions', action.id, actionFields)) {
+      this.database.prepare(`
+        INSERT INTO catalog_factory_actions
+          (id, name, ore, components, action_kind, output_item_id, output_quantity,
+           meld_id, award_stone_behavior_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(action.id, ...Object.values(actionFields));
+    }
+    const settings = {
+      magnet_item_id: item.id,
+      magnet_intact_salvage_chance: MAGNET_CATALOG.intactSalvageChance
+    };
+    const insertSetting = this.database.prepare(
+      'INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)'
+    );
+    for (const [key, value] of Object.entries(settings)) {
+      const valueJson = JSON.stringify(value);
+      const stored = this.database.prepare(
+        'SELECT value_json FROM catalog_settings WHERE key = ?'
+      ).get(key);
+      if (stored && stored.value_json !== valueJson) {
+        throw new Error(`Cannot install Magnet: catalog setting ${key} differs.`);
       }
       if (!stored) insertSetting.run(key, valueJson);
     }
@@ -7386,6 +7961,100 @@ export class SqliteStore {
       }));
     });
     return updated > 0;
+  }
+
+  #migrateManufacturingMinimumPrices(now = Date.now()) {
+    const migrationName = 'manufacturing-minimum-prices-v1';
+    if (!this.hasCatalog() || this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return false;
+    let updatedItems = 0;
+    let cancelledOrders = 0;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      const setting = (key) => {
+        const row = this.database.prepare(
+          'SELECT value_json FROM catalog_settings WHERE key = ?'
+        ).get(key);
+        if (!row) throw new Error(`Cannot reprice manufacturing: ${key} is missing.`);
+        try {
+          return JSON.parse(row.value_json);
+        } catch (error) {
+          throw new Error(`Cannot reprice manufacturing: ${key} is invalid.`, { cause: error });
+        }
+      };
+      const rules = setting('item_value_rules');
+      if (!rules || typeof rules !== 'object' || Array.isArray(rules)
+        || !rules.factory || typeof rules.factory !== 'object'
+        || Array.isArray(rules.factory)) {
+        throw new Error('Cannot reprice manufacturing: item value rules are invalid.');
+      }
+      if (rules.oreCrateGold === undefined) {
+        rules.oreCrateGold = LEGACY_ITEM_VALUE_RULES.oreCrateGold;
+      }
+      if (rules.factory.oreInputValueShare === undefined) {
+        rules.factory.oreInputValueShare = LEGACY_ITEM_VALUE_RULES.factory.oreInputValueShare;
+      }
+      if (rules.factory.workerCostShare === undefined) {
+        rules.factory.workerCostShare = LEGACY_ITEM_VALUE_RULES.factory.workerCostShare;
+      }
+      const workerBotTiers = setting('factory_worker_bot_tiers');
+      const workerContractDuration = setting('factory_worker_bot_contract_duration_ms');
+      const oreItemId = Number(setting('ore_item_id'));
+      this.database.prepare(`
+        UPDATE catalog_settings SET value_json = ? WHERE key = 'item_value_rules'
+      `).run(JSON.stringify(rules));
+      const valuationCatalog = { settings: {
+        item_value_rules: rules,
+        factory_worker_bot_tiers: workerBotTiers,
+        factory_worker_bot_contract_duration_ms: workerContractDuration
+      } };
+      const updatedItemIds = new Set([oreItemId]);
+      const updateFloor = this.database.prepare(`
+        UPDATE catalog_items SET gold_value_units = ?
+        WHERE id = ? AND gold_value_units < ?
+      `);
+      const oreFloorUnits = goldToUnits(rules.oreCrateGold);
+      updatedItems += Number(updateFloor.run(oreFloorUnits, oreItemId, oreFloorUnits).changes);
+      const actions = this.database.prepare(`
+        SELECT id, ore, components, output_item_id, output_quantity
+        FROM catalog_factory_actions
+        WHERE action_kind = 'item' AND output_item_id IS NOT NULL
+      `).all();
+      for (const action of actions) {
+        const outputItemId = Number(action.output_item_id);
+        const floorUnits = goldToUnits(factoryProductionFloorGold(valuationCatalog, {
+          id: action.id,
+          ore: action.ore,
+          components: action.components,
+          outputQuantity: action.output_quantity
+        }));
+        updatedItemIds.add(outputItemId);
+        updatedItems += Number(updateFloor.run(floorUnits, outputItemId, floorUnits).changes);
+      }
+      const removeOrder = this.database.prepare('DELETE FROM market_orders WHERE id = ?');
+      for (const order of this.database.prepare(`
+        SELECT id, item_id, city_id, price_units FROM market_orders
+      `).all()) {
+        if (!updatedItemIds.has(Number(order.item_id))) continue;
+        if (Number(order.price_units) >= this.#itemGoldPrice(
+          order.item_id, order.city_id
+        ).priceUnits) continue;
+        cancelledOrders += Number(removeOrder.run(order.id).changes);
+      }
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        oreGold: rules.oreCrateGold,
+        manufacturedItems: updatedItemIds.size - 1,
+        updatedItems,
+        cancelledOrders
+      }));
+    });
+    return updatedItems > 0 || cancelledOrders > 0;
   }
 
   #migrateExpandedStones(now = Date.now()) {
@@ -9218,6 +9887,13 @@ export class SqliteStore {
     return value;
   }
 
+  #factoryQueueLimit(facilityKind = 'factory') {
+    const configuredLimit = this.#positiveIntegerSetting('factory_queue_limit');
+    return facilityKind === 'factory'
+      ? Math.min(FACTORY_QUEUE_MAX_JOBS, configuredLimit)
+      : configuredLimit;
+  }
+
   #settingArrayNumber(key, index, settings = null) {
     const values = settings ? settings[key] : this.#setting(key);
     if (!Array.isArray(values)) throw new Error(`Invalid array catalog setting: ${key}.`);
@@ -10464,8 +11140,68 @@ export class SqliteStore {
       this.#ensureWisdomMineAvailability(now);
       this.#ensureElectronicsMineAvailability(now);
       this.#ensureRelicsMineAvailability(now);
+      this.#ensureRegionalThiefOperations(now);
       this.#adminWorldAuditBootstrap(now);
     });
+  }
+
+  #ensureRegionalThiefOperations(now) {
+    if (this.database.prepare(`
+      SELECT 1 FROM schema_migrations
+      WHERE name = 'regional-ore-thief-operations-v1'
+    `).get()) return;
+    const maps = this.database.prepare(`
+      SELECT id, name, capital_city_id
+      FROM world_maps
+      WHERE capital_city_id IS NOT NULL
+      ORDER BY sort_order, id
+    `).all();
+    if (!maps.length) return;
+    const airRouteType = this.#routeTypeId('air');
+    const missionRoutes = this.database.prepare(`
+      SELECT catalog_routes.id, catalog_routes.city1_id, catalog_routes.is_open,
+        catalog_cities.map_id
+      FROM catalog_routes
+      JOIN catalog_cities ON catalog_cities.id = catalog_routes.city1_id
+      WHERE catalog_routes.type = ?
+        AND catalog_routes.city1_id = catalog_routes.city2_id
+      ORDER BY catalog_routes.id
+    `).all(airRouteType);
+    // Before regional bases, every historical operation belonged to the one legacy
+    // mission circuit. Preserve that history in the circuit's region.
+    const legacyMapId = Number(missionRoutes[0]?.map_id ?? maps.at(-1).id);
+    this.database.prepare(`
+      UPDATE thief_bases SET map_id = ? WHERE map_id IS NULL
+    `).run(legacyMapId);
+
+    let nextRouteId = Number(this.database.prepare(
+      'SELECT COALESCE(MAX(id), 0) + 1 AS id FROM catalog_routes'
+    ).get().id);
+    const addRoute = this.database.prepare(`
+      INSERT INTO catalog_routes
+        (id, city1_id, city2_id, length, type, is_open, is_inter_map)
+      VALUES (?, ?, ?, NULL, ?, 1, 0)
+    `);
+    let addedRoutes = 0;
+    let addedBases = 0;
+    for (const map of maps) {
+      const route = missionRoutes.find((entry) => Number(entry.map_id) === Number(map.id));
+      if (!route) {
+        addRoute.run(nextRouteId++, map.capital_city_id, map.capital_city_id, airRouteType);
+        addedRoutes += 1;
+      }
+      if (!this.#currentThiefBase(map.id)) {
+        this.#createThiefBase(map.id, now,
+          seededRandom('ore-thief-base-regional-bootstrap', map.id, now));
+        addedBases += 1;
+      }
+    }
+    this.database.prepare(`
+      INSERT OR IGNORE INTO schema_migrations (name, applied_at, details_json)
+      VALUES ('regional-ore-thief-operations-v1', ?, ?)
+    `).run(now, JSON.stringify({
+      regions: maps.length, addedRoutes, addedBases, legacyMapId
+    }));
   }
 
   provisionCinderwakeOilFieldTestKits(now = Date.now()) {
@@ -10504,15 +11240,15 @@ export class SqliteStore {
     ].map((itemId) => this.database.prepare(
       'SELECT id, name FROM catalog_items WHERE id = ?'
     ).get(itemId));
-    const ledger = this.database.prepare(`
+    const autoloader = this.database.prepare(`
       SELECT catalog_items.id, catalog_items.name
       FROM catalog_gadget_items
       JOIN catalog_gadgets ON catalog_gadgets.id = catalog_gadget_items.gadget_id
       JOIN catalog_items ON catalog_items.id = catalog_gadget_items.item_id
-      WHERE catalog_gadgets.behavior_key = 'ledger'
+      WHERE catalog_gadgets.behavior_key = 'autoloader'
       ORDER BY catalog_items.rarity DESC, catalog_items.id DESC LIMIT 1
     `).get();
-    if (!machineItems.length || supportItems.some((item) => !item) || !ledger) return false;
+    if (!machineItems.length || supportItems.some((item) => !item) || !autoloader) return false;
 
     let migrated = false;
     this.#transaction(() => {
@@ -10537,12 +11273,12 @@ export class SqliteStore {
           const quantity = item.is_bomb ? 4 : Number(item.rarity) === 1 ? 2 : 1;
           grant.run(player.id, city.id, item.id, quantity);
         }
-        for (const item of [...supportItems, ledger]) {
+        for (const item of [...supportItems, autoloader]) {
           grant.run(player.id, city.id, item.id, 1);
         }
         this.#insertSystemMessage(player.id, 'Machine',
           'Cinderwake Oil Field test kit issued',
-          `The Council has opened the Cinderwake field trial. We have stored one of every Oil Field machine part in Cinderwake for you, with spare Tin machinery and four of each bomb. A Search Plane, Bomber, Helicopter, and ${ledger.name} complete the kit. Activate the Ledger from Gadgets, then open the Oil Field and make a useful mess.`,
+          `The Council has opened the Cinderwake field trial. We have stored one of every Oil Field machine part in Cinderwake for you, with spare Tin machinery and four of each bomb. A Search Plane, Bomber, Helicopter, and ${autoloader.name} complete the kit. Activate the Autoloader from Gadgets, then open the Oil Field and make a useful mess.`,
           now, `cinderwake-oil-field-test-kit:${player.id}:v1`, {
             event: 'cinderwake-oil-field-test-kit',
             systemSenderName: 'The Council', cityId: Number(city.id),
@@ -10554,11 +11290,11 @@ export class SqliteStore {
               supportItems: supportItems.map((item) => ({
                 itemId: Number(item.id), name: item.name, quantity: 1
               })),
-              ledger: { itemId: Number(ledger.id), name: ledger.name, quantity: 1 }
+              autoloader: { itemId: Number(autoloader.id), name: autoloader.name, quantity: 1 }
             },
             actions: [
               { label: 'Open the Oil Field', path: '/oil-field' },
-              { label: 'Activate the Ledger', path: '/gadgets' },
+              { label: 'Activate the Autoloader', path: '/gadgets' },
               { label: 'Inspect Cinderwake things', path: `/inventory?city=${city.id}` }
             ]
           });
@@ -13960,6 +14696,767 @@ Compliance is compulsory. Enjoy your new life.
     `).all(playerId, now).map((gadget) => gadget.behavior_key));
   }
 
+  #gadgetAutomationDefinition(behaviorKey) {
+    const definition = GADGET_AUTOMATION_REPLACEMENTS.find(
+      (candidate) => candidate.behaviorKey === String(behaviorKey)
+    );
+    if (!definition) throw new Error('Unknown gadget automation.');
+    return definition;
+  }
+
+  #gadgetAutomationConfiguration(row) {
+    if (!row) return null;
+    try {
+      const configuration = JSON.parse(row.configuration_json);
+      if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) {
+        throw new Error('configuration must be an object');
+      }
+      const queue = Array.isArray(configuration.tasks)
+        ? configuration
+        : { tasks: [{ cityId: Number(row.city_id), ...configuration }], cursor: 0 };
+      const taskLimit = Number(this.#setting('gadget_automation_max_tasks'));
+      if (!Array.isArray(queue.tasks) || queue.tasks.length > taskLimit
+        || queue.tasks.some((task) => !task || typeof task !== 'object'
+          || Array.isArray(task) || !Number.isSafeInteger(Number(task.cityId)))) {
+        throw new Error('task queue is invalid');
+      }
+      const cursor = Number(queue.cursor);
+      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor is invalid');
+      return {
+        tasks: queue.tasks.map((task) => ({ ...task, cityId: Number(task.cityId) })),
+        cursor: queue.tasks.length ? cursor % queue.tasks.length : 0
+      };
+    } catch (error) {
+      throw new Error('The saved gadget automation configuration is invalid.', { cause: error });
+    }
+  }
+
+  #gadgetAutomationTaskKey(behaviorKey, task) {
+    if (behaviorKey === 'autoloader') return `ship:${Number(task.vehicleId)}`;
+    if (behaviorKey === 'autolister') {
+      return `stock-type:${Number(task.cityId)}:${Number(task.mineTypeId)}`;
+    }
+    if (behaviorKey === 'automaker') return `factory:${Number(task.factoryId)}`;
+    if (behaviorKey === 'automelder') return `meld:${Number(task.meldId)}`;
+    throw new Error('Unknown gadget automation.');
+  }
+
+  #knownAutomationCity(playerId, cityId, { market = false, capital = false } = {}) {
+    const city = this.database.prepare(`
+      SELECT catalog_cities.id, catalog_cities.name, catalog_cities.has_market,
+        catalog_cities.map_id, world_maps.capital_city_id
+      FROM catalog_cities
+      JOIN world_maps ON world_maps.id = catalog_cities.map_id
+      WHERE catalog_cities.id = ? AND (
+        EXISTS (SELECT 1 FROM known_cities
+          WHERE known_cities.player_id = ? AND known_cities.city_id = catalog_cities.id)
+        OR EXISTS (SELECT 1 FROM players
+          WHERE players.id = ? AND (players.city_id = catalog_cities.id
+            OR players.home_city_id = catalog_cities.id))
+      )
+    `).get(Number(cityId), playerId, playerId);
+    if (!city) throw new Error('Choose a city you have discovered.');
+    if (market && !city.has_market) throw new Error(`${city.name} has no player market.`);
+    if (capital && Number(city.capital_city_id) !== Number(city.id)) {
+      throw new Error('Automelder storage must be in a regional capital.');
+    }
+    return city;
+  }
+
+  gadgetAutomationReport(playerId, behaviorKey, now = Date.now()) {
+    const definition = this.#gadgetAutomationDefinition(behaviorKey);
+    const gadget = this.#requireActiveGadget(playerId, definition.behaviorKey, now);
+    const row = this.database.prepare(`
+      SELECT * FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+    `).get(playerId, gadget.id);
+    const configuration = this.#gadgetAutomationConfiguration(row);
+    const cities = this.database.prepare(`
+      WITH available_cities AS (
+        SELECT city_id AS id FROM known_cities WHERE player_id = ?
+        UNION SELECT city_id FROM players WHERE id = ?
+        UNION SELECT home_city_id FROM players WHERE id = ?
+      )
+      SELECT catalog_cities.id, catalog_cities.name, catalog_cities.has_market AS hasMarket,
+        catalog_cities.map_id AS mapId,
+        CASE WHEN world_maps.capital_city_id = catalog_cities.id THEN 1 ELSE 0 END AS isCapital
+      FROM available_cities
+      JOIN catalog_cities ON catalog_cities.id = available_cities.id
+      JOIN world_maps ON world_maps.id = catalog_cities.map_id
+      ORDER BY world_maps.sort_order, catalog_cities.name
+    `).all(playerId, playerId, playerId).map((city) => ({ ...city,
+      hasMarket: Boolean(city.hasMarket), isCapital: Boolean(city.isCapital) }));
+    const report = {
+      behaviorKey: definition.behaviorKey,
+      displayName: definition.displayName,
+      description: definition.description,
+      activeUntil: gadget.expires_at,
+      configuration,
+      tasks: configuration?.tasks ?? [],
+      taskLimit: Number(this.#setting('gadget_automation_max_tasks')),
+      enabled: Boolean(row?.enabled),
+      cityId: configuration?.tasks[configuration.cursor]?.cityId ?? row?.city_id ?? null,
+      intervalMinutes: row ? row.interval_ms / 60000
+        : Number(this.#setting('gadget_automation_default_interval_minutes')),
+      intervalOptions: this.#setting('gadget_automation_interval_minutes').map(Number),
+      nextRunAt: row?.next_run_at ?? null,
+      lastRunAt: row?.last_run_at ?? null,
+      lastStatus: row?.last_status ?? '',
+      generatedAt: now,
+      cities
+    };
+    if (definition.behaviorKey === 'autoloader') {
+      report.maxLoadQuantity = MAX_AUTOLOADER_CRATES_PER_TASK;
+      report.ships = this.database.prepare(`
+        SELECT player_vehicles.id,
+          COALESCE(NULLIF(player_vehicles.name, ''), catalog_items.name) AS name,
+          player_vehicles.city_id AS cityId, catalog_cities.name AS cityName,
+          player_vehicles.status, player_vehicles.damaged,
+          (SELECT COUNT(*) FROM player_ship_cannons
+            WHERE player_ship_cannons.vehicle_id = player_vehicles.id) AS cannons
+        FROM player_vehicles
+        JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
+        JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
+        JOIN catalog_cities ON catalog_cities.id = player_vehicles.city_id
+        WHERE player_vehicles.player_id = ? AND catalog_vehicles.route_type = ?
+          AND player_vehicles.aircraft_destroyed = 0
+        ORDER BY catalog_cities.name, name, player_vehicles.id
+      `).all(playerId, this.#routeTypeId('sea')).map((ship) => ({ ...ship,
+        damaged: Boolean(ship.damaged), cannons: Number(ship.cannons) }));
+      report.ammunition = this.database.prepare(`
+        SELECT catalog_cannonballs.ammo_type AS type, catalog_cannonballs.item_id AS itemId,
+          catalog_items.name
+        FROM catalog_cannonballs
+        JOIN catalog_items ON catalog_items.id = catalog_cannonballs.item_id
+        ORDER BY catalog_cannonballs.ammo_type
+      `).all();
+    } else if (definition.behaviorKey === 'autolister') {
+      report.stockTypes = this.database.prepare(`
+        SELECT catalog_mine_types.id, catalog_mine_types.name,
+          inventory.city_id AS cityId, SUM(inventory.quantity) AS quantity,
+          COUNT(DISTINCT catalog_items.id) AS itemCount
+        FROM inventory
+        JOIN catalog_items ON catalog_items.id = inventory.item_id
+        JOIN catalog_mine_types ON catalog_mine_types.id = catalog_items.mine_type_id
+        WHERE inventory.player_id = ? AND inventory.quantity > 0
+          AND catalog_items.marketable_id IS NOT NULL
+        GROUP BY catalog_mine_types.id, catalog_mine_types.name, inventory.city_id
+        ORDER BY catalog_mine_types.name, inventory.city_id
+      `).all(playerId);
+      report.maxMarkupPercent = Number(this.#setting('gadget_autolister_max_markup_percent'));
+    } else if (definition.behaviorKey === 'automaker') {
+      report.factories = this.database.prepare(`
+        SELECT factories.id, factories.city_id AS cityId, catalog_cities.name AS cityName,
+          factories.factory_action_id AS activeActionId,
+          (SELECT COUNT(*) FROM factory_queue WHERE factory_queue.factory_id = factories.id)
+            AS queuedJobs
+        FROM factories
+        JOIN catalog_cities ON catalog_cities.id = factories.city_id
+        WHERE factories.owner_id = ? AND factories.operator_id = ?
+          AND factories.facility_kind = 'factory' AND factories.built = 1
+        ORDER BY catalog_cities.name, factories.id
+      `).all(playerId, playerId);
+      report.actions = this.database.prepare(`
+        SELECT catalog_factory_actions.id, catalog_factory_actions.name,
+          catalog_factory_actions.ore, catalog_factory_actions.output_item_id AS outputItemId,
+          catalog_factory_actions.output_quantity AS outputQuantity,
+          catalog_items.name AS outputName
+        FROM catalog_factory_actions
+        JOIN catalog_items ON catalog_items.id = catalog_factory_actions.output_item_id
+        WHERE catalog_factory_actions.action_kind = 'item'
+        ORDER BY catalog_items.rarity DESC, catalog_items.name
+      `).all();
+    } else if (definition.behaviorKey === 'automelder') {
+      report.melds = this.database.prepare(`
+        SELECT catalog_melds.id, catalog_melds.name, catalog_melds.rarity
+        FROM catalog_melds
+        WHERE catalog_melds.is_public = 1
+          AND NOT EXISTS (SELECT 1 FROM player_melds
+            WHERE player_melds.player_id = ? AND player_melds.meld_id = catalog_melds.id)
+          AND NOT EXISTS (SELECT 1 FROM broken_melds
+            WHERE broken_melds.player_id = ? AND broken_melds.meld_id = catalog_melds.id)
+        ORDER BY catalog_melds.rarity DESC, catalog_melds.name
+      `).all(playerId, playerId);
+    }
+    return report;
+  }
+
+  configureGadgetAutomation(playerId, behaviorKey, input, now = Date.now()) {
+    const definition = this.#gadgetAutomationDefinition(behaviorKey);
+    const gadget = this.#requireActiveGadget(playerId, definition.behaviorKey, now);
+    const intervalMinutes = Number(input.intervalMinutes);
+    const intervalOptions = this.#setting('gadget_automation_interval_minutes').map(Number);
+    if (!intervalOptions.includes(intervalMinutes)) throw new Error('Choose a valid interval.');
+    const existingRow = this.database.prepare(`
+      SELECT * FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+    `).get(playerId, gadget.id);
+    const queue = this.#gadgetAutomationConfiguration(existingRow)
+      ?? { tasks: [], cursor: 0 };
+    let city;
+    let configuration;
+    if (definition.behaviorKey === 'autoloader') {
+      const vehicleId = Number(input.vehicleId);
+      const ammoType = Number(input.ammoType);
+      const quantity = Number(input.quantity);
+      const ship = this.database.prepare(`
+        SELECT player_vehicles.id, player_vehicles.city_id
+        FROM player_vehicles
+        JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
+        WHERE player_vehicles.id = ? AND player_vehicles.player_id = ?
+          AND catalog_vehicles.route_type = ? AND player_vehicles.aircraft_destroyed = 0
+      `).get(vehicleId, playerId, this.#routeTypeId('sea'));
+      if (!ship) throw new Error('Choose one of your ships.');
+      city = this.#knownAutomationCity(playerId, ship.city_id);
+      if (!this.database.prepare(
+        'SELECT 1 FROM catalog_cannonballs WHERE ammo_type = ?'
+      ).get(ammoType)) throw new Error('Choose a valid ammunition type.');
+      if (!Number.isSafeInteger(quantity) || quantity < 1
+        || quantity > MAX_AUTOLOADER_CRATES_PER_TASK) {
+        throw new Error(`Choose a whole number of ammunition crates from 1 to ${
+          MAX_AUTOLOADER_CRATES_PER_TASK}.`);
+      }
+      configuration = { vehicleId, ammoType, quantity };
+    } else if (definition.behaviorKey === 'autolister') {
+      const cityId = Number(input.cityId);
+      const mineTypeId = Number(input.mineTypeId);
+      const markupPercent = Number(input.markupPercent);
+      city = this.#knownAutomationCity(playerId, cityId, { market: true });
+      if (!Number.isFinite(markupPercent) || markupPercent < 0
+        || markupPercent > Number(this.#setting('gadget_autolister_max_markup_percent'))) {
+        throw new Error('Choose a valid non-negative markup percentage.');
+      }
+      const mineType = this.database.prepare(`
+        SELECT catalog_mine_types.id FROM catalog_mine_types
+        WHERE catalog_mine_types.id = ? AND EXISTS (
+          SELECT 1 FROM inventory
+          JOIN catalog_items ON catalog_items.id = inventory.item_id
+          WHERE inventory.player_id = ? AND inventory.city_id = ?
+            AND inventory.quantity > 0 AND catalog_items.marketable_id IS NOT NULL
+            AND catalog_items.mine_type_id = catalog_mine_types.id
+        )
+      `).get(mineTypeId, playerId, city.id);
+      if (!mineType) {
+        throw new Error('Choose a marketable Thing type you own in that city.');
+      }
+      configuration = { mineTypeId, markupPercent };
+    } else if (definition.behaviorKey === 'automaker') {
+      const factoryId = Number(input.factoryId);
+      const actionId = Number(input.actionId);
+      const factory = this.database.prepare(`
+        SELECT * FROM factories WHERE id = ? AND owner_id = ? AND operator_id = ?
+          AND facility_kind = 'factory' AND built = 1
+      `).get(factoryId, playerId, playerId);
+      if (!factory) throw new Error('Choose one of your completed, owner-operated factories.');
+      city = this.#knownAutomationCity(playerId, factory.city_id);
+      if (!this.database.prepare(`
+        SELECT 1 FROM catalog_factory_actions
+        WHERE id = ? AND action_kind = 'item' AND output_item_id IS NOT NULL
+      `).get(actionId)) throw new Error('Choose a manufactured factory item.');
+      configuration = { factoryId, actionId };
+    } else {
+      const cityId = Number(input.cityId);
+      const meldId = Number(input.meldId);
+      city = this.#knownAutomationCity(playerId, cityId, { capital: true });
+      if (!this.database.prepare(`
+        SELECT 1 FROM catalog_melds WHERE id = ? AND is_public = 1
+          AND NOT EXISTS (SELECT 1 FROM player_melds
+            WHERE player_melds.player_id = ? AND player_melds.meld_id = catalog_melds.id)
+          AND NOT EXISTS (SELECT 1 FROM broken_melds
+            WHERE broken_melds.player_id = ? AND broken_melds.meld_id = catalog_melds.id)
+      `).get(meldId, playerId, playerId)) throw new Error('Choose an incomplete Meld.');
+      configuration = { meldId };
+    }
+    const task = { cityId: Number(city.id), ...configuration };
+    const taskKey = this.#gadgetAutomationTaskKey(definition.behaviorKey, task);
+    const existingTaskIndex = queue.tasks.findIndex((candidate) =>
+      this.#gadgetAutomationTaskKey(definition.behaviorKey, candidate) === taskKey);
+    const updatedExistingTask = existingTaskIndex >= 0;
+    if (updatedExistingTask) {
+      queue.tasks[existingTaskIndex] = task;
+    } else {
+      const taskLimit = Number(this.#setting('gadget_automation_max_tasks'));
+      if (queue.tasks.length >= taskLimit) {
+        throw new Error(`This gadget already has its maximum of ${taskLimit} tasks.`);
+      }
+      queue.tasks.push(task);
+    }
+    if (queue.tasks.length === 1) queue.cursor = 0;
+    const nextTask = queue.tasks[queue.cursor] ?? task;
+    const status = `${updatedExistingTask ? 'Updated' : 'Added'} round-robin task ${
+      (updatedExistingTask ? existingTaskIndex : queue.tasks.length - 1) + 1} of ${queue.tasks.length}.`;
+    this.database.prepare(`
+      INSERT INTO gadget_automations
+        (player_id, gadget_id, city_id, configuration_json, interval_ms,
+         next_run_at, last_status, enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      ON CONFLICT (player_id, gadget_id) DO UPDATE SET
+        city_id = excluded.city_id, configuration_json = excluded.configuration_json,
+        interval_ms = excluded.interval_ms, next_run_at = excluded.next_run_at,
+        last_status = excluded.last_status, enabled = 1, updated_at = excluded.updated_at
+    `).run(playerId, gadget.id, nextTask.cityId, JSON.stringify(queue),
+      intervalMinutes * 60000, now, status, now, now);
+    return this.gadgetAutomationReport(playerId, definition.behaviorKey, now);
+  }
+
+  removeGadgetAutomationTask(playerId, behaviorKey, taskIndex, now = Date.now()) {
+    const definition = this.#gadgetAutomationDefinition(behaviorKey);
+    const gadget = this.#requireActiveGadget(playerId, definition.behaviorKey, now);
+    const row = this.database.prepare(`
+      SELECT * FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+    `).get(playerId, gadget.id);
+    if (!row) throw new Error('That gadget automation is not configured.');
+    const queue = this.#gadgetAutomationConfiguration(row);
+    const index = Number(taskIndex);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= queue.tasks.length) {
+      throw new Error('That automation task no longer exists.');
+    }
+    queue.tasks.splice(index, 1);
+    if (queue.tasks.length) {
+      if (index < queue.cursor) queue.cursor -= 1;
+      queue.cursor %= queue.tasks.length;
+    } else {
+      queue.cursor = 0;
+    }
+    const nextCityId = queue.tasks[queue.cursor]?.cityId ?? row.city_id;
+    this.database.prepare(`
+      UPDATE gadget_automations SET city_id = ?, configuration_json = ?, enabled = ?,
+        last_status = ?, updated_at = ? WHERE player_id = ? AND gadget_id = ?
+    `).run(nextCityId, JSON.stringify(queue), queue.tasks.length ? row.enabled : 0,
+      queue.tasks.length
+        ? `Removed a task; ${queue.tasks.length} remain in the round-robin queue.`
+        : 'Removed the final task; automation disabled.',
+      now, playerId, gadget.id);
+    return this.gadgetAutomationReport(playerId, definition.behaviorKey, now);
+  }
+
+  disableGadgetAutomation(playerId, behaviorKey, now = Date.now()) {
+    const definition = this.#gadgetAutomationDefinition(behaviorKey);
+    const gadget = this.database.prepare(
+      'SELECT id FROM catalog_gadgets WHERE behavior_key = ?'
+    ).get(definition.behaviorKey);
+    if (!gadget) throw new Error('Gadget automation not found.');
+    const changed = this.database.prepare(`
+      UPDATE gadget_automations SET enabled = 0, last_status = 'Disabled by miner.',
+        updated_at = ? WHERE player_id = ? AND gadget_id = ?
+    `).run(now, playerId, gadget.id).changes;
+    if (!changed) throw new Error('That gadget automation is not configured.');
+    return true;
+  }
+
+  enableGadgetAutomation(playerId, behaviorKey, now = Date.now()) {
+    const definition = this.#gadgetAutomationDefinition(behaviorKey);
+    const gadget = this.#requireActiveGadget(playerId, definition.behaviorKey, now);
+    const row = this.database.prepare(`
+      SELECT * FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
+    `).get(playerId, gadget.id);
+    if (!row) throw new Error('That gadget automation is not configured.');
+    const queue = this.#gadgetAutomationConfiguration(row);
+    if (!queue.tasks.length) throw new Error('Add at least one task before enabling automation.');
+    this.database.prepare(`
+      UPDATE gadget_automations SET enabled = 1, next_run_at = ?,
+        last_status = 'Re-enabled by miner.', updated_at = ?
+      WHERE player_id = ? AND gadget_id = ?
+    `).run(now, now, playerId, gadget.id);
+    return true;
+  }
+
+  #runAutoloader(automation, configuration, { allowShuttle = false } = {}) {
+    const vehicle = this.#vehicleRecord(Number(configuration.vehicleId), automation.player_id);
+    if (!vehicle || vehicle.route_type !== this.#routeTypeId('sea')) {
+      return { status: 'Waiting: the configured ship no longer exists.', disable: true };
+    }
+    if (vehicle.status !== 'idle') return { status: 'Waiting: the configured ship is away from port.' };
+    if (Number(vehicle.city_id) !== Number(automation.city_id)) {
+      return { status: 'Waiting: the configured ship is in a different city.' };
+    }
+    if (vehicle.damaged) return { status: 'Waiting: the configured ship needs repair.' };
+    if (!allowShuttle && this.#vehicleShuttleRecord(vehicle.id, automation.player_id)) {
+      return { status: 'Waiting: the configured ship is running a shuttle route.' };
+    }
+    const loadout = this.#vehicleLoadout(vehicle);
+    if (!loadout.ship || !loadout.cannons.length) {
+      return { status: 'Waiting: attach at least one cannon to the configured ship.' };
+    }
+    const ammo = this.database.prepare(`
+      SELECT catalog_cannonballs.*, catalog_items.name
+      FROM catalog_cannonballs JOIN catalog_items ON catalog_items.id = catalog_cannonballs.item_id
+      WHERE catalog_cannonballs.ammo_type = ?
+    `).get(Number(configuration.ammoType));
+    if (!ammo) return { status: 'Waiting: the configured ammunition no longer exists.', disable: true };
+    const available = Number(this.database.prepare(`
+      SELECT quantity FROM inventory WHERE player_id = ? AND city_id = ? AND item_id = ?
+    `).get(automation.player_id, automation.city_id, ammo.item_id)?.quantity ?? 0);
+    const free = Math.max(0, Number(loadout.capacity) - Number(loadout.cargoSize));
+    const requested = configuration.quantity === undefined
+      ? Number.POSITIVE_INFINITY : Number(configuration.quantity);
+    if (requested !== Number.POSITIVE_INFINITY
+      && (!Number.isSafeInteger(requested) || requested < 1
+        || requested > MAX_AUTOLOADER_CRATES_PER_TASK)) {
+      return { status: 'Disabled: the configured ammunition quantity is invalid.', disable: true };
+    }
+    const crates = Math.min(available, free, requested);
+    if (!crates) {
+      return { status: available ? 'Waiting: the ship has no free capacity.'
+        : `Waiting: no ${ammo.name} crates are stored in this city.` };
+    }
+    this.#changeInventory(automation.player_id, automation.city_id, ammo.item_id, -crates);
+    const field = this.#ammunitionRules()[ammo.ammo_type]?.storageField;
+    if (!field) throw new Error(`Missing ammunition rule for type ${ammo.ammo_type}.`);
+    const shots = crates * Number(this.#setting('shots_per_crate'));
+    this.database.prepare(`UPDATE player_ship_state SET ${field} = ${field} + ? WHERE vehicle_id = ?`)
+      .run(shots, vehicle.id);
+    return { status: `Loaded ${crates} crate${crates === 1 ? '' : 's'} of ${ammo.name} (${shots} shots).` };
+  }
+
+  #runShuttleAutoloader(vehicle, now) {
+    const automation = this.database.prepare(`
+      SELECT gadget_automations.*
+      FROM gadget_automations
+      JOIN catalog_gadgets ON catalog_gadgets.id = gadget_automations.gadget_id
+      JOIN player_gadgets ON player_gadgets.player_id = gadget_automations.player_id
+        AND player_gadgets.gadget_id = gadget_automations.gadget_id
+        AND player_gadgets.expires_at > ?
+      WHERE gadget_automations.player_id = ? AND gadget_automations.enabled = 1
+        AND catalog_gadgets.behavior_key = 'autoloader'
+    `).get(now, vehicle.player_id);
+    if (!automation) return null;
+    let queue;
+    try {
+      queue = this.#gadgetAutomationConfiguration(automation);
+    } catch (error) {
+      this.database.prepare(`
+        UPDATE gadget_automations SET last_run_at = ?, last_status = ?, updated_at = ?
+        WHERE player_id = ? AND gadget_id = ?
+      `).run(now, `Shuttle turnaround waiting: ${error.message}`.slice(0, 500), now,
+        automation.player_id, automation.gadget_id);
+      return null;
+    }
+    const taskIndex = queue.tasks.findIndex((task) =>
+      Number(task.vehicleId) === Number(vehicle.id)
+      && Number(task.cityId) === Number(vehicle.city_id));
+    if (taskIndex < 0) return null;
+    const task = queue.tasks[taskIndex];
+    let outcome;
+    this.database.exec('SAVEPOINT shuttle_autoloader');
+    try {
+      outcome = this.#runAutoloader({
+        ...automation, city_id: task.cityId
+      }, task, { allowShuttle: true });
+      this.database.exec('RELEASE shuttle_autoloader');
+    } catch (error) {
+      this.database.exec('ROLLBACK TO shuttle_autoloader');
+      this.database.exec('RELEASE shuttle_autoloader');
+      outcome = { status: `Waiting: ${error.message}` };
+    }
+    if (outcome.disable) {
+      queue.tasks.splice(taskIndex, 1);
+      if (queue.tasks.length) queue.cursor %= queue.tasks.length;
+      else queue.cursor = 0;
+    }
+    this.database.prepare(`
+      UPDATE gadget_automations SET city_id = ?, configuration_json = ?,
+        last_run_at = ?, last_status = ?, enabled = ?, updated_at = ?
+      WHERE player_id = ? AND gadget_id = ?
+    `).run(queue.tasks[queue.cursor]?.cityId ?? automation.city_id,
+      JSON.stringify(queue), now, `Shuttle turnaround: ${outcome.status}`.slice(0, 500),
+      queue.tasks.length ? 1 : 0, now, automation.player_id, automation.gadget_id);
+    return outcome;
+  }
+
+  #runAutolister(automation, configuration, now) {
+    const city = this.database.prepare(
+      'SELECT name, has_market FROM catalog_cities WHERE id = ?'
+    ).get(automation.city_id);
+    const mineType = this.database.prepare(
+      'SELECT id, name FROM catalog_mine_types WHERE id = ?'
+    ).get(Number(configuration.mineTypeId));
+    if (!city?.has_market || !mineType) {
+      return { status: 'Waiting: the configured market or Thing type is no longer available.', disable: true };
+    }
+    const markup = Number(configuration.markupPercent);
+    if (!Number.isFinite(markup) || markup < 0
+      || markup > Number(this.#setting('gadget_autolister_max_markup_percent'))) {
+      return { status: 'Waiting: the configured markup is invalid.', disable: true };
+    }
+    const items = this.database.prepare(`
+      SELECT catalog_items.id, catalog_items.name, inventory.quantity
+      FROM inventory
+      JOIN catalog_items ON catalog_items.id = inventory.item_id
+      WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
+        AND catalog_items.mine_type_id = ? AND catalog_items.marketable_id IS NOT NULL
+      ORDER BY catalog_items.rarity DESC, catalog_items.name, catalog_items.id
+    `).all(automation.player_id, automation.city_id, mineType.id);
+    if (!items.length) {
+      return { status: `Waiting: no marketable ${mineType.name} Things are stored in ${city.name}.` };
+    }
+    const listedQuantity = this.database.prepare(`
+      SELECT COALESCE(SUM(quantity), 0) AS quantity FROM market_orders
+      WHERE player_id = ? AND city_id = ? AND item_id = ? AND side = 'sell'
+    `);
+    const operations = [];
+    let bidSkipped = 0;
+    for (const item of items) {
+      this.#trimItemListings(automation.player_id, automation.city_id, item.id);
+      const listed = Number(listedQuantity.get(
+        automation.player_id, automation.city_id, item.id
+      ).quantity);
+      const quantity = Math.max(0, Number(item.quantity) - listed);
+      if (!quantity) continue;
+      const minimum = this.#itemGoldPrice(item.id, automation.city_id).priceUnits;
+      const rawPrice = Math.ceil(minimum * (100 + markup) / 100);
+      if (!Number.isSafeInteger(rawPrice)) {
+        return { status: 'Waiting: a calculated price is too large.', disable: true };
+      }
+      const priceUnits = roundListingMinimumUpUnits(rawPrice);
+      const bid = this.#oppositeItemOrder(
+        automation.player_id, automation.city_id, item.id, 'buy', false
+      );
+      if (bid && priceUnits <= bid.price_units) {
+        bidSkipped += 1;
+        continue;
+      }
+      operations.push({ item, quantity, priceUnits });
+    }
+    if (!operations.length) {
+      return { status: bidSkipped
+        ? `Waiting: existing bids already meet the target price for ${bidSkipped} ${mineType.name} kind${bidSkipped === 1 ? '' : 's'}.`
+        : `Waiting: every ${mineType.name} Thing is already listed.` };
+    }
+    const existingListing = this.database.prepare(`
+      SELECT id FROM market_orders WHERE player_id = ? AND city_id = ? AND item_id = ?
+        AND side = 'sell' AND price_units = ? ORDER BY id LIMIT 1
+    `);
+    const increaseListing = this.database.prepare(
+      'UPDATE market_orders SET quantity = quantity + ? WHERE id = ?'
+    );
+    const insertListing = this.database.prepare(`
+      INSERT INTO market_orders
+        (player_id, city_id, item_id, side, price_units, quantity, created_at)
+      VALUES (?, ?, ?, 'sell', ?, ?, ?)
+    `);
+    let totalQuantity = 0;
+    for (const operation of operations) {
+      const existing = existingListing.get(automation.player_id, automation.city_id,
+        operation.item.id, operation.priceUnits);
+      if (existing) increaseListing.run(operation.quantity, existing.id);
+      else insertListing.run(automation.player_id, automation.city_id, operation.item.id,
+        operation.priceUnits, operation.quantity, now);
+      totalQuantity += operation.quantity;
+    }
+    this.awardStone(automation.player_id, 'Listed', now);
+    const skipped = bidSkipped
+      ? ` ${bidSkipped} kind${bidSkipped === 1 ? '' : 's'} skipped because existing bids meet the target price.`
+      : '';
+    return { status: `Listed ${totalQuantity} ${mineType.name} Thing${totalQuantity === 1 ? '' : 's'} across ${operations.length} kind${operations.length === 1 ? '' : 's'} in ${city.name}.${skipped}` };
+  }
+
+  #runAutomaker(automation, configuration, now) {
+    this.#updateFactory(Number(configuration.factoryId), now);
+    const factory = this.database.prepare(`
+      SELECT * FROM factories WHERE id = ? AND owner_id = ? AND operator_id = ?
+        AND facility_kind = 'factory' AND built = 1
+    `).get(Number(configuration.factoryId), automation.player_id, automation.player_id);
+    const action = this.database.prepare(`
+      SELECT * FROM catalog_factory_actions
+      WHERE id = ? AND action_kind = 'item' AND output_item_id IS NOT NULL
+    `).get(Number(configuration.actionId));
+    if (!factory || Number(factory.city_id) !== Number(automation.city_id) || !action) {
+      return { status: 'Waiting: the configured factory or product is no longer available.', disable: true };
+    }
+    const queuedCount = Number(this.database.prepare(
+      'SELECT COUNT(*) AS count FROM factory_queue WHERE factory_id = ?'
+    ).get(factory.id).count);
+    const enqueued = Boolean(factory.factory_action_id || queuedCount);
+    if (enqueued && queuedCount >= this.#factoryQueueLimit()) {
+      return { status: 'Waiting: the configured factory queue is full.' };
+    }
+    if (!enqueued) {
+      const activeCount = Number(this.database.prepare(`
+        SELECT COUNT(*) AS count FROM factories
+        WHERE facility_kind = 'factory' AND owner_id = ? AND operator_id = owner_id
+          AND factory_action_id IS NOT NULL
+      `).get(automation.player_id).count);
+      if (activeCount >= Number(this.#setting('max_active_factories'))) {
+        return { status: 'Waiting: the active-factory limit has been reached.' };
+      }
+    }
+    const oreItemId = this.#itemIdSetting('ore_item_id');
+    const ore = Number(this.database.prepare(`
+      SELECT quantity FROM inventory WHERE player_id = ? AND city_id = ? AND item_id = ?
+    `).get(automation.player_id, automation.city_id, oreItemId)?.quantity ?? 0);
+    if (ore < Number(action.ore)) {
+      return { status: `Waiting: ${action.ore} Ore is required in the factory city.` };
+    }
+    this.#changeInventory(automation.player_id, automation.city_id, oreItemId, -action.ore);
+    if (enqueued) {
+      this.database.prepare(`
+        INSERT INTO factory_queue
+          (factory_id, operator_id, action_id, item_id, ore_reserved, position, queued_at)
+        VALUES (?, ?, ?, NULL, ?, ?, ?)
+      `).run(factory.id, automation.player_id, action.id, action.ore, queuedCount + 1, now);
+    } else {
+      this.database.prepare(`
+        UPDATE factories SET factory_action_id = ?, item_id = NULL, components_done = 0,
+          last_event_at = ?, completion_at = NULL WHERE id = ?
+      `).run(action.id, now, factory.id);
+      this.#estimateFactory(factory.id, now);
+    }
+    return { status: `${enqueued ? 'Queued' : 'Started'} ${action.name}.` };
+  }
+
+  #runAutomelder(automation, configuration, now) {
+    const city = this.database.prepare(`
+      SELECT catalog_cities.id, catalog_cities.name, world_maps.capital_city_id
+      FROM catalog_cities JOIN world_maps ON world_maps.id = catalog_cities.map_id
+      WHERE catalog_cities.id = ?
+    `).get(automation.city_id);
+    if (!city || Number(city.capital_city_id) !== Number(city.id)) {
+      return { status: 'Waiting: the configured city is no longer a regional capital.', disable: true };
+    }
+    const meld = this.database.prepare(
+      'SELECT id, name FROM catalog_melds WHERE id = ? AND is_public = 1'
+    ).get(Number(configuration.meldId));
+    if (!meld) return { status: 'Waiting: the configured Meld no longer exists.', disable: true };
+    if (this.database.prepare(`
+      SELECT 1 FROM player_melds WHERE player_id = ? AND meld_id = ?
+    `).get(automation.player_id, meld.id)) {
+      return { status: `${meld.name} is complete. Choose another Meld.`, disable: true };
+    }
+    if (this.database.prepare(`
+      SELECT 1 FROM broken_melds WHERE player_id = ? AND meld_id = ?
+    `).get(automation.player_id, meld.id)) {
+      return { status: `${meld.name} has been dismantled and cannot be remade.`, disable: true };
+    }
+    const completedBeforeStaging = this.#completeMeldsFromStash(automation.player_id, now);
+    if (completedBeforeStaging.some((created) => created.id === meld.id)) {
+      return { status: `${meld.name} assembled from Meld storage.`, disable: true };
+    }
+    const requirements = this.database.prepare(`
+      SELECT catalog_meld_requirements.item_id, catalog_meld_requirements.quantity,
+        catalog_items.name
+      FROM catalog_meld_requirements
+      JOIN catalog_items ON catalog_items.id = catalog_meld_requirements.item_id
+      WHERE catalog_meld_requirements.meld_id = ? ORDER BY catalog_meld_requirements.id
+    `).all(meld.id);
+    let selected = null;
+    for (const requirement of requirements) {
+      const stored = Number(this.database.prepare(`
+        SELECT quantity FROM meld_stash WHERE player_id = ? AND item_id = ?
+      `).get(automation.player_id, requirement.item_id)?.quantity ?? 0);
+      const local = Number(this.database.prepare(`
+        SELECT quantity FROM inventory WHERE player_id = ? AND city_id = ? AND item_id = ?
+      `).get(automation.player_id, automation.city_id, requirement.item_id)?.quantity ?? 0);
+      if (stored < requirement.quantity && local > 0
+        && this.#remainingMeldItemNeed(automation.player_id, requirement.item_id) > 0) {
+        selected = requirement;
+        break;
+      }
+    }
+    if (!selected) {
+      return { status: `Waiting: ${city.name} has none of the recipe things still needed for ${meld.name}.` };
+    }
+    this.#changeInventory(automation.player_id, automation.city_id, selected.item_id, -1);
+    this.#changeMeldStash(automation.player_id, selected.item_id, 1, now);
+    const created = this.#completeMeldsFromStash(automation.player_id, now);
+    if (created.length) {
+      this.#insertSystemMessage(automation.player_id, 'Automelder', 'Meld assembled',
+        `Your Automelder staged ${selected.name} in ${city.name} and assembled ${
+          created.map((entry) => entry.name).join(', ')}.`, now,
+        `automelder:${automation.player_id}:${now}:${created.map((entry) => entry.id).join('-')}`, {
+          event: 'automelder-completed', cityId: city.id,
+          meldIds: created.map((entry) => entry.id),
+          actions: [{ label: 'View Melds', path: '/melds' }]
+        });
+    }
+    const targetComplete = created.some((entry) => entry.id === meld.id);
+    return { status: targetComplete
+      ? `Staged ${selected.name}; ${meld.name} assembled.`
+      : `Staged one ${selected.name} from ${city.name}.`, disable: targetComplete };
+  }
+
+  settleGadgetAutomations(now = Date.now()) {
+    return this.#transaction(() => {
+      const rows = this.database.prepare(`
+        SELECT gadget_automations.*, catalog_gadgets.behavior_key,
+          catalog_gadgets.display_name
+        FROM gadget_automations
+        JOIN catalog_gadgets ON catalog_gadgets.id = gadget_automations.gadget_id
+        JOIN player_gadgets ON player_gadgets.player_id = gadget_automations.player_id
+          AND player_gadgets.gadget_id = gadget_automations.gadget_id
+          AND player_gadgets.expires_at > ?
+        WHERE gadget_automations.enabled = 1 AND gadget_automations.next_run_at <= ?
+        ORDER BY gadget_automations.next_run_at, gadget_automations.player_id,
+          gadget_automations.gadget_id
+      `).all(now, now);
+      let actions = 0;
+      let disabled = 0;
+      const update = this.database.prepare(`
+        UPDATE gadget_automations SET city_id = ?, configuration_json = ?, next_run_at = ?,
+          last_run_at = ?, last_status = ?, enabled = ?, updated_at = ?
+        WHERE player_id = ? AND gadget_id = ?
+      `);
+      for (const automation of rows) {
+        let outcome;
+        let queue = null;
+        let taskIndex = 0;
+        let originalTaskCount = 0;
+        this.database.exec('SAVEPOINT gadget_automation_run');
+        try {
+          queue = this.#gadgetAutomationConfiguration(automation);
+          originalTaskCount = queue.tasks.length;
+          taskIndex = originalTaskCount ? queue.cursor % originalTaskCount : 0;
+          const task = queue.tasks[taskIndex];
+          const taskAutomation = task
+            ? { ...automation, city_id: task.cityId }
+            : automation;
+          if (!task) {
+            outcome = { status: 'No tasks remain in the round-robin queue.', disable: true };
+          } else if (automation.behavior_key === 'autoloader') {
+            outcome = this.#runAutoloader(taskAutomation, task);
+          } else if (automation.behavior_key === 'autolister') {
+            outcome = this.#runAutolister(taskAutomation, task, now);
+          } else if (automation.behavior_key === 'automaker') {
+            outcome = this.#runAutomaker(taskAutomation, task, now);
+          } else if (automation.behavior_key === 'automelder') {
+            outcome = this.#runAutomelder(taskAutomation, task, now);
+          } else {
+            outcome = { status: 'Disabled: this gadget no longer provides automation.', disable: true };
+          }
+          this.database.exec('RELEASE gadget_automation_run');
+        } catch (error) {
+          this.database.exec('ROLLBACK TO gadget_automation_run');
+          this.database.exec('RELEASE gadget_automation_run');
+          outcome = { status: `Waiting: ${error.message}` };
+        }
+        let pauseWithTasks = false;
+        if (queue && originalTaskCount) {
+          if (outcome.disable) {
+            if (automation.behavior_key === 'automaker') {
+              pauseWithTasks = true;
+              queue.cursor = taskIndex;
+            } else {
+              queue.tasks.splice(taskIndex, 1);
+              queue.cursor = queue.tasks.length ? taskIndex % queue.tasks.length : 0;
+            }
+          } else {
+            queue.cursor = (taskIndex + 1) % queue.tasks.length;
+          }
+        }
+        const enabled = queue ? (queue.tasks.length && !pauseWithTasks ? 1 : 0) : 1;
+        const nextCityId = queue?.tasks[queue.cursor]?.cityId ?? automation.city_id;
+        const configurationJson = queue ? JSON.stringify(queue) : automation.configuration_json;
+        const status = originalTaskCount
+          ? `Task ${taskIndex + 1}/${originalTaskCount}: ${outcome.status}`
+          : outcome.status;
+        update.run(nextCityId, configurationJson, now + Number(automation.interval_ms), now,
+          String(status).slice(0, 500), enabled, now,
+          automation.player_id, automation.gadget_id);
+        actions += 1;
+        if (!enabled) disabled += 1;
+      }
+      return { automationsProcessed: rows.length, actions, disabled };
+    });
+  }
+
   ledgerReport(playerId, monthOffset = 0, now = Date.now()) {
     this.#requireActiveGadget(playerId, 'ledger', now);
     const actionLabel = (kind) => this.#settingString('ledger_report_labels', 'actions', kind);
@@ -15439,8 +16936,9 @@ Compliance is compulsory. Enjoy your new life.
         'SELECT COUNT(*) AS count FROM factory_queue WHERE factory_id = ?'
       ).get(mill.id).count;
       const enqueued = Boolean(mill.factory_action_id || queuedCount);
-      if (enqueued && queuedCount >= Number(this.#setting('factory_queue_limit'))) {
-        throw new Error(`This mill queue is full (${this.#setting('factory_queue_limit')} jobs).`);
+      const queueLimit = this.#factoryQueueLimit('mill');
+      if (enqueued && queuedCount >= queueLimit) {
+        throw new Error(`This mill queue is full (${queueLimit} jobs).`);
       }
       const vehicle = this.#vehicleRecord(Number(vehicleId), playerId);
       if (!vehicle || vehicle.city_id !== player.city_id || vehicle.status !== 'idle'
@@ -15781,8 +17279,8 @@ Compliance is compulsory. Enjoy your new life.
           'SELECT COUNT(*) AS count FROM factory_queue WHERE factory_id = ?'
         ).get(factoryId).count;
         const enqueued = Boolean(factory.factory_action_id || queuedCount);
-        if (enqueued && queuedCount >= Number(this.#setting('factory_queue_limit'))) {
-          throw new Error(`This factory queue is full (${this.#setting('factory_queue_limit')} jobs).`);
+        if (enqueued && queuedCount >= this.#factoryQueueLimit()) {
+          throw new Error(`This factory queue is full (${this.#factoryQueueLimit()} jobs).`);
         }
         if (!enqueued && factory.owner_id === playerId) {
           const activeCount = this.database.prepare(`
@@ -16401,7 +17899,7 @@ Compliance is compulsory. Enjoy your new life.
       rate: this.#factoryRate(factoryId, now),
       workers,
       queue,
-      queueLimit: Number(this.#setting('factory_queue_limit'))
+      queueLimit: this.#factoryQueueLimit(factory.facility_kind)
     };
   }
 
@@ -19930,6 +21428,7 @@ Compliance is compulsory. Enjoy your new life.
         catalog_vehicles.capacity AS base_capacity, catalog_vehicles.route_type,
         catalog_vehicles.cargo_policy, catalog_vehicles.route_policy,
         catalog_vehicles.capacity_cap,
+        players.is_npc,
         catalog_items.name AS item_name, catalog_items.rarity, catalog_items.icon,
         catalog_lands.attack AS land_attack, catalog_lands.armor AS land_armor,
         catalog_ships.id AS ship_id, catalog_ships.cannon_portals, catalog_ships.hull AS max_hull,
@@ -19940,6 +21439,7 @@ Compliance is compulsory. Enjoy your new life.
             AND ghost_vehicles.defeated_at IS NULL
         ) AS is_ghost
       FROM player_vehicles
+      JOIN players ON players.id = player_vehicles.player_id
       JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
       JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
       LEFT JOIN catalog_lands ON catalog_lands.vehicle_id = catalog_vehicles.id
@@ -20292,20 +21792,51 @@ Compliance is compulsory. Enjoy your new life.
     return stowaway.id;
   }
 
-  #escapeDwarfStowaways(vehicleId, now) {
+  #npcCapturedDwarves(vehicle) {
+    if (!vehicle?.is_npc) return [];
+    return this.database.prepare(`
+      SELECT dwarf_stowaways.id, dwarf_stowaways.item_id AS itemId,
+        dwarf_stowaways.rarity, catalog_items.name
+      FROM dwarf_stowaways
+      LEFT JOIN catalog_items ON catalog_items.id = dwarf_stowaways.item_id
+      WHERE dwarf_stowaways.vehicle_id = ?
+        AND dwarf_stowaways.captor_player_id = ?
+        AND dwarf_stowaways.status = 'captured'
+      ORDER BY dwarf_stowaways.id
+    `).all(vehicle.id, vehicle.player_id).map((dwarf) => ({
+      ...dwarf,
+      name: dwarf.name ?? this.#dwarfTierForRarity(dwarf.rarity)?.name ?? 'Dwarf',
+      damage: Math.max(1, Number(dwarf.rarity))
+    }));
+  }
+
+  #escapeDwarfStowaways(vehicleId, now, { capturedOnly = false } = {}) {
+    const statusClause = capturedOnly ? "= 'captured'" : "IN ('aboard', 'captured')";
     const stowaways = this.database.prepare(`
       SELECT dwarf_stowaways.id, dwarf_stowaways.item_id AS itemId,
         dwarf_stowaways.rarity, catalog_items.name
       FROM dwarf_stowaways
       LEFT JOIN catalog_items ON catalog_items.id = dwarf_stowaways.item_id
       WHERE dwarf_stowaways.vehicle_id = ?
-        AND dwarf_stowaways.status IN ('aboard', 'captured')
+        AND dwarf_stowaways.status ${statusClause}
       ORDER BY dwarf_stowaways.id
     `).all(vehicleId);
     if (stowaways.length) {
+      const deleteSingle = this.database.prepare(`
+        DELETE FROM player_vehicle_cargo
+        WHERE vehicle_id = ? AND item_id = ? AND quantity = 1
+      `);
+      const decrement = this.database.prepare(`
+        UPDATE player_vehicle_cargo SET quantity = quantity - 1
+        WHERE vehicle_id = ? AND item_id = ? AND quantity > 1
+      `);
+      for (const stowaway of stowaways) {
+        deleteSingle.run(vehicleId, stowaway.itemId);
+        decrement.run(vehicleId, stowaway.itemId);
+      }
       this.database.prepare(`
         UPDATE dwarf_stowaways SET status = 'escaped', arrival_at = ?
-        WHERE vehicle_id = ? AND status IN ('aboard', 'captured')
+        WHERE vehicle_id = ? AND status ${statusClause}
       `).run(now, vehicleId);
     }
     return stowaways;
@@ -20339,35 +21870,48 @@ Compliance is compulsory. Enjoy your new life.
       vehicle.rating, vehicle.rating)?.rank ?? null;
   }
 
-  #currentThiefBase() {
-    return this.database.prepare('SELECT * FROM thief_bases ORDER BY id DESC LIMIT 1').get();
+  #currentThiefBase(mapId) {
+    const regionId = Number(mapId);
+    if (!Number.isSafeInteger(regionId) || regionId < 1) return null;
+    return this.database.prepare(`
+      SELECT * FROM thief_bases WHERE map_id = ? ORDER BY id DESC LIMIT 1
+    `).get(regionId);
   }
 
-  #hasThiefBaseDiscovery(playerId, baseId = this.#currentThiefBase()?.id) {
+  #hasThiefBaseDiscovery(playerId, baseId) {
     return Boolean(baseId && this.database.prepare(
       'SELECT 1 FROM thief_base_discoveries WHERE base_id = ? AND player_id = ?'
     ).get(baseId, playerId));
   }
 
-  #ensureCurrentThiefBase(now) {
-    const current = this.#currentThiefBase();
+  #ensureCurrentThiefBase(mapId, now) {
+    const current = this.#currentThiefBase(mapId);
     if (current) return current;
     return this.#transaction(() => {
-      const existing = this.#currentThiefBase();
+      const existing = this.#currentThiefBase(mapId);
       if (existing) return existing;
-      this.#createThiefBase(now, seededRandom('ore-thief-base-recovery', now));
-      return this.#currentThiefBase();
+      this.#createThiefBase(mapId, now,
+        seededRandom('ore-thief-base-recovery', mapId, now));
+      return this.#currentThiefBase(mapId);
     });
   }
 
   thiefBaseStatus(playerId, now = Date.now()) {
-    // The operation is persistent world state, but a maintenance cleanup can leave
-    // the singleton table empty. Restore it on the first explicit Airfield view so
-    // merely starting the server still does not advance or populate the world.
-    const base = this.#ensureCurrentThiefBase(now);
+    const region = this.database.prepare(`
+      SELECT world_maps.id, world_maps.name
+      FROM players
+      JOIN catalog_cities ON catalog_cities.id = players.city_id
+      JOIN world_maps ON world_maps.id = catalog_cities.map_id
+      WHERE players.id = ?
+    `).get(playerId);
+    if (!region) throw new Error('The player is not in a known region.');
+    // Regional operations are persistent world state. Restore a missing base only
+    // when a player explicitly opens that region's Airfield.
+    const base = this.#ensureCurrentThiefBase(region.id, now);
     const discovered = this.#hasThiefBaseDiscovery(playerId, base.id);
     return {
-      id: base.id, discovered, distance: discovered ? base.distance : null,
+      id: base.id, mapId: region.id, mapName: region.name,
+      discovered, distance: discovered ? base.distance : null,
       buckets: discovered ? base.buckets : null, damaged: discovered && Boolean(base.damaged),
       destroyed: discovered && Boolean(base.destroyed_at), ore: discovered && base.destroyed_at ? base.ore : null,
       discoveredAt: discovered ? base.discovered_at : null,
@@ -20376,7 +21920,7 @@ Compliance is compulsory. Enjoy your new life.
     };
   }
 
-  #createThiefBase(now, random) {
+  #createThiefBase(mapId, now, random) {
     const minimumDistance = Number(this.#setting('thief_base_min_distance'));
     const maximumDistance = Number(this.#setting('thief_base_max_distance'));
     const minimumBuckets = Number(this.#setting('thief_base_min_buckets'));
@@ -20386,8 +21930,9 @@ Compliance is compulsory. Enjoy your new life.
     const buckets = minimumBuckets
       + Math.floor(random() * (maximumBuckets - minimumBuckets + 1));
     this.database.prepare(`
-      INSERT INTO thief_bases (distance, ore, buckets, created_at) VALUES (?, 0, ?, ?)
-    `).run(distance, buckets, now);
+      INSERT INTO thief_bases (map_id, distance, ore, buckets, created_at)
+      VALUES (?, ?, 0, ?, ?)
+    `).run(mapId, distance, buckets, now);
   }
 
   #grantAsoMineRentalVoucher(playerId, cityId, grantedAt) {
@@ -20950,12 +22495,14 @@ Compliance is compulsory. Enjoy your new life.
     if (!hasDue) return 0;
     const dueStatement = this.database.prepare(`
       SELECT player_vehicles.*, catalog_aircrafts.aircraft_type,
-        catalog_vehicles.capacity AS base_capacity, catalog_items.name AS item_name
+        catalog_vehicles.capacity AS base_capacity, catalog_items.name AS item_name,
+        mission_city.map_id
       FROM player_vehicles
       JOIN catalog_aircrafts ON catalog_aircrafts.vehicle_id = player_vehicles.vehicle_type_id
       JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
       JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
       JOIN catalog_routes ON catalog_routes.id = player_vehicles.route_id
+      JOIN catalog_cities AS mission_city ON mission_city.id = catalog_routes.city1_id
       WHERE player_vehicles.player_id = ? AND player_vehicles.status = 'traveling'
         AND player_vehicles.aircraft_event_resolved = 0
         AND player_vehicles.aircraft_event_at IS NOT NULL AND player_vehicles.aircraft_event_at <= ?
@@ -20968,7 +22515,7 @@ Compliance is compulsory. Enjoy your new life.
       // have settled the same mission after the optimistic read above.
       const due = dueStatement.all(playerId, now);
       for (const vehicle of due) {
-        const base = this.#currentThiefBase();
+        const base = this.#currentThiefBase(vehicle.map_id);
         if (!base) continue;
         const random = seededRandom('aircraft-mission', vehicle.id, base.id, vehicle.departed_at);
         let eventType = null;
@@ -21025,11 +22572,14 @@ Compliance is compulsory. Enjoy your new life.
             if (damage > 0 && buckets === 0) {
               const lastDestroyed = this.database.prepare(`
                 SELECT COALESCE(MAX(destroyed_at), 0) AS time FROM thief_bases
-                WHERE destroyed_at IS NOT NULL AND id != ?
-              `).get(base.id).time;
+                WHERE map_id = ? AND destroyed_at IS NOT NULL AND id != ?
+              `).get(base.map_id, base.id).time;
               const stolen = this.database.prepare(`
-                SELECT COALESCE(SUM(quantity), 0) AS quantity FROM bum_thefts WHERE created_at > ?
-              `).get(lastDestroyed).quantity;
+                SELECT COALESCE(SUM(bum_thefts.quantity), 0) AS quantity
+                FROM bum_thefts
+                JOIN catalog_cities ON catalog_cities.id = bum_thefts.city_id
+                WHERE catalog_cities.map_id = ? AND bum_thefts.created_at > ?
+              `).get(base.map_id, lastDestroyed).quantity;
               ore = Math.floor(stolen * Number(this.#setting('thief_base_ore_recovery_ratio')));
               this.database.prepare(`
                 UPDATE thief_bases SET buckets = 0, damaged = 1, destroyed_at = ?,
@@ -21113,9 +22663,9 @@ Compliance is compulsory. Enjoy your new life.
           this.database.prepare('UPDATE player_vehicles SET aircraft_event_resolved = 1 WHERE id = ?')
             .run(vehicle.id);
         }
-        const current = this.#currentThiefBase();
+        const current = this.#currentThiefBase(vehicle.map_id);
         if (current?.destroyed_at && current.ore === 0) {
-          this.#createThiefBase(vehicle.aircraft_event_at, random);
+          this.#createThiefBase(vehicle.map_id, vehicle.aircraft_event_at, random);
         }
         resolved += 1;
       }
@@ -21209,7 +22759,8 @@ Compliance is compulsory. Enjoy your new life.
             baitIndex -= candidate.quantity;
           }
           const treasure = this.database.prepare(`
-            SELECT sunken_items.id, sunken_items.item_id, catalog_items.rarity
+            SELECT sunken_items.id, sunken_items.item_id,
+              sunken_items.source_vehicle_id, catalog_items.rarity
             FROM sunken_items JOIN catalog_items ON catalog_items.id = sunken_items.item_id
             WHERE sunken_items.route_id = ? AND ABS(sunken_items.location - ?) < ?
               AND (catalog_items.rarity >= ?
@@ -21223,6 +22774,7 @@ Compliance is compulsory. Enjoy your new life.
             caughtItemId = treasure.item_id;
             salvaged = true;
             this.database.prepare('DELETE FROM sunken_items WHERE id = ?').run(treasure.id);
+            this.#clearEmptyVehicleWreck(treasure.source_vehicle_id);
             this.awardStone(playerId, 'Salvaged', settledAt);
             if (treasure.rarity >= Number(this.#setting('achievement_high_rarity_minimum'))) {
               this.awardStone(playerId, 'Reclaimed', settledAt);
@@ -21288,6 +22840,117 @@ Compliance is compulsory. Enjoy your new life.
             AND (next_fish_location IS NOT ? OR fish_sequence IS NOT ?)
         `).run(nextLocation, sequence, vehicle.id, nextLocation, sequence);
         processed += 1;
+      }
+    });
+    return processed;
+  }
+
+  #settleMagnets(playerId, now) {
+    const magnetItemId = this.#itemIdSetting('magnet_item_id');
+    const chance = Number(this.#setting('magnet_intact_salvage_chance'));
+    if (!(chance >= 0 && chance <= 1)) {
+      throw new Error('Invalid magnet_intact_salvage_chance setting.');
+    }
+    const vehicleIds = this.database.prepare(`
+      SELECT player_vehicles.id
+      FROM player_vehicles
+      JOIN player_vehicle_cargo
+        ON player_vehicle_cargo.vehicle_id = player_vehicles.id
+      WHERE player_vehicles.player_id = ? AND player_vehicles.status = 'traveling'
+        AND player_vehicle_cargo.item_id = ? AND player_vehicle_cargo.quantity > 0
+      ORDER BY player_vehicles.id
+    `).all(playerId, magnetItemId);
+    if (!vehicleIds.length) return 0;
+    let processed = 0;
+    this.#transaction(() => {
+      for (const { id } of vehicleIds) {
+        const vehicle = this.#vehicleRecord(id, playerId);
+        if (!vehicle || vehicle.status !== 'traveling') continue;
+        const route = this.database.prepare(`
+          SELECT catalog_routes.*, city1.map_id AS map1_id, city2.map_id AS map2_id
+          FROM catalog_routes
+          JOIN catalog_cities AS city1 ON city1.id = catalog_routes.city1_id
+          JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
+          WHERE catalog_routes.id = ? AND catalog_routes.length > 0
+        `).get(vehicle.route_id);
+        if (!route || Number(route.type) === Number(this.#routeTypeId('air'))) continue;
+        const loadout = this.#vehicleLoadout(vehicle);
+        const magnets = Number(loadout.cargo.find(
+          (entry) => Number(entry.itemId) === magnetItemId
+        )?.quantity ?? 0);
+        const pullsUsed = Number(this.database.prepare(`
+          SELECT COUNT(*) AS count FROM vehicle_events
+          WHERE vehicle_id = ? AND event_type = 'magnet-salvage'
+            AND json_extract(details_json, '$.departedAt') = ?
+        `).get(vehicle.id, vehicle.departed_at).count);
+        let pullsRemaining = Math.max(0, magnets - pullsUsed);
+        if (!pullsRemaining) continue;
+        const settledAt = Math.min(Number(now), Number(vehicle.arrives_at));
+        const motion = this.#vehicleRouteMotion(vehicle, route);
+        if (!motion) continue;
+        const location = motion.locationAt(settledAt);
+        const wreckage = this.database.prepare(`
+          SELECT sunken_items.id, sunken_items.item_id,
+            sunken_items.source_vehicle_id, sunken_items.location,
+            catalog_items.name, catalog_items.rarity
+          FROM sunken_items
+          JOIN catalog_items ON catalog_items.id = sunken_items.item_id
+          WHERE sunken_items.route_id = ? AND sunken_items.created_at <= ?
+            AND sunken_items.location BETWEEN ? AND ?
+          ORDER BY sunken_items.location, sunken_items.id
+        `).all(route.id, settledAt,
+          motion.forwards ? 0 : location, motion.forwards ? location : Number(route.length));
+        if (!motion.forwards) wreckage.reverse();
+        let freeCapacity = Math.max(0, loadout.capacity - loadout.cargoSize);
+        for (const wreck of wreckage) {
+          if (!pullsRemaining) break;
+          const random = seededRandom('magnet-salvage', vehicle.id, vehicle.route_id,
+            vehicle.departed_at, wreck.id);
+          const recyclePreference = Boolean(this.database.prepare(`
+            SELECT 1 FROM recycle_preferences WHERE player_id = ? AND item_id = ?
+          `).get(playerId, wreck.item_id));
+          const retained = freeCapacity > 0 && !recyclePreference
+            && this.#vehicleAcceptsAutomaticCargo(vehicle, wreck.item_id)
+            && random() < chance;
+          let scraps = 0;
+          if (retained) {
+            this.database.prepare(`
+              INSERT INTO player_vehicle_cargo (vehicle_id, item_id, quantity)
+              VALUES (?, ?, 1)
+              ON CONFLICT (vehicle_id, item_id) DO UPDATE SET quantity = quantity + 1
+            `).run(vehicle.id, wreck.item_id);
+            freeCapacity -= 1;
+          } else {
+            scraps = this.#recyclingYield(wreck.item_id);
+            this.#changeScraps(playerId, vehicle.destination_city_id, scraps);
+          }
+          this.database.prepare('DELETE FROM sunken_items WHERE id = ?').run(wreck.id);
+          const wreckCleared = this.#clearEmptyVehicleWreck(wreck.source_vehicle_id);
+          this.database.prepare(`
+            INSERT INTO vehicle_events
+              (vehicle_id, player_id, event_type, route_id, details_json, created_at)
+            VALUES (?, ?, 'magnet-salvage', ?, ?, ?)
+          `).run(vehicle.id, playerId, route.id, JSON.stringify({
+            itemId: wreck.item_id, quantity: 1,
+            outcome: retained ? 'cargo' : 'scraps', scraps,
+            location: wreck.location, sourceVehicleId: wreck.source_vehicle_id,
+            wreckCleared, departedAt: vehicle.departed_at
+          }), settledAt);
+          this.#recordFindings(playerId, [{
+            itemId: wreck.item_id, quantity: 1,
+            cityId: retained ? null : vehicle.destination_city_id,
+            mapIds: [route.map1_id, route.map2_id], foundAt: settledAt,
+            recycled: !retained,
+            ...(!retained ? {} : { status: 'Attracted into vehicle cargo' })
+          }], 'salvage', now);
+          this.awardStone(playerId, 'Salvaged', settledAt);
+          if (retained
+            && Number(wreck.rarity) >= Number(this.#setting('achievement_high_rarity_minimum'))) {
+            this.awardStone(playerId, 'Reclaimed', settledAt);
+          }
+          pullsRemaining -= 1;
+          processed += 1;
+        }
       }
     });
     return processed;
@@ -21774,6 +23437,55 @@ Compliance is compulsory. Enjoy your new life.
     ) ? baseName : `${rarityName} ${baseName}`;
   }
 
+  #insertVehicleWreckage(source, route, sourceLoadout, location, now) {
+    const quantities = new Map();
+    const add = (itemId, quantity = 1) => {
+      const id = Number(itemId);
+      const count = Number(quantity);
+      if (!Number.isSafeInteger(id) || !Number.isSafeInteger(count) || count < 1) return;
+      quantities.set(id, (quantities.get(id) ?? 0) + count);
+    };
+    const damagedVehicle = this.database.prepare(`
+      SELECT id FROM catalog_items
+      WHERE repaired_item_id = ? AND is_damaged = 1
+      ORDER BY id LIMIT 1
+    `).get(source.item_id);
+    if (damagedVehicle) add(damagedVehicle.id);
+    if (Number(route.type) === Number(this.#routeTypeId('land'))) {
+      for (const entry of sourceLoadout?.cargo ?? []) add(entry.itemId, entry.quantity);
+      for (const entry of sourceLoadout?.mods ?? []) add(entry.itemId);
+      for (const entry of sourceLoadout?.weapons ?? []) add(entry.itemId);
+    }
+    const dwarfItemIds = new Set(this.#dwarfTiers().map((tier) => Number(tier.itemId)));
+    const insert = this.database.prepare(`
+      INSERT INTO sunken_items
+        (item_id, route_id, location, source_vehicle_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    let inserted = 0;
+    for (const [itemId, quantity] of quantities) {
+      if (dwarfItemIds.has(itemId)) continue;
+      for (let count = 0; count < quantity; count += 1) {
+        insert.run(itemId, route.id, location, source.id, now);
+        inserted += 1;
+      }
+    }
+    return inserted;
+  }
+
+  #clearEmptyVehicleWreck(sourceVehicleId) {
+    const id = Number(sourceVehicleId);
+    if (!Number.isSafeInteger(id) || id < 1) return false;
+    const result = this.database.prepare(`
+      DELETE FROM ghost_wrecks
+      WHERE source_vehicle_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM sunken_items WHERE source_vehicle_id = ?
+        )
+    `).run(id, id);
+    return result.changes > 0;
+  }
+
   #recordGhostWreck(source, routeId, sourceLoadout, now, options = {}) {
     if (!source || source.route_type === this.#routeTypeId('air')) return null;
     if (this.database.prepare('SELECT 1 FROM players WHERE id = ? AND is_npc = 1')
@@ -21807,16 +23519,65 @@ Compliance is compulsory. Enjoy your new life.
       Number(source.route_type) === Number(this.#routeTypeId('sea')) ? 'ship' : 'rider',
       route.id, location, Number(source.rarity), JSON.stringify(loadout),
       String(options.cause ?? 'route destruction'), Number(now));
+    if (inserted.changes) {
+      this.#insertVehicleWreckage(source, route, sourceLoadout, location, Number(now));
+    }
     const wreck = this.database.prepare(`
       SELECT * FROM ghost_wrecks WHERE source_vehicle_id = ?
     `).get(source.id);
     return wreck ? { ...wreck, recorded: Boolean(inserted.changes) } : null;
   }
 
+  #recordCreatureRemains(creature, routeId, location, now) {
+    if (!creature) return null;
+    const route = this.database.prepare(`
+      SELECT id, type, length FROM catalog_routes WHERE id = ? AND length > 0
+    `).get(Number(routeId));
+    if (!route || Number(route.type) === Number(this.#routeTypeId('air'))) return null;
+    const source = this.database.prepare(`
+      SELECT catalog_vehicles.id AS vehicle_type_id,
+        catalog_vehicles.item_id, catalog_vehicles.speed AS base_speed,
+        catalog_vehicles.capacity AS base_capacity, catalog_vehicles.route_type,
+        catalog_vehicles.cargo_policy, catalog_vehicles.route_policy,
+        catalog_vehicles.capacity_cap, catalog_items.name AS item_name,
+        catalog_lands.attack AS land_attack, catalog_lands.armor AS land_armor,
+        catalog_ships.cannon_portals, catalog_ships.hull AS max_hull,
+        catalog_ships.crew AS max_crew
+      FROM catalog_vehicles
+      JOIN catalog_items ON catalog_items.id = catalog_vehicles.item_id
+      LEFT JOIN catalog_lands ON catalog_lands.vehicle_id = catalog_vehicles.id
+      LEFT JOIN catalog_ships ON catalog_ships.vehicle_id = catalog_vehicles.id
+      WHERE catalog_vehicles.route_type = ? AND catalog_items.rarity = ?
+      ORDER BY (COALESCE(catalog_lands.attack, 0) + COALESCE(catalog_lands.armor, 0)
+        + COALESCE(catalog_ships.hull, 0) + COALESCE(catalog_ships.crew, 0)) DESC,
+        catalog_vehicles.id LIMIT 1
+    `).get(route.type, Number(creature.rarity));
+    if (!source) return null;
+    const rawLocation = Number(location);
+    const remainsLocation = Math.max(0, Math.min(Number(route.length),
+      Number.isFinite(rawLocation) ? rawLocation : Number(creature.location)));
+    const name = this.#worldCreatureName(creature.creature_type, creature.rarity);
+    const inserted = this.database.prepare(`
+      INSERT OR IGNORE INTO ghost_wrecks
+        (source_vehicle_id, source_creature_id, source_player_id, vehicle_type_id,
+         source_item_id, source_vehicle_name, ghost_kind, route_id, location,
+         rarity, loadout_json, cause, wrecked_at)
+      VALUES (NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)
+    `).run(creature.id, source.vehicle_type_id, source.item_id, name,
+      Number(route.type) === Number(this.#routeTypeId('sea')) ? 'ship' : 'rider',
+      route.id, remainsLocation, Number(creature.rarity),
+      `defeated world creature:${creature.creature_type}`, Number(now));
+    const remains = this.database.prepare(`
+      SELECT * FROM ghost_wrecks WHERE source_creature_id = ?
+    `).get(creature.id);
+    return remains ? { ...remains, recorded: Boolean(inserted.changes) } : null;
+  }
+
   #settleGhostWrecks(now) {
     const wrecks = this.database.prepare(`
       SELECT ghost_wrecks.id AS wreck_id,
         ghost_wrecks.source_vehicle_id AS id,
+        ghost_wrecks.source_creature_id,
         ghost_wrecks.source_player_id AS player_id,
         ghost_wrecks.source_vehicle_name AS name,
         ghost_wrecks.source_item_id AS item_id,
@@ -21846,7 +23607,9 @@ Compliance is compulsory. Enjoy your new life.
     `).all();
     let wraithsRisen = 0;
     let ghostShipsRisen = 0;
+    let creatureRemainsScanned = 0;
     for (const wreck of wrecks) {
+      if (wreck.source_creature_id !== null) creatureRemainsScanned += 1;
       let sourceLoadout = null;
       try { sourceLoadout = JSON.parse(wreck.loadout_json); } catch {}
       const ghost = this.#maybeRaiseGhost(
@@ -21864,7 +23627,8 @@ Compliance is compulsory. Enjoy your new life.
       else if (ghost) wraithsRisen += 1;
     }
     return {
-      ghostWrecksScanned: wrecks.length, wraithsRisen, ghostShipsRisen,
+      ghostWrecksScanned: wrecks.length, creatureRemainsScanned,
+      wraithsRisen, ghostShipsRisen,
       restlessDeadRisen: wraithsRisen + ghostShipsRisen
     };
   }
@@ -21873,6 +23637,10 @@ Compliance is compulsory. Enjoy your new life.
     if (!source || source.route_type === this.#routeTypeId('air')) return null;
     if (this.database.prepare('SELECT 1 FROM players WHERE id = ? AND is_npc = 1')
       .get(source.player_id)) return null;
+    const priorCreatureGhost = source.source_creature_id ? this.database.prepare(
+      'SELECT id FROM ghost_vehicles WHERE source_creature_id = ?'
+    ).get(source.source_creature_id) : null;
+    if (priorCreatureGhost) return null;
     const priorSourceGhost = source.id ? this.database.prepare(
       'SELECT id FROM ghost_vehicles WHERE source_vehicle_id = ?'
     ).get(source.id) : null;
@@ -21887,7 +23655,8 @@ Compliance is compulsory. Enjoy your new life.
       && active.length >= Number(this.#setting('ghost_max_active_per_route_class'))) return null;
     const chanceAt = Number(options.chanceAt ?? now);
     const random = seededRandom(
-      'ghost-rise', source.id ?? 0, routeId, chanceAt, source.rarity
+      'ghost-rise', source.id ?? source.source_creature_id ?? 0,
+      routeId, chanceAt, source.rarity
     );
     if (!options.force) {
       const multipliers = this.#setting('ghost_rise_moon_multipliers');
@@ -22030,10 +23799,12 @@ Compliance is compulsory. Enjoy your new life.
     const ghost = this.database.prepare(`
       INSERT INTO ghost_vehicles
         (vehicle_id, source_vehicle_id, source_player_id, source_item_id,
-         source_vehicle_name, ghost_kind, route_id, rarity, risen_at, bounty_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         source_vehicle_name, ghost_kind, route_id, rarity, risen_at, bounty_json,
+         source_creature_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(ghostVehicleId, source.id ?? null, source.player_id ?? null, source.item_id,
-      baseName, ghostKind, route.id, source.rarity, now, JSON.stringify(insertedBounty));
+      baseName, ghostKind, route.id, source.rarity, now, JSON.stringify(insertedBounty),
+      source.source_creature_id ?? null);
     const ghostId = Number(ghost.lastInsertRowid);
     this.#announceWorldChat(`ghost:${ghostId}:risen`,
       'ghost-risen', {
@@ -22128,7 +23899,8 @@ Compliance is compulsory. Enjoy your new life.
         catalog_rarities.name AS rarity_name,
         catalog_items.name AS source_item_name,
         catalog_items.description AS source_item_description,
-        catalog_items.icon AS source_icon,
+        catalog_items.icon AS source_item_icon,
+        source_creature.creature_type AS source_creature_type,
         source_owner.name AS source_player_name,
         defeated.name AS defeated_by_name
       FROM ghost_vehicles
@@ -22141,6 +23913,8 @@ Compliance is compulsory. Enjoy your new life.
       JOIN catalog_items ON catalog_items.id = ghost_vehicles.source_item_id
       LEFT JOIN player_vehicles ON player_vehicles.id = ghost_vehicles.vehicle_id
       LEFT JOIN player_ship_state ON player_ship_state.vehicle_id = player_vehicles.id
+      LEFT JOIN world_creatures AS source_creature
+        ON source_creature.id = ghost_vehicles.source_creature_id
       LEFT JOIN players AS source_owner ON source_owner.id = ghost_vehicles.source_player_id
       LEFT JOIN players AS defeated ON defeated.id = ghost_vehicles.defeated_by_player_id
        WHERE ${includeHistory
@@ -22163,6 +23937,10 @@ Compliance is compulsory. Enjoy your new life.
       const location = distanceFromOrigin === null ? null
         : Number(row.origin_city_id) === Number(row.city1_id)
           ? distanceFromOrigin : Number(row.length) - distanceFromOrigin;
+      const sourceCreatureName = row.source_creature_type
+        ? this.#worldCreatureName(row.source_creature_type, row.rarity) : null;
+      const sourceIcon = row.source_creature_type
+        ? this.#worldCreatureIcon(row.source_creature_type) : row.source_item_icon;
       return {
         id: row.id, vehicleId: row.vehicle_id, name, baseName,
         kind: row.ghost_kind, routeId: row.route_id, routeType: row.route_type,
@@ -22172,9 +23950,11 @@ Compliance is compulsory. Enjoy your new life.
         mapIds: [...new Set([row.map1_id, row.map2_id])],
         regionNames, regionName: regionNames.join(' / '),
         rarity: row.rarity, rarityName: row.rarity_name,
-        icon: row.source_icon,
+        icon: sourceIcon,
         sourceItemId: row.source_item_id, sourceItemName: row.source_item_name,
-        sourceItemDescription: row.source_item_description, sourceIcon: row.source_icon,
+        sourceItemDescription: row.source_item_description, sourceIcon,
+        sourceCreatureId: row.source_creature_id,
+        sourceCreatureType: row.source_creature_type, sourceCreatureName,
         sourceVehicleName: row.source_vehicle_name,
         sourcePlayerName: row.source_player_name,
         speed: row.speed,
@@ -23214,6 +24994,12 @@ Compliance is compulsory. Enjoy your new life.
       const classRules = this.#setting('combat_class_by_rarity');
       const creatureLocation = Number(encounterLocation
         ?? this.#worldCreatureLocationAt(liveCreature, now));
+      const creatureRemainsCandidate = defeated
+        ? this.#recordCreatureRemains(
+          { ...liveCreature, route_type: creature.route_type },
+          liveCreature.route_id, creatureLocation, now
+        )
+        : null;
       const snapshotCargo = (currentLoadout) => currentLoadout.cargo.map((item) => ({
         itemId: Number(item.itemId), name: item.name, icon: item.icon,
         rarity: Number(item.rarity), quantity: Number(item.quantity)
@@ -23331,6 +25117,7 @@ Compliance is compulsory. Enjoy your new life.
            shotsFired, hp, defeated, rewards, initiator, starting, ending,
            combatSnapshots, phases, skippedPhases, destroyed: landDestroyed,
            ghostId: null, ghostName: null, wreckId: wreckCandidate?.id ?? null,
+           creatureRemainsId: creatureRemainsCandidate?.id ?? null,
            escapedStowaways,
            vehicleRatingBefore, vehicleRatingAfter,
            creatureRatingBefore, creatureRatingAfter }), now);
@@ -23352,6 +25139,8 @@ Compliance is compulsory. Enjoy your new life.
       const ghostText = landDestroyed
         ? ` Its wreck remains at ${Math.round(Number(encounterLocation))} km. The restless dead may find it.`
         : '';
+      const creatureRemainsText = creatureRemainsCandidate
+        ? ' Its remains may also join the restless dead.' : '';
       const stowawayText = escapedStowaways.length
         ? ` ${escapedStowaways.length === 1 ? 'A Dwarf stowaway' : `${escapedStowaways.length} Dwarf stowaways`} escaped from the wreck.`
         : '';
@@ -23361,7 +25150,7 @@ Compliance is compulsory. Enjoy your new life.
           this.#vehicleName(traveling)}. ` : ''}Your ${this.#vehicleName(traveling)} dealt ${
           damage} damage to the ${creatureName} and took ${counterDamage} damage. ${
           defeated ? `You defeated it.${rewardText}` : `It has ${hp}/${liveCreature.max_hp} health remaining.`}${
-          ghostText}${stowawayText}`,
+          creatureRemainsText}${ghostText}${stowawayText}`,
         now, `world-creature:${creature.id}:vehicle:${vehicle.id}`, {
           event: 'world-creature-combat', creatureId: creature.id, vehicleId: vehicle.id,
           creatureName, creatureType: creature.creature_type,
@@ -23373,7 +25162,8 @@ Compliance is compulsory. Enjoy your new life.
            damage, counterDamage, shotsFired, hp, defeated, rewards, rewardQuantity, initiator,
            availableRewardQuantity, starting, ending, combatSnapshots, phases, skippedPhases,
            destroyed: landDestroyed, ghostId: null, ghostName: null,
-           wreckId: wreckCandidate?.id ?? null, escapedStowaways,
+           wreckId: wreckCandidate?.id ?? null,
+           creatureRemainsId: creatureRemainsCandidate?.id ?? null, escapedStowaways,
            vehicleRatingBefore, vehicleRatingAfter, creatureRatingBefore, creatureRatingAfter,
             actions: [{ label: 'View world events', path: '/events' },
              ...(shipSunk || landDestroyed
@@ -23413,6 +25203,7 @@ Compliance is compulsory. Enjoy your new life.
        rewards, rewardQuantity, availableRewardQuantity, starting, ending,
        combatSnapshots, phases, skippedPhases, destroyed: landDestroyed,
        ghostId: null, ghostName: null, wreckId: wreckCandidate?.id ?? null,
+       creatureRemainsId: creatureRemainsCandidate?.id ?? null,
        escapedStowaways,
        vehicleRatingBefore, vehicleRatingAfter,
        creatureRatingBefore, creatureRatingAfter
@@ -23733,6 +25524,7 @@ Compliance is compulsory. Enjoy your new life.
 
   #settleVehicles(playerId, now = Date.now(), settlementDepth = 0) {
     this.settleWorldEvents(now);
+    this.#settleMagnets(playerId, now);
     let continuedVehicleJourney = false;
     const result = {
       encounters: this.#transaction(() => this.#settleDueVehicleEncounters(now)),
@@ -23926,6 +25718,11 @@ Compliance is compulsory. Enjoy your new life.
         const catches = journeyEvents.filter((event) => event.type === 'fished').map((event) => ({
           ...event.details, itemName: event.itemName, caughtAt: event.createdAt
         }));
+        const magnetPulls = journeyEvents.filter(
+          (event) => event.type === 'magnet-salvage'
+        ).map((event) => ({
+          ...event.details, itemName: event.itemName, salvagedAt: event.createdAt
+        }));
         if (!continuesJourney) {
           for (const item of cargo) {
             this.#changeInventory(playerId, vehicle.destination_city_id, item.item_id, item.quantity);
@@ -24027,6 +25824,12 @@ Compliance is compulsory. Enjoy your new life.
           }
           journeyNotes.push(`caught ${[...caught].map(([name, quantity]) =>
             `${quantity}\u00d7 ${name}`).join(', ')}`);
+        }
+        if (magnetPulls.length) {
+          const cargoPulls = magnetPulls.filter((entry) => entry.outcome === 'cargo').length;
+          const scraps = magnetPulls.reduce((sum, entry) => sum + Number(entry.scraps ?? 0), 0);
+          journeyNotes.push(`Magnets recovered ${cargoPulls} cargo thing${
+            cargoPulls === 1 ? '' : 's'} and ${scraps} Ore scrap${scraps === 1 ? '' : 's'}`);
         }
         if (battleEvents.length) {
           const counts = new Map();
@@ -24486,6 +26289,9 @@ Compliance is compulsory. Enjoy your new life.
           meldCount / Number(this.#setting('aircraft_melds_per_slot'))
         )) pause('Your meld count does not allow another aircraft in flight.');
       }
+      if (Number(vehicle.route_type) === Number(this.#routeTypeId('sea'))) {
+        this.#runShuttleAutoloader(vehicle, now);
+      }
       const currentLoadout = this.#vehicleLoadout(vehicle);
       if (currentLoadout.cargoSize > currentLoadout.capacity) {
         pause('Vehicle is over capacity.');
@@ -24712,7 +26518,10 @@ Compliance is compulsory. Enjoy your new life.
     if (routeType !== airRouteType) {
       return routes.filter((route) => route.city1_id !== route.city2_id && Number(route.length) > 0);
     }
-    const base = this.#currentThiefBase();
+    const mapId = this.database.prepare(
+      'SELECT map_id FROM catalog_cities WHERE id = ?'
+    ).get(cityId)?.map_id;
+    const base = this.#currentThiefBase(mapId);
     const discovered = base ? this.#hasThiefBaseDiscovery(playerId, base.id) : false;
     const searchRoleId = this.#aircraftRoleId('search');
     const bomberRoleId = this.#aircraftRoleId('bomber');
@@ -25935,7 +27744,7 @@ Compliance is compulsory. Enjoy your new life.
       const mission = vehicle.route_type === airRouteType && route.city1_id === route.city2_id;
       let base = null;
       if (mission) {
-        base = this.#currentThiefBase();
+        base = this.#currentThiefBase(endpointMaps?.map1_id);
         if (!base) throw new Error('The ore-thief mission is unavailable.');
         const discovered = this.#hasThiefBaseDiscovery(playerId, base.id);
         if (vehicle.aircraft_type === searchRoleId && discovered) {
@@ -26301,6 +28110,9 @@ Compliance is compulsory. Enjoy your new life.
     const ghost2 = this.database.prepare(
       'SELECT * FROM ghost_vehicles WHERE vehicle_id = ? AND defeated_at IS NULL'
     ).get(other.id);
+    const captiveDwarves = [
+      this.#npcCapturedDwarves(vehicle), this.#npcCapturedDwarves(other)
+    ];
     const random = seededRandom(vehicle.id, other.id, routeId, now);
     const pendingSinks = [];
     const ghostAttackForceRatio = Number(this.#setting('ghost_attack_force_ratio'));
@@ -26326,7 +28138,7 @@ Compliance is compulsory. Enjoy your new life.
         ghostLandStats(other, loadout2, ghost2)
       ];
       result = fightLand(startingLandStats[0], aggressive1,
-        startingLandStats[1], aggressive2, random, combatRules);
+        startingLandStats[1], aggressive2, random, combatRules, captiveDwarves);
       result.type = 'land2';
     } else {
       const ammunitionRules = this.#ammunitionRules();
@@ -26353,7 +28165,7 @@ Compliance is compulsory. Enjoy your new life.
       };
       result = fightShips(makeShip(vehicle, loadout1, ghost1), aggressive1,
         makeShip(other, loadout2, ghost2), aggressive2, random,
-        ammunitionRules, combatRules);
+        ammunitionRules, combatRules, captiveDwarves);
       result.type = 'ship';
       result.repairs = [];
       for (const [index, [entry, ship, loadout]] of [
@@ -26395,6 +28207,18 @@ Compliance is compulsory. Enjoy your new life.
       this.#setVehicleReinforcement(entry.id,
         Number(reinforcementEndings[index]?.reinforcement ?? 0));
     }
+    const defeatedNpcSides = [vehicle, other].map((entry, index) => {
+      if (!entry.is_npc) return false;
+      const structurallyDefeated = result.type === 'land2'
+        ? result.ending[index]?.armor === 0 && result.ending[index]?.reinforcement === 0
+        : result.ships[index]?.hull === 0;
+      return structurallyDefeated
+        || (result.winner > 0 && Number(result.winner) !== index + 1);
+    });
+    const escapedNpcCaptives = [vehicle, other].map((entry, index) =>
+      defeatedNpcSides[index]
+        ? this.#escapeDwarfStowaways(entry.id, now, { capturedOnly: true }) : []);
+    result.freedCaptiveDwarves = escapedNpcCaptives.flat();
     const battleRoute = this.database.prepare(
       'SELECT id, city1_id, city2_id, length FROM catalog_routes WHERE id = ?'
     ).get(routeId);
@@ -26497,11 +28321,11 @@ Compliance is compulsory. Enjoy your new life.
         }
       }
     }
-    const escapedDestroyedStowaways = [[], []];
+    const escapedDestroyedStowaways = escapedNpcCaptives.map((entries) => [...entries]);
     for (const [index, entry] of [vehicle, other].entries()) {
       if (destroyedLand[index]) {
         // Pillage resolves first, so a Dwarf already moved to the victor remains captured.
-        escapedDestroyedStowaways[index] = this.#escapeDwarfStowaways(entry.id, now);
+        escapedDestroyedStowaways[index].push(...this.#escapeDwarfStowaways(entry.id, now));
       }
     }
     for (const entry of [vehicle, other]) {
@@ -26565,6 +28389,7 @@ Compliance is compulsory. Enjoy your new life.
         destroyed: destroyedLand[index], ghostId: null, ghostName: null,
         wreckId: wreckCandidates[index]?.id ?? null,
         escapedStowaways: escapedDestroyedStowaways[index],
+        freedCaptiveDwarves: result.freedCaptiveDwarves,
         pillage: pillageResult ? {
           direction: won ? 'taken' : 'lost', kind: pillageResult.kind,
           trips: pillageResult.trips ?? 0,
@@ -26586,11 +28411,16 @@ Compliance is compulsory. Enjoy your new life.
         ? ` ${escapedDestroyedStowaways[index].length === 1
           ? 'A Dwarf stowaway' : `${escapedDestroyedStowaways[index].length} Dwarf stowaways`} escaped from the wreck.`
         : '';
+      const freedCaptiveText = result.freedCaptiveDwarves.length && !entry.is_npc
+        ? ` ${result.freedCaptiveDwarves.length === 1
+          ? 'A Dwarf captured by the NPC fought back and escaped.'
+          : `${result.freedCaptiveDwarves.length} Dwarves captured by the NPC fought back and escaped.`}`
+        : '';
       this.#insertSystemMessage(entry.player_id, 'Vehicle',
         `${outcomeLabel} against ${this.#vehicleName(opponent)}`,
         `Your ${this.#vehicleName(entry)} ${tied ? 'drew with' : won ? 'defeated' : 'lost to'} ${
           playerNames.get(opponent.player_id) ?? 'Unknown miner'}'s ${
-          this.#vehicleName(opponent)}.${destructionText}${stowawayText} The complete account of every combat phase is below.`,
+          this.#vehicleName(opponent)}.${destructionText}${stowawayText}${freedCaptiveText} The complete account of every combat phase is below.`,
         now, `vehicle-combat:${battleId}:player:${entry.player_id}`, {
           event: 'vehicle-combat', battleId, battleType: result.type, side: index,
           outcome: payload.outcome,
@@ -26603,6 +28433,7 @@ Compliance is compulsory. Enjoy your new life.
           destroyed: destroyedLand[index], ghostId: null, ghostName: null,
           wreckId: wreckCandidates[index]?.id ?? null,
           escapedStowaways: escapedDestroyedStowaways[index],
+          freedCaptiveDwarves: result.freedCaptiveDwarves,
           starting: result.type === 'land2' ? startingLandStats : result.starting,
           result, pillage: payload.pillage,
           actions: [{ label: 'Open battle report', path: `/battles/${battleId}` },

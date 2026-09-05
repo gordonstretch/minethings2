@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Tin Meldal Detector</title>
-  <desc id="desc">Tin Meldal Detector, depicted as a handheld detector coil scanning a small meld medallion.</desc>
+  <title id="title">Tin Automelder</title>
+  <desc id="desc">Tin Automelder, depicted as a handheld staging controller scanning a small Meld ingredient.</desc>
   <path d="m29 102 51-70 12 9-49 68" fill="#aeb2aa" stroke="#292d29" stroke-width="7" stroke-linecap="round"/>
   <path d="M75 34 89 15l16 12-14 19" fill="#68726c" stroke="#292d29" stroke-width="5"/>
   <ellipse cx="30" cy="102" rx="23" ry="13" fill="none" stroke="#292d29" stroke-width="7"/>

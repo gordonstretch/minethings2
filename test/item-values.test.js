@@ -31,6 +31,8 @@ function pricedCatalog(overrides = {}) {
       machine_power: [0, 1, 1, 2, 2, 3, 3],
       day_ms: 86400000,
       rarity_roll_base: 7,
+      factory_worker_bot_contract_duration_ms: 10 * 60 * 60 * 1000,
+      factory_worker_bot_tiers: [{ id: 1, name: 'Test worker', cph: 10, costGold: 100 }],
       ...settings
     },
     ...catalogOverrides
@@ -140,6 +142,25 @@ test('enforces rarity floors and prices Oil Field returns and defenses', () => {
 
   const oil = catalog.byId.get(catalog.settings.oil_item_id);
   assert.equal(oil.goldValue, oilBarrelGold);
+  const ore = catalog.byId.get(catalog.settings.ore_item_id);
+  assert.equal(ore.goldValue, 10);
+
+  const workerHours = catalog.settings.factory_worker_bot_contract_duration_ms / 3600000;
+  const cheapestWorkerGoldPerComponent = Math.min(
+    ...catalog.settings.factory_worker_bot_tiers.map(
+      (tier) => tier.costGold / (tier.cph * workerHours)
+    )
+  );
+  for (const action of catalog.factoryActions.filter(
+    (candidate) => candidate.actionKind === 'item'
+  )) {
+    const expectedFloor = Math.ceil((
+      action.ore * catalog.settings.item_value_rules.oreCrateGold
+      + action.components * cheapestWorkerGoldPerComponent
+    ) / action.outputQuantity);
+    assert.ok(catalog.byId.get(action.outputItemId).goldValue >= expectedFloor,
+      `${action.name} should cover Ore and the cheapest Worker Bot contract`);
+  }
 
   const machineItem = (type) => {
     const machine = catalog.machines.find((candidate) => candidate.type === type);
@@ -167,14 +188,14 @@ test('enforces rarity floors and prices Oil Field returns and defenses', () => {
 
 test('uses database-shaped valuation rules and factory output IDs instead of names', () => {
   const rules = structuredClone(LEGACY_ITEM_VALUE_RULES);
-  rules.factory.ore = 2;
+  rules.oreCrateGold = 12;
   const catalog = pricedCatalog({
     settings: { item_value_rules: rules },
     items: [item(9000, 'Completely renamed output', 1, 1)],
     factoryActions: [{
-      id: 1, name: 'Also renamed', ore: 3, components: 0,
-      outputItemId: 9000, outputQuantity: 1
+      id: 1, name: 'Also renamed', ore: 3, components: 20, actionKind: 'item',
+      outputItemId: 9000, outputQuantity: 2
     }]
   });
-  assert.equal(catalog.byId.get(9000).goldValue, 6.5833);
+  assert.equal(catalog.byId.get(9000).goldValue, 28);
 });

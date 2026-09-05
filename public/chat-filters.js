@@ -3,7 +3,7 @@
 
   const filterRoot = () => document.querySelector('[data-chat-filters]');
   const storageKey = (root) => `minethings.chat-filters.v2.${root.dataset.chatPlayerId}`;
-  const emptyState = () => ({ ratingTiers: [], hideWorldEvents: false, hiddenRegions: [] });
+  const emptyState = () => ({ ratingTiers: [], hideWorldEvents: true, hiddenRegions: [] });
 
   const loadState = (root) => {
     try {

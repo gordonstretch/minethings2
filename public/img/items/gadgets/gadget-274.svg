@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Titanium Ledger</title>
-  <desc id="desc">Titanium Ledger, depicted as a clasped metal ledger beside balanced coin stacks.</desc>
+  <title id="title">Titanium Autoloader</title>
+  <desc id="desc">Titanium Autoloader, depicted as a clasped metal cargo controller beside balanced ammunition stacks.</desc>
   <path d="M20 13h80l12 13v89H20z" fill="#9fc5cc" stroke="#292d29" stroke-width="7" stroke-linejoin="round"/>
   <path d="M33 28h54v73H33z" fill="#e3f0ef" stroke="#292d29" stroke-width="5"/>
   <path d="M60 31v67M39 47h42M39 63h42M39 79h42" fill="none" stroke="#4184a8" stroke-width="4"/>

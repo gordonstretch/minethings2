@@ -493,7 +493,7 @@ test('street Ore, landmark visits, and notice reading persist and award completi
   `).get(player.id, initial.city.cityId).quantity;
   assert.equal(balance, progress.scrapsCollected
     + CITY_LOCATION_REWARD_SCRAPS + CITY_NOTICE_REWARD_SCRAPS);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 131);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
   store.close();
 });
 
