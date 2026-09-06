@@ -39,7 +39,7 @@
   }
 
   // These pages have client-owned transient state that a server snapshot cannot safely restore.
-  const contentMorphEnabled = !/^\/(?:casino|oil-field|explore)(?:\/|$)/
+  const contentMorphEnabled = !/^\/(?:casino|oil-field|explore|map)(?:\/|$)/
     .test(window.location.pathname);
 
   let revision = Math.max(0, Number(script.dataset.liveRevision) || 0);

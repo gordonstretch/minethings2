@@ -83,11 +83,13 @@ of at least 32 characters (for example, generate one with `openssl rand -hex 32`
 SHILL_SIGNAL_SECRET=replace-with-a-private-random-secret
 ```
 
-Keep the same secret across restarts and never commit it. Pseudonymous network observations expire
-after 30 days; the raw network address and token are never shown in the admin UI, and the raw address
-is not stored in the game database. MineThings trusts `X-Real-IP`, or the rightmost `X-Forwarded-For`
-address, only when the direct connection comes from the same host's loopback proxy. Without this setting, economic signals continue to work and
-the page clearly reports that network matching is off.
+Keep the same secret across restarts and never commit it. Pseudonymous sign-in address observations
+expire after 30 days; the raw address and token are never shown in the admin UI, and the raw address
+is not stored in the game database. MineThings trusts `X-Real-IP`, or the rightmost
+`X-Forwarded-For` address, only when the direct connection comes from the same host's loopback
+proxy. If that proxy supplies no usable client address, MineThings records nothing—it never treats
+the proxy's loopback address as the miner's address. Without this setting, economic signals continue
+to work and the page clearly reports that sign-in address matching is off.
 
 The **Backups and updates** page uses SQLite's online backup API, so a manual backup does not
 require downtime and includes committed WAL data. Backups default to a `backups` directory beside

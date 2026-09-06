@@ -8,7 +8,7 @@ import test from 'node:test';
 import { createPlayer } from '../src/game.js';
 import {
   BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, LEGACY_STARTER_WELCOME_PACK, loadLegacyCatalog, RELICS_CATALOG,
-  SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
+  SAFE_TRAVEL_KIT_CATALOG, SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
 import { LEGAL_VERSION, sellerConfiguration } from '../src/legal.js';
 import { listDatabaseBackups } from '../src/database-backups.js';
@@ -658,7 +658,7 @@ test('streams scoped database changes to live pages without reload code', async 
   assert.match(client, /data-live-dirty/);
   assert.match(client, /data-journey-planner/);
   assert.match(client,
-    /contentMorphEnabled[\s\S]*?casino\|oil-field\|explore[\s\S]*?window\.location\.pathname/u,
+    /contentMorphEnabled[\s\S]*?casino\|oil-field\|explore\|map[\s\S]*?window\.location\.pathname/u,
     'client-owned casino, Oil Field, and city exploration state must survive live updates');
   assert.doesNotMatch(client, /location\.reload|location\.replace/);
   assert.match(client, /addEventListener\('session-ended'/u);
@@ -874,6 +874,91 @@ test('keeps every open gateway destination hidden until its route is completed',
     assert.equal(store.vehicleDetails(player.id, vehicleId, 1200).status, 'traveling');
   }
 });
+
+test('renders a static operations snapshot with hover details and management links',
+  async (context) => {
+    const store = new SqliteStore(':memory:');
+    store.seedCatalog(loadLegacyCatalog());
+    store.ensureWorldMaps(1000);
+    const catalog = store.loadCatalog();
+    const password = 'map operations password';
+    const landType = catalog.settings.route_type_ids.land;
+    const route = catalog.routes.find((candidate) => candidate.open
+      && !candidate.interMap && candidate.type === landType
+      && candidate.city1Id !== candidate.city2Id);
+    const vehicleType = catalog.vehicles.find((candidate) =>
+      candidate.routeType === landType && candidate.capacity > 0);
+    const stock = catalog.items.find((candidate) => candidate.marketableId
+      && Number.isSafeInteger(candidate.mineTypeId) && !candidate.damaged);
+    const autolister = catalog.gadgetByName.get('autolister');
+    assert.ok(route && vehicleType && stock && autolister);
+    const draft = createPlayer(
+      'Map Operator', '', hashPassword(password), catalog, 1000, () => 0.5
+    );
+    draft.cityId = route.city1Id;
+    draft.homeCityId = route.city1Id;
+    draft.mines[0].cityId = route.city1Id;
+    draft.knownCityIds = [...new Set([
+      ...(draft.knownCityIds ?? []), route.city1Id, route.city2Id
+    ])];
+    draft.inventory = { [vehicleType.itemId]: 2, [stock.id]: 20 };
+    draft.inventoryByCity = { [route.city1Id]: draft.inventory };
+    const player = store.addPlayer(draft);
+    const transitVehicleId = store.activateVehicle(player.id, vehicleType.itemId, 1500);
+    const shuttleVehicleId = store.activateVehicle(player.id, vehicleType.itemId, 1500);
+    store.startVehicleShuttle(
+      player.id, shuttleVehicleId, route.id, 2000, [stock.mineTypeId]
+    );
+    store.database.prepare(`
+      UPDATE player_vehicles
+      SET status = 'traveling', city_id = NULL, route_id = ?, origin_city_id = ?,
+        destination_city_id = ?, departed_at = 2000, arrives_at = 1000000,
+        segment_started_at = 2000, segment_start_location = 0, travel_order = 'peaceful'
+      WHERE id = ?
+    `).run(route.id, route.city1Id, route.city2Id, transitVehicleId);
+    store.database.prepare(`
+      INSERT INTO player_gadgets (player_id, gadget_id, expires_at)
+      VALUES (?, ?, 9999999999)
+    `).run(player.id, autolister.id);
+    store.configureGadgetAutomation(player.id, 'autolister', {
+      cityId: route.city1Id, mineTypeId: stock.mineTypeId,
+      markupPercent: 25, intervalMinutes: 5
+    }, 2100);
+
+    const server = createApp({ store, catalog, now: () => 2500 });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    context.after(async () => {
+      await new Promise((resolve, reject) => server.close(
+        (error) => error ? reject(error) : resolve()
+      ));
+      store.close();
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = await fetch(`${base}/login`, {
+      method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ name: player.name, password })
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    const html = await (await fetch(`${base}/map`, { headers: { cookie } })).text();
+
+    assert.match(html, /data-map-snapshot-at="2500"/u);
+    assert.match(html, /1 automation task · 1 shuttle/u);
+    assert.match(html, /Refresh this page for a new snapshot/u);
+    assert.doesNotMatch(html, /map-transit|Vehicles in transit|vehicle in transit/u);
+    assert.doesNotMatch(html, new RegExp(`href="/vehicles/${transitVehicleId}"`));
+    assert.match(html,
+      /class="map-operation-link map-automation-marker" href="\/gadgets\/autolister"[\s\S]*?<title>Autolister:/u);
+    assert.match(html,
+      /class="city-map-operation city-map-operation-automation"[\s\S]*?href="\/gadgets\/autolister"[\s\S]*?List all/u);
+    assert.match(html, new RegExp(
+      `List all ${catalog.mineTypes.find((entry) => entry.id === stock.mineTypeId).name} Things at 25% markup`
+    ));
+    assert.match(html, new RegExp(
+      `id="city-${route.city1Id}"[\\s\\S]*?city-map-operation-shuttle[\\s\\S]*?href="/vehicles/${shuttleVehicleId}"`
+    ));
+    assert.doesNotMatch(html, /<animate\b/u, 'the operations map must remain a still snapshot');
+  });
 
 test('renders fixed regional capitals and retires the regional-home chooser', async (context) => {
   const store = new SqliteStore(':memory:');
@@ -1258,6 +1343,7 @@ test('signs in and registers miners through the local Google OAuth flow', async 
   assert.equal(created.inventory[LEGACY_STARTER_WELCOME_PACK.dwarfItemId],
     created.discoveries.filter((finding) =>
       finding.itemId === LEGACY_STARTER_WELCOME_PACK.dwarfItemId).length + 1);
+  assert.equal(created.inventory[LEGACY_STARTER_WELCOME_PACK.safeTravelKitItemId], 1);
   for (const gadgetItemId of LEGACY_STARTER_WELCOME_PACK.gadgetItemIds) {
     assert.equal(created.inventory[gadgetItemId],
       created.discoveries.filter((finding) => finding.itemId === gadgetItemId).length + 1);
@@ -1282,6 +1368,7 @@ test('signs in and registers miners through the local Google OAuth flow', async 
   assert.match(googleWelcomeMessages[0].body, /banished permanently to Old Earth/u);
   assert.match(googleWelcomeMessages[0].body, /1 x Green Dwarf/);
   assert.match(googleWelcomeMessages[0].body, /1 x Yellow Tin Turbo Engine/);
+  assert.match(googleWelcomeMessages[0].body, /1 x Yellow Safe Travel Kit/);
   assert.match(googleWelcomeMessages[0].body, /Equipment Mine rental/);
   assert.match(googleWelcomeMessages[0].body, /100 ASO casino voucher/);
   assert.match(googleWelcomeMessages[0].body, /Terms of provisional survival:/);
@@ -1594,10 +1681,18 @@ test('shows privacy-limited shill signals only to administrators', async (contex
   const second = store.addPlayer(createPlayer(
     'Signal Beta', '', hashPassword(password), catalog, 1200, () => 0.5
   ));
+  const third = store.addPlayer(createPlayer(
+    'Signal Gamma', '', hashPassword(password), catalog, 1300, () => 0.5
+  ));
+  const fourth = store.addPlayer(createPlayer(
+    'Signal Delta', '', hashPassword(password), catalog, 1400, () => 0.5
+  ));
   const secret = 'server-test-shill-secret-32-characters-long';
   const sharedAddress = '198.51.100.25';
   const sharedToken = crypto.createHmac('sha256', secret)
-    .update(`minethings-network-v1\0${sharedAddress}`).digest('hex');
+    .update(`minethings-sign-in-address-v2\0${sharedAddress}`).digest('hex');
+  const loopbackToken = crypto.createHmac('sha256', secret)
+    .update(`minethings-sign-in-address-v2\0${'127.0.0.1'}`).digest('hex');
   const server = createApp({
     store, now: () => 5000, adminNames: administrator.name,
     shillSignalSecret: secret
@@ -1610,12 +1705,11 @@ test('shows privacy-limited shill signals only to administrators', async (contex
   });
   const base = `http://127.0.0.1:${server.address().port}`;
   const login = async (name, address) => {
+    const headers = { 'content-type': 'application/x-www-form-urlencoded' };
+    if (address) headers['x-forwarded-for'] = address;
     const response = await fetch(`${base}/login`, {
       method: 'POST', redirect: 'manual',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-forwarded-for': address
-      },
+      headers,
       body: new URLSearchParams({ name, password })
     });
     assert.equal(response.status, 303);
@@ -1624,6 +1718,8 @@ test('shows privacy-limited shill signals only to administrators', async (contex
   const adminCookie = await login(administrator.name, '203.0.113.10');
   const firstCookie = await login(first.name, sharedAddress);
   await login(second.name, `192.0.2.99, ${sharedAddress}`);
+  await login(third.name);
+  await login(fourth.name);
 
   assert.equal((await fetch(`${base}/admin/shills`, {
     headers: { cookie: firstCookie }
@@ -1636,8 +1732,8 @@ test('shows privacy-limited shill signals only to administrators', async (contex
   assert.match(html, /<h1>Shill signals<\/h1>/u);
   assert.match(html, /Signal Alpha/u);
   assert.match(html, /Signal Beta/u);
-  assert.match(html, /Shared recent network/u);
-  assert.match(html, /Network matching is active/u);
+  assert.match(html, /Same public sign-in address/u);
+  assert.match(html, /Sign-in address matching is active/u);
   assert.match(html, /never proof or an automatic punishment/u);
   assert.doesNotMatch(html, new RegExp(sharedAddress.replaceAll('.', '\\.'), 'u'));
   assert.doesNotMatch(html, new RegExp(sharedToken, 'u'));
@@ -1645,6 +1741,11 @@ test('shows privacy-limited shill signals only to administrators', async (contex
     SELECT COUNT(*) AS count FROM account_network_observations
     WHERE network_token = ?
   `).get(sharedToken).count, 2);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM account_network_observations
+    WHERE network_token = ?
+  `).get(loopbackToken).count, 0,
+  'direct loopback logins must not be retained as a shared miner address');
 });
 
 test('publishes live maintenance warnings and counts recently active signed-in miners',
@@ -3277,6 +3378,7 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.equal(liveStarter.inventory[LEGACY_STARTER_WELCOME_PACK.dwarfItemId],
     liveStarter.discoveries.filter((finding) =>
       finding.itemId === LEGACY_STARTER_WELCOME_PACK.dwarfItemId).length + 1);
+  assert.equal(liveStarter.inventory[LEGACY_STARTER_WELCOME_PACK.safeTravelKitItemId], 1);
   for (const gadgetItemId of LEGACY_STARTER_WELCOME_PACK.gadgetItemIds) {
     assert.equal(liveStarter.inventory[gadgetItemId],
       liveStarter.discoveries.filter((finding) => finding.itemId === gadgetItemId).length + 1);
@@ -3297,10 +3399,13 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.equal(welcome.details.grants.casinoVoucherQuantity, 100);
   assert.deepEqual(welcome.details.grants.gadgets.map((gadget) => gadget.itemId),
     LEGACY_STARTER_WELCOME_PACK.gadgetItemIds);
+  assert.equal(welcome.details.grants.safeTravelKit.itemId,
+    SAFE_TRAVEL_KIT_CATALOG.itemId);
   assert.deepEqual(welcome.details.grants.rentalMines.map((mine) => mine.mineTypeId), [4, 5]);
   assert.match(welcome.body, /4,321 credits and 5g/);
   assert.match(welcome.body, /2 initial discoveries/);
   assert.match(welcome.body, /Capacity for 73 Things/);
+  assert.match(welcome.body, /Open your Safe Travel Kit/u);
   const starterCookie = registration.headers.get('set-cookie').split(';')[0];
   assert.equal((await fetch(base, {
     redirect: 'manual', headers: { cookie: starterCookie }
@@ -3412,6 +3517,65 @@ test('breaks factory-made Bolt boxes down from local inventory', async (context)
   assert.equal(restored.protectedInventoryByCity[saved.cityId][BOLT_BOX_CATALOG.boltItemId], 40);
   const afterHtml = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
   assert.match(afterHtml, /2 boxes broken down into 40 Bolts/u);
+});
+
+test('opens a Safe Travel Kit from Things and reveals its kept instruction card', async (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(catalog);
+  const password = 'safe travel password';
+  const player = createPlayer(
+    'Safe Kit Opener', '', hashPassword(password), catalog, 1000, () => 0.5
+  );
+  player.inventory[SAFE_TRAVEL_KIT_CATALOG.itemId] = 1;
+  player.inventoryByCity = { [player.cityId]: player.inventory };
+  const saved = store.addPlayer(player);
+  const server = createApp({ store, now: () => 2000 });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/login`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: player.name, password })
+  });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const beforeHtml = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
+  assert.match(beforeHtml, new RegExp(
+    `class="safe-travel-kit-open-form" method="post" action="/inventory/${SAFE_TRAVEL_KIT_CATALOG.itemId}/open"`
+  ));
+  assert.match(beforeHtml, /Open kit · unpack supplies and read instructions/u);
+
+  const response = await fetch(`${base}/inventory/${SAFE_TRAVEL_KIT_CATALOG.itemId}/open`, {
+    method: 'POST', redirect: 'manual',
+    headers: { cookie, referer: `${base}/inventory` }
+  });
+  assert.equal(response.status, 303);
+  assert.match(response.headers.get('location'), /^\/messages\/view\/\d+$/u);
+  const detailsHtml = await (await fetch(`${base}${response.headers.get('location')}`, {
+    headers: { cookie }
+  })).text();
+  assert.match(detailsHtml, /Safe Travel Kit fitting instructions/u);
+  assert.match(detailsHtml, /5 x Bolt/u);
+  assert.match(detailsHtml, /Yellow Tin Door Panels/u);
+  assert.match(detailsHtml, /Yellow Tin Quick Shift/u);
+  assert.match(detailsHtml, /Customize mods and weapons/u);
+  assert.match(detailsHtml, /Commit this exact loadout/u);
+  assert.match(detailsHtml, /Peaceful/u);
+  assert.match(detailsHtml, /Kept: this message will not expire/u);
+  assert.match(detailsHtml, /Unpacked into your Things/u);
+  const opened = store.playerById(saved.id);
+  assert.equal(opened.inventory[SAFE_TRAVEL_KIT_CATALOG.itemId], undefined);
+  assert.equal(opened.inventory[2], (player.inventory[2] ?? 0) + 5);
+  assert.equal(opened.inventory[1112], (player.inventory[1112] ?? 0) + 1);
+  assert.equal(opened.inventory[1116], (player.inventory[1116] ?? 0) + 1);
+
+  const artwork = await fetch(`${base}/node/safe-travel-kit.svg`);
+  assert.equal(artwork.status, 200);
+  assert.match(artwork.headers.get('content-type'), /image\/svg\+xml/u);
 });
 
 test('disables city and crypto Sell now tickets without local stock and renders a price line', async (context) => {
@@ -4791,7 +4955,8 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(publicGuideHtml, /Kraken.*Land Whale.*White Whale.*Orca Pod.*Elephant Herd.*T-Rex/su);
   assert.match(publicGuideHtml,
     /Destroyed road vehicles, sunken ships, and defeated event creatures leave remains/u);
-  assert.match(publicGuideHtml, /<strong>1,564 things<\/strong>/u);
+  assert.match(publicGuideHtml,
+    new RegExp(`<strong>${catalog.items.length.toLocaleString('en-GB')} things<\\/strong>`, 'u'));
   const expectedGuideCategories = 18 + catalog.mineTypes.length;
   assert.match(publicGuideHtml,
     new RegExp(`<span>Categories<\\/span><strong>${expectedGuideCategories}<\\/strong>`, 'u'));
@@ -5980,9 +6145,32 @@ test('configures and disables the new gadget machinery through its web page', as
     SELECT configuration_json FROM gadget_automations WHERE player_id = ? AND gadget_id = ?
   `).get(saved.id, autolister.id).configuration_json), { tasks: [], cursor: 0 });
 
+  const seaRoute = store.database.prepare(`
+    SELECT id, city1_id, city2_id FROM catalog_routes
+    WHERE type = ? AND (city1_id = ? OR city2_id = ?) AND city1_id <> city2_id
+    ORDER BY id LIMIT 1
+  `).get(Number(catalog.settings.route_type_ids.sea), saved.cityId, saved.cityId);
+  assert.ok(seaRoute);
+  const destinationCityId = Number(seaRoute.city1_id) === Number(saved.cityId)
+    ? Number(seaRoute.city2_id) : Number(seaRoute.city1_id);
+  store.database.prepare(`
+    UPDATE player_vehicles SET city_id = NULL, status = 'traveling', route_id = ?,
+      origin_city_id = ?, destination_city_id = ?, departed_at = 1900, arrives_at = 999999
+    WHERE id = ?
+  `).run(seaRoute.id, saved.cityId, destinationCityId, vehicleId);
+  store.database.prepare(`
+    INSERT INTO player_vehicle_shuttles
+      (vehicle_id, player_id, route_id, origin_city_id, destination_city_id,
+       mine_type_ids_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, '[]', 1900, 1900)
+  `).run(vehicleId, saved.id, seaRoute.id, saved.cityId, destinationCityId);
   const autoloaderPage = await (await fetch(`${base}/gadgets/autoloader`, {
     headers: { cookie }
   })).text();
+  assert.match(autoloaderPage,
+    new RegExp(`<option value="${vehicleId}">[^<]+ · In transit: [^<]+ → [^<]+ · shuttle`));
+  assert.match(autoloaderPage,
+    new RegExp(`name="cityId" required>[\\s\\S]*?<option value="${saved.cityId}"`));
   assert.match(autoloaderPage,
     /name="quantity" min="1" max="1000" step="1" value="1" required/u);
   const configureAutoloader = await fetch(`${base}/gadgets/autoloader/configure`, {
@@ -5990,7 +6178,8 @@ test('configures and disables the new gadget machinery through its web page', as
       cookie, 'content-type': 'application/x-www-form-urlencoded'
     },
     body: new URLSearchParams({
-      vehicleId: String(vehicleId), ammoType: String(ammunition.type),
+      vehicleId: String(vehicleId), cityId: String(saved.cityId),
+      ammoType: String(ammunition.type),
       quantity: '3', intervalMinutes: '15'
     })
   });

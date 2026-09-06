@@ -3,7 +3,7 @@ import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
 import {
   BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog,
-  MAGNET_CATALOG, parseValues,
+  MAGNET_CATALOG, parseValues, SAFE_TRAVEL_KIT_CATALOG,
   RELICS_CATALOG, SHROOM_CATALOG,
   WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
@@ -17,7 +17,7 @@ test('parses MySQL values including escaped apostrophes and nulls', () => {
 
 test('loads the playable catalog from the legacy dump', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(catalog.items.length, 1564);
+  assert.equal(catalog.items.length, 1565);
   assert.equal(catalog.discoverableItems.length, 848);
   assert.equal(catalog.cities[0].name, "Tzolk'in");
   assert.equal(catalog.mineTypes.find((type) => type.id === 1).name, 'Starter');
@@ -60,6 +60,21 @@ test('loads the playable catalog from the legacy dump', () => {
     { name: 'Tin Pipe200', quantity: 4, machine: 'pipe200', explosive: false },
     { name: 'M-80', quantity: 5, machine: null, explosive: true }
   ]);
+  const safeTravelKit = catalog.byId.get(welcomePack.safeTravelKitItemId);
+  assert.equal(safeTravelKit.id, SAFE_TRAVEL_KIT_CATALOG.itemId);
+  assert.equal(safeTravelKit.name, 'Safe Travel Kit');
+  assert.equal(safeTravelKit.rarity, 1);
+  assert.equal(safeTravelKit.canFind, false);
+  assert.equal(safeTravelKit.icon, '/node/safe-travel-kit.svg');
+  assert.deepEqual(catalog.settings.safe_travel_kit_contents.map((content) => ({
+    name: catalog.byId.get(content.itemId)?.name,
+    quantity: content.quantity,
+    mod: catalog.modByItemId.has(content.itemId)
+  })), [
+    { name: 'Bolt', quantity: 5, mod: false },
+    { name: 'Tin Door Panels', quantity: 1, mod: true },
+    { name: 'Tin Quick Shift', quantity: 1, mod: true }
+  ]);
   assert.deepEqual(welcomePack.rentalMineTypeIds, [4, 5]);
   assert.deepEqual(welcomePack.rentalMineTypeIds.map((mineTypeId) =>
     catalog.mineTypes.find((mineType) => mineType.id === mineTypeId)?.name),
@@ -83,6 +98,10 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.byId.get(277).icon, '/node/explosives/explosive-277.svg');
   assert.equal(catalog.byId.get(340).icon, '/legacy/img/equipment/src/MR3.png');
   assert.equal(catalog.byId.get(358).icon, '/legacy/img/icons/I4.png');
+  assert.deepEqual(catalog.settings.world_creature_hp, {
+    kraken: 90, land_whale: 70, white_whale: 85,
+    orca_pod: 62.5, elephant_herd: 82.5, t_rex: 110
+  });
   assert.equal(catalog.items.find((item) => item.name === 'Search Plane').icon,
     '/node/vehicles/vehicle-737.svg');
   assert.match(catalog.byId.get(catalog.machineById.get(6).itemId).icon,

@@ -412,6 +412,20 @@ test('binds land and cargo commits to an exact one-use server preview', async (c
   for (const stat of ['attack', 'armor', 'offense', 'defense', 'dodge']) {
     assert.match(initialHtml, new RegExp(`data-combat-stat="${stat}"`, 'u'));
   }
+  const modEffects = initialHtml.match(new RegExp(
+    `<section class="mod-effects" data-mod-effects="${mod.id}"[^>]*>([\\s\\S]*?)<\\/section>`,
+    'u'
+  ));
+  assert.ok(modEffects, 'the selectable mod must show its effects as a distinct list');
+  for (const [stat, label] of [
+    ['capacity', 'Capacity'], ['attack', 'Base attack'], ['armor', 'Armour'],
+    ['offense', 'Aggressive power'], ['defense', 'Defensive power'], ['dodge', 'Dodge']
+  ]) {
+    assert.match(modEffects[1], new RegExp(
+      `data-mod-stat="${stat}"[^>]*><span>${label}<\\/span><strong[^>]*>[+\\-0-9.]+<\\/strong>`,
+      'u'
+    ), `${label} must be listed even when its modifier is zero`);
+  }
 
   const retiredDirectFit = await postForm(base, `/vehicles/${vehicleId}/mods`, cookie, {
     [`mod_${mod.id}`]: 'on'

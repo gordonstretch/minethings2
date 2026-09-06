@@ -13,12 +13,12 @@ import {
   LEGACY_MACHINE_TYPE_RULES, LEGACY_SPECIALISATION_TITLES, LEGACY_STARTER_WELCOME_PACK,
   LEGACY_WORLD_EVENT_SETTINGS, EXPANDED_STONE_CATALOG, ADDITIONAL_STONE_CATALOG,
   MANUFACTURED_TRANSPORT_CATALOG,
-  BOLT_BOX_CATALOG, MAGNET_CATALOG,
+  BOLT_BOX_CATALOG, MAGNET_CATALOG, SAFE_TRAVEL_KIT_CATALOG,
   PRESTIGE_SPECIALISATIONS, FACTORY_WORKER_BOT_TIERS, ASO_DISCOVERY_STONE,
   CITY_COMPLETION_STONE, HOME_DISPLAY_STONE, HOME_STONE, STARTER_BOT_STONE,
   INVENTORY_CAPACITY_RULES,
   ELECTRONICS_CATALOG, RELICS_CATALOG, SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG,
-  WORLD_CREATURE_TYPES
+  WORLD_CREATURE_HP_REBALANCE_FACTOR, WORLD_CREATURE_TYPES
 } from './legacy-catalog.js';
 import { resolveCasinoPull, validateCasinoRules } from './casino.js';
 import {
@@ -82,7 +82,7 @@ import {
 } from './city-exploration.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 137;
+const CURRENT_SCHEMA_VERSION = 138;
 const CHAT_HISTORY_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const SHILL_NETWORK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
@@ -419,6 +419,7 @@ export class SqliteStore {
       this.#migrateBoltBoxCatalog();
       this.#migrateMagnetCatalog();
       this.#migrateMagnetFitting();
+      this.#migrateSafeTravelKits();
       this.#migrateRegionalMineAvailability();
       this.#migrateAsoMineRentalVouchers();
       this.#migrateFactoryBuildCompletionMessages();
@@ -456,6 +457,7 @@ export class SqliteStore {
       this.#migrateCasinoGlobalSpinCount();
       this.#migrateMachineItemDescriptions();
       this.#migrateEventThreats();
+      this.#migrateWorldCreatureHealth();
       this.#migrateChatHistoryWindow();
       this.#migrateFrequentDwarfAndCreatureRolls();
       this.#migrateRegionalCreatureRollsAndFasterDwarves();
@@ -2128,6 +2130,10 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 137) {
+      this.#migrateTo138();
+      return;
+    }
     if (schemaVersion === 136) {
       this.#migrateTo137();
       return;
@@ -7078,6 +7084,24 @@ export class SqliteStore {
         PRAGMA user_version = 137;
       `);
     });
+    this.#migrateTo138();
+  }
+
+  #migrateTo138() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 138) return;
+      if (currentVersion !== 137) {
+        throw new Error(`Cannot invalidate unsafe proxy address evidence at v${currentVersion}.`);
+      }
+      // V1 could hash the reverse proxy's loopback address when forwarded
+      // client headers were absent. Existing rows cannot be distinguished
+      // from valid observations, so discard them rather than accuse miners.
+      this.database.exec(`
+        DELETE FROM account_network_observations;
+        PRAGMA user_version = 138;
+      `);
+    });
   }
 
   #insertPrestigeSpecialisations() {
@@ -7491,6 +7515,124 @@ export class SqliteStore {
         throw new Error(`Cannot install Magnet: catalog setting ${key} differs.`);
       }
       if (!stored) insertSetting.run(key, valueJson);
+    }
+  }
+
+  #migrateSafeTravelKits(now = Date.now()) {
+    const migrationName = 'safe-travel-kit-v1';
+    if (!this.hasCatalog()
+      || !this.database.prepare('SELECT 1 FROM catalog_items LIMIT 1').get()
+      || this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      this.#insertSafeTravelKitCatalog();
+      const starterSetting = this.database.prepare(`
+        SELECT value_json FROM catalog_settings WHERE key = 'starter_welcome_pack'
+      `).get();
+      if (!starterSetting) throw new Error('Cannot install Safe Travel Kits without the starter welcome pack.');
+      const starterPack = JSON.parse(starterSetting.value_json);
+      if (!starterPack || typeof starterPack !== 'object' || Array.isArray(starterPack)) {
+        throw new Error('Cannot install Safe Travel Kits: the starter welcome pack is invalid.');
+      }
+      const starterPackChanged = !Object.hasOwn(starterPack, 'safeTravelKitItemId');
+      if (starterPackChanged) this.database.prepare(`
+        UPDATE catalog_settings SET value_json = ? WHERE key = 'starter_welcome_pack'
+      `).run(JSON.stringify({
+        ...starterPack, safeTravelKitItemId: SAFE_TRAVEL_KIT_CATALOG.itemId
+      }));
+
+      const players = this.database.prepare(`
+        SELECT players.id, players.name, players.city_id, catalog_cities.name AS city_name
+        FROM players
+        JOIN catalog_cities ON catalog_cities.id = players.city_id
+        WHERE players.is_npc = 0
+        ORDER BY players.id
+      `).all();
+      const grant = this.database.prepare(`
+        INSERT INTO inventory (player_id, city_id, item_id, quantity) VALUES (?, ?, ?, 1)
+        ON CONFLICT (player_id, city_id, item_id) DO UPDATE SET
+          quantity = inventory.quantity + 1
+      `);
+      for (const player of players) {
+        grant.run(player.id, player.city_id, SAFE_TRAVEL_KIT_CATALOG.itemId);
+        this.#insertSystemMessage(
+          player.id, 'Admin', 'Safe Travel Kit issued',
+          `The Council has issued you one Safe Travel Kit in ${player.city_name}. Open it from [rrl=/inventory]Your Things[/rrl] before your next journey. The sealed kit contains survival fittings and Bolts; opening it unpacks them and reveals the complete fitting and safer-travel instructions.`,
+          now, 'safe-travel-kit-retrospective:v1', {
+            event: 'safe-travel-kit-issued', systemSenderName: 'The Council',
+            cityId: Number(player.city_id), cityName: player.city_name,
+            items: [{ itemId: SAFE_TRAVEL_KIT_CATALOG.itemId, quantity: 1 }],
+            actions: [{ label: 'Open your Safe Travel Kit', path: '/inventory' }]
+          }
+        );
+      }
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        itemId: SAFE_TRAVEL_KIT_CATALOG.itemId,
+        contents: SAFE_TRAVEL_KIT_CATALOG.contents,
+        starterPackChanged,
+        playersGranted: players.length
+      }));
+      migrated = true;
+    });
+    return migrated;
+  }
+
+  #insertSafeTravelKitCatalog() {
+    const item = SAFE_TRAVEL_KIT_CATALOG.items[0];
+    for (const content of SAFE_TRAVEL_KIT_CATALOG.contents) {
+      if (!this.database.prepare('SELECT 1 FROM catalog_items WHERE id = ?').get(content.itemId)) {
+        throw new Error(`Cannot install Safe Travel Kits without catalog item ${content.itemId}.`);
+      }
+    }
+    const stored = this.database.prepare('SELECT * FROM catalog_items WHERE id = ?').get(item.id);
+    const fields = {
+      name: item.name, rarity: item.rarity, description: item.description,
+      marketable_id: item.marketableId ?? null, mine_type_id: item.mineTypeId,
+      repaired_item_id: item.repairedItemId ?? null, can_find: item.canFind ? 1 : 0,
+      icon: item.icon, icon_source: item.iconSource, is_damaged: item.damaged ? 1 : 0,
+      large_image_filename: item.largeImageFilename ?? null, large_image: item.largeImage,
+      has_large_image: item.hasLargeImage ? 1 : 0,
+      gold_value_units: item.goldValueUnits
+    };
+    if (stored) {
+      for (const [column, value] of Object.entries(fields)) {
+        if ((stored[column] ?? null) !== (value ?? null)) {
+          throw new Error(`Cannot install Safe Travel Kit ${item.id}: catalog_items.${column} is already occupied by different catalog data.`);
+        }
+      }
+    } else {
+      this.database.prepare(`
+        INSERT INTO catalog_items
+          (id, name, rarity, description, marketable_id, mine_type_id, repaired_item_id,
+           can_find, icon, icon_source, is_damaged, large_image_filename, large_image,
+           has_large_image, gold_value_units)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(item.id, ...Object.values(fields));
+    }
+    const settings = {
+      safe_travel_kit_item_id: SAFE_TRAVEL_KIT_CATALOG.itemId,
+      safe_travel_kit_contents: SAFE_TRAVEL_KIT_CATALOG.contents
+    };
+    const insertSetting = this.database.prepare(
+      'INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)'
+    );
+    for (const [key, value] of Object.entries(settings)) {
+      const valueJson = JSON.stringify(value);
+      const existing = this.database.prepare(
+        'SELECT value_json FROM catalog_settings WHERE key = ?'
+      ).get(key);
+      if (existing && existing.value_json !== valueJson) {
+        throw new Error(`Cannot install Safe Travel Kits: catalog setting ${key} differs.`);
+      }
+      if (!existing) insertSetting.run(key, valueJson);
     }
   }
 
@@ -9497,6 +9639,79 @@ export class SqliteStore {
         pursuitInitiators: true, ghostAttackForceRatio: 0.85, iconsUpdated
       }));
     });
+  }
+
+  #migrateWorldCreatureHealth(now = Date.now()) {
+    // Creature health is a one-way resource. Enforce that at the persistence
+    // boundary so movement, settlement, or future combat changes cannot heal a
+    // wounded creature. Initial health is still supplied by INSERT on spawn.
+    this.database.exec(`
+      CREATE TRIGGER IF NOT EXISTS world_creatures_prevent_healing
+      BEFORE UPDATE OF hp ON world_creatures
+      WHEN NEW.hp > OLD.hp
+      BEGIN
+        SELECT RAISE(ABORT, 'World creatures cannot heal.');
+      END;
+    `);
+
+    const migrationName = 'world-creature-health-half-v1';
+    if (!this.hasCatalog() || this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      const settingRow = this.database.prepare(`
+        SELECT value_json FROM catalog_settings WHERE key = 'world_creature_hp'
+      `).get();
+      if (!settingRow) throw new Error('Cannot rebalance world creatures without HP settings.');
+      const previousHp = parsedObject(settingRow.value_json);
+      if (WORLD_CREATURE_TYPES.some((type) =>
+        !Number.isFinite(Number(previousHp[type])) || Number(previousHp[type]) <= 0)) {
+        throw new Error('Cannot rebalance world creatures with invalid HP settings.');
+      }
+      const targetHp = LEGACY_WORLD_EVENT_SETTINGS.world_creature_hp;
+      const alreadyBalanced = WORLD_CREATURE_TYPES.every((type) =>
+        Number(previousHp[type]) === Number(targetHp[type]));
+      let settingsUpdated = false;
+      let creaturesScaled = 0;
+      if (!alreadyBalanced) {
+        const nextHp = { ...previousHp };
+        for (const type of WORLD_CREATURE_TYPES) {
+          nextHp[type] = Number(previousHp[type]) * WORLD_CREATURE_HP_REBALANCE_FACTOR;
+        }
+        this.database.prepare(`
+          UPDATE catalog_settings SET value_json = ? WHERE key = 'world_creature_hp'
+        `).run(JSON.stringify(nextHp));
+        settingsUpdated = true;
+
+        const updateCreature = this.database.prepare(`
+          UPDATE world_creatures SET hp = ?, max_hp = ? WHERE id = ?
+        `);
+        for (const creature of this.database.prepare(`
+          SELECT id, hp, max_hp FROM world_creatures ORDER BY id
+        `).all()) {
+          const maxHp = Math.max(1, Math.round(
+            Number(creature.max_hp) * WORLD_CREATURE_HP_REBALANCE_FACTOR
+          ));
+          const hp = Number(creature.hp) <= 0 ? 0 : Math.max(1, Math.min(maxHp, Math.round(
+            Number(creature.hp) * WORLD_CREATURE_HP_REBALANCE_FACTOR
+          )));
+          updateCreature.run(hp, maxHp, creature.id);
+          creaturesScaled += 1;
+        }
+      }
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json) VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        factor: WORLD_CREATURE_HP_REBALANCE_FACTOR,
+        settingsUpdated, creaturesScaled, healingPrevented: true
+      }));
+      migrated = true;
+    });
+    return migrated;
   }
 
   #migrateChatHistoryWindow(now = Date.now()) {
@@ -13643,6 +13858,7 @@ export class SqliteStore {
     const pack = this.#setting('starter_welcome_pack');
     const vehicleItemId = Number(pack?.vehicleItemId);
     const dwarfItemId = Number(pack?.dwarfItemId);
+    const safeTravelKitItemId = Number(pack?.safeTravelKitItemId);
     const gadgetItemIds = Array.isArray(pack?.gadgetItemIds)
       ? pack.gadgetItemIds.map(Number) : [];
     const itemGrants = Array.isArray(pack?.itemGrants)
@@ -13671,6 +13887,19 @@ export class SqliteStore {
       WHERE catalog_items.id = ? AND catalog_dwarf_tiers.rarity = 2
         AND catalog_items.rarity = 2 AND catalog_items.repaired_item_id IS NULL
     `).get(dwarfItemId) : null;
+    const safeTravelKit = Number.isSafeInteger(safeTravelKitItemId)
+      ? this.database.prepare(`
+        SELECT id, name, rarity FROM catalog_items
+        WHERE id = ? AND repaired_item_id IS NULL AND can_find = 0
+      `).get(safeTravelKitItemId) : null;
+    const safeTravelKitContents = Array.isArray(this.#setting('safe_travel_kit_contents'))
+      ? this.#setting('safe_travel_kit_contents').map((content) => ({
+        itemId: Number(content?.itemId), quantity: Number(content?.quantity),
+        ...this.database.prepare(`
+          SELECT name AS item_name, rarity AS item_rarity
+          FROM catalog_items WHERE id = ?
+        `).get(Number(content?.itemId))
+      })) : [];
     const gadgets = gadgetItemIds.map((itemId) => this.database.prepare(`
       SELECT catalog_items.id AS item_id, catalog_items.name, catalog_items.rarity,
         catalog_gadgets.behavior_key, catalog_gadgets.display_name
@@ -13712,6 +13941,12 @@ export class SqliteStore {
       || !vehicle || Number(vehicle.rarity) !== 1
       || Number(vehicle.route_type) !== landRouteType
       || !dwarf
+      || !safeTravelKit
+      || Number(safeTravelKit.rarity) !== 1
+      || safeTravelKitItemId !== Number(this.#setting('safe_travel_kit_item_id'))
+      || safeTravelKitContents.length !== 3
+      || safeTravelKitContents.some((content) => !content.item_name
+        || !Number.isSafeInteger(content.quantity) || content.quantity < 1)
       || gadgetItemIds.length < 2
       || new Set(gadgetItemIds).size !== gadgetItemIds.length
       || gadgets.some((gadget) => !gadget || Number(gadget.rarity) !== 1)
@@ -13754,6 +13989,7 @@ export class SqliteStore {
     for (const gadgetItemId of gadgetItemIds) {
       grantInventoryItem.run(player.id, player.cityId, gadgetItemId, 1);
     }
+    grantInventoryItem.run(player.id, player.cityId, safeTravelKitItemId, 1);
     for (const supply of supplies) {
       grantInventoryItem.run(player.id, player.cityId, supply.itemId, supply.quantity);
     }
@@ -13815,6 +14051,8 @@ export class SqliteStore {
       player.inventoryByCity[player.cityId][gadgetItemId]
         = Number(player.inventoryByCity[player.cityId][gadgetItemId] ?? 0) + 1;
     }
+    player.inventoryByCity[player.cityId][safeTravelKitItemId]
+      = Number(player.inventoryByCity[player.cityId][safeTravelKitItemId] ?? 0) + 1;
     for (const supply of supplies) {
       player.inventoryByCity[player.cityId][supply.itemId]
         = Number(player.inventoryByCity[player.cityId][supply.itemId] ?? 0)
@@ -13827,6 +14065,14 @@ export class SqliteStore {
     return {
       vehicleItemId, vehicleName: vehicle.name, vehicleRarity: Number(vehicle.rarity),
       dwarfItemId, dwarfName: dwarf.name, dwarfRarity: Number(dwarf.rarity),
+      safeTravelKit: {
+        itemId: Number(safeTravelKit.id), itemName: safeTravelKit.name,
+        itemRarity: Number(safeTravelKit.rarity), quantity: 1,
+        contents: safeTravelKitContents.map((content) => ({
+          itemId: content.itemId, itemName: content.item_name,
+          itemRarity: Number(content.item_rarity), quantity: content.quantity
+        }))
+      },
       gadgets: gadgets.map((gadget) => ({
         itemId: Number(gadget.item_id), itemName: gadget.name,
         itemRarity: Number(gadget.rarity), behaviorKey: gadget.behavior_key,
@@ -13878,6 +14124,12 @@ export class SqliteStore {
     const gadgetGrantText = pack.gadgets.map((gadget) =>
       `- 1 x ${this.#setting('rarity_color_names')[gadget.itemRarity]} ${gadget.itemName}, stored in ${city.name}`
     ).join('\n');
+    const safeTravelKitColor = String(
+      this.#setting('rarity_color_names')[pack.safeTravelKit.itemRarity]
+    );
+    const safeTravelKitContents = pack.safeTravelKit.contents.map((content) =>
+      `${number(content.quantity)} x ${content.itemName}`
+    ).join(', ');
     const supplyGrantText = pack.supplies.map((supply) => {
       const purpose = supply.machineBehaviorKey === 'pipe200' ? ' connectors'
         : supply.explosive ? ' explosives' : '';
@@ -13916,6 +14168,7 @@ ${rentalGrantText}
 - 1 x ${color} ${pack.vehicleName}, stored in ${city.name}
 - 1 x ${pack.dwarfName}, already working the mines in ${city.name}
 ${gadgetGrantText}
+- 1 x ${safeTravelKitColor} ${pack.safeTravelKit.itemName}, stored in ${city.name}; contains ${safeTravelKitContents}
 ${supplyGrantText}
 - ${number(pack.cryptoQuantity)} ${pack.cryptoSymbol} (${pack.cryptoName})
 - ${number(pack.casinoVoucherQuantity)} ${pack.casinoVoucherCryptoSymbol} casino voucher, wagered before owned ${pack.casinoVoucherCryptoSymbol}; winnings become ordinary ${pack.casinoVoucherCryptoSymbol}
@@ -13931,11 +14184,12 @@ Terms of provisional survival:
 5. [rrl=/dwarves]Meet your ${pack.dwarfName}[/rrl] and see what it can find around ${city.name}.
 6. [rrl=/gadgets]Inspect your ${gadgetNames}[/rrl]. While you and the item are in ${city.name}, activate the protection or speed gadget before departure; each item is consumed and its effect applies globally.
 7. [rrl=/oil-field]Try the Oil Field[/rrl] with your Tin Pump, Tin Pad, and Tin Pipe200 connectors.
-8. [rrl=/vehicles]Open Fleet[/rrl], activate your ${pack.vehicleName}, and check its available land routes.
-9. [rrl=/casino]Visit the casino[/rrl] and try the machines with your ${number(pack.casinoVoucherQuantity)} ${pack.casinoVoucherCryptoSymbol} voucher.
-10. [rrl=/map]Study the world map[/rrl], then send your ${pack.vehicleName} exploring when you are ready.
-11. [rrl=/exchange]Visit Markets[/rrl] and [rrl=/crypto]Crypto[/rrl] before making your first trade.
-12. [rrl=/guide]Read the Field guide[/rrl] whenever you want the rules behind a system.
+8. [rrl=/inventory]Open your ${pack.safeTravelKit.itemName}[/rrl] before your first journey. It unpacks five Bolts and two Yellow defensive mods, then opens a kept Council instruction card explaining exactly how to fit them and travel more safely.
+9. [rrl=/vehicles]Open Fleet[/rrl], activate your ${pack.vehicleName}, and check its available land routes.
+10. [rrl=/casino]Visit the casino[/rrl] and try the machines with your ${number(pack.casinoVoucherQuantity)} ${pack.casinoVoucherCryptoSymbol} voucher.
+11. [rrl=/map]Study the world map[/rrl], then send your ${pack.vehicleName} exploring when you are ready.
+12. [rrl=/exchange]Visit Markets[/rrl] and [rrl=/crypto]Crypto[/rrl] before making your first trade.
+13. [rrl=/guide]Read the Field guide[/rrl] whenever you want the rules behind a system.
 
 Compliance is compulsory. Enjoy your new life.
 
@@ -13948,6 +14202,7 @@ Compliance is compulsory. Enjoy your new life.
       { label: `Meet your ${pack.dwarfName}`, path: '/dwarves' },
       { label: 'Inspect your travel gadgets', path: '/gadgets' },
       { label: 'Try the Oil Field', path: '/oil-field' },
+      { label: `Open your ${pack.safeTravelKit.itemName}`, path: '/inventory' },
       { label: `Activate your ${pack.vehicleName}`, path: '/vehicles' },
       { label: `Spend your ${pack.casinoVoucherCryptoSymbol} voucher`, path: '/casino' },
       { label: 'Open the world map', path: '/map' },
@@ -13968,6 +14223,7 @@ Compliance is compulsory. Enjoy your new life.
           dwarfItemId: pack.dwarfItemId, dwarfName: pack.dwarfName,
           dwarfQuantity: 1,
           gadgets: pack.gadgets,
+          safeTravelKit: pack.safeTravelKit,
           supplies: pack.supplies,
           rentalMines: pack.rentalMines,
           rentalDurationMs: pack.rentalDurationMs,
@@ -14928,7 +15184,7 @@ Compliance is compulsory. Enjoy your new life.
     if (!city) throw new Error('Choose a city you have discovered.');
     if (market && !city.has_market) throw new Error(`${city.name} has no player market.`);
     if (capital && Number(city.capital_city_id) !== Number(city.id)) {
-      throw new Error('Automelder storage must be in a regional capital.');
+      throw new Error('This automation must use a regional capital.');
     }
     return city;
   }
@@ -14979,19 +15235,35 @@ Compliance is compulsory. Enjoy your new life.
       report.ships = this.database.prepare(`
         SELECT player_vehicles.id,
           COALESCE(NULLIF(player_vehicles.name, ''), catalog_items.name) AS name,
-          player_vehicles.city_id AS cityId, catalog_cities.name AS cityName,
+          player_vehicles.city_id AS cityId, current_city.name AS cityName,
+          origin_city.name AS originCityName, destination_city.name AS destinationCityName,
           player_vehicles.status, player_vehicles.damaged,
+          EXISTS (SELECT 1 FROM player_vehicle_shuttles
+            WHERE player_vehicle_shuttles.vehicle_id = player_vehicles.id) AS isShuttle,
           (SELECT COUNT(*) FROM player_ship_cannons
             WHERE player_ship_cannons.vehicle_id = player_vehicles.id) AS cannons
         FROM player_vehicles
         JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
         JOIN catalog_items ON catalog_items.id = player_vehicles.item_id
-        JOIN catalog_cities ON catalog_cities.id = player_vehicles.city_id
+        LEFT JOIN catalog_cities AS current_city ON current_city.id = player_vehicles.city_id
+        LEFT JOIN catalog_cities AS origin_city ON origin_city.id = player_vehicles.origin_city_id
+        LEFT JOIN catalog_cities AS destination_city
+          ON destination_city.id = player_vehicles.destination_city_id
         WHERE player_vehicles.player_id = ? AND catalog_vehicles.route_type = ?
           AND player_vehicles.aircraft_destroyed = 0
-        ORDER BY catalog_cities.name, name, player_vehicles.id
-      `).all(playerId, this.#routeTypeId('sea')).map((ship) => ({ ...ship,
-        damaged: Boolean(ship.damaged), cannons: Number(ship.cannons) }));
+        ORDER BY COALESCE(current_city.name, origin_city.name, destination_city.name),
+          name, player_vehicles.id
+      `).all(playerId, this.#routeTypeId('sea')).map((ship) => ({
+        ...ship,
+        damaged: Boolean(ship.damaged),
+        isShuttle: Boolean(ship.isShuttle),
+        cannons: Number(ship.cannons),
+        locationLabel: ship.cityName
+          ? ship.cityName
+          : ship.originCityName && ship.destinationCityName
+            ? `In transit: ${ship.originCityName} → ${ship.destinationCityName}`
+            : 'In transit'
+      }));
       report.ammunition = this.database.prepare(`
         SELECT catalog_cannonballs.ammo_type AS type, catalog_cannonballs.item_id AS itemId,
           catalog_items.name
@@ -15050,6 +15322,48 @@ Compliance is compulsory. Enjoy your new life.
     return report;
   }
 
+  mapOperationsSnapshot(playerId, snapshotAt = Date.now()) {
+    const generatedAt = Number(snapshotAt);
+    if (!Number.isFinite(generatedAt)) throw new Error('Invalid map snapshot time.');
+    const vehicles = this.vehiclesForPlayer(playerId, generatedAt, { settle: false });
+    const automations = this.database.prepare(`
+      SELECT gadget_automations.*, catalog_gadgets.behavior_key,
+        catalog_gadgets.display_name, player_gadgets.expires_at
+      FROM gadget_automations
+      JOIN catalog_gadgets ON catalog_gadgets.id = gadget_automations.gadget_id
+      JOIN player_gadgets ON player_gadgets.player_id = gadget_automations.player_id
+        AND player_gadgets.gadget_id = gadget_automations.gadget_id
+      WHERE gadget_automations.player_id = ? AND gadget_automations.enabled = 1
+        AND player_gadgets.expires_at > ?
+      ORDER BY catalog_gadgets.id
+    `).all(Number(playerId), generatedAt).map((row) => {
+      const configuration = this.#gadgetAutomationConfiguration(row);
+      return {
+        behaviorKey: row.behavior_key,
+        displayName: row.display_name,
+        activeUntil: Number(row.expires_at),
+        intervalMinutes: Number(row.interval_ms) / 60000,
+        nextRunAt: Number(row.next_run_at),
+        lastRunAt: row.last_run_at === null ? null : Number(row.last_run_at),
+        lastStatus: row.last_status,
+        tasks: configuration?.tasks.map((task, index) => ({ ...task, index })) ?? []
+      };
+    }).filter((automation) => automation.tasks.length > 0);
+    return {
+      generatedAt,
+      shuttles: vehicles.filter((vehicle) => vehicle.shuttle).map((vehicle) => ({
+        vehicleId: vehicle.id,
+        vehicleName: vehicle.name,
+        itemName: vehicle.itemName,
+        rank: vehicle.rank,
+        status: vehicle.status,
+        ...vehicle.shuttle
+      })),
+      vehicleNamesById: Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle.name])),
+      automations
+    };
+  }
+
   configureGadgetAutomation(playerId, behaviorKey, input, now = Date.now()) {
     const definition = this.#gadgetAutomationDefinition(behaviorKey);
     const gadget = this.#requireActiveGadget(playerId, definition.behaviorKey, now);
@@ -15075,7 +15389,9 @@ Compliance is compulsory. Enjoy your new life.
           AND catalog_vehicles.route_type = ? AND player_vehicles.aircraft_destroyed = 0
       `).get(vehicleId, playerId, this.#routeTypeId('sea'));
       if (!ship) throw new Error('Choose one of your ships.');
-      city = this.#knownAutomationCity(playerId, ship.city_id);
+      const loadingCityId = input.cityId === undefined || input.cityId === ''
+        ? Number(ship.city_id) : Number(input.cityId);
+      city = this.#knownAutomationCity(playerId, loadingCityId, { capital: true });
       if (!this.database.prepare(
         'SELECT 1 FROM catalog_cannonballs WHERE ammo_type = ?'
       ).get(ammoType)) throw new Error('Choose a valid ammunition type.');
@@ -15233,6 +15549,15 @@ Compliance is compulsory. Enjoy your new life.
     const vehicle = this.#vehicleRecord(Number(configuration.vehicleId), automation.player_id);
     if (!vehicle || vehicle.route_type !== this.#routeTypeId('sea')) {
       return { status: 'Waiting: the configured ship no longer exists.', disable: true };
+    }
+    const loadingPort = this.database.prepare(`
+      SELECT catalog_cities.name
+      FROM catalog_cities
+      JOIN world_maps ON world_maps.id = catalog_cities.map_id
+      WHERE catalog_cities.id = ? AND world_maps.capital_city_id = catalog_cities.id
+    `).get(Number(automation.city_id));
+    if (!loadingPort) {
+      return { status: 'Waiting: update this task to use a regional capital loading port.' };
     }
     if (vehicle.status !== 'idle') return { status: 'Waiting: the configured ship is away from port.' };
     if (Number(vehicle.city_id) !== Number(automation.city_id)) {
@@ -27404,6 +27729,124 @@ Compliance is compulsory. Enjoy your new life.
     });
   }
 
+  openSafeTravelKit(playerId, now = Date.now()) {
+    return this.#transaction(() => {
+      const openedAt = Math.round(Number(now));
+      if (!Number.isSafeInteger(openedAt) || openedAt < 0) {
+        throw new Error('Invalid Safe Travel Kit opening time.');
+      }
+      const player = this.database.prepare(`
+        SELECT players.city_id, catalog_cities.name AS city_name
+        FROM players
+        JOIN catalog_cities ON catalog_cities.id = players.city_id
+        WHERE players.id = ?
+      `).get(playerId);
+      if (!player) throw new Error('Player not found.');
+      const kitItemId = this.#itemIdSetting('safe_travel_kit_item_id');
+      const kitItem = this.database.prepare(
+        'SELECT id, name FROM catalog_items WHERE id = ?'
+      ).get(kitItemId);
+      const configuredContents = this.#setting('safe_travel_kit_contents');
+      if (!kitItem || !Array.isArray(configuredContents) || !configuredContents.length) {
+        throw new Error('Safe Travel Kit catalog data is incomplete.');
+      }
+      const selectContent = this.database.prepare(`
+        SELECT catalog_items.id, catalog_items.name, catalog_items.rarity,
+          catalog_mods.id AS mod_id, catalog_mods.capacity, catalog_mods.attack,
+          catalog_mods.armor, catalog_mods.offense, catalog_mods.defense,
+          catalog_mods.dodge
+        FROM catalog_items
+        LEFT JOIN catalog_mods ON catalog_mods.item_id = catalog_items.id
+        WHERE catalog_items.id = ?
+      `);
+      const contents = configuredContents.map((content) => ({
+        ...selectContent.get(Number(content?.itemId)),
+        itemId: Number(content?.itemId), quantity: Number(content?.quantity)
+      }));
+      if (contents.some((content) => !content.id
+        || !Number.isSafeInteger(content.quantity) || content.quantity < 1)) {
+        throw new Error('Safe Travel Kit catalog data is incomplete.');
+      }
+      const owned = Number(this.database.prepare(`
+        SELECT quantity FROM inventory
+        WHERE player_id = ? AND city_id = ? AND item_id = ?
+      `).get(playerId, player.city_id, kitItemId)?.quantity ?? 0);
+      if (owned < 1) {
+        throw new Error(`You do not own a ${kitItem.name} in this city.`);
+      }
+
+      this.#changeInventory(playerId, player.city_id, kitItemId, -1);
+      for (const content of contents) {
+        this.#changeInventory(playerId, player.city_id, content.itemId, content.quantity);
+      }
+      this.#trimItemListings(playerId, player.city_id, kitItemId);
+
+      const boltItemId = this.#itemIdSetting('bolt_item_id');
+      const boltContent = contents.find((content) => content.itemId === boltItemId);
+      const mods = contents.filter((content) => content.mod_id);
+      if (!boltContent || !mods.length) {
+        throw new Error('Safe Travel Kit catalog data is incomplete.');
+      }
+      const colorNames = this.#setting('rarity_color_names');
+      const statText = (mod) => [
+        Number(mod.armor) ? `${Number(mod.armor) > 0 ? '+' : ''}${mod.armor} armour` : '',
+        Number(mod.dodge) ? `${Number(mod.dodge) > 0 ? '+' : ''}${mod.dodge} dodge` : '',
+        Number(mod.capacity) ? `${mod.capacity} cargo capacity` : ''
+      ].filter(Boolean).join(', ');
+      const modLines = mods.map((mod) =>
+        `- ${mod.quantity} x ${colorNames[mod.rarity]} ${mod.name} (${statText(mod)})`
+      ).join('\n');
+      const boltsRequired = mods.reduce((sum, mod) => sum
+        + this.#vehicleFittingBoltCost(mod.itemId, mod.rarity) * mod.quantity, 0);
+      const boltAdvice = boltsRequired === 0
+        ? `These Yellow mods cost no Bolts to fit. Keep all ${boltContent.quantity} Bolts in ${player.city_name} for Green-or-better fittings, or for a Magnet, which always costs one Bolt to fit.`
+        : `Fitting both mods consumes ${boltsRequired} of these Bolts. Bolts spent on fittings are not returned when a mod is removed.`;
+      const modNames = mods.map((mod) => mod.name).join(' and ');
+      const body = `SAFE TRAVEL KIT — COUNCIL FITTING CARD
+
+Opened in ${player.city_name}. Contents unpacked into Your Things:
+- ${boltContent.quantity} x ${boltContent.name}
+${modLines}
+
+Fit the defensive mods before travelling:
+1. [rrl=/vehicles]Open Fleet[/rrl]. If your Yellow land vehicle is still stored, activate it in ${player.city_name}.
+2. Select Manage on that idle vehicle, then select “Customize mods and weapons”.
+3. Tick “Fit this mod” for ${modNames}. Do not merely carry them as cargo: only fitted mods change vehicle statistics.
+4. Select “Preview loadout”. Check the proposed armour, dodge, and capacity totals.
+5. Select “Commit this exact loadout”. Each mod uses one capacity, so these two fittings reduce cargo room by two slots.
+6. Return to the vehicle status page, choose a route, select the Peaceful order, and send the vehicle.
+
+${boltAdvice}
+
+Peaceful means your vehicle starts no fights against living traffic. Pillagers, route creatures, and restless wrecks can still attack it; the fitted armour and dodge improve its chance of surviving those encounters. A faster vehicle and an active Shield or Turbo Engine gadget add further protection.`;
+      const detailsContents = contents.map((content) => ({
+        itemId: content.itemId, quantity: content.quantity
+      }));
+      const messageId = this.#insertSystemMessage(
+        playerId, 'Vehicle', 'Safe Travel Kit fitting instructions', body, openedAt,
+        null, {
+          event: 'safe-travel-kit-opened', systemSenderName: 'The Council',
+          cityId: Number(player.city_id), cityName: player.city_name,
+          contents: detailsContents,
+          boltsRequired,
+          actions: [
+            { label: 'Open Fleet', path: '/vehicles' },
+            { label: 'Review unpacked Things', path: '/inventory' },
+            { label: 'Read safer travel orders', path: '/guide#guide-transport-orders' }
+          ]
+        }
+      );
+      if (!messageId) throw new Error('Safe Travel Kit instructions could not be created.');
+      this.database.prepare(
+        'UPDATE messages SET is_kept = 1 WHERE id = ? AND recipient_id = ?'
+      ).run(messageId, playerId);
+      return {
+        kitItemId, kitName: kitItem.name, cityId: Number(player.city_id),
+        cityName: player.city_name, contents: detailsContents, boltsRequired, messageId
+      };
+    });
+  }
+
   attachShipCannon(playerId, vehicleId, cannonId) {
     return this.attachShipCannons(playerId, vehicleId, [cannonId])[0];
   }
@@ -31306,7 +31749,7 @@ Compliance is compulsory. Enjoy your new life.
       let score = 0;
       if (pair.sharedNetworkCount) {
         score += 50 + Math.min(10, Math.max(0, pair.sharedNetworkCount - 1) * 5);
-        evidence.push(`Shared recent network (${pair.sharedNetworkCount})`);
+        evidence.push(`Same public sign-in address (${pair.sharedNetworkCount})`);
       }
       if (pair.tradeCount >= 5) score += 15;
       else if (pair.tradeCount >= 2) score += 8;

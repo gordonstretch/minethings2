@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createPlayer } from '../src/game.js';
-import { loadLegacyCatalog } from '../src/legacy-catalog.js';
+import { loadLegacyCatalog, SAFE_TRAVEL_KIT_CATALOG } from '../src/legacy-catalog.js';
 import { SqliteStore } from '../src/store.js';
 
 function regionalFixture(context, name) {
@@ -339,7 +339,7 @@ test('v94 migration adds fixed capitals without rewriting legacy miner data', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 138);
   store.ensureWorldMaps(2000);
   const migratedCatalog = store.loadCatalog();
   assert.deepEqual({ ...store.database.prepare(
@@ -348,10 +348,15 @@ test('v94 migration adds fixed capitals without rewriting legacy miner data', (c
   assert.deepEqual(store.database.prepare(
     'SELECT city_id FROM known_cities WHERE player_id = ? ORDER BY city_id'
   ).all(player.id).map((entry) => entry.city_id), knownBefore);
-  assert.deepEqual(store.database.prepare(`
+  const inventoryAfter = store.database.prepare(`
     SELECT city_id, item_id, quantity FROM inventory
     WHERE player_id = ? ORDER BY city_id, item_id
-  `).all(player.id).map((entry) => ({ ...entry })), inventoryBefore);
+  `).all(player.id).map((entry) => ({ ...entry }));
+  assert.deepEqual(inventoryAfter, [...inventoryBefore, {
+    city_id: playerBefore.city_id,
+    item_id: SAFE_TRAVEL_KIT_CATALOG.itemId,
+    quantity: 1
+  }].sort((first, second) => first.city_id - second.city_id || first.item_id - second.item_id));
   assert.deepEqual(store.database.prepare(`
     SELECT item_id, quantity, stored_at FROM meld_stash
     WHERE player_id = ? ORDER BY item_id
@@ -392,7 +397,7 @@ test('v99 adds only regional-capital catalog metadata before world bootstrap', (
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 138);
   assert.ok(store.database.prepare('PRAGMA table_info(world_maps)').all()
     .some((column) => column.name === 'capital_city_id'));
   assert.deepEqual({ ...store.database.prepare(

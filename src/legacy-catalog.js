@@ -58,9 +58,11 @@ export const INVENTORY_CAPACITY_RULES = Object.freeze({
     15: 100
   })
 });
+export const SAFE_TRAVEL_KIT_ITEM_ID = 1598;
 export const LEGACY_STARTER_WELCOME_PACK = Object.freeze({
   vehicleItemId: 154,
   dwarfItemId: 1348,
+  safeTravelKitItemId: SAFE_TRAVEL_KIT_ITEM_ID,
   gadgetItemIds: Object.freeze([255, 257, 259]),
   itemGrants: Object.freeze([
     Object.freeze({ itemId: 1278, quantity: 1 }),
@@ -874,11 +876,39 @@ export const MAGNET_CATALOG = Object.freeze({
   intactSalvageChance: 0.35,
   fittingBoltCost: 1
 });
+export const SAFE_TRAVEL_KIT_CATALOG = Object.freeze({
+  itemId: SAFE_TRAVEL_KIT_ITEM_ID,
+  items: Object.freeze([
+    Object.freeze({
+      id: SAFE_TRAVEL_KIT_ITEM_ID,
+      name: 'Safe Travel Kit',
+      rarity: 1,
+      description: 'A Council-sealed first-journey kit. Open it in local Things to unpack five Bolts, Yellow Tin Door Panels, and a Yellow Tin Quick Shift, then read the enclosed fitting and travel instructions.',
+      marketableId: null,
+      mineTypeId: 1,
+      repairedItemId: null,
+      canFind: false,
+      icon: '/node/safe-travel-kit.svg',
+      iconSource: 'starter-svg',
+      damaged: false,
+      largeImageFilename: null,
+      largeImage: '/node/safe-travel-kit.svg',
+      hasLargeImage: true,
+      goldValueUnits: 5833
+    })
+  ]),
+  contents: Object.freeze([
+    Object.freeze({ itemId: 2, quantity: 5 }),
+    Object.freeze({ itemId: 1112, quantity: 1 }),
+    Object.freeze({ itemId: 1116, quantity: 1 })
+  ])
+});
 const VEHICLE_CARGO_POLICIES = new Set(['standard', 'oil-only', 'any-item']);
 const VEHICLE_ROUTE_POLICIES = new Set(['standard', 'capital-link']);
 export const WORLD_CREATURE_TYPES = Object.freeze([
   'kraken', 'land_whale', 'white_whale', 'orca_pod', 'elephant_herd', 't_rex'
 ]);
+export const WORLD_CREATURE_HP_REBALANCE_FACTOR = 0.5;
 export const LEGACY_CASINO_SLOT_RULES = Object.freeze({
   version: 5,
   symbolItemIds: [2, 1434, 1464, 1494, 1524, 1554, 277, 278, 279, 280, 281, 282],
@@ -1122,8 +1152,12 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_creature_roll_min_interval_ms: 60 * 1000,
   world_creature_roll_max_interval_ms: 10 * 60 * 1000,
   world_creature_hp: {
-    kraken: 180, land_whale: 140, white_whale: 170,
-    orca_pod: 125, elephant_herd: 165, t_rex: 220
+    kraken: 180 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    land_whale: 140 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    white_whale: 170 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    orca_pod: 125 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    elephant_herd: 165 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    t_rex: 220 * WORLD_CREATURE_HP_REBALANCE_FACTOR
   },
   world_creature_speed_kph: {
     kraken: 18, land_whale: 12, white_whale: 22,
@@ -1734,6 +1768,10 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     ...item,
     goldValue: item.goldValueUnits / 10000
   })));
+  items.push(...SAFE_TRAVEL_KIT_CATALOG.items.map((item) => ({
+    ...item,
+    goldValue: item.goldValueUnits / 10000
+  })));
   items.push(...SHROOM_CATALOG.items.map((item) => {
     const icon = item.icon;
     return {
@@ -2007,6 +2045,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     magnet_item_id: MAGNET_CATALOG.items[0].id,
     magnet_intact_salvage_chance: MAGNET_CATALOG.intactSalvageChance,
     magnet_fitting_bolt_cost: MAGNET_CATALOG.fittingBoltCost,
+    safe_travel_kit_item_id: SAFE_TRAVEL_KIT_CATALOG.itemId,
+    safe_travel_kit_contents: SAFE_TRAVEL_KIT_CATALOG.contents,
     block_and_tackle_item_id: 1107,
     search_plane_item_id: 737,
     bomber_item_id: 738,
@@ -2502,6 +2542,19 @@ export function indexCatalog({
   const welcomeM80Grant = welcomeSupplyItems.find(
     (grant) => grant.item?.name === 'M-80' && grant.explosive
   );
+  const safeTravelKitItemId = Number(settings.safe_travel_kit_item_id);
+  const safeTravelKitItem = requireItem(
+    safeTravelKitItemId, 'setting safe_travel_kit_item_id'
+  );
+  const safeTravelKitContents = Array.isArray(settings.safe_travel_kit_contents)
+    ? settings.safe_travel_kit_contents.map((entry) => ({
+      itemId: Number(entry?.itemId), quantity: Number(entry?.quantity),
+      item: byId.get(Number(entry?.itemId)), mod: modByItemId.get(Number(entry?.itemId))
+    })) : [];
+  const safeTravelKitBolts = safeTravelKitContents.find(
+    (entry) => entry.itemId === Number(settings.bolt_item_id)
+  );
+  const safeTravelKitMods = safeTravelKitContents.filter((entry) => entry.mod);
   const welcomeRentalMineTypeIds = Array.isArray(welcomePack?.rentalMineTypeIds)
     ? welcomePack.rentalMineTypeIds.map(Number) : [];
   const welcomeRentalMineTypes = welcomeRentalMineTypeIds.map((mineTypeId) =>
@@ -2527,6 +2580,22 @@ export function indexCatalog({
     || welcomeMachineGrant('pump')?.quantity !== 1
     || welcomeMachineGrant('pipe200')?.quantity !== 4
     || welcomeM80Grant?.quantity !== 5
+    || Number(welcomePack.safeTravelKitItemId) !== safeTravelKitItemId
+    || safeTravelKitItem.rarity !== 1 || safeTravelKitItem.repairedItemId !== null
+    || safeTravelKitItem.canFind
+    || safeTravelKitContents.length !== 3
+    || new Set(safeTravelKitContents.map((entry) => entry.itemId)).size !== 3
+    || safeTravelKitContents.some((entry) => !entry.item
+      || !Number.isSafeInteger(entry.quantity) || entry.quantity < 1)
+    || safeTravelKitBolts?.quantity !== 5
+    || safeTravelKitMods.length !== 2
+    || safeTravelKitMods.some((entry) => entry.quantity !== 1
+      || entry.item.rarity !== 1 || entry.item.repairedItemId !== null
+      || Number(entry.mod.attack) < 0 || Number(entry.mod.armor) < 0
+      || Number(entry.mod.offense) < 0 || Number(entry.mod.defense) < 0
+      || Number(entry.mod.dodge) < 0)
+    || !safeTravelKitMods.some((entry) => Number(entry.mod.armor) > 0)
+    || !safeTravelKitMods.some((entry) => Number(entry.mod.dodge) > 0)
     || welcomeRentalMineTypeIds.length !== 2
     || new Set(welcomeRentalMineTypeIds).size !== welcomeRentalMineTypeIds.length
     || welcomeRentalMineTypes.some((mineType) => !mineType || mineType.rentCost <= 0

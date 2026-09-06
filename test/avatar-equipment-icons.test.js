@@ -184,9 +184,22 @@ test('serves standalone SVGs and leaves avatar and miner PNG dressing in rendere
       assert.ok((await detail.text()).includes(`class="detail-image" src="${icon}"`));
     }
 
+    const magnet = catalog.byId.get(catalog.settings.magnet_item_id);
+    const magnetAsset = await fetch(`${base}${magnet.icon}`);
+    assert.equal(magnetAsset.status, 200);
+    assert.match(magnetAsset.headers.get('content-type'), /^image\/svg\+xml\b/u);
+    assert.match(await magnetAsset.text(),
+      /<title id="title">Vehicle salvage Magnet<\/title>/u);
+    const magnetDetail = await fetch(`${base}/items/${magnet.id}`);
+    assert.equal(magnetDetail.status, 200);
+    assert.ok((await magnetDetail.text()).includes(
+      `class="detail-image" src="${magnet.icon}"`
+    ));
+
     for (const invalid of [
       '/node/equipment/equipment-50.svg', '/node/equipment/equipment-51.png',
-      '/node/avatars/avatar-760.svg', '/node/avatars/avatar-761.svg/extra'
+      '/node/equipment/magnet.svg/extra', '/node/avatars/avatar-760.svg',
+      '/node/avatars/avatar-761.svg/extra'
     ]) assert.equal((await fetch(`${base}${invalid}`)).status, 404, invalid);
 
     const source = fs.readFileSync(path.join(ROOT, 'src', 'server.js'), 'utf8');

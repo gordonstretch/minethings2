@@ -359,10 +359,15 @@ function clientNetworkAddress(request) {
   const trustedLocalProxy = direct === '127.0.0.1' || direct === '::1';
   if (!trustedLocalProxy) return direct;
   const realAddress = normalizedIpAddress(request.headers['x-real-ip']);
-  if (realAddress) return realAddress;
+  if (realAddress && realAddress !== '127.0.0.1' && realAddress !== '::1') {
+    return realAddress;
+  }
   const forwarded = String(request.headers['x-forwarded-for'] ?? '')
-    .split(',').map((entry) => normalizedIpAddress(entry)).filter(Boolean);
-  return forwarded.at(-1) ?? direct;
+    .split(',').map((entry) => normalizedIpAddress(entry))
+    .filter((address) => address && address !== '127.0.0.1' && address !== '::1');
+  // A loopback peer is the reverse proxy, not the miner. If it supplies no
+  // usable client address, retaining the peer would falsely link every login.
+  return forwarded.at(-1) ?? null;
 }
 
 function requestDestination(request, fallback = '/') {
@@ -813,6 +818,22 @@ function signedStat(value) {
   const number = Number(value);
   const rounded = Math.round((number + Number.EPSILON) * 1000) / 1000;
   return rounded > 0 ? `+${rounded}` : String(rounded);
+}
+
+function modEffectsList(mod) {
+  const effects = [
+    ['capacity', 'Capacity', mod.capacity],
+    ['attack', 'Base attack', mod.attack],
+    ['armor', 'Armour', mod.armor],
+    ['offense', 'Aggressive power', mod.offense],
+    ['defense', 'Defensive power', mod.defense],
+    ['dodge', 'Dodge', mod.dodge]
+  ];
+  return `<section class="mod-effects" data-mod-effects="${Number(mod.id)}" aria-label="Mod effects"><strong>Effects</strong><ul>${effects.map(([key, label, value]) => {
+    const number = Number(value);
+    const direction = number > 0 ? 'positive' : number < 0 ? 'negative' : 'neutral';
+    return `<li data-mod-stat="${key}"><span>${label}</span><strong class="mod-effect-${direction}">${escapeHtml(signedStat(number))}</strong></li>`;
+  }).join('')}</ul></section>`;
 }
 
 function combatStatsPanel(stats, context = 'Current combat state') {
@@ -1458,10 +1479,12 @@ function gadgetAutomationPage(report, catalog) {
   let hasChoices = true;
   if (report.behaviorKey === 'autoloader') {
     const ships = report.ships.map((ship) => `<option value="${ship.id}">${
-      escapeHtml(ship.name)} · ${escapeHtml(ship.cityName)} · ${ship.cannons} cannon${ship.cannons === 1 ? '' : 's'} · ${escapeHtml(ship.status)}</option>`).join('');
+      escapeHtml(ship.name)} · ${escapeHtml(ship.locationLabel)}${ship.isShuttle ? ' · shuttle' : ''} · ${ship.cannons} cannon${ship.cannons === 1 ? '' : 's'} · ${escapeHtml(ship.status)}</option>`).join('');
+    const capitals = report.cities.filter((city) => city.isCapital)
+      .map((city) => `<option value="${city.id}">${escapeHtml(city.name)}</option>`).join('');
     const ammunition = report.ammunition.map((ammo) => `<option value="${ammo.type}">${escapeHtml(ammo.name)}</option>`).join('');
-    hasChoices = Boolean(ships && ammunition);
-    controls = `<label>Ship<select name="vehicleId" required>${ships || '<option value="">No ships owned</option>'}</select></label><label>Cannon fodder<select name="ammoType" required>${ammunition}</select></label><label>Crates to load<input type="number" name="quantity" min="1" max="${report.maxLoadQuantity}" step="1" value="1" required></label>${interval}<p class="field-help">Each scheduled turn loads up to the chosen number of crates from stock in the configured port, then advances to the next task. Configured shuttles use the same quantity after landing and before their immediate next departure.</p>`;
+    hasChoices = Boolean(ships && capitals && ammunition);
+    controls = `<label>Ship<select name="vehicleId" required>${ships || '<option value="">No ships owned</option>'}</select></label><label>Capital loading port<select name="cityId" required>${capitals || '<option value="">No known regional capital</option>'}</select></label><label>Cannon fodder<select name="ammoType" required>${ammunition}</select></label><label>Crates to load<input type="number" name="quantity" min="1" max="${report.maxLoadQuantity}" step="1" value="1" required></label>${interval}<p class="field-help">All your ships are shown, including ships underway. Loading occurs only while the selected ship is physically in the chosen regional capital. A configured shuttle is checked during its brief turnaround there, after landing and before its immediate next departure.</p>`;
   } else if (report.behaviorKey === 'autolister') {
     const stock = report.stockTypes.map((mineType) => {
       const city = report.cities.find(
@@ -2541,6 +2564,7 @@ function inventoryPage(player, catalog, meldItemNeeds = {}, listingQuantitiesByC
   fleetStandingByByCity = {}) {
   const mapsById = new Map(catalog.maps.map((map) => [Number(map.id), map]));
   const boltBoxItemId = Number(catalog.settings.bolt_box_item_id);
+  const safeTravelKitItemId = Number(catalog.settings.safe_travel_kit_item_id);
   const boltsPerBox = Number(catalog.settings.bolts_per_box);
   const boltItem = catalog.byId.get(Number(catalog.settings.bolt_item_id));
   const selectedCity = catalogCityForId(catalog, player.cityId);
@@ -2598,6 +2622,9 @@ function inventoryPage(player, catalog, meldItemNeeds = {}, listingQuantitiesByC
         ? `<form class="bolt-box-breakdown-form" method="post" action="/inventory/${item.id}/break-down"><input aria-label="Number of ${escapeHtml(item.name)} to break down" type="number" name="quantity" min="1" max="${count}" value="1" required><button>Break down · ${boltsPerBox.toLocaleString('en-GB')} ${escapeHtml(boltItem.name)}s each</button></form>`
         : '';
       action = `${breakdownAction}<a class="button inventory-market-link" href="/market/items/${item.id}">Open local market</a><form class="inventory-meld-form" method="post" action="/inventory/${item.id}/meld"><button class="secondary" title="${escapeHtml(meldTitle)}"${meldDisabled ? ' disabled' : ''}>Meld</button></form><form class="recycle-form" method="post" action="/inventory/${item.id}/recycle"><input aria-label="Number of ${escapeHtml(item.name)} to recycle" type="number" name="quantity" min="1" max="${Math.max(1, recyclableCount)}" value="1" required${recycleDisabled ? ' disabled' : ''}><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : recycleTitle ? ` title="${escapeHtml(recycleTitle)}"` : ''}>Recycle · ${scrapsEach.toLocaleString('en-GB')} scraps each</button></form><form class="recycle-all-form" method="post" action="/inventory/${item.id}/recycle"><input type="hidden" name="quantity" value="${recyclableCount}"><button class="secondary"${recycleDisabled ? ` disabled title="${escapeHtml(recycleTitle)}"` : ''}>Recycle all · ${(recyclableCount * scrapsEach).toLocaleString('en-GB')} scraps</button></form>`;
+    }
+    if (current && item.id === safeTravelKitItemId) {
+      action = `<form class="safe-travel-kit-open-form" method="post" action="/inventory/${item.id}/open"><button>Open kit · unpack supplies and read instructions</button></form>`;
     }
     return itemCard(item, {
       count,
@@ -3057,10 +3084,10 @@ function adminShillSignalsPage(state, networkEnabled) {
     </tr>`;
   }).join('');
   const networkNotice = networkEnabled
-    ? `<p><strong>Network matching is active.</strong> ${state.networkObservationCount.toLocaleString('en-GB')} pseudonymous sign-in observation${state.networkObservationCount === 1 ? '' : 's'} remain in the 30-day window.</p>`
-    : '<p><strong>Network matching is off.</strong> Set a private <code>SHILL_SIGNAL_SECRET</code> of at least 32 characters and restart the server. Economic signals below still work.</p>';
-  return `${adminTabs('shills')}<section class="page-title"><div><p class="eyebrow">Market integrity · human review</p><h1>Shill signals</h1></div><p>Prioritises account pairs using recent market transfers and pseudonymous network matches. A signal is evidence to inspect, never proof or an automatic punishment.</p></section>
-    <section class="shill-explainer"><h2>Read these signals carefully</h2>${networkNotice}<p>Shared networks can be families, workplaces, mobile carriers or VPNs. Email aliases—including Apple Hide My Email addresses—are not treated as proof. MineThings never shows or stores the raw network address in its game database, and this page never suspends an account.</p></section>
+    ? `<p><strong>Sign-in address matching is active.</strong> ${state.networkObservationCount.toLocaleString('en-GB')} pseudonymous sign-in observation${state.networkObservationCount === 1 ? '' : 's'} remain in the 30-day window.</p>`
+    : '<p><strong>Sign-in address matching is off.</strong> Set a private <code>SHILL_SIGNAL_SECRET</code> of at least 32 characters and restart the server. Economic signals below still work.</p>';
+  return `${adminTabs('shills')}<section class="page-title"><div><p class="eyebrow">Market integrity · human review</p><h1>Shill signals</h1></div><p>Prioritises account pairs using recent market transfers and pseudonymous public sign-in address matches. A signal is evidence to inspect, never proof or an automatic punishment.</p></section>
+    <section class="shill-explainer"><h2>Read these signals carefully</h2>${networkNotice}<p>A matching public sign-in address can reflect a family, workplace, mobile carrier, VPN or proxy; it does not establish that people share a home or control one another's accounts. Email aliases—including Apple Hide My Email addresses—are not treated as proof. MineThings never shows or stores the raw address in its game database, and this page never suspends an account.</p></section>
     <div class="admin-metrics"><article><strong>${levelCount('high')}</strong><span>High priority</span></article><article><strong>${levelCount('review')}</strong><span>Review</span></article><article><strong>${levelCount('watch')}</strong><span>Watch</span></article><article><strong>30 days</strong><span>Evidence window</span></article></div>
     <form class="market-search shill-filter" method="get" action="/admin/shills"><label>Account pair filter<select name="playerId"><option value="">All miners</option>${playerOptions}</select></label><button>Apply filter</button></form>
     <div class="table-scroll"><table class="shill-signals-table"><thead><tr><th>Account pair</th><th>Score</th><th>Why it was flagged</th><th>Recent activity</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No account pairs have evidence in this window.</td></tr>'}</tbody></table></div>
@@ -3539,6 +3566,12 @@ function messageItemGroups(message, catalog) {
   if (details.event === 'shot-down') addGroup('Lost cargo', details.cargo);
   if (details.event === 'map-discovered' && details.itemId) {
     addGroup('Expedition reward', [{ itemId: details.itemId, quantity: 1 }]);
+  }
+  if (details.event === 'safe-travel-kit-issued') {
+    addGroup('Issued kit', details.items);
+  }
+  if (details.event === 'safe-travel-kit-opened') {
+    addGroup('Unpacked into your Things', details.contents);
   }
   if (details.event === 'administrator-grant' && details.kind === 'item') {
     addGroup('Granted item', [{ itemId: details.itemId, quantity: details.quantity }]);
@@ -4652,8 +4685,8 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     const cost = boltCost(item.rarity, item.id);
     return itemCard(item, { compact: true, className: 'item-card-picker',
       meta: [fitted ? 'Fitted now' : `${local[mod.itemId] ?? 0} available in ${catalogCityForId(catalog, vehicle.cityId).name}`,
-        `capacity ${signedStat(mod.capacity)}`, `base attack ${signedStat(mod.attack)}`,
-        `armor ${signedStat(mod.armor)}`, fitted ? 'Removal returns this mod' : `${cost} ${boltItem.name}${cost === 1 ? '' : 's'} to fit`],
+        fitted ? 'Removal returns this mod' : `${cost} ${boltItem.name}${cost === 1 ? '' : 's'} to fit`],
+      details: modEffectsList(mod),
       action: `<label><input type="checkbox" name="mod_${mod.id}"${selected ? ' checked' : ''}${vehicle.damaged && !fitted ? ' disabled' : ''}> ${fitted ? 'Keep fitted' : 'Fit this mod'}</label>` });
   }).join('');
   const fittedWeaponCounts = new Map();
@@ -5459,7 +5492,9 @@ function cityTransportFacilityPage(player, catalog, vehicles, facilityKey, thief
   </article>`;
 }
 
-function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldCityIds = []) {
+function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldCityIds = [],
+  operationsSnapshot = { generatedAt: Date.now(), shuttles: [],
+    vehicleNamesById: {}, automations: [] }) {
   const currentCity = catalogCityForId(catalog, player.cityId);
   const playerMap = catalog.maps.find((map) => map.id === currentCity.mapId)
     ?? { id: currentCity.mapId, name: 'Gallego', slug: 'gallego' };
@@ -5514,6 +5549,92 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
     }
     return [city.id, position];
   }));
+  const snapshotAt = Number(operationsSnapshot.generatedAt);
+  const snapshotShuttles = Array.isArray(operationsSnapshot.shuttles)
+    ? operationsSnapshot.shuttles : [];
+  const snapshotAutomations = Array.isArray(operationsSnapshot.automations)
+    ? operationsSnapshot.automations : [];
+  const taskSummary = (automation, task) => {
+    if (automation.behaviorKey === 'autoloader') {
+      const vehicleName = operationsSnapshot.vehicleNamesById?.[task.vehicleId]
+        ?? `vehicle #${Number(task.vehicleId)}`;
+      const ammunition = catalog.cannonballs.find((entry) =>
+        Number(entry.type) === Number(task.ammoType));
+      const ammunitionName = catalog.byId.get(ammunition?.itemId)?.name ?? 'ammunition';
+      return `${vehicleName}: load up to ${Number(task.quantity).toLocaleString('en-GB')} ${ammunitionName} crate${Number(task.quantity) === 1 ? '' : 's'}`;
+    }
+    if (automation.behaviorKey === 'autolister') {
+      const mineType = catalog.mineTypes.find((entry) =>
+        Number(entry.id) === Number(task.mineTypeId));
+      return `List all ${mineType?.name ?? `type #${Number(task.mineTypeId)}`} Things at ${formatGold(Number(task.markupPercent))}% markup`;
+    }
+    if (automation.behaviorKey === 'automaker') {
+      const action = catalog.factoryActionById.get(Number(task.actionId));
+      const output = catalog.byId.get(action?.outputItemId);
+      return `Factory #${Number(task.factoryId)}: make ${output?.name ?? action?.name ?? `action #${Number(task.actionId)}`}`;
+    }
+    if (automation.behaviorKey === 'automelder') {
+      const meld = catalog.meldById.get(Number(task.meldId));
+      return `Assemble ${meld?.name ?? `Meld #${Number(task.meldId)}`}`;
+    }
+    return `Task ${Number(task.index) + 1}`;
+  };
+  const automationMarkers = {
+    autoloader: 'L', autolister: '$', automaker: 'F', automelder: 'M'
+  };
+  const cityOperations = new Map();
+  const addCityOperation = (operation) => {
+    if (!cityOperations.has(operation.cityId)) cityOperations.set(operation.cityId, []);
+    cityOperations.get(operation.cityId).push(operation);
+  };
+  for (const automation of snapshotAutomations) {
+    for (const task of automation.tasks ?? []) {
+      const cityId = Number(task.cityId);
+      const summary = taskSummary(automation, task);
+      const nextRun = Number(automation.nextRunAt) <= snapshotAt
+        ? 'due now' : `next run in ${formatDuration(Number(automation.nextRunAt) - snapshotAt)}`;
+      addCityOperation({
+        kind: 'automation', behaviorKey: automation.behaviorKey,
+        cityId, label: automation.displayName, summary,
+        href: `/gadgets/${encodeURIComponent(automation.behaviorKey)}`,
+        marker: automationMarkers[automation.behaviorKey] ?? 'A',
+        title: `${automation.displayName}: ${summary}. Every ${formatGold(automation.intervalMinutes)} minutes; ${nextRun}.${automation.lastStatus ? ` Last status: ${automation.lastStatus}` : ''}`
+      });
+    }
+  }
+  for (const shuttle of snapshotShuttles) {
+    const cityId = Number(shuttle.originCityId);
+    const phase = shuttle.pausedReason
+      ? `paused: ${shuttle.pausedReason}` : String(shuttle.phase ?? shuttle.status);
+    const summary = `${shuttle.originCityName} to ${shuttle.destinationCityName} · ${phase}`;
+    addCityOperation({
+      kind: 'shuttle', cityId, label: shuttle.vehicleName, summary,
+      href: `/vehicles/${Number(shuttle.vehicleId)}`, marker: 'S',
+      title: `Shuttle ${shuttle.vehicleName}: ${summary}. ${Number(shuttle.deliveries).toLocaleString('en-GB')} deliveries, ${Number(shuttle.deliveredThings).toLocaleString('en-GB')} Things delivered.`
+    });
+  }
+  const operationMarkers = mapCities.map((city) => {
+    const entries = cityOperations.get(city.id) ?? [];
+    if (!entries.length) return '';
+    const groups = new Map();
+    for (const entry of entries) {
+      const groupKey = entry.kind === 'shuttle'
+        ? 'shuttle' : `${entry.kind}:${entry.behaviorKey}`;
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(entry);
+    }
+    const position = positions.get(city.id);
+    return [...groups.values()].map((group, index, all) => {
+      const first = group[0];
+      const x = Math.min(875, Number(position.x) + 34);
+      const y = Math.max(20, Math.min(580,
+        Number(position.y) + (index - (all.length - 1) / 2) * 22));
+      const title = group.length === 1 ? first.title
+        : `${group.length} ${first.kind === 'shuttle' ? 'shuttles' : first.label + ' tasks'} in ${city.name}: ${group.map((entry) => entry.summary).join('; ')}`;
+      const href = first.kind === 'shuttle' && group.length > 1 ? '/vehicles' : first.href;
+      return `<a class="map-operation-link map-${first.kind}-marker" href="${escapeHtml(href)}" aria-label="${escapeHtml(title)}"><g class="map-operation-marker" transform="translate(${x} ${y})"><title>${escapeHtml(title)}</title><circle class="map-operation-marker-halo" r="11" /><circle class="map-operation-marker-token" r="8" /><text text-anchor="middle" y="3">${escapeHtml(first.marker)}</text>${group.length > 1 ? `<text class="map-operation-marker-count" x="8" y="-7">${group.length}</text>` : ''}</g></a>`;
+    }).join('');
+  }).join('');
   const mapBackgroundFilename = `${currentMap.slug}.png`;
   const hasDimensionBackground = /^[a-z0-9-]+$/.test(currentMap.slug)
     && fs.existsSync(path.join(PUBLIC_ROOT, 'img', mapBackgroundFilename));
@@ -5596,7 +5717,10 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
     const cityAction = city.id === player.cityId
       ? '<p class="city-walk-link"><a class="text-link" href="/explore">Explore this city on foot →</a></p>'
       : known.has(city.id) ? `<form method="post" action="/cities/${city.id}/select"><button>View this city</button></form>` : '';
-    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"${hasOilField ? ' data-oil-field="true"' : ''}><header class="city-card-heading">${capitalBadge}<h3>${escapeHtml(city.name)}</h3></header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${oilFieldOperation}${cityAction}</article>`;
+    const operations = cityOperations.get(city.id) ?? [];
+    const operationList = operations.length
+      ? `<section class="city-map-operations"><h4>Your operations</h4><ul>${operations.map((operation) => `<li class="city-map-operation city-map-operation-${operation.kind}"><a class="city-map-operation-link" href="${escapeHtml(operation.href)}" title="${escapeHtml(operation.title)}"><span>${operation.kind === 'shuttle' ? 'Shuttle' : escapeHtml(operation.label)}</span><strong>${escapeHtml(operation.summary)}</strong><small>Manage →</small></a></li>`).join('')}</ul></section>` : '';
+    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"${hasOilField ? ' data-oil-field="true"' : ''}><header class="city-card-heading">${capitalBadge}<h3>${escapeHtml(city.name)}</h3></header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${oilFieldOperation}${operationList}${cityAction}</article>`;
   }).join('');
   const mapTabs = catalog.maps.filter((map) => visibleMapIds.has(map.id))
     .map((map) => {
@@ -5625,8 +5749,14 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
   const currentMapOilField = mapCities.find((city) => oilFieldCities.has(city.id));
   const oilFieldFact = currentMapOilField
     ? ` · <strong>Oil Field</strong> at ${escapeHtml(currentMapOilField.name)}` : '';
+  const automationTaskCount = snapshotAutomations.reduce((sum, automation) =>
+    sum + Number(automation.tasks?.length ?? 0), 0);
+  const snapshotDate = new Date(snapshotAt);
+  const snapshotIso = snapshotDate.toISOString();
+  const snapshotLabel = snapshotDate.toLocaleString('en-GB');
+  const operationsSummary = `<section class="map-operations-snapshot" data-map-snapshot-at="${snapshotAt}" aria-labelledby="map-operations-heading"><div><p class="eyebrow">Your operations · Snapshot</p><h2 id="map-operations-heading">${automationTaskCount.toLocaleString('en-GB')} automation task${automationTaskCount === 1 ? '' : 's'} · ${snapshotShuttles.length.toLocaleString('en-GB')} shuttle${snapshotShuttles.length === 1 ? '' : 's'}</h2></div><p>Captured <time datetime="${snapshotIso}">${escapeHtml(snapshotLabel)}</time>. Hover or focus a marker for details; select it to manage that operation. Refresh this page for a new snapshot.</p></section>`;
   return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} region</p><h1>Cities</h1></div><p>Vehicles reveal cities and regions when they complete a route.</p></section><section class="map-opportunities" aria-labelledby="regional-capital-heading"><p class="eyebrow">${escapeHtml(currentMap.name)} opportunities · Shared regional base</p><h2 id="regional-capital-heading"><span class="city-capital-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>${escapeHtml(capitalCity.name)} · Regional capital</h2><p>Every miner in ${escapeHtml(currentMap.name)} shares ${escapeHtml(capitalCity.name)} as their capital and home city in this region. Bring things here to Meld, build factories, hire workers, and trade with other miners gathering in the region’s central market. Other cities remain independent outposts with their own mines, routes, and local markets.</p><p class="map-region-facts"><strong>${mapCities.length} cities</strong> · <strong>${mapMineTypes.size} mine types</strong> · ${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}${oilFieldFact}</p></section>
-    <figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital and gateways</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types${currentMapOilField ? `, the Oil Field at ${escapeHtml(currentMapOilField.name)}` : ''}, and gateway cities. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="oil-field-key"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt="">Oil Field</span><span class="gateway-key">Gateway to another region</span></figcaption></figure>
+    ${operationsSummary}<figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital, gateways and your operations</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types${currentMapOilField ? `, the Oil Field at ${escapeHtml(currentMapOilField.name)}` : ''}, gateway cities, live gadget automation and shuttle origins. This is a snapshot captured at ${escapeHtml(snapshotLabel)}. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g><g class="city-operation-layer" aria-label="City operations">${operationMarkers}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="oil-field-key"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt="">Oil Field</span><span class="gateway-key">Gateway to another region</span><span class="automation-key"><i aria-hidden="true">A</i>Live automation</span><span class="shuttle-key"><i aria-hidden="true">S</i>Shuttle origin</span></figcaption></figure>
     <section><h2>Local route network</h2><ul class="route-list">${routeRows || '<li>No routes are currently available.</li>'}</ul></section>${exitsSection}
     <section><h2>City operations</h2><div class="city-grid">${cities}</div></section><script src="/node/map.js?v=20260821a" defer></script>`;
 }
@@ -6426,7 +6556,7 @@ export function createApp(options = {}) {
     const address = clientNetworkAddress(request);
     if (!address) return;
     const token = crypto.createHmac('sha256', shillSignalSecret)
-      .update(`minethings-network-v1\0${address}`)
+      .update(`minethings-sign-in-address-v2\0${address}`)
       .digest('hex');
     try {
       store.recordAccountNetworkObservation(playerId, token, authMethod, observedAt);
@@ -7021,6 +7151,10 @@ export function createApp(options = {}) {
       if (!staticFile(request, response, PUBLIC_ROOT, '/favicon.svg')) response.writeHead(404).end('Not found');
       return;
     }
+    if (url.pathname === '/node/safe-travel-kit.svg') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/safe-travel-kit.svg')) response.writeHead(404).end('Not found');
+      return;
+    }
     if (/^\/node\/crypto\/[a-z]+\.svg$/.test(url.pathname)) {
       const relativePath = url.pathname.replace('/node/crypto', '/crypto');
       if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
@@ -7114,6 +7248,10 @@ export function createApp(options = {}) {
     if (/^\/node\/mods\/item-\d+\.svg$/.test(url.pathname)) {
       const relativePath = url.pathname.replace('/node/mods', '/img/items/mods');
       if (!staticFile(request, response, PUBLIC_ROOT, relativePath)) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/equipment/magnet.svg') {
+      if (!staticFile(request, response, PUBLIC_ROOT, url.pathname)) response.writeHead(404).end('Not found');
       return;
     }
     if (/^\/node\/equipment\/equipment-\d+\.svg$/.test(url.pathname)) {
@@ -8597,9 +8735,11 @@ export function createApp(options = {}) {
         redirect(response, '/oil-field');
       } else if (request.method === 'GET' && url.pathname === '/map') {
         if (!requirePlayer()) return;
+        const mapSnapshotAt = now();
         responseHtml(response, 200, layout('Map', mapPage(player, catalog,
-          store.knownCityIds(player.id, now()), url.searchParams.get('world') ?? '',
-          store.oilFieldCityIds()), player, flash));
+          store.knownCityIds(player.id, mapSnapshotAt), url.searchParams.get('world') ?? '',
+          store.oilFieldCityIds(), store.mapOperationsSnapshot(player.id, mapSnapshotAt)),
+        player, flash));
       } else if (url.pathname === '/move' && ['GET', 'POST'].includes(request.method)) {
         if (request.method === 'POST') request.resume();
         responseHtml(response, 410, layout('Regional capitals',
@@ -9706,6 +9846,15 @@ export function createApp(options = {}) {
         const result = store.breakDownBoltBoxes(player.id, form.quantity);
         setFlash(`${result.boxes.toLocaleString('en-GB')} ${result.boxes === 1 ? 'box' : 'boxes'} broken down into ${result.bolts.toLocaleString('en-GB')} ${result.boltName}s.`);
         redirect(response, '/inventory');
+      } else if (request.method === 'POST' && /^\/inventory\/\d+\/open$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const itemId = Number(url.pathname.split('/')[2]);
+        if (itemId !== Number(catalog.settings.safe_travel_kit_item_id)) {
+          throw new Error('That item cannot be opened here.');
+        }
+        const result = store.openSafeTravelKit(player.id, now());
+        setFlash(`${result.kitName} opened in ${result.cityName}. Its supplies are now in Your Things.`);
+        redirect(response, `/messages/view/${result.messageId}`);
       } else if (request.method === 'POST' && /^\/inventory\/\d+\/recycle$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const itemId = Number(url.pathname.split('/')[2]);
