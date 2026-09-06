@@ -11,7 +11,8 @@ import {
   indexCatalog, LEGACY_CASINO_SLOT_RULES, LEGACY_COMBAT_SEASON_SETTINGS, LEGACY_ITEM_VALUE_RULES,
   LEGACY_MACHINE_BEHAVIOR_RULES,
   LEGACY_MACHINE_TYPE_RULES, LEGACY_SPECIALISATION_TITLES, LEGACY_STARTER_WELCOME_PACK,
-  LEGACY_WORLD_EVENT_SETTINGS, EXPANDED_STONE_CATALOG, MANUFACTURED_TRANSPORT_CATALOG,
+  LEGACY_WORLD_EVENT_SETTINGS, EXPANDED_STONE_CATALOG, ADDITIONAL_STONE_CATALOG,
+  MANUFACTURED_TRANSPORT_CATALOG,
   BOLT_BOX_CATALOG, MAGNET_CATALOG,
   PRESTIGE_SPECIALISATIONS, FACTORY_WORKER_BOT_TIERS, ASO_DISCOVERY_STONE,
   CITY_COMPLETION_STONE, HOME_DISPLAY_STONE, HOME_STONE, STARTER_BOT_STONE,
@@ -81,8 +82,9 @@ import {
 } from './city-exploration.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 136;
+const CURRENT_SCHEMA_VERSION = 137;
 const CHAT_HISTORY_WINDOW_MS = 72 * 60 * 60 * 1000;
+export const SHILL_NETWORK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
 const GUILD_CREATION_COST_UNITS = 100 * GOLD_SCALE;
 const GUILD_BANK_CAPACITY = 1000;
@@ -403,6 +405,7 @@ export class SqliteStore {
       this.#migrate();
       this.#migrateCityBars();
       this.#migrateExpandedStones();
+      this.#migrateAdditionalStones();
       this.#migrateStarterBotStone();
       this.#migrateHomeStone();
       this.#migrateHomeProgressStones();
@@ -415,6 +418,7 @@ export class SqliteStore {
       this.#migrateRelicsCatalog();
       this.#migrateBoltBoxCatalog();
       this.#migrateMagnetCatalog();
+      this.#migrateMagnetFitting();
       this.#migrateRegionalMineAvailability();
       this.#migrateAsoMineRentalVouchers();
       this.#migrateFactoryBuildCompletionMessages();
@@ -610,6 +614,18 @@ export class SqliteStore {
         pm_banned INTEGER NOT NULL DEFAULT 0 CHECK (pm_banned IN (0, 1)),
         chat_color TEXT NOT NULL DEFAULT 'ff033e'
       );
+
+      CREATE TABLE IF NOT EXISTS account_network_observations (
+        player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        network_token TEXT NOT NULL CHECK (length(network_token) = 64),
+        auth_method TEXT NOT NULL CHECK (auth_method IN ('local', 'google')),
+        first_seen_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        login_count INTEGER NOT NULL DEFAULT 1 CHECK (login_count > 0),
+        PRIMARY KEY (player_id, network_token)
+      );
+      CREATE INDEX IF NOT EXISTS account_network_observations_recent
+        ON account_network_observations (last_seen_at DESC, network_token, player_id);
 
       CREATE TABLE IF NOT EXISTS specialisation_tenure (
         player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -2112,6 +2128,10 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 136) {
+      this.#migrateTo137();
+      return;
+    }
     if (schemaVersion === 135) {
       this.#migrateTo136();
       return;
@@ -7033,6 +7053,31 @@ export class SqliteStore {
       `).run(replacement.description, replacement.gadgetId);
       this.database.exec('PRAGMA user_version = 136');
     });
+    this.#migrateTo137();
+  }
+
+  #migrateTo137() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 137) return;
+      if (currentVersion !== 136) {
+        throw new Error(`Cannot install shill-signal evidence at v${currentVersion}.`);
+      }
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS account_network_observations (
+          player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+          network_token TEXT NOT NULL CHECK (length(network_token) = 64),
+          auth_method TEXT NOT NULL CHECK (auth_method IN ('local', 'google')),
+          first_seen_at INTEGER NOT NULL,
+          last_seen_at INTEGER NOT NULL,
+          login_count INTEGER NOT NULL DEFAULT 1 CHECK (login_count > 0),
+          PRIMARY KEY (player_id, network_token)
+        );
+        CREATE INDEX IF NOT EXISTS account_network_observations_recent
+          ON account_network_observations (last_seen_at DESC, network_token, player_id);
+        PRAGMA user_version = 137;
+      `);
+    });
   }
 
   #insertPrestigeSpecialisations() {
@@ -7311,6 +7356,78 @@ export class SqliteStore {
     return migrated;
   }
 
+  #migrateMagnetFitting(now = Date.now()) {
+    const migrationName = 'magnet-fitting-v1';
+    if (!this.hasCatalog()
+      || !this.database.prepare('SELECT 1 FROM catalog_items WHERE id = ?').get(
+        MAGNET_CATALOG.items[0].id
+      )
+      || this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      const { modInserted, settingInserted } = this.#insertMagnetFittingCatalog();
+      const item = MAGNET_CATALOG.items[0];
+      const artworkUpdated = Number(this.database.prepare(`
+        UPDATE catalog_items
+        SET icon = ?, icon_source = ?, large_image = ?, has_large_image = 1
+        WHERE id = ? AND (icon IS NULL OR TRIM(icon) = '' OR icon = ?)
+      `).run(item.icon, item.iconSource, item.largeImage, item.id, item.icon).changes);
+      const legacyDescription = 'Carry Magnets in a surface vehicle. Each Magnet can pull one thing from wreckage passed during a journey. Most pulls become Ore scraps at the destination, while some survive as cargo, including a wrecked vehicle\'s damaged chassis.';
+      const descriptionUpdated = Number(this.database.prepare(`
+        UPDATE catalog_items SET description = ? WHERE id = ? AND description = ?
+      `).run(item.description, item.id, legacyDescription).changes);
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        itemId: item.id, modId: MAGNET_CATALOG.mod.id,
+        modInserted, settingInserted, artworkUpdated, descriptionUpdated
+      }));
+      migrated = true;
+    });
+    return migrated;
+  }
+
+  #insertMagnetFittingCatalog() {
+    const mod = MAGNET_CATALOG.mod;
+    const existingById = this.database.prepare(
+      'SELECT item_id FROM catalog_mods WHERE id = ?'
+    ).get(mod.id);
+    const existingByItem = this.database.prepare(
+      'SELECT id FROM catalog_mods WHERE item_id = ?'
+    ).get(mod.itemId);
+    if ((existingById && Number(existingById.item_id) !== Number(mod.itemId))
+      || (existingByItem && Number(existingByItem.id) !== Number(mod.id))) {
+      throw new Error('Cannot install the Magnet fitting: its catalog slot is occupied.');
+    }
+    let modInserted = 0;
+    if (!existingById && !existingByItem) {
+      modInserted = Number(this.database.prepare(`
+        INSERT INTO catalog_mods
+          (id, item_id, capacity, attack, armor, offense, defense, dodge)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(mod.id, mod.itemId, mod.capacity, mod.attack, mod.armor,
+        mod.offense, mod.defense, mod.dodge).changes);
+    }
+    const settingKey = 'magnet_fitting_bolt_cost';
+    const settingValue = JSON.stringify(MAGNET_CATALOG.fittingBoltCost);
+    const existingSetting = this.database.prepare(
+      'SELECT value_json FROM catalog_settings WHERE key = ?'
+    ).get(settingKey);
+    if (existingSetting && existingSetting.value_json !== settingValue) {
+      throw new Error('Cannot install the Magnet fitting: its Bolt cost differs.');
+    }
+    const settingInserted = existingSetting ? 0 : Number(this.database.prepare(`
+      INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)
+    `).run(settingKey, settingValue).changes);
+    return { modInserted, settingInserted };
+  }
+
   #insertMagnetCatalog() {
     const item = MAGNET_CATALOG.items[0];
     const action = MAGNET_CATALOG.factoryActions[0];
@@ -7342,6 +7459,7 @@ export class SqliteStore {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(item.id, ...Object.values(itemFields));
     }
+    this.#insertMagnetFittingCatalog();
     const actionFields = {
       name: action.name, ore: action.ore, components: action.components,
       action_kind: action.actionKind, output_item_id: action.outputItemId,
@@ -7358,7 +7476,8 @@ export class SqliteStore {
     }
     const settings = {
       magnet_item_id: item.id,
-      magnet_intact_salvage_chance: MAGNET_CATALOG.intactSalvageChance
+      magnet_intact_salvage_chance: MAGNET_CATALOG.intactSalvageChance,
+      magnet_fitting_bolt_cost: MAGNET_CATALOG.fittingBoltCost
     };
     const insertSetting = this.database.prepare(
       'INSERT INTO catalog_settings (key, value_json) VALUES (?, ?)'
@@ -8084,6 +8203,56 @@ export class SqliteStore {
         VALUES (?, ?, ?)
       `).run(migrationName, now, JSON.stringify({
         stones: EXPANDED_STONE_CATALOG.length, changes
+      }));
+      migrated = true;
+    });
+    return migrated;
+  }
+
+  #migrateAdditionalStones(now = Date.now()) {
+    const migrationName = 'additional-stones-v1';
+    if (!this.hasCatalog()
+      || !this.database.prepare('SELECT 1 FROM catalog_items LIMIT 1').get()
+      || this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      const insert = this.database.prepare(`
+        INSERT OR IGNORE INTO catalog_stones
+          (id, name, behavior_key, description, rank, rarity)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      let changes = 0;
+      for (const stone of ADDITIONAL_STONE_CATALOG) {
+        changes += Number(insert.run(stone.id, stone.name, stone.behaviorKey,
+          stone.description, stone.rank, stone.rarity).changes);
+      }
+      const retroactiveAwards = {};
+      for (const progressStone of [
+        { progressType: 'scrap', behaviorKey: 'Scavenged' },
+        { progressType: 'sign', behaviorKey: 'Informed' },
+        { progressType: 'location', behaviorKey: 'Sightseen' }
+      ]) {
+        retroactiveAwards[progressStone.behaviorKey] = 0;
+        const players = this.database.prepare(`
+          SELECT DISTINCT player_id FROM city_exploration_progress
+          WHERE progress_type = ? ORDER BY player_id
+        `).all(progressStone.progressType);
+        for (const player of players) {
+          if (this.awardStone(player.player_id, progressStone.behaviorKey, now)) {
+            retroactiveAwards[progressStone.behaviorKey] += 1;
+          }
+        }
+      }
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        stones: ADDITIONAL_STONE_CATALOG.length, changes, retroactiveAwards
       }));
       migrated = true;
     });
@@ -14325,6 +14494,7 @@ Compliance is compulsory. Enjoy your new life.
       this.database.prepare(
         'UPDATE players SET credits = credits - ?, battery_expires_at = ? WHERE id = ?'
       ).run(cost, expiresAt, playerId);
+      this.awardStone(playerId, 'Extended', now);
       return { cost, days: extension / Number(this.#setting('day_ms')),
         expiresAt, credits: player.credits - cost };
     });
@@ -15104,7 +15274,8 @@ Compliance is compulsory. Enjoy your new life.
     const shots = crates * Number(this.#setting('shots_per_crate'));
     this.database.prepare(`UPDATE player_ship_state SET ${field} = ${field} + ? WHERE vehicle_id = ?`)
       .run(shots, vehicle.id);
-    return { status: `Loaded ${crates} crate${crates === 1 ? '' : 's'} of ${ammo.name} (${shots} shots).` };
+    return { status: `Loaded ${crates} crate${crates === 1 ? '' : 's'} of ${ammo.name} (${shots} shots).`,
+      acted: true };
   }
 
   #runShuttleAutoloader(vehicle, now) {
@@ -15147,6 +15318,7 @@ Compliance is compulsory. Enjoy your new life.
       this.database.exec('RELEASE shuttle_autoloader');
       outcome = { status: `Waiting: ${error.message}` };
     }
+    if (outcome.acted) this.awardStone(automation.player_id, 'Automated', now);
     if (outcome.disable) {
       queue.tasks.splice(taskIndex, 1);
       if (queue.tasks.length) queue.cursor %= queue.tasks.length;
@@ -15246,7 +15418,8 @@ Compliance is compulsory. Enjoy your new life.
     const skipped = bidSkipped
       ? ` ${bidSkipped} kind${bidSkipped === 1 ? '' : 's'} skipped because existing bids meet the target price.`
       : '';
-    return { status: `Listed ${totalQuantity} ${mineType.name} Thing${totalQuantity === 1 ? '' : 's'} across ${operations.length} kind${operations.length === 1 ? '' : 's'} in ${city.name}.${skipped}` };
+    return { status: `Listed ${totalQuantity} ${mineType.name} Thing${totalQuantity === 1 ? '' : 's'} across ${operations.length} kind${operations.length === 1 ? '' : 's'} in ${city.name}.${skipped}`,
+      acted: true };
   }
 
   #runAutomaker(automation, configuration, now) {
@@ -15300,7 +15473,7 @@ Compliance is compulsory. Enjoy your new life.
       `).run(action.id, now, factory.id);
       this.#estimateFactory(factory.id, now);
     }
-    return { status: `${enqueued ? 'Queued' : 'Started'} ${action.name}.` };
+    return { status: `${enqueued ? 'Queued' : 'Started'} ${action.name}.`, acted: true };
   }
 
   #runAutomelder(automation, configuration, now) {
@@ -15370,7 +15543,7 @@ Compliance is compulsory. Enjoy your new life.
     const targetComplete = created.some((entry) => entry.id === meld.id);
     return { status: targetComplete
       ? `Staged ${selected.name}; ${meld.name} assembled.`
-      : `Staged one ${selected.name} from ${city.name}.`, disable: targetComplete };
+      : `Staged one ${selected.name} from ${city.name}.`, disable: targetComplete, acted: true };
   }
 
   settleGadgetAutomations(now = Date.now()) {
@@ -15427,6 +15600,7 @@ Compliance is compulsory. Enjoy your new life.
           this.database.exec('RELEASE gadget_automation_run');
           outcome = { status: `Waiting: ${error.message}` };
         }
+        if (outcome.acted) this.awardStone(automation.player_id, 'Automated', now);
         let pauseWithTasks = false;
         if (queue && originalTaskCount) {
           if (outcome.disable) {
@@ -16682,6 +16856,7 @@ Compliance is compulsory. Enjoy your new life.
         ON CONFLICT (player_id) DO UPDATE SET employer_id = excluded.employer_id,
           factory_id = NULL, cph = excluded.cph, oiled = 0, contract_expires = excluded.contract_expires
       `).run(workerId, employerId, cph, expiresAt);
+      this.awardStone(employerId, 'Employed', now);
       return { playerId: workerId, name: employee.name, cph, expiresAt };
     });
   }
@@ -17394,6 +17569,7 @@ Compliance is compulsory. Enjoy your new life.
       `).run(playerId, factoryId, factory.city_id, Number(tier.id), String(tier.name),
         Number(tier.cph), expiresAt, now);
       this.#estimateFactory(factoryId, now);
+      this.awardStone(playerId, 'Employed', now);
       return { id: Number(result.lastInsertRowid), name: tier.name, cph: Number(tier.cph),
         costGold: Number(tier.costGold), expiresAt };
     });
@@ -17440,6 +17616,7 @@ Compliance is compulsory. Enjoy your new life.
         'UPDATE workers SET oiled = 1, cph = cph + ? WHERE player_id = ?'
       ).run(Number(this.#setting('worker_oil_cph_bonus')), workerId);
       if (worker.factory_id) this.#estimateFactory(worker.factory_id, now);
+      this.awardStone(playerId, 'Oiled', now);
       return true;
     });
   }
@@ -17764,6 +17941,9 @@ Compliance is compulsory. Enjoy your new life.
         completion_at = NULL, last_event_at = ? WHERE id = ?
     `).run(now, factory.id);
     this.awardStone(operatorId, 'Produced', now);
+    if (action.action_kind === 'repair') {
+      this.awardStone(operatorId, 'Restored', now);
+    }
     if (action.action_kind === 'build') {
       this.awardStone(operatorId, 'Constructed', now);
     }
@@ -18277,6 +18457,7 @@ Compliance is compulsory. Enjoy your new life.
       const scraps = this.#recyclingYield(Number(itemId)) * count;
       this.#changeInventory(playerId, Number(cityId), Number(itemId), -count);
       this.#changeScraps(playerId, Number(cityId), scraps);
+      this.awardStone(playerId, 'Recycled', now);
       return { quantity: count, scraps };
     });
   }
@@ -18291,7 +18472,7 @@ Compliance is compulsory. Enjoy your new life.
       scrapsPerOre: this.#positiveIntegerSetting('recycling_scraps_per_ore') };
   }
 
-  refineOreScraps(playerId, quantity = 1) {
+  refineOreScraps(playerId, quantity = 1, now = Date.now()) {
     const ore = orderQuantity(quantity);
     return this.#transaction(() => {
       const player = this.database.prepare('SELECT city_id FROM players WHERE id = ?').get(playerId);
@@ -18299,6 +18480,7 @@ Compliance is compulsory. Enjoy your new life.
       const scraps = ore * this.#positiveIntegerSetting('recycling_scraps_per_ore');
       this.#changeScraps(playerId, player.city_id, -scraps);
       this.#changeInventory(playerId, player.city_id, this.#itemIdSetting('ore_item_id'), ore);
+      this.awardStone(playerId, 'Refined', now);
       return { ore, scraps };
     });
   }
@@ -18371,6 +18553,7 @@ Compliance is compulsory. Enjoy your new life.
         items += selection.quantity;
         scraps += gained;
       }
+      this.awardStone(playerId, 'Recycled', now);
       return { items, scraps };
     });
   }
@@ -18842,6 +19025,32 @@ Compliance is compulsory. Enjoy your new life.
       WHERE city_id = ? AND side = 'sell' AND quantity > 0
       ORDER BY item_id
     `).all(Number(cityId)).map((row) => row.item_id);
+  }
+
+  itemListingQuantities(playerId) {
+    const byCity = {};
+    const rows = this.database.prepare(`
+      SELECT city_id, item_id, SUM(quantity) AS quantity
+      FROM market_orders
+      WHERE player_id = ? AND side = 'sell' AND quantity > 0
+      GROUP BY city_id, item_id
+      ORDER BY city_id, item_id
+    `).all(Number(playerId));
+    for (const row of rows) {
+      byCity[row.city_id] ??= {};
+      byCity[row.city_id][row.item_id] = Number(row.quantity);
+    }
+    return byCity;
+  }
+
+  fleetStandingByCounts(playerId) {
+    return Object.fromEntries(this.database.prepare(`
+      SELECT city_id, COUNT(*) AS quantity
+      FROM player_vehicles
+      WHERE player_id = ? AND status = 'idle' AND city_id IS NOT NULL
+      GROUP BY city_id
+      ORDER BY city_id
+    `).all(Number(playerId)).map((row) => [row.city_id, Number(row.quantity)]));
   }
 
   purchasableItemListings(cityId, buyerId) {
@@ -22854,10 +23063,10 @@ Compliance is compulsory. Enjoy your new life.
     const vehicleIds = this.database.prepare(`
       SELECT player_vehicles.id
       FROM player_vehicles
-      JOIN player_vehicle_cargo
-        ON player_vehicle_cargo.vehicle_id = player_vehicles.id
+      JOIN player_vehicle_mods ON player_vehicle_mods.vehicle_id = player_vehicles.id
+      JOIN catalog_mods ON catalog_mods.id = player_vehicle_mods.mod_id
       WHERE player_vehicles.player_id = ? AND player_vehicles.status = 'traveling'
-        AND player_vehicle_cargo.item_id = ? AND player_vehicle_cargo.quantity > 0
+        AND catalog_mods.item_id = ?
       ORDER BY player_vehicles.id
     `).all(playerId, magnetItemId);
     if (!vehicleIds.length) return 0;
@@ -22875,9 +23084,9 @@ Compliance is compulsory. Enjoy your new life.
         `).get(vehicle.route_id);
         if (!route || Number(route.type) === Number(this.#routeTypeId('air'))) continue;
         const loadout = this.#vehicleLoadout(vehicle);
-        const magnets = Number(loadout.cargo.find(
+        const magnets = Number(loadout.mods.find(
           (entry) => Number(entry.itemId) === magnetItemId
-        )?.quantity ?? 0);
+        ) ? 1 : 0);
         const pullsUsed = Number(this.database.prepare(`
           SELECT COUNT(*) AS count FROM vehicle_events
           WHERE vehicle_id = ? AND event_type = 'magnet-salvage'
@@ -22944,6 +23153,7 @@ Compliance is compulsory. Enjoy your new life.
             ...(!retained ? {} : { status: 'Attracted into vehicle cargo' })
           }], 'salvage', now);
           this.awardStone(playerId, 'Salvaged', settledAt);
+          this.awardStone(playerId, 'Magnetised', settledAt);
           if (retained
             && Number(wreck.rarity) >= Number(this.#setting('achievement_high_rarity_minimum'))) {
             this.awardStone(playerId, 'Reclaimed', settledAt);
@@ -26731,6 +26941,9 @@ Compliance is compulsory. Enjoy your new life.
         continue;
       }
       desiredItems.set(itemId, item);
+      if (Number(item.id) === Number(this.#itemIdSetting('magnet_item_id'))) {
+        reasons.push(`${item.name} must be fitted with a Bolt, not carried as cargo.`);
+      }
       const compatible = compatibleCargoAllowed({
         routeType: vehicle.route_type, aircraftType: vehicle.aircraft_type,
         vehicleRarity: vehicle.rarity, cargoPolicy: vehicle.cargo_policy,
@@ -26838,7 +27051,9 @@ Compliance is compulsory. Enjoy your new life.
     `);
     const candidates = [...new Set([...inventory.keys(), ...current.keys()])]
       .map((itemId) => selectItem.get(itemId))
-      .filter((item) => item && compatibleCargoAllowed({
+      .filter((item) => item
+        && Number(item.id) !== Number(this.#itemIdSetting('magnet_item_id'))
+        && compatibleCargoAllowed({
         routeType: vehicle.route_type, aircraftType: vehicle.aircraft_type,
         vehicleRarity: vehicle.rarity, cargoPolicy: vehicle.cargo_policy,
         itemId: item.id, itemRarity: item.rarity,
@@ -26894,6 +27109,15 @@ Compliance is compulsory. Enjoy your new life.
     if (!vehicle) throw new Error('Vehicle not found.');
     const modIds = this.#vehicleLoadout(vehicle).mods.map((entry) => entry.id);
     return this.fitVehicleLoadout(playerId, vehicleId, modIds, weaponIds).weapons;
+  }
+
+  #vehicleFittingBoltCost(itemId, rarity) {
+    if (Number(itemId) === Number(this.#itemIdSetting('magnet_item_id'))) {
+      return this.#positiveIntegerSetting('magnet_fitting_bolt_cost');
+    }
+    const freeRarity = Number(this.#setting('mod_bolt_free_rarity'));
+    const boltsPerRarity = Number(this.#setting('mod_bolts_per_rarity'));
+    return Math.max(0, Number(rarity) - freeRarity) * boltsPerRarity;
   }
 
   #vehicleFittingPlan(playerId, vehicleId, modIds = [], weaponIds = []) {
@@ -26955,10 +27179,8 @@ Compliance is compulsory. Enjoy your new life.
     const weaponChanges = difference(currentWeapons, desiredWeapons);
     const additions = [...modChanges.additions, ...weaponChanges.additions];
     const removals = [...modChanges.removals, ...weaponChanges.removals];
-    const freeRarity = Number(this.#setting('mod_bolt_free_rarity'));
-    const boltsPerRarity = Number(this.#setting('mod_bolts_per_rarity'));
     const boltsRequired = additions.reduce((sum, entry) => sum
-      + Math.max(0, entry.rarity - freeRarity) * boltsPerRarity, 0);
+      + this.#vehicleFittingBoltCost(entry.item_id, entry.rarity), 0);
     const boltItemId = this.#itemIdSetting('bolt_item_id');
     const inventory = new Map(this.database.prepare(`
       SELECT item_id, quantity FROM inventory WHERE player_id = ? AND city_id = ?
@@ -27135,7 +27357,7 @@ Compliance is compulsory. Enjoy your new life.
     });
   }
 
-  breakDownBoltBoxes(playerId, quantity = 1) {
+  breakDownBoltBoxes(playerId, quantity = 1, now = Date.now()) {
     const boxes = orderQuantity(quantity);
     return this.#transaction(() => {
       const player = this.database.prepare('SELECT city_id FROM players WHERE id = ?').get(playerId);
@@ -27174,6 +27396,7 @@ Compliance is compulsory. Enjoy your new life.
           protectedBoxesOpened * boltsPerBox);
       }
       this.#trimItemListings(playerId, player.city_id, boxItemId);
+      this.awardStone(playerId, 'Unboxed', now);
       return {
         boxItemId, boxName: boxItem.name, boltItemId, boltName: boltItem.name,
         boxes, bolts, boltsPerBox
@@ -27185,7 +27408,7 @@ Compliance is compulsory. Enjoy your new life.
     return this.attachShipCannons(playerId, vehicleId, [cannonId])[0];
   }
 
-  #shipLoadoutPlan(playerId, vehicleId, cannonIds = []) {
+  #shipLoadoutPlan(playerId, vehicleId, cannonIds = [], modIds = null) {
     const vehicle = this.#vehicleRecord(vehicleId, playerId);
     if (!vehicle || vehicle.status !== 'idle' || vehicle.route_type !== this.#routeTypeId('sea')) {
       throw new Error('That ship is not in port.');
@@ -27207,6 +27430,28 @@ Compliance is compulsory. Enjoy your new life.
       throw new Error('Cannon class does not match this ship.');
     }
     const loadout = this.#vehicleLoadout(vehicle);
+    const desiredModIds = modIds === null
+      ? loadout.mods.map((entry) => entry.id)
+      : (modIds ?? []).map(Number);
+    if (desiredModIds.some((id) => !Number.isSafeInteger(id))
+      || new Set(desiredModIds).size !== desiredModIds.length) {
+      throw new Error('Invalid ship fitting selection.');
+    }
+    const selectMod = this.database.prepare(`
+      SELECT catalog_mods.*, catalog_items.name, catalog_items.rarity
+      FROM catalog_mods JOIN catalog_items ON catalog_items.id = catalog_mods.item_id
+      WHERE catalog_mods.id = ?
+    `);
+    const desiredMods = desiredModIds.map((id) => selectMod.get(id));
+    if (desiredMods.some((entry) => !entry)) throw new Error('Unknown ship fitting selected.');
+    const magnetItemId = this.#itemIdSetting('magnet_item_id');
+    if (desiredMods.some((entry) => Number(entry.item_id) !== Number(magnetItemId))) {
+      throw new Error('Only a Magnet can be fitted to both land vehicles and ships.');
+    }
+    const desiredModIdSet = new Set(desiredModIds);
+    const currentModIdSet = new Set(loadout.mods.map((entry) => entry.id));
+    const modAdditions = desiredMods.filter((entry) => !currentModIdSet.has(entry.id));
+    const modRemovals = loadout.mods.filter((entry) => !desiredModIdSet.has(entry.id));
     const reasons = [];
     if (desiredCannons.length > vehicle.cannon_portals) {
       reasons.push(`This ship has ${vehicle.cannon_portals} cannon portals; ${desiredCannons.length} were selected.`);
@@ -27238,9 +27483,10 @@ Compliance is compulsory. Enjoy your new life.
     const moved = assignments.map((assignment, index) => ({ assignment, portal: index + 1 }))
       .filter(({ assignment }) => assignment.kind === 'moved');
     const removals = unmatchedCurrent.filter((entry) => !entry.matched).map((entry) => entry.cannon);
-    const changed = additions.length > 0 || removals.length > 0 || moved.length > 0;
-    if (vehicle.damaged && (additions.length || moved.length)) {
-      reasons.push('This ship is damaged; cannons may only be removed until it is repaired.');
+    const changed = additions.length > 0 || removals.length > 0 || moved.length > 0
+      || modAdditions.length > 0 || modRemovals.length > 0;
+    if (vehicle.damaged && (additions.length || moved.length || modAdditions.length)) {
+      reasons.push('This ship is damaged; cannons and fittings may only be removed until it is repaired.');
     }
     const inventory = new Map(this.database.prepare(`
       SELECT item_id, quantity FROM inventory WHERE player_id = ? AND city_id = ?
@@ -27254,13 +27500,27 @@ Compliance is compulsory. Enjoy your new life.
     for (const cannon of removals) {
       returned.set(cannon.itemId, (returned.get(cannon.itemId) ?? 0) + 1);
     }
+    for (const mod of modAdditions) {
+      required.set(mod.item_id, (required.get(mod.item_id) ?? 0) + 1);
+    }
+    for (const mod of modRemovals) {
+      returned.set(mod.itemId, (returned.get(mod.itemId) ?? 0) + 1);
+    }
     for (const [itemId, quantity] of required) {
       const available = (inventory.get(itemId) ?? 0) + (returned.get(itemId) ?? 0);
       if (available < quantity) {
-        const cannon = additions.find(({ assignment }) => assignment.desired.item_id === itemId)
-          ?.assignment.desired;
-        reasons.push(`Need ${quantity} ${cannon.name}; ${available} available in this city.`);
+        const fitting = additions.find(({ assignment }) =>
+          assignment.desired.item_id === itemId)?.assignment.desired
+          ?? modAdditions.find((entry) => entry.item_id === itemId);
+        reasons.push(`Need ${quantity} ${fitting.name}; ${available} available in this city.`);
       }
+    }
+    const boltItemId = this.#itemIdSetting('bolt_item_id');
+    const boltsRequired = modAdditions.reduce((sum, entry) => sum
+      + this.#vehicleFittingBoltCost(entry.item_id, entry.rarity), 0);
+    const boltsAvailable = inventory.get(boltItemId) ?? 0;
+    if (boltsAvailable < boltsRequired) {
+      reasons.push(`Need ${boltsRequired} Bolt${boltsRequired === 1 ? '' : 's'}; ${boltsAvailable} available in this city.`);
     }
     const tackleRequired = removals.length ? 1 : 0;
     const tackleItemId = this.#itemIdSetting('block_and_tackle_item_id');
@@ -27277,8 +27537,9 @@ Compliance is compulsory. Enjoy your new life.
     if (!desiredCannons.length && ammunitionShots) {
       reasons.push('Unload all ammunition before removing the last cannon.');
     }
-    const installedModAdjustment = loadout.capacityBreakdown.installedModAdjustment
-      ?? loadout.capacityBreakdown.mods;
+    const installedModAdjustment = desiredMods.reduce(
+      (sum, mod) => sum + Number(mod.capacity), 0
+    );
     const totalCapacity = this.#vehicleTotalCapacity(vehicle, installedModAdjustment);
     const modAdjustment = totalCapacity - Number(vehicle.base_capacity);
     const capacity = totalCapacity
@@ -27309,22 +27570,25 @@ Compliance is compulsory. Enjoy your new life.
       reasons.push(`Loadout has ${loadout.cargoSize} cargo but only ${capacity} capacity after fitting.`);
     }
     return {
-      vehicle, desiredCannonIds, desiredCannons, loadout, additions, removals, kept, moved,
+      vehicle, desiredCannonIds, desiredCannons, desiredModIds, desiredMods, loadout,
+      additions, removals, kept, moved, modAdditions, modRemovals,
       changed, tackleRequired, tackleAvailable, tackleItemId, ammunitionShots,
+      boltsRequired, boltsAvailable, boltItemId,
       capacity, capacityBreakdown, cargoSize: loadout.cargoSize,
       reasons, valid: reasons.length === 0
     };
   }
 
-  previewShipLoadout(playerId, vehicleId, cannonIds = []) {
-    const plan = this.#shipLoadoutPlan(playerId, vehicleId, cannonIds);
+  previewShipLoadout(playerId, vehicleId, cannonIds = [], modIds = null) {
+    const plan = this.#shipLoadoutPlan(playerId, vehicleId, cannonIds, modIds);
     const cannonSummary = (cannon, portal) => ({
       id: cannon.id, itemId: cannon.item_id ?? cannon.itemId,
       name: cannon.name, rarity: cannon.rarity, portal
     });
     return {
       valid: plan.valid, reasons: plan.reasons, changed: plan.changed,
-      desiredCannonIds: plan.desiredCannonIds, capacity: plan.capacity,
+      desiredCannonIds: plan.desiredCannonIds, desiredModIds: plan.desiredModIds,
+      capacity: plan.capacity,
       capacityBreakdown: plan.capacityBreakdown, cargoSize: plan.cargoSize,
       freePortals: plan.vehicle.cannon_portals - plan.desiredCannons.length,
       portalsAfter: plan.desiredCannons.length,
@@ -27338,22 +27602,35 @@ Compliance is compulsory. Enjoy your new life.
         ...cannonSummary(assignment.current, portal), fromPortal: assignment.current.portal,
         toPortal: portal
       })),
+      modsAdded: plan.modAdditions.map((entry) => entry.name),
+      modsRemoved: plan.modRemovals.map((entry) => entry.name),
+      boltsRequired: plan.boltsRequired, boltsAvailable: plan.boltsAvailable,
       tackleRequired: plan.tackleRequired, tackleAvailable: plan.tackleAvailable,
       ammunitionRetained: plan.ammunitionShots, ammunitionLosses: [],
       losses: { blockAndTackle: plan.tackleRequired, ammunitionShots: 0 }
     };
   }
 
-  fitShipLoadout(playerId, vehicleId, cannonIds = []) {
+  fitShipLoadout(playerId, vehicleId, cannonIds = [], modIds = null) {
     return this.#transaction(() => {
-      const plan = this.#shipLoadoutPlan(playerId, vehicleId, cannonIds);
-      if (!plan.valid) throw new Error(`Cannot commit this cannon loadout. ${plan.reasons.join(' ')}`);
+      const plan = this.#shipLoadoutPlan(playerId, vehicleId, cannonIds, modIds);
+      if (!plan.valid) throw new Error(`Cannot commit this ship loadout. ${plan.reasons.join(' ')}`);
       if (!plan.changed) return plan.loadout;
       for (const cannon of plan.removals) {
         this.#changeInventory(playerId, plan.vehicle.city_id, cannon.itemId, 1);
       }
       for (const { assignment } of plan.additions) {
         this.#changeInventory(playerId, plan.vehicle.city_id, assignment.desired.item_id, -1);
+      }
+      for (const mod of plan.modRemovals) {
+        this.#changeInventory(playerId, plan.vehicle.city_id, mod.itemId, 1);
+      }
+      for (const mod of plan.modAdditions) {
+        this.#changeInventory(playerId, plan.vehicle.city_id, mod.item_id, -1);
+      }
+      if (plan.boltsRequired) {
+        this.#changeInventory(playerId, plan.vehicle.city_id,
+          plan.boltItemId, -plan.boltsRequired);
       }
       if (plan.tackleRequired) {
         this.#changeInventory(playerId, plan.vehicle.city_id,
@@ -27367,6 +27644,12 @@ Compliance is compulsory. Enjoy your new life.
       for (let index = 0; index < plan.desiredCannonIds.length; index += 1) {
         insert.run(plan.vehicle.id, plan.desiredCannonIds[index], index + 1);
       }
+      this.database.prepare('DELETE FROM player_vehicle_mods WHERE vehicle_id = ?')
+        .run(plan.vehicle.id);
+      const insertMod = this.database.prepare(
+        'INSERT INTO player_vehicle_mods (vehicle_id, mod_id) VALUES (?, ?)'
+      );
+      for (const id of plan.desiredModIds) insertMod.run(plan.vehicle.id, id);
       return this.#vehicleLoadout(plan.vehicle);
     });
   }
@@ -29573,6 +29856,7 @@ Compliance is compulsory. Enjoy your new life.
         playerId, state.city.cityId, 'scrap', scrap.key, now
       )) {
         this.#addCityExplorationScraps(playerId, state.city.cityId, scrap.quantity);
+        this.awardStone(playerId, 'Scavenged', now);
         pickup = {
           key: scrap.key, quantity: scrap.quantity,
           label: `${scrap.quantity} Ore scrap${scrap.quantity === 1 ? '' : 's'}`
@@ -29583,6 +29867,7 @@ Compliance is compulsory. Enjoy your new life.
       const visitedLocation = location && this.#recordCityExplorationProgress(
         playerId, state.city.cityId, 'location', location.key, now
       ) ? { key: location.key, label: location.label } : null;
+      if (visitedLocation) this.awardStone(playerId, 'Sightseen', now);
       let progress = this.#cityExplorationProgress(
         playerId, state.city.cityId, state.interior
       );
@@ -29627,6 +29912,7 @@ Compliance is compulsory. Enjoy your new life.
       const firstRead = this.#recordCityExplorationProgress(
         playerId, state.city.cityId, 'sign', sign.key, now
       );
+      if (firstRead) this.awardStone(playerId, 'Informed', now);
       const rewards = [];
       let progress = this.#cityExplorationProgress(
         playerId, state.city.cityId, state.interior
@@ -30844,6 +31130,270 @@ Compliance is compulsory. Enjoy your new life.
       return this.professionMineKits(null, now, false)
         .find((kit) => kit.id === Number(kitId));
     });
+  }
+
+  expireAccountNetworkObservations(now = Date.now(), retentionMs = SHILL_NETWORK_RETENTION_MS) {
+    const observedAt = Number(now);
+    const retention = Math.max(24 * 60 * 60 * 1000,
+      Math.min(SHILL_NETWORK_RETENTION_MS, Math.round(Number(retentionMs))
+        || SHILL_NETWORK_RETENTION_MS));
+    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
+      throw new Error('Invalid network evidence timestamp.');
+    }
+    return Number(this.database.prepare(
+      'DELETE FROM account_network_observations WHERE last_seen_at < ?'
+    ).run(observedAt - retention).changes);
+  }
+
+  recordAccountNetworkObservation(playerId, networkToken, authMethod, now = Date.now(),
+    retentionMs = SHILL_NETWORK_RETENTION_MS) {
+    const token = String(networkToken ?? '').toLowerCase();
+    const method = String(authMethod ?? '').toLowerCase();
+    const observedAt = Number(now);
+    if (!/^[a-f0-9]{64}$/u.test(token)) throw new Error('Invalid network evidence token.');
+    if (!['local', 'google'].includes(method)) throw new Error('Invalid authentication method.');
+    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
+      throw new Error('Invalid network evidence timestamp.');
+    }
+    const player = this.database.prepare(
+      'SELECT id FROM players WHERE id = ? AND is_npc = 0'
+    ).get(Number(playerId));
+    if (!player) throw new Error('Miner not found.');
+    return this.#transaction(() => {
+      this.expireAccountNetworkObservations(observedAt, retentionMs);
+      this.database.prepare(`
+        INSERT INTO account_network_observations
+          (player_id, network_token, auth_method, first_seen_at, last_seen_at, login_count)
+        VALUES (?, ?, ?, ?, ?, 1)
+        ON CONFLICT (player_id, network_token) DO UPDATE SET
+          auth_method = excluded.auth_method,
+          last_seen_at = MAX(account_network_observations.last_seen_at, excluded.last_seen_at),
+          first_seen_at = MIN(account_network_observations.first_seen_at, excluded.first_seen_at),
+          login_count = account_network_observations.login_count + 1
+      `).run(player.id, token, method, observedAt, observedAt);
+      return true;
+    });
+  }
+
+  adminShillSignals(now = Date.now(), options = {}) {
+    const currentTime = Number(now);
+    this.expireAccountNetworkObservations(currentTime);
+    const since = currentTime - SHILL_NETWORK_RETENTION_MS;
+    const selectedPlayerId = Number(options.playerId);
+    const players = this.database.prepare(`
+      SELECT players.id, players.name, players.created_at, players.suspended,
+        EXISTS (
+          SELECT 1 FROM external_auth_identities
+          WHERE external_auth_identities.player_id = players.id
+            AND external_auth_identities.provider = 'google'
+        ) AS google_linked
+      FROM players WHERE players.is_npc = 0
+      ORDER BY players.name COLLATE NOCASE, players.id
+    `).all().map((player) => ({
+      ...player,
+      googleLinked: Boolean(player.google_linked),
+      suspended: Boolean(player.suspended)
+    }));
+    const playerById = new Map(players.map((player) => [Number(player.id), player]));
+    const tradeRows = this.database.prepare(`
+      SELECT 'things' AS market_kind, market_sales.id, market_sales.buyer_id,
+        market_sales.seller_id, market_sales.quantity, market_sales.price_units,
+        market_sales.price_units * market_sales.quantity AS total_units,
+        catalog_items.gold_value_units AS reference_units,
+        catalog_items.name AS asset_name, market_sales.created_at
+      FROM market_sales
+      JOIN catalog_items ON catalog_items.id = market_sales.item_id
+      WHERE market_sales.created_at >= ?
+      UNION ALL
+      SELECT 'crypto', crypto_market_sales.id, crypto_market_sales.buyer_id,
+        crypto_market_sales.seller_id, crypto_market_sales.quantity,
+        crypto_market_sales.price_units,
+        crypto_market_sales.price_units * crypto_market_sales.quantity,
+        NULL, printf('Crypto #%d', crypto_market_sales.crypto_type_id),
+        crypto_market_sales.created_at
+      FROM crypto_market_sales WHERE crypto_market_sales.created_at >= ?
+      UNION ALL
+      SELECT 'mines', mine_market_sales.id, mine_market_sales.buyer_id,
+        mine_market_sales.seller_id, mine_market_sales.quantity,
+        mine_market_sales.price_units,
+        mine_market_sales.price_units * mine_market_sales.quantity,
+        NULL, catalog_mine_types.name || ' Mine', mine_market_sales.created_at
+      FROM mine_market_sales
+      JOIN catalog_mine_types ON catalog_mine_types.id = mine_market_sales.mine_type_id
+      WHERE mine_market_sales.created_at >= ?
+      UNION ALL
+      SELECT 'factories', factory_market_sales.id, factory_market_sales.buyer_id,
+        factory_market_sales.seller_id, factory_market_sales.quantity,
+        factory_market_sales.price_units,
+        factory_market_sales.price_units * factory_market_sales.quantity,
+        NULL,
+        CASE factory_market_sales.market_type
+          WHEN 'rental' THEN 'Factory rental' ELSE 'Factory' END,
+        factory_market_sales.created_at
+      FROM factory_market_sales WHERE factory_market_sales.created_at >= ?
+      ORDER BY created_at DESC, id DESC
+    `).all(since, since, since, since).filter((trade) =>
+      trade.buyer_id !== trade.seller_id
+      && playerById.has(Number(trade.buyer_id))
+      && playerById.has(Number(trade.seller_id)));
+    const playerTradeUnits = new Map(players.map((player) => [Number(player.id), 0]));
+    const pairs = new Map();
+    const pairFor = (leftId, rightId) => {
+      const firstId = Math.min(Number(leftId), Number(rightId));
+      const secondId = Math.max(Number(leftId), Number(rightId));
+      const key = `${firstId}:${secondId}`;
+      if (!pairs.has(key)) pairs.set(key, {
+        key, firstId, secondId, tradeCount: 0, grossUnits: 0, netToFirstUnits: 0,
+        directions: new Set(), marketKinds: new Set(), trades: [],
+        extremeItemTrades: 0, maximumItemPriceMultiple: 0,
+        sharedNetworkCount: 0, sharedNetworkLastSeenAt: 0
+      });
+      return pairs.get(key);
+    };
+    for (const trade of tradeRows) {
+      const buyerId = Number(trade.buyer_id);
+      const sellerId = Number(trade.seller_id);
+      const totalUnits = Math.max(0, Number(trade.total_units) || 0);
+      const pair = pairFor(buyerId, sellerId);
+      pair.tradeCount += 1;
+      pair.grossUnits += totalUnits;
+      pair.netToFirstUnits += sellerId === pair.firstId ? totalUnits : -totalUnits;
+      pair.directions.add(`${buyerId}:${sellerId}`);
+      pair.marketKinds.add(trade.market_kind);
+      const priceMultiple = Number(trade.reference_units) > 0
+        ? Number(trade.price_units) / Number(trade.reference_units) : 0;
+      if (priceMultiple >= 5) pair.extremeItemTrades += 1;
+      pair.maximumItemPriceMultiple = Math.max(pair.maximumItemPriceMultiple, priceMultiple);
+      if (pair.trades.length < 10) pair.trades.push({
+        id: Number(trade.id),
+        marketKind: trade.market_kind,
+        buyerId,
+        sellerId,
+        assetName: trade.market_kind === 'crypto'
+          ? (cryptoType(Number(String(trade.asset_name).slice(8)))?.symbol
+            ?? trade.asset_name) : trade.asset_name,
+        quantity: Number(trade.quantity),
+        totalGold: totalUnits / GOLD_SCALE,
+        priceMultiple,
+        createdAt: Number(trade.created_at)
+      });
+      playerTradeUnits.set(buyerId, (playerTradeUnits.get(buyerId) ?? 0) + totalUnits);
+      playerTradeUnits.set(sellerId, (playerTradeUnits.get(sellerId) ?? 0) + totalUnits);
+    }
+    const networkRows = this.database.prepare(`
+      SELECT first.player_id AS first_id, second.player_id AS second_id,
+        COUNT(*) AS shared_network_count,
+        MAX(MIN(first.last_seen_at, second.last_seen_at)) AS shared_network_last_seen_at
+      FROM account_network_observations AS first
+      JOIN account_network_observations AS second
+        ON second.network_token = first.network_token
+        AND second.player_id > first.player_id
+      JOIN players AS first_player ON first_player.id = first.player_id
+      JOIN players AS second_player ON second_player.id = second.player_id
+      WHERE first.last_seen_at >= ? AND second.last_seen_at >= ?
+        AND first_player.is_npc = 0 AND second_player.is_npc = 0
+      GROUP BY first.player_id, second.player_id
+    `).all(since, since);
+    for (const row of networkRows) {
+      const pair = pairFor(row.first_id, row.second_id);
+      pair.sharedNetworkCount = Number(row.shared_network_count);
+      pair.sharedNetworkLastSeenAt = Number(row.shared_network_last_seen_at);
+    }
+    const results = [...pairs.values()].map((pair) => {
+      const first = playerById.get(pair.firstId);
+      const second = playerById.get(pair.secondId);
+      const evidence = [];
+      let score = 0;
+      if (pair.sharedNetworkCount) {
+        score += 50 + Math.min(10, Math.max(0, pair.sharedNetworkCount - 1) * 5);
+        evidence.push(`Shared recent network (${pair.sharedNetworkCount})`);
+      }
+      if (pair.tradeCount >= 5) score += 15;
+      else if (pair.tradeCount >= 2) score += 8;
+      if (pair.grossUnits >= 10000 * GOLD_SCALE) score += 20;
+      else if (pair.grossUnits >= 1000 * GOLD_SCALE) score += 12;
+      else if (pair.grossUnits >= 100 * GOLD_SCALE) score += 6;
+      if (pair.tradeCount) {
+        evidence.push(`${pair.tradeCount} market trade${pair.tradeCount === 1 ? '' : 's'} worth ${
+          (pair.grossUnits / GOLD_SCALE).toLocaleString('en-GB')}g`);
+      }
+      if (pair.directions.size > 1) {
+        score += 10;
+        evidence.push('Trading in both directions');
+      }
+      const firstConcentration = pair.grossUnits / Math.max(1,
+        playerTradeUnits.get(pair.firstId) ?? 0);
+      const secondConcentration = pair.grossUnits / Math.max(1,
+        playerTradeUnits.get(pair.secondId) ?? 0);
+      const concentration = Math.max(firstConcentration, secondConcentration);
+      const concentratedPlayer = firstConcentration >= secondConcentration ? first : second;
+      if (pair.tradeCount >= 2 && concentration >= 0.75) {
+        score += 15;
+        evidence.push(`${Math.round(concentration * 100)}% of ${concentratedPlayer.name}'s recent trade value`);
+      }
+      const oneWayRatio = pair.grossUnits
+        ? Math.abs(pair.netToFirstUnits) / pair.grossUnits : 0;
+      let netFlow = null;
+      if (pair.grossUnits && pair.netToFirstUnits !== 0) {
+        netFlow = pair.netToFirstUnits > 0
+          ? { from: second, to: first, gold: pair.netToFirstUnits / GOLD_SCALE }
+          : { from: first, to: second, gold: -pair.netToFirstUnits / GOLD_SCALE };
+      }
+      if (pair.grossUnits >= 1000 * GOLD_SCALE && oneWayRatio >= 0.9) {
+        score += 15;
+        evidence.push(`${Math.round(oneWayRatio * 100)}% net value flow ${netFlow.from.name} → ${netFlow.to.name}`);
+      }
+      if (pair.maximumItemPriceMultiple >= 5) {
+        score += pair.maximumItemPriceMultiple >= 10 ? 25 : 15;
+        evidence.push(`${pair.extremeItemTrades} Thing trade${pair.extremeItemTrades === 1 ? '' : 's'} up to ${
+          pair.maximumItemPriceMultiple.toFixed(1)}× fixed value`);
+      }
+      const creationGapMs = Math.abs(Number(first.created_at) - Number(second.created_at));
+      if (creationGapMs <= 24 * 60 * 60 * 1000) {
+        score += 10;
+        evidence.push('Accounts created within 24 hours');
+      }
+      const boundedScore = Math.min(100, score);
+      const level = boundedScore >= 70 ? 'high'
+        : boundedScore >= 40 ? 'review' : boundedScore >= 20 ? 'watch' : 'context';
+      return {
+        ...pair,
+        directions: [...pair.directions],
+        marketKinds: [...pair.marketKinds].sort(),
+        first,
+        second,
+        grossGold: pair.grossUnits / GOLD_SCALE,
+        netFlow,
+        oneWayRatio,
+        concentration,
+        creationGapMs,
+        evidence,
+        score: boundedScore,
+        level,
+        lastActivityAt: Math.max(
+          pair.sharedNetworkLastSeenAt,
+          ...pair.trades.map((trade) => trade.createdAt),
+          0
+        )
+      };
+    }).filter((pair) => !Number.isSafeInteger(selectedPlayerId)
+      || selectedPlayerId < 1
+      || pair.firstId === selectedPlayerId
+      || pair.secondId === selectedPlayerId)
+      .sort((left, right) => right.score - left.score
+        || right.lastActivityAt - left.lastActivityAt
+        || left.key.localeCompare(right.key));
+    return {
+      since,
+      currentTime,
+      selectedPlayerId: Number.isSafeInteger(selectedPlayerId) && selectedPlayerId > 0
+        ? selectedPlayerId : null,
+      players,
+      pairs: results,
+      networkObservationCount: Number(this.database.prepare(`
+        SELECT COUNT(*) AS count FROM account_network_observations WHERE last_seen_at >= ?
+      `).get(since).count)
+    };
   }
 
   adminOverview(now = Date.now()) {

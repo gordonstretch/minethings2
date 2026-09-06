@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
@@ -340,6 +341,28 @@ function cookies(request) {
     }
   }
   return result;
+}
+
+function normalizedIpAddress(value) {
+  let address = String(value ?? '').trim().toLowerCase();
+  const zoneIndex = address.indexOf('%');
+  if (zoneIndex >= 0) address = address.slice(0, zoneIndex);
+  if (address.startsWith('::ffff:') && net.isIP(address.slice(7)) === 4) {
+    address = address.slice(7);
+  }
+  return net.isIP(address) ? address : null;
+}
+
+function clientNetworkAddress(request) {
+  const direct = normalizedIpAddress(request.socket.remoteAddress);
+  if (!direct) return null;
+  const trustedLocalProxy = direct === '127.0.0.1' || direct === '::1';
+  if (!trustedLocalProxy) return direct;
+  const realAddress = normalizedIpAddress(request.headers['x-real-ip']);
+  if (realAddress) return realAddress;
+  const forwarded = String(request.headers['x-forwarded-for'] ?? '')
+    .split(',').map((entry) => normalizedIpAddress(entry)).filter(Boolean);
+  return forwarded.at(-1) ?? direct;
 }
 
 function requestDestination(request, fallback = '/') {
@@ -2514,7 +2537,8 @@ function localItemGoldValue(item, catalog, cityId) {
     ? Math.floor(calculatedUnits / 10000) * 10000 : calculatedUnits) / 10000;
 }
 
-function inventoryPage(player, catalog, meldItemNeeds = {}) {
+function inventoryPage(player, catalog, meldItemNeeds = {}, listingQuantitiesByCity = {},
+  fleetStandingByByCity = {}) {
   const mapsById = new Map(catalog.maps.map((map) => [Number(map.id), map]));
   const boltBoxItemId = Number(catalog.settings.bolt_box_item_id);
   const boltsPerBox = Number(catalog.settings.bolts_per_box);
@@ -2550,6 +2574,7 @@ function inventoryPage(player, catalog, meldItemNeeds = {}) {
   const cardsForLocation = ({ city, entries }) => entries.map(({ item, count, type }) => {
     const localValue = localItemGoldValue(item, catalog, city.id);
     const protectedCount = player.protectedInventoryByCity?.[city.id]?.[item.id] ?? 0;
+    const listedCount = Math.max(0, Number(listingQuantitiesByCity?.[city.id]?.[item.id]) || 0);
     const current = city.id === player.cityId;
     let action = '';
     if (current) {
@@ -2580,6 +2605,8 @@ function inventoryPage(player, catalog, meldItemNeeds = {}) {
       showFixedValue: false,
       meta: [type.label, `${formatGold(localValue)}g fixed value`, ...(protectedCount
         ? [`${protectedCount} factory-made ${protectedCount === 1 ? 'copy' : 'copies'} protected`]
+        : []), ...(listedCount
+        ? [`${listedCount.toLocaleString('en-GB')} listed`]
         : [])],
       action
     });
@@ -2597,13 +2624,15 @@ function inventoryPage(player, catalog, meldItemNeeds = {}) {
     const regionQuantity = cities.reduce((sum, city) => sum + city.quantity, 0);
     const citySections = cities.map((location) => {
       const current = location.city.id === player.cityId;
+      const fleetStandingBy = Math.max(0,
+        Number(fleetStandingByByCity?.[location.city.id]) || 0);
       const regionalCapital = isRegionalCapital(catalog, location.city.id);
       const capitalIcon = regionalCapital
         ? `<span class="capital-city-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>`
         : '';
       const switchCity = current ? '<strong class="active-state">Selected city</strong>'
         : `<form method="post" action="/cities/${location.city.id}/select"><button class="secondary">Switch to manage</button></form>`;
-      return `<section class="inventory-city${current ? ' current' : ''}" data-city-id="${location.city.id}"><header><div><p class="eyebrow">${regionalCapital ? 'Regional capital' : 'City'}</p><h3>${capitalIcon}${escapeHtml(location.city.name)}</h3></div><p>${location.quantity.toLocaleString('en-GB')} thing${location.quantity === 1 ? '' : 's'} · ${location.entries.length.toLocaleString('en-GB')} type${location.entries.length === 1 ? '' : 's'}</p>${switchCity}</header><div class="item-grid">${cardsForLocation(location)}</div></section>`;
+      return `<section class="inventory-city${current ? ' current' : ''}" data-city-id="${location.city.id}"><header><div><p class="eyebrow">${regionalCapital ? 'Regional capital' : 'City'}</p><h3>${capitalIcon}${escapeHtml(location.city.name)}</h3></div><p>${location.quantity.toLocaleString('en-GB')} thing${location.quantity === 1 ? '' : 's'} · ${location.entries.length.toLocaleString('en-GB')} type${location.entries.length === 1 ? '' : 's'} · ${fleetStandingBy.toLocaleString('en-GB')} fleet vehicle${fleetStandingBy === 1 ? '' : 's'} standing by</p>${switchCity}</header><div class="item-grid">${cardsForLocation(location)}</div></section>`;
     }).join('');
     return `<section class="inventory-region" data-region-id="${region.id}"><header><div><p class="eyebrow">Region</p><h2>${escapeHtml(region.name)}</h2></div><p>${regionQuantity.toLocaleString('en-GB')} thing${regionQuantity === 1 ? '' : 's'} across ${cities.length.toLocaleString('en-GB')} cit${cities.length === 1 ? 'y' : 'ies'}</p></header>${citySections}</section>`;
   }).join('');
@@ -2937,6 +2966,7 @@ function adminTabs(active = 'dashboard') {
   const links = [
     ['dashboard', '/admin', 'Dashboard'], ['announcement', '/admin/announcement', 'Announcement'],
     ['backups', '/admin/backups', 'Backups and updates'],
+    ['shills', '/admin/shills', 'Shill signals'],
     ['audit', '/admin/audit', 'Audit log'], ['players', '/admin/players', 'Miners'],
     ['payments', '/admin/payments', 'Payments'],
     ['travelling', '/admin/travelling', 'Travelling things'],
@@ -2997,6 +3027,44 @@ function adminRestartPage(title, message) {
 function adminPlayersPage(players, query = '') {
   const rows = players.map((subject) => `<tr><td><a class="text-link" href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a>${subject.authority > 0 ? ' <strong>Admin</strong>' : ''}</td><td>${escapeHtml(subject.email || 'Not supplied')}<br><small>${subject.email_verified_at === null ? 'Verification pending' : 'Verified'}</small></td><td>${subject.mine_count}</td><td>${subject.item_count}</td><td>${subject.credits}c / ${formatGold(subject.gold)}g</td><td>${subject.suspended ? 'Suspended' : subject.chatBanned || subject.pmBanned ? 'Restricted' : subject.email_verified_at === null ? 'Email locked' : 'Active'}</td></tr>`).join('');
   return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Moderation</p><h1>Miners</h1></div></section><form class="market-search" method="get"><label>Search<input name="q" value="${escapeHtml(query)}" placeholder="Name or email"></label><button>Search</button></form><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Email</th><th>Mines</th><th>Things</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No matching miners.</td></tr>'}</tbody></table></div>`;
+}
+
+function adminShillSignalsPage(state, networkEnabled) {
+  const levelLabel = {
+    high: 'High priority', review: 'Review', watch: 'Watch', context: 'Context'
+  };
+  const levelCount = (level) => state.pairs.filter((pair) => pair.level === level).length;
+  const playerOptions = state.players.map((subject) =>
+    `<option value="${subject.id}"${state.selectedPlayerId === subject.id ? ' selected' : ''}>${escapeHtml(subject.name)}</option>`).join('');
+  const rows = state.pairs.map((pair) => {
+    const identity = (subject) => `<a class="text-link" href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a><small>${subject.googleLinked ? 'Google linked' : 'Local sign-in'}${subject.suspended ? ' · Suspended' : ''}</small>`;
+    const trades = pair.trades.map((trade) => {
+      const buyer = trade.buyerId === pair.first.id ? pair.first : pair.second;
+      const seller = trade.sellerId === pair.first.id ? pair.first : pair.second;
+      const multiple = trade.priceMultiple >= 5
+        ? ` · <strong>${trade.priceMultiple.toFixed(1)}× fixed value</strong>` : '';
+      return `<li><time datetime="${new Date(trade.createdAt).toISOString()}">${new Date(trade.createdAt).toLocaleString('en-GB')}</time> · ${escapeHtml(buyer.name)} bought ${trade.quantity.toLocaleString('en-GB')} × ${escapeHtml(trade.assetName)} from ${escapeHtml(seller.name)} for ${trade.totalGold.toLocaleString('en-GB')}g${multiple}</li>`;
+    }).join('');
+    const netFlow = pair.netFlow
+      ? `<br><small>Net ${pair.netFlow.gold.toLocaleString('en-GB')}g: ${escapeHtml(pair.netFlow.from.name)} → ${escapeHtml(pair.netFlow.to.name)}</small>` : '';
+    const recentActivity = pair.lastActivityAt
+      ? new Date(pair.lastActivityAt).toLocaleString('en-GB') : 'No recent timestamp';
+    return `<tr class="shill-signal-row" data-shill-level="${pair.level}">
+      <td><div class="shill-pair">${identity(pair.first)}<span aria-hidden="true">↔</span>${identity(pair.second)}</div></td>
+      <td><span class="shill-risk shill-risk-${pair.level}">${pair.score} · ${levelLabel[pair.level]}</span></td>
+      <td><ul class="shill-evidence">${pair.evidence.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul></td>
+      <td>${pair.tradeCount.toLocaleString('en-GB')} trades · ${pair.grossGold.toLocaleString('en-GB')}g${netFlow}<br><small>Latest signal: ${recentActivity}</small>${trades ? `<details class="shill-trades"><summary>Recent trade evidence</summary><ul>${trades}</ul></details>` : ''}</td>
+    </tr>`;
+  }).join('');
+  const networkNotice = networkEnabled
+    ? `<p><strong>Network matching is active.</strong> ${state.networkObservationCount.toLocaleString('en-GB')} pseudonymous sign-in observation${state.networkObservationCount === 1 ? '' : 's'} remain in the 30-day window.</p>`
+    : '<p><strong>Network matching is off.</strong> Set a private <code>SHILL_SIGNAL_SECRET</code> of at least 32 characters and restart the server. Economic signals below still work.</p>';
+  return `${adminTabs('shills')}<section class="page-title"><div><p class="eyebrow">Market integrity · human review</p><h1>Shill signals</h1></div><p>Prioritises account pairs using recent market transfers and pseudonymous network matches. A signal is evidence to inspect, never proof or an automatic punishment.</p></section>
+    <section class="shill-explainer"><h2>Read these signals carefully</h2>${networkNotice}<p>Shared networks can be families, workplaces, mobile carriers or VPNs. Email aliases—including Apple Hide My Email addresses—are not treated as proof. MineThings never shows or stores the raw network address in its game database, and this page never suspends an account.</p></section>
+    <div class="admin-metrics"><article><strong>${levelCount('high')}</strong><span>High priority</span></article><article><strong>${levelCount('review')}</strong><span>Review</span></article><article><strong>${levelCount('watch')}</strong><span>Watch</span></article><article><strong>30 days</strong><span>Evidence window</span></article></div>
+    <form class="market-search shill-filter" method="get" action="/admin/shills"><label>Account pair filter<select name="playerId"><option value="">All miners</option>${playerOptions}</select></label><button>Apply filter</button></form>
+    <div class="table-scroll"><table class="shill-signals-table"><thead><tr><th>Account pair</th><th>Score</th><th>Why it was flagged</th><th>Recent activity</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No account pairs have evidence in this window.</td></tr>'}</tbody></table></div>
+    <p><small>The score is a review aid based on corroborating signals. Check player histories and context before taking any moderation action.</small></p>`;
 }
 
 function adminPlayerPage(subject, catalog) {
@@ -4488,6 +4556,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
         ['Weapons', `${vehicle.weapons.length} fitted`]
       ] : []),
       ...(vehicle.type === 'sea' ? [
+        ['Utility fittings', `${vehicle.mods.length} fitted`],
         ['Cannon portals', `${vehicle.cannons.length}/${cannonPortals} occupied`],
         ['Ammunition', ammoOverview || 'No ammunition hold']
       ] : [])
@@ -4525,14 +4594,17 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const ammoBoxItemIds = new Set(catalog.boxes.map((box) => box.itemId));
   const boltsAvailable = local[boltItem.id] ?? 0;
   const blockAndTacklesAvailable = local[blockAndTackleItem.id] ?? 0;
-  const boltCost = (rarity) => Math.max(0,
-    Number(rarity) - Number(catalog.settings.mod_bolt_free_rarity))
-    * Number(catalog.settings.mod_bolts_per_rarity);
+  const boltCost = (rarity, itemId = null) => Number(itemId) === Number(
+    catalog.settings.magnet_item_id
+  ) ? Number(catalog.settings.magnet_fitting_bolt_cost) : Math.max(0,
+      Number(rarity) - Number(catalog.settings.mod_bolt_free_rarity))
+      * Number(catalog.settings.mod_bolts_per_rarity);
   const cargoById = new Map(vehicle.cargo.map((entry) => [entry.itemId, entry]));
   const cargoChoices = new Map();
   for (const [itemId, quantity] of Object.entries(local)) {
     const item = catalog.byId.get(Number(itemId));
-    if (item && quantity > 0 && compatibleCargoAllowed({
+    if (item && Number(item.id) !== Number(catalog.settings.magnet_item_id)
+      && quantity > 0 && compatibleCargoAllowed({
       routeType: vehicle.routeType,
       aircraftType: vehicle.aircraftType, vehicleRarity: vehicle.rarity,
       cargoPolicy: vehicle.cargoPolicy,
@@ -4568,13 +4640,16 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const armsAllowed = new Set(armsRarities(vehicle.rarity, catalog.settings));
   const modChoices = catalog.mods.filter((mod) => {
     const item = catalog.byId.get(mod.itemId);
-    return item && armsAllowed.has(item.rarity)
+    const compatibleVehicle = vehicle.type === 'land'
+      || (vehicle.type === 'sea'
+        && Number(item?.id) === Number(catalog.settings.magnet_item_id));
+    return item && compatibleVehicle && armsAllowed.has(item.rarity)
       && (fittedMods.has(mod.id) || selectedMods.has(mod.id) || (local[mod.itemId] ?? 0) > 0);
   }).sort(compareCatalogEntriesByRarity(catalog)).map((mod) => {
     const item = catalog.byId.get(mod.itemId);
     const fitted = fittedMods.has(mod.id);
     const selected = selectedMods.has(mod.id);
-    const cost = boltCost(item.rarity);
+    const cost = boltCost(item.rarity, item.id);
     return itemCard(item, { compact: true, className: 'item-card-picker',
       meta: [fitted ? 'Fitted now' : `${local[mod.itemId] ?? 0} available in ${catalogCityForId(catalog, vehicle.cityId).name}`,
         `capacity ${signedStat(mod.capacity)}`, `base attack ${signedStat(mod.attack)}`,
@@ -4684,7 +4759,9 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
       ['Bolts here', String(boltsAvailable)]
     ] : []),
     ...(vehicle.type === 'sea' ? [
+      ['Utility fittings', `${vehicle.mods.length} fitted`],
       ['Cannon portals', `${vehicle.cannons.length}/${cannonPortals} occupied · ${cannonPortalsRemaining} free`],
+      ['Bolts here', String(boltsAvailable)],
       ['Ammunition', ammoOverview || 'No ammunition hold'],
       ['Hull', `${vehicle.ship?.hull ?? 0}/${vehicle.ship?.max_hull ?? vehicle.shipDefinition?.hull ?? 0}`],
       ['Crew', `${vehicle.ship?.crew ?? 0}/${vehicle.shipDefinition?.crew ?? 0}`],
@@ -4763,7 +4840,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const fullAmmoCrates = (totalLoadedShots - totalLooseShots) / shotsPerCrate;
   const unloadWarning = totalLooseShots
     ? `<label class="danger-confirm"><input type="checkbox" name="confirmLoss" value="yes" required> Discard ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} that cannot make a complete crate.</label>` : '';
-  const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete cannon set you want fitted. Existing cannons can be kept, returned or replaced in one preview. Any removal consumes one ${escapeHtml(blockAndTackleItem.name)}; ammunition remains aboard. Commit cannon changes before loading ammunition.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached. Choose a proposed quantity below, preview the cannon loadout, then commit it to unlock ammunition loading. The commit button appears after a valid preview.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview cannon loadout</button>${commitButton}</div></form></div><div id="ammunition"><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p>Cannons draw from this ship's shared ammunition hold; shots do not need to be assigned to individual cannon portals. <a class="text-link" href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></div></section>` : '';
+  const shipFittings = vehicle.type === 'sea' ? `<section class="vehicle-fittings"><h2>Ship fittings and cannons <small>${vehicle.cannons.length}/${cannonPortals} portals occupied</small></h2><p>Choose the complete fitting and cannon set. Fitting a Magnet consumes the Magnet and one ${escapeHtml(boltItem.name)}. Existing cannons can be kept, returned or replaced; any cannon removal consumes one ${escapeHtml(blockAndTackleItem.name)}. Ammunition remains aboard.</p><ul class="fitted-cannon-list">${attachedCannons || '<li>No cannons attached. Choose the proposed loadout below, preview it, then commit it to unlock ammunition loading.</li>'}</ul><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/customize" data-live-preview-form>${previewBindingInput}<h3>Utility fittings</h3><p>A fitted Magnet can recover one piece of wreckage per journey. A Magnet carried as cargo does nothing.</p><div class="fitting-grid">${modChoices || '<p>No Magnet is fitted or available in this city.</p>'}</div><h3>Proposed complete cannon set</h3><div class="fitting-grid">${cannonChoices || '<p>No compatible cannons fitted or available in this city.</p>'}</div><div class="customization-actions"><button name="intent" value="preview">Preview ship loadout</button>${commitButton}</div></form></div><div id="ammunition"><h2>Ammunition <small>${totalLoadedShots} shots loaded</small></h2><p>Cannons draw from this ship's shared ammunition hold; shots do not need to be assigned to individual cannon portals. <a class="text-link" href="/vehicles/boxes?vehicleId=${vehicle.id}">Open ammunition boxes into crates</a>, then load those crates here.</p><div class="stacked-actions">${ammo}</div><form class="ammo-unload" method="post" action="/vehicles/${vehicle.id}/ammo/unload"><p>Unload ${fullAmmoCrates} complete crate${fullAmmoCrates === 1 ? '' : 's'} to ${escapeHtml(city.name)}.${totalLooseShots ? ` ${totalLooseShots} loose shot${totalLooseShots === 1 ? '' : 's'} cannot be repacked.` : ' No shots will be lost.'}</p>${unloadWarning}<button class="secondary"${totalLoadedShots ? '' : ' disabled'}>Unload all ammunition</button></form></div></section>` : '';
   const deactivateBlocked = !vehicleCanDeactivate(vehicle, catalog);
   const deactivateWarning = vehicle.damaged
     ? `${cityRepairStatus} A damaged vehicle cannot be stored as a thing.`
@@ -5801,7 +5878,7 @@ function legalPage(seller, paymentConfig) {
     <section id="accounts"><h2>2. Accounts and acceptable use</h2><p>You must provide accurate registration information, protect your password and use only accounts you are authorised to control. Do not exploit vulnerabilities, automate abusive traffic, interfere with other miners, launder value, harass people, or transmit unlawful material. Accounts may be restricted or closed where reasonably necessary for security, abuse prevention or operation of the service.</p></section>
     <section id="service"><h2>3. Experimental service</h2><p>The restoration is provided on an experimental, as-available basis. Game rules, balancing and availability may change. No promise is made that the service will be uninterrupted, error-free, permanently available, or that game data can always be preserved.</p></section>
     <section id="payments"><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Contact the seller before initiating a dispute where practical.</p></section>
-    <section id="privacy"><h2>5. Privacy</h2><p><strong>Controller, purposes and bases.</strong> The operator identified above controls the personal data used by MineThings. Account and gameplay data are processed to create and perform your account and provide features you request; payment records are processed to perform purchases and meet legal, accounting and dispute obligations; and security, moderation, fraud prevention and service-integrity records are processed for the operator's legitimate interests in running a safe, reliable game. A verified email is required to hold an account. MineThings does not use account data for advertising or automated decisions with legal or similarly significant effects.</p><p><strong>Data collected.</strong> MineThings stores your miner name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data; game possessions, actions, settings and communications; and essential security and session information. An essential HttpOnly session cookie keeps you signed in. If Google sign-in is enabled, MineThings stores the Google account identifier and email returned during sign-in. If payments are enabled, it stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries, but not card numbers.</p><p><strong>Who can see it.</strong> Miner names, profile details you choose to show, market activity, guild membership, public chat and public world or battle records can be visible to other miners. Private messages are addressed to their participants and guild chat to current guild members. The operator may access records where necessary to administer, secure or moderate the service.</p><p><strong>Sharing and retention.</strong> Data is shared only with service infrastructure and, when you choose them, Google for sign-in and PayPal for payment. Those providers process data under their own notices and may process it internationally. Account and gameplay records are kept while the account remains active or the persistent world requires them. Security, moderation and payment records are kept for as long as reasonably needed to prevent abuse, resolve disputes and meet legal or accounting duties, then deleted or anonymised where practical.</p><p><strong>Your rights.</strong> Depending on the processing and its legal basis, you may ask for access, correction, deletion, restriction or portability. <strong>You may object at any time to processing based on legitimate interests.</strong> Contact the published seller address above. You may also complain to the <a class="text-link" href="https://ico.org.uk/make-a-complaint/data-protection-complaints/data-protection-complaints/" rel="external noreferrer">Information Commissioner's Office</a>. Some requests may be limited by other people's rights or legal, security and fraud-prevention retention duties.</p></section>
+    <section id="privacy"><h2>5. Privacy</h2><p><strong>Controller, purposes and bases.</strong> The operator identified above controls the personal data used by MineThings. Account and gameplay data are processed to create and perform your account and provide features you request; payment records are processed to perform purchases and meet legal, accounting and dispute obligations; and security, moderation, fraud prevention and service-integrity records are processed for the operator's legitimate interests in running a safe, reliable game. A verified email is required to hold an account. MineThings does not use account data for advertising or automated decisions with legal or similarly significant effects.</p><p><strong>Data collected.</strong> MineThings stores your miner name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data; game possessions, actions, settings and communications; and essential security and session information. An essential HttpOnly session cookie keeps you signed in. To identify possible multi-account market abuse, a successful sign-in can create a keyed pseudonymous token derived from the network address, together with the sign-in method and first, latest and total sign-in observations. The raw network address is not stored in the game database or displayed to administrators. If Google sign-in is enabled, MineThings stores the Google account identifier and email returned during sign-in. If payments are enabled, it stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries, but not card numbers.</p><p><strong>Who can see it.</strong> Miner names, profile details you choose to show, market activity, guild membership, public chat and public world or battle records can be visible to other miners. Private messages are addressed to their participants and guild chat to current guild members. The operator may access records where necessary to administer, secure or moderate the service. Administrators can see whether two accounts have a recent pseudonymous network match and a scored summary of relevant market activity, but not the network address or token. The score only prioritises human review and never automatically suspends, restricts or otherwise penalises an account.</p><p><strong>Sharing and retention.</strong> Data is shared only with service infrastructure and, when you choose them, Google for sign-in and PayPal for payment. Those providers process data under their own notices and may process it internationally. Account and gameplay records are kept while the account remains active or the persistent world requires them. Pseudonymous network observations are retained for no more than 30 days. Other security, moderation and payment records are kept for as long as reasonably needed to prevent abuse, resolve disputes and meet legal or accounting duties, then deleted or anonymised where practical.</p><p><strong>Your rights.</strong> Depending on the processing and its legal basis, you may ask for access, correction, deletion, restriction or portability. <strong>You may object at any time to processing based on legitimate interests.</strong> Contact the published seller address above. You may also complain to the <a class="text-link" href="https://ico.org.uk/make-a-complaint/data-protection-complaints/data-protection-complaints/" rel="external noreferrer">Information Commissioner's Office</a>. Some requests may be limited by other people's rights or legal, security and fraud-prevention retention duties.</p></section>
     <section id="rights"><h2>6. Rights and submitted content</h2><p>Names, code, artwork and other historical MineThings material remain the property of their respective rights holders. Identification of Japhet Stevens as the original creator is attribution, not a claim of endorsement or ownership by him of this restoration.</p><p>You retain any rights you hold in content you submit. You grant the operator a worldwide, non-exclusive, royalty-free licence to store, reproduce, transmit, display and moderate that content only as reasonably necessary to operate, secure and preserve MineThings. You must not submit content you have no right to use.</p></section>
     <section id="liability"><h2>7. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
     <section id="changes"><h2>8. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
@@ -6337,6 +6414,26 @@ export function createApp(options = {}) {
   }
   const now = options.now ?? Date.now;
   const random = options.random ?? Math.random;
+  const shillSignalSecret = String(
+    options.shillSignalSecret ?? process.env.SHILL_SIGNAL_SECRET ?? ''
+  ).trim();
+  if (shillSignalSecret && Buffer.byteLength(shillSignalSecret, 'utf8') < 32) {
+    throw new Error('SHILL_SIGNAL_SECRET must contain at least 32 characters.');
+  }
+  const networkShillSignalsEnabled = Boolean(shillSignalSecret);
+  const recordAuthenticatedNetwork = (playerId, request, authMethod, observedAt) => {
+    if (!networkShillSignalsEnabled) return;
+    const address = clientNetworkAddress(request);
+    if (!address) return;
+    const token = crypto.createHmac('sha256', shillSignalSecret)
+      .update(`minethings-network-v1\0${address}`)
+      .digest('hex');
+    try {
+      store.recordAccountNetworkObservation(playerId, token, authMethod, observedAt);
+    } catch (error) {
+      console.error(`Could not retain network evidence for miner ${playerId}: ${error.message}`);
+    }
+  };
   const previewBindings = new PreviewBindingRegistry({ now });
   store.expireMessages(now());
   const sessions = new Map();
@@ -7405,6 +7502,7 @@ export function createApp(options = {}) {
             sessions.set(id, createLoginSession(emailOwner.id, {
               flash: 'Signed in with Google.'
             }));
+            recordAuthenticatedNetwork(emailOwner.id, request, 'google', completedAt);
             redirect(response, '/', [
               sessionCookie(id, catalog, secureCookies), clearGoogleSignupCookie(secureCookies)
             ]);
@@ -7490,6 +7588,7 @@ export function createApp(options = {}) {
           };
         }
         sessions.set(id, newSession);
+        recordAuthenticatedNetwork(saved.id, request, 'google', registeredAt);
         redirect(response, '/', [
           sessionCookie(id, catalog, secureCookies), clearGoogleSignupCookie(secureCookies)
         ]);
@@ -7634,6 +7733,7 @@ export function createApp(options = {}) {
           };
         }
         sessions.set(id, newSession);
+        recordAuthenticatedNetwork(saved.id, request, 'local', registeredAt);
         try {
           await sendEmailVerification(saved.id, request, newSession, registeredAt);
         } catch (error) {
@@ -7657,6 +7757,7 @@ export function createApp(options = {}) {
         authFailures.delete(authKey(request));
         const id = crypto.randomBytes(32).toString('base64url');
         sessions.set(id, createLoginSession(found.id));
+        recordAuthenticatedNetwork(found.id, request, 'local', attemptedAt);
         redirect(response, found.emailVerified ? '/' : '/verify-email',
           sessionCookie(id, catalog, secureCookies));
       } else if (request.method === 'POST' && url.pathname === '/logout') {
@@ -7665,7 +7766,8 @@ export function createApp(options = {}) {
         redirect(response, '/', clearSessionCookie(secureCookies));
       } else if (request.method === 'GET' && url.pathname === '/inventory') {
         if (requirePlayer()) responseHtml(response, 200, layout('Things', inventoryPage(
-          player, catalog, store.remainingMeldItemNeeds(player.id)
+          player, catalog, store.remainingMeldItemNeeds(player.id),
+          store.itemListingQuantities(player.id), store.fleetStandingByCounts(player.id)
         ), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/dwarves') {
         if (requirePlayer()) responseHtml(response, 200,
@@ -8221,7 +8323,10 @@ export function createApp(options = {}) {
               modIds: expandCounts('mod').sort((first, second) => first - second),
               weaponIds: expandCounts('weapon').sort((first, second) => first - second)
             }
-          : { cannonIds: completeCannonSet(expandCounts('cannon')) };
+          : {
+              modIds: expandCounts('mod').sort((first, second) => first - second),
+              cannonIds: completeCannonSet(expandCounts('cannon'))
+            };
         const kind = vehicle.type === 'sea' ? 'ship' : 'land';
         if (form.intent === 'commit') {
           consumePreview(sessionId, session, player.id, vehicleId, kind, selections,
@@ -8230,8 +8335,10 @@ export function createApp(options = {}) {
             store.fitVehicleLoadout(player.id, vehicleId, selections.modIds, selections.weaponIds);
             setFlash('Mod and weapon loadout committed together.');
           } else if (vehicle.type === 'sea') {
-            store.fitShipLoadout(player.id, vehicleId, selections.cannonIds);
-            setFlash('Complete cannon loadout committed.');
+            store.fitShipLoadout(
+              player.id, vehicleId, selections.cannonIds, selections.modIds
+            );
+            setFlash('Ship fitting and cannon loadout committed.');
           } else {
             throw new Error('This vehicle has no customizable fittings.');
           }
@@ -8242,7 +8349,9 @@ export function createApp(options = {}) {
         if (form.intent !== 'preview') throw new Error('Preview this loadout before committing it.');
         const preview = vehicle.type === 'land'
           ? store.previewVehicleFittings(player.id, vehicleId, selections.modIds, selections.weaponIds)
-          : store.previewShipLoadout(player.id, vehicleId, selections.cannonIds);
+          : store.previewShipLoadout(
+              player.id, vehicleId, selections.cannonIds, selections.modIds
+            );
         const previewState = rememberPreview(sessionId, session, player.id, vehicleId,
           kind, selections, preview);
         responseHtml(response, 200, layout(`Preview · ${vehicle.name}`,
@@ -8768,6 +8877,14 @@ export function createApp(options = {}) {
           maintenanceNotice: maintenanceSnapshot(adminTime),
           currentTime: adminTime
         }), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/admin/shills') {
+        if (!requireAdmin()) return;
+        const shillTime = now();
+        const selectedPlayerId = Number(url.searchParams.get('playerId'));
+        responseHtml(response, 200, layout('Admin · Shill signals', adminShillSignalsPage(
+          store.adminShillSignals(shillTime, { playerId: selectedPlayerId }),
+          networkShillSignalsEnabled
+        ), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/admin/backups') {
         if (!requireAdmin()) return;
         responseHtml(response, 200, layout('Admin · Backups and updates', adminBackupsPage({

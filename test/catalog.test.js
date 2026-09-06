@@ -158,6 +158,11 @@ test('loads the playable catalog from the legacy dump', () => {
   const magnet = catalog.byId.get(catalog.settings.magnet_item_id);
   assert.equal(magnet.name, MAGNET_CATALOG.items[0].name);
   assert.equal(magnet.canFind, false);
+  assert.equal(magnet.icon, '/node/equipment/magnet.svg');
+  assert.equal(magnet.largeImage, '/node/equipment/magnet.svg');
+  assert.deepEqual(catalog.mods.find((mod) => mod.itemId === magnet.id),
+    MAGNET_CATALOG.mod);
+  assert.equal(catalog.settings.magnet_fitting_bolt_cost, 1);
   assert.equal(catalog.factoryActions.find((action) =>
     action.outputItemId === magnet.id)?.id, MAGNET_CATALOG.factoryActions[0].id);
   assert.deepEqual(catalog.settings.factory_worker_bot_tiers.map((tier) => ({
@@ -176,9 +181,9 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.avatarElements.length, 156);
   assert.equal(catalog.avatarElementByItemId.get(avatar.itemId).id, avatar.id);
   assert.equal(catalog.avatarElementTypeById.get(avatar.typeId).name, 'Borders');
-  assert.equal(catalog.stones.length, 69);
+  assert.equal(catalog.stones.length, 81);
   assert.equal(catalog.stones[0].name, 'Chatted');
-  assert.equal(catalog.stones.at(-1).name, 'Completionist');
+  assert.equal(catalog.stones.at(-1).name, 'Magnetised');
   assert.equal(catalog.stones.find((stone) => stone.name === 'Jackpotted').rarity, 6);
   assert.equal(catalog.settings.starter_item_limit, INVENTORY_CAPACITY_RULES.base);
   assert.equal(catalog.containers.reduce((sum, container) => sum + container.capacity, 0),

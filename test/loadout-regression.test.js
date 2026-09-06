@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPlayer } from '../src/game.js';
-import { loadLegacyCatalog } from '../src/legacy-catalog.js';
+import { loadLegacyCatalog, MAGNET_CATALOG } from '../src/legacy-catalog.js';
 import { createApp } from '../src/server.js';
 import { hashPassword, SqliteStore } from '../src/store.js';
 
@@ -214,6 +214,58 @@ test('treats ship cannon quantities as a complete replaceable and removable load
   assert.equal(inventoryQuantity(store, player.id, player.cityId, second.itemId), 1);
   assert.equal(inventoryQuantity(store, player.id, player.cityId, tackleId), 0);
 });
+
+test('fits a Magnet to a ship with one Bolt and returns only the Magnet on removal',
+  (context) => {
+    const store = new SqliteStore(':memory:');
+    context.after(() => store.close());
+    store.seedCatalog(bootstrapCatalog);
+    const catalog = store.loadCatalog();
+    const { ship } = shipFixture(catalog);
+    const boltItemId = Number(catalog.settings.bolt_item_id);
+    const magnetItemId = Number(catalog.settings.magnet_item_id);
+    const player = store.addPlayer(createPlayer(
+      'Magnetic Sailor', '', 'hash', catalog, 1000, () => 0.5
+    ));
+    player.inventory[ship.itemId] = 1;
+    player.inventory[magnetItemId] = 1;
+    store.savePlayer(player);
+    const vehicleId = store.activateVehicle(player.id, ship.itemId);
+
+    const cargoPreview = store.previewVehicleCargo(player.id, vehicleId, {
+      [magnetItemId]: 1
+    });
+    assert.equal(cargoPreview.valid, false);
+    assert.match(cargoPreview.reasons.join(' '), /fitted with a Bolt/u);
+    const noBolt = store.previewShipLoadout(
+      player.id, vehicleId, [], [MAGNET_CATALOG.mod.id]
+    );
+    assert.equal(noBolt.valid, false);
+    assert.match(noBolt.reasons.join(' '), /Need 1 Bolt/u);
+    store.database.prepare(`
+      INSERT INTO inventory (player_id, city_id, item_id, quantity) VALUES (?, ?, ?, 1)
+    `).run(player.id, player.cityId, boltItemId);
+    const preview = store.previewShipLoadout(
+      player.id, vehicleId, [], [MAGNET_CATALOG.mod.id]
+    );
+    assert.equal(preview.valid, true);
+    assert.equal(preview.boltsRequired, 1);
+    assert.deepEqual(preview.modsAdded, ['Magnet']);
+    store.fitShipLoadout(player.id, vehicleId, [], [MAGNET_CATALOG.mod.id]);
+    assert.equal(store.vehicleDetails(player.id, vehicleId, 2000).mods[0].itemId,
+      magnetItemId);
+    assert.equal(inventoryQuantity(store, player.id, player.cityId, magnetItemId), 0);
+    assert.equal(inventoryQuantity(store, player.id, player.cityId, boltItemId), 0);
+
+    const removal = store.previewShipLoadout(player.id, vehicleId, [], []);
+    assert.equal(removal.valid, true);
+    assert.equal(removal.boltsRequired, 0);
+    assert.deepEqual(removal.modsRemoved, ['Magnet']);
+    store.fitShipLoadout(player.id, vehicleId, [], []);
+    assert.equal(store.vehicleDetails(player.id, vehicleId, 2000).mods.length, 0);
+    assert.equal(inventoryQuantity(store, player.id, player.cityId, magnetItemId), 1);
+    assert.equal(inventoryQuantity(store, player.id, player.cityId, boltItemId), 0);
+  });
 
 test('reorders duplicate cannons without tackle and counts only complete ammunition crates',
   (context) => {
@@ -469,6 +521,8 @@ test('renders a complete ship editor and recovery-only damaged controls', async 
   player.inventory[second.itemId] = 1;
   player.inventory[tackleId] = 2;
   player.inventory[ammunition.itemId] = 2;
+  player.inventory[Number(catalog.settings.magnet_item_id)] = 1;
+  player.inventory[Number(catalog.settings.bolt_item_id)] = 1;
   store.savePlayer(player);
   const vehicleId = store.activateVehicle(player.id, ship.itemId);
   store.fitShipLoadout(player.id, vehicleId, [first.id]);
@@ -479,6 +533,10 @@ test('renders a complete ship editor and recovery-only damaged controls', async 
   const editorHtml = await (await fetch(`${base}${path}`, { headers: { cookie } })).text();
   assert.doesNotMatch(editorHtml, /action="\/vehicles\/\d+\/cannons\/detach"/u);
   assert.doesNotMatch(editorHtml, />Detach all/u);
+  assert.match(editorHtml, /Ship fittings and cannons/u);
+  assert.match(editorHtml, /\/node\/equipment\/magnet\.svg/u);
+  assert.match(inputTag(editorHtml, `mod_${MAGNET_CATALOG.mod.id}`), /type="checkbox"/u);
+  assert.match(editorHtml, /Fitting a Magnet consumes the Magnet and one Bolt/u);
   assert.match(inputTag(editorHtml, `cannon_${first.id}`), /value="1"/u,
     'the fitted cannon is part of the proposed complete set');
   for (const label of ['Base', 'Cannons', 'Ammunition', 'Cargo', 'Free']) {

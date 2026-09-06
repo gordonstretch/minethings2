@@ -158,6 +158,33 @@ export const EXPANDED_STONE_CATALOG = Object.freeze([
   ASO_DISCOVERY_STONE,
   CITY_COMPLETION_STONE
 ]);
+
+export const ADDITIONAL_STONE_CATALOG = Object.freeze([
+  { id: 70, name: 'Scavenged', behaviorKey: 'Scavenged',
+    description: 'collected a Street Ore scrap while exploring a city', rank: 70, rarity: 1 },
+  { id: 71, name: 'Informed', behaviorKey: 'Informed',
+    description: 'read a notice while exploring a city', rank: 71, rarity: 1 },
+  { id: 72, name: 'Sightseen', behaviorKey: 'Sightseen',
+    description: 'visited a marked location while exploring a city', rank: 72, rarity: 1 },
+  { id: 73, name: 'Recycled', behaviorKey: 'Recycled',
+    description: 'recycled a Thing into Ore scraps', rank: 73, rarity: 1 },
+  { id: 74, name: 'Refined', behaviorKey: 'Refined',
+    description: 'refined Ore scraps into Ore', rank: 74, rarity: 2 },
+  { id: 75, name: 'Restored', behaviorKey: 'Restored',
+    description: 'completed a damaged Thing repair at a factory', rank: 75, rarity: 3 },
+  { id: 76, name: 'Employed', behaviorKey: 'Employed',
+    description: 'hired a miner or Worker bot', rank: 76, rarity: 2 },
+  { id: 77, name: 'Automated', behaviorKey: 'Automated',
+    description: 'completed a task through a gadget automation', rank: 77, rarity: 3 },
+  { id: 78, name: 'Oiled', behaviorKey: 'Oiled',
+    description: 'oiled a Worker', rank: 78, rarity: 2 },
+  { id: 79, name: 'Extended', behaviorKey: 'Extended',
+    description: 'bought a battery extension', rank: 79, rarity: 2 },
+  { id: 80, name: 'Unboxed', behaviorKey: 'Unboxed',
+    description: 'broke a Bolt box into individual Bolts', rank: 80, rarity: 1 },
+  { id: 81, name: 'Magnetised', behaviorKey: 'Magnetised',
+    description: 'recovered wreckage using a carried Magnet', rank: 81, rarity: 4 }
+]);
 export const SHROOM_CATALOG = Object.freeze({
   mapId: 2,
   mapSlug: 'bromo',
@@ -809,7 +836,7 @@ export const MAGNET_CATALOG = Object.freeze({
       id: 1597,
       name: 'Magnet',
       rarity: 0,
-      description: 'Carry Magnets in a surface vehicle. Each Magnet can pull one thing from wreckage passed during a journey. Most pulls become Ore scraps at the destination, while some survive as cargo, including a wrecked vehicle\'s damaged chassis.',
+      description: 'Fit a Magnet to a land vehicle or ship with one Bolt. A fitted Magnet can pull one thing from wreckage passed during a journey. Most pulls become Ore scraps at the destination, while some survive as cargo, including a wrecked vehicle\'s damaged chassis.',
       marketableId: null,
       mineTypeId: 4,
       repairedItemId: null,
@@ -823,6 +850,16 @@ export const MAGNET_CATALOG = Object.freeze({
       goldValueUnits: 6160000
     })
   ]),
+  mod: Object.freeze({
+    id: 145,
+    itemId: 1597,
+    capacity: 0,
+    attack: 0,
+    armor: 0,
+    offense: 0,
+    defense: 0,
+    dodge: 0
+  }),
   factoryActions: Object.freeze([
     Object.freeze({
       id: 23,
@@ -834,7 +871,8 @@ export const MAGNET_CATALOG = Object.freeze({
       outputQuantity: 1
     })
   ]),
-  intactSalvageChance: 0.35
+  intactSalvageChance: 0.35,
+  fittingBoltCost: 1
 });
 const VEHICLE_CARGO_POLICIES = new Set(['standard', 'oil-only', 'any-item']);
 const VEHICLE_ROUTE_POLICIES = new Set(['standard', 'capital-link']);
@@ -1500,6 +1538,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     id: row[0], itemId: row[1], capacity: row[2], attack: row[3], armor: row[4],
     offense: row[5], defense: row[6], dodge: row[7]
   }));
+  mods.push({ ...MAGNET_CATALOG.mod });
   const cannons = tableRows(sql, 'cannons').map((row) => ({
     id: row[0], itemId: row[1], damage: row[2], rateOfFire: row[3]
   }));
@@ -1643,6 +1682,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     description: row[2], rank: row[3], rarity: Math.floor((row[3] - 1) / 7) + 1
   }));
   stones.push(...EXPANDED_STONE_CATALOG.map((stone) => ({ ...stone })));
+  stones.push(...ADDITIONAL_STONE_CATALOG.map((stone) => ({ ...stone })));
   const sources = {
     marketableIconById,
     equipmentByItemId: new Map(equipment.map((entry) => [entry.itemId, entry])),
@@ -1966,6 +2006,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     bolts_per_box: BOLT_BOX_CATALOG.boltsPerBox,
     magnet_item_id: MAGNET_CATALOG.items[0].id,
     magnet_intact_salvage_chance: MAGNET_CATALOG.intactSalvageChance,
+    magnet_fitting_bolt_cost: MAGNET_CATALOG.fittingBoltCost,
     block_and_tackle_item_id: 1107,
     search_plane_item_id: 737,
     bomber_item_id: 738,

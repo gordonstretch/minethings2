@@ -973,7 +973,7 @@ test('maintenance still delivers recorded findings when another subsystem fails'
 test('creates the findings and restless-wreck ledgers on a fresh database', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const findingColumns = store.database.prepare('PRAGMA table_info(finding_events)')
     .all().map((column) => column.name);
   assert.deepEqual(findingColumns, [
@@ -1047,7 +1047,7 @@ test('migrates the legacy ore-thief base into Gallego and creates regional opera
     store.close();
 
     store = new SqliteStore(databaseFile);
-    assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+    assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
     assert.ok(store.database.prepare('PRAGMA table_info(thief_bases)').all()
       .some((column) => column.name === 'map_id'));
     store.ensureWorldMaps(2000);
@@ -1082,7 +1082,7 @@ test('migrates a v125 database to the restless-wreck ledger once', (context) => 
   });
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.ok(store.database.prepare(`
     SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ghost_wrecks'
   `).get());
@@ -1098,7 +1098,7 @@ test('migrates a v125 database to the restless-wreck ledger once', (context) => 
 
   store.close();
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
 });
 
 test('migrates v109 databases to the starter welcome-pack setting without backfilling miners', (context) => {
@@ -1134,7 +1134,7 @@ test('migrates v109 databases to the starter welcome-pack setting without backfi
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'starter_welcome_pack'
   `).get().value_json), LEGACY_STARTER_WELCOME_PACK);
@@ -1185,7 +1185,7 @@ test('upgrades legacy starter packs without backfilling miners', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'starter_welcome_pack'
   `).get().value_json), {
@@ -1285,7 +1285,7 @@ test('migrates v103 databases to the creature attack-name catalog setting', (con
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const attackNames = JSON.parse(store.database.prepare(`
     SELECT value_json FROM catalog_settings WHERE key = 'world_creature_attack_names'
   `).get().value_json);
@@ -1330,7 +1330,7 @@ test('migrates a v88 database to the durable findings digest schema exactly once
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.ok(store.database.prepare(
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'finding_events'"
   ).get());
@@ -1353,7 +1353,7 @@ test('migrates a v88 database to the durable findings digest schema exactly once
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare(
     "SELECT COUNT(*) AS count FROM catalog_settings WHERE key LIKE 'daily_findings_%'"
   ).get().count, 2, 'reopening v89 does not replay the migration');
@@ -1384,7 +1384,7 @@ test('migrates v124 players without replaying their historical finding ledger', 
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare(`
     SELECT delivered_through_id FROM player_finding_notice_state WHERE player_id = ?
   `).get(player.id).delivered_through_id, historicalMaximum);
@@ -1437,7 +1437,7 @@ test('migrates v130 mines to durable rate-aware schedules', (context) => {
   store = new SqliteStore(databaseFile);
   const columns = new Set(store.database.prepare('PRAGMA table_info(mines)').all()
     .map((column) => column.name));
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(columns.has('cycle_interval_ms'), true);
   assert.equal(store.playerById(player.id, 1000).mines[0].cycleIntervalMs,
     Number(catalog.settings.find_interval_ms));
@@ -1468,7 +1468,7 @@ test('migrates v131 gadget ownership and catalog entries to automation machinery
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual({ ...store.database.prepare(`
     SELECT behavior_key AS behaviorKey, display_name AS displayName
     FROM catalog_gadgets WHERE id = 6
@@ -1519,7 +1519,7 @@ test('migrates v132 automation settings into ten-task queues and installs Legend
     store.close();
 
     store = new SqliteStore(databaseFile);
-    assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+    assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
     assert.deepEqual(JSON.parse(store.database.prepare(`
       SELECT configuration_json FROM gadget_automations
       WHERE player_id = ? AND gadget_id = 6
@@ -1590,7 +1590,7 @@ test('migrates item-specific Autolister queues to distinct Thing-type tasks', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(JSON.parse(store.database.prepare(`
     SELECT configuration_json FROM gadget_automations
     WHERE player_id = ? AND gadget_id = 6
@@ -1622,7 +1622,7 @@ test('migrates legacy state and all live catalog data to the current schema', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   for (const table of ['catalog_rarities', 'catalog_equipment_types', 'catalog_bot_parts',
     'catalog_specialisations', 'catalog_specialisation_bonuses', 'catalog_dwarf_tiers',
     'catalog_settings', 'catalog_labels', 'external_auth_identities', 'combat_seasons',
@@ -1917,7 +1917,7 @@ test('migrates v84 creatures and their pursuit history into tiered route actors'
   legacy.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare('PRAGMA foreign_key_check').get(), undefined);
   const creature = store.database.prepare('SELECT * FROM world_creatures WHERE id = 7').get();
   assert.equal(creature.rarity, 1);
@@ -2099,7 +2099,7 @@ test('rebases existing and new capacity to 500 with unique containers reaching 1
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare(
     "SELECT value_json FROM catalog_settings WHERE key = 'starter_item_limit'"
   ).get().value_json, '500');
@@ -2153,7 +2153,7 @@ test('removes legacy Oil Field tier constraints during migration', (context) => 
   store.database.prepare(
     'INSERT INTO oil_hexes (city_id, x, y, available, build_tier) VALUES (2, 99, 99, 91, 92)'
   ).run();
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const remapped = store.database.prepare(
     'SELECT available, build_tier FROM oil_hexes WHERE x = 99 AND y = 99'
   ).get();
@@ -2277,7 +2277,7 @@ test('a schema upgrade adds only new settings and does not replay old catalog ba
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare(
     "SELECT value_json FROM catalog_settings WHERE key = 'factory_market_icon'"
   ).get(), undefined);
@@ -2433,6 +2433,9 @@ test('uses original player-priced item listings, bids, and best-price FIFO fills
   const expensiveListingId = store.placeSellOrder(
     savedExpensiveSeller.id, itemId, 3, 1, 4002
   );
+  assert.deepEqual(store.itemListingQuantities(savedSeller.id), {
+    1: { [itemId]: 2 }
+  });
   assert.throws(() => store.placeBuyOrder(
     savedSeller.id, itemId, askPrice, 1, 4003
   ), /Cancel or move your existing listing first/);
@@ -2455,6 +2458,10 @@ test('uses original player-priced item listings, bids, and best-price FIFO fills
   ]);
   assert.equal(purchase.gold, 6);
   assert.equal(store.playerById(savedSeller.id).inventory[itemId] ?? 0, 0);
+  assert.deepEqual(store.itemListingQuantities(savedSeller.id), {});
+  assert.deepEqual(store.itemListingQuantities(savedSecondSeller.id), {
+    1: { [itemId]: 1 }
+  });
   assert.equal(store.playerById(savedSecondSeller.id).inventory[itemId], 1);
   assert.equal(store.inventoryCapacity(savedSeller.id).itemCount, sellerStartingCapacity - 2);
   assert.equal(store.inventoryCapacity(savedSecondSeller.id).itemCount, secondStartingCapacity - 1);
@@ -3058,7 +3065,7 @@ test('v107 refunds legacy mine-bid gold before replacing the open order book', (
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.playerById(bidder.id).gold, 100);
   assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM mine_market_orders').get().count, 0);
   const columns = store.database.prepare('PRAGMA table_info(mine_market_orders)')
@@ -3100,7 +3107,7 @@ test('v108 and v109 install Shrooms and restrict their mine to Bromo cities', (c
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(store.database.prepare(`
     SELECT name, rarity, icon, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity
@@ -3158,7 +3165,7 @@ test('v109 expands an existing six-item Shroom mine to five finds per tier', (co
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(store.database.prepare(`
     SELECT rarity, COUNT(*) AS count
     FROM catalog_items WHERE mine_type_id = ?
@@ -3205,7 +3212,7 @@ test('installs Wood finds and hardware Melds only in Calbuco', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(store.database.prepare(`
     SELECT name, rarity, icon, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3320,7 +3327,7 @@ test('installs three-line Wisdom haiku and Melds only in Dempo', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const wisdomItems = store.database.prepare(`
     SELECT name, rarity, description, icon, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3386,7 +3393,7 @@ test('installs Electronic Devices and their Melds only in Ebeko', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const electronicsItems = store.database.prepare(`
     SELECT name, rarity, description, icon, icon_source, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3453,7 +3460,7 @@ test('installs ominous Relics and their Melds only in Fogo', (context) => {
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const relicItems = store.database.prepare(`
     SELECT name, rarity, description, icon, icon_source, can_find, has_large_image
     FROM catalog_items WHERE mine_type_id = ? ORDER BY rarity, id
@@ -3570,7 +3577,7 @@ test('seeds and reloads the legacy gameplay catalog from SQLite', (context) => {
     [20, 20, 20]
   );
   assert.equal(restored.weapons.length, 30);
-  assert.equal(restored.mods.length, 72);
+  assert.equal(restored.mods.length, 73);
   assert.equal(restored.rarities.length, 7);
   assert.equal(restored.equipmentTypes.length, 7);
   assert.equal(restored.botParts.length, 13);
@@ -3639,7 +3646,7 @@ test('seeds and reloads the legacy gameplay catalog from SQLite', (context) => {
   assert.equal(restored.tiers.length, 36);
   assert.equal(restored.avatarElementTypes.length, 7);
   assert.equal(restored.avatarElements.length, 156);
-  assert.equal(restored.stones.length, 69);
+  assert.equal(restored.stones.length, 81);
 });
 
 test('loads machine rules when optional fixed pipe power is omitted', (context) => {
@@ -4110,6 +4117,9 @@ test('runs the four replacement gadget automations against real city systems', (
     JOIN catalog_gadgets ON catalog_gadgets.id = gadget_automations.gadget_id
     WHERE player_id = ? AND catalog_gadgets.behavior_key = 'automelder'
   `).get(saved.id).enabled, 0);
+  assert.ok(store.stonesForPlayer(saved.id).earned.some(
+    (stone) => stone.behaviorKey === 'Automated'
+  ));
   assert.equal(store.settleGadgetAutomations(3001).automationsProcessed, 0);
 });
 
@@ -4281,6 +4291,9 @@ test('buys the original ten-day battery extension only while charged', (context)
   assert.equal(result.credits, 11);
   assert.equal(result.expiresAt, 2000 + 20 * 60 * 60 * 1000 + 10 * 24 * 60 * 60 * 1000);
   assert.equal(store.playerById(player.id, 2000).credits, 11);
+  assert.ok(store.stonesForPlayer(player.id).earned.some(
+    (stone) => stone.behaviorKey === 'Extended'
+  ));
 
   store.database.prepare('UPDATE players SET battery_expires_at = 1999 WHERE id = ?').run(player.id);
   assert.throws(() => store.extendBattery(player.id, 2000), /Recharge your current batteries/);
@@ -4746,6 +4759,8 @@ test('runs meld-gated factory construction and damaged-item repair with contract
   assert.throws(() => store.recycleInventory(maker.id, restored.cityId, 737, 1),
     /factory-made items/);
   assert.ok(store.stonesForPlayer(maker.id).earned.some((stone) => stone.name === 'Produced'));
+  assert.ok(store.stonesForPlayer(maker.id).earned.some((stone) => stone.name === 'Employed'));
+  assert.ok(store.stonesForPlayer(maker.id).earned.some((stone) => stone.name === 'Restored'));
   assert.deepEqual(store.recentMessages(maker.id, 'all', 'Factory')
     .map((message) => message.details.actionName).sort(),
   ['Build', 'Live aircraft output', 'Live restoration']);
@@ -4796,6 +4811,9 @@ test('manufactures Bolt boxes and breaks them down into protected individual Bol
   assert.equal(unpacked.inventory[box.id], undefined);
   assert.equal(unpacked.inventory[BOLT_BOX_CATALOG.boltItemId], boltsBefore + 20);
   assert.equal(unpacked.protectedInventoryByCity[maker.cityId][BOLT_BOX_CATALOG.boltItemId], 20);
+  assert.ok(store.stonesForPlayer(maker.id).earned.some(
+    (stone) => stone.behaviorKey === 'Unboxed'
+  ));
   assert.throws(() => store.breakDownBoltBoxes(maker.id, 1), /do not own enough/u);
 });
 
@@ -4822,7 +4840,7 @@ test('adds the Bolt box catalog to an existing schema without a version bump', (
 
   store = new SqliteStore(databaseFile);
   const restored = store.loadCatalog();
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(restored.byId.get(box.id).name, box.name);
   assert.equal(restored.factoryActions.find((entry) => entry.id === action.id).outputItemId,
     box.id);
@@ -4844,10 +4862,11 @@ test('adds the Magnet factory product to an existing schema without a version bu
   const magnet = MAGNET_CATALOG.items[0];
   const action = MAGNET_CATALOG.factoryActions[0];
   store.database.prepare('DELETE FROM catalog_factory_actions WHERE id = ?').run(action.id);
+  store.database.prepare('DELETE FROM catalog_mods WHERE id = ?').run(MAGNET_CATALOG.mod.id);
   store.database.prepare('DELETE FROM catalog_items WHERE id = ?').run(magnet.id);
   store.database.prepare(`
     DELETE FROM catalog_settings
-    WHERE key IN ('magnet_item_id', 'magnet_intact_salvage_chance')
+    WHERE key IN ('magnet_item_id', 'magnet_intact_salvage_chance', 'magnet_fitting_bolt_cost')
   `).run();
   store.database.prepare(
     "DELETE FROM schema_migrations WHERE name = 'magnet-catalog-v1'"
@@ -4856,16 +4875,71 @@ test('adds the Magnet factory product to an existing schema without a version bu
 
   store = new SqliteStore(databaseFile);
   const restored = store.loadCatalog();
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(restored.byId.get(magnet.id).name, magnet.name);
+  assert.equal(restored.byId.get(magnet.id).icon, '/node/equipment/magnet.svg');
+  assert.deepEqual(restored.mods.find((mod) => mod.itemId === magnet.id),
+    MAGNET_CATALOG.mod);
   assert.equal(restored.factoryActions.find((entry) => entry.id === action.id).outputItemId,
     magnet.id);
   assert.equal(restored.settings.magnet_item_id, magnet.id);
   assert.equal(restored.settings.magnet_intact_salvage_chance,
     MAGNET_CATALOG.intactSalvageChance);
+  assert.equal(restored.settings.magnet_fitting_bolt_cost, 1);
   assert.ok(store.database.prepare(
     "SELECT 1 FROM schema_migrations WHERE name = 'magnet-catalog-v1'"
   ).get());
+});
+
+test('upgrades existing Magnets with artwork and the one-Bolt vehicle fitting', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-magnet-fitting-'));
+  const databaseFile = path.join(directory, 'game.sqlite');
+  let store = new SqliteStore(databaseFile);
+  context.after(() => {
+    store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  store.seedCatalog(catalog);
+  const magnet = MAGNET_CATALOG.items[0];
+  const legacyDescription = 'Carry Magnets in a surface vehicle. Each Magnet can pull one thing from wreckage passed during a journey. Most pulls become Ore scraps at the destination, while some survive as cargo, including a wrecked vehicle\'s damaged chassis.';
+  store.database.prepare(`
+    UPDATE catalog_items
+    SET description = ?, icon = '', icon_source = '', large_image = NULL, has_large_image = 0
+    WHERE id = ?
+  `).run(legacyDescription, magnet.id);
+  store.database.prepare('DELETE FROM catalog_mods WHERE id = ?').run(MAGNET_CATALOG.mod.id);
+  store.database.prepare(
+    "DELETE FROM catalog_settings WHERE key = 'magnet_fitting_bolt_cost'"
+  ).run();
+  store.database.prepare(`
+    INSERT OR REPLACE INTO schema_migrations (name, applied_at, details_json)
+    VALUES ('magnet-catalog-v1', 2000, '{}')
+  `).run();
+  store.database.prepare(
+    "DELETE FROM schema_migrations WHERE name = 'magnet-fitting-v1'"
+  ).run();
+  store.close();
+
+  store = new SqliteStore(databaseFile);
+  const restored = store.loadCatalog();
+  const restoredMagnet = restored.byId.get(magnet.id);
+  assert.equal(restoredMagnet.icon, '/node/equipment/magnet.svg');
+  assert.equal(restoredMagnet.largeImage, '/node/equipment/magnet.svg');
+  assert.equal(restoredMagnet.description, magnet.description);
+  assert.deepEqual(restored.mods.find((mod) => mod.itemId === magnet.id),
+    MAGNET_CATALOG.mod);
+  assert.equal(restored.settings.magnet_fitting_bolt_cost, 1);
+  const migration = store.database.prepare(`
+    SELECT details_json FROM schema_migrations WHERE name = 'magnet-fitting-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(migration.details_json), {
+    itemId: magnet.id,
+    modId: MAGNET_CATALOG.mod.id,
+    modInserted: 1,
+    settingInserted: 1,
+    artworkUpdated: 1,
+    descriptionUpdated: 1
+  });
 });
 
 test('builds mills from Calbuco onward and turns Wood into vehicle reinforcement', (context) => {
@@ -5407,6 +5481,9 @@ test('lets an available Worker oil themself from their home-city inventory', (co
   assert.equal(restored.worker.oiled, true);
   assert.equal(restored.worker.cph, 2.2);
   assert.equal(restored.inventory[oil.id], undefined);
+  assert.ok(store.stonesForPlayer(player.id).earned.some(
+    (stone) => stone.behaviorKey === 'Oiled'
+  ));
 });
 
 test('persists profiles and private conversations', (context) => {
@@ -5542,6 +5619,12 @@ test('recycles local inventory into Ore scraps and recommends low-value things w
   assert.deepEqual(store.refineOreScraps(player.id, 1), { ore: 1, scraps: 1000 });
   const oreItemId = Number(catalog.settings.ore_item_id);
   assert.equal(store.playerById(player.id).inventory[oreItemId], 1);
+  assert.ok(store.stonesForPlayer(player.id).earned.some(
+    (stone) => stone.behaviorKey === 'Recycled'
+  ));
+  assert.ok(store.stonesForPlayer(player.id).earned.some(
+    (stone) => stone.behaviorKey === 'Refined'
+  ));
 
   const factoryOutput = [...catalog.factoryOutputItemIds]
     .map((id) => catalog.byId.get(id))
@@ -6325,7 +6408,7 @@ test('backfills the Aso outpost voucher for players who already qualified', (con
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.playerById(player.id).mineRentalVoucher.available, true);
   const messages = store.recentMessages(player.id, 'all', 'City').filter((message) =>
     message.details.event === 'mine-rental-voucher-granted');
@@ -6800,7 +6883,7 @@ test('v97 adds a random weather clock without rewriting weather history', async 
     migrationResults.map((result) => result.message).filter(Boolean).join('; '));
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual({ ...store.database.prepare(`
     SELECT last_slot_at, next_weather_at, weather_sequence
     FROM world_event_clock WHERE id = 1
@@ -6871,7 +6954,7 @@ test('v98 adds Snow and Hurricane without rewriting weather history', (context) 
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.deepEqual(store.database.prepare(`
     SELECT map_id, slot_at, condition, temperature_c, wind_kph, rainfall_mm
     FROM world_weather_slots ORDER BY map_id, slot_at
@@ -8199,7 +8282,7 @@ test('grandfathers existing accounts into mandatory email verification', (contex
   assert.ok(store.database.prepare(
     'SELECT email_verified_at FROM players WHERE id = ?'
   ).get(player.id).email_verified_at);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
 });
 
 test('provisions every miner with an idempotent all-tier ghost-hunter fleet', (context) => {
@@ -9661,7 +9744,7 @@ test('repairs missing legacy ship state before loading ammunition', (context) =>
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.ok(store.vehicleDetails(player.id, vehicleId, 2000).ship);
   store.attachShipCannon(player.id, vehicleId, cannon.id);
   assert.equal(store.loadShipAmmo(player.id, vehicleId, ammunition.type, 2),
@@ -10267,7 +10350,7 @@ test('sinks ship cargo into the route and lets a Fisherman salvage it with bait'
   assert.equal(salvageEvents[0].payload.status, 'Loaded into ship cargo');
 });
 
-test('carried Magnets salvage passed wreckage once each per journey and clear empty wrecks',
+test('fitted Magnets salvage passed wreckage once each per journey and clear empty wrecks',
   (context) => {
     const store = new SqliteStore(':memory:');
     context.after(() => store.close());
@@ -10296,12 +10379,25 @@ test('carried Magnets salvage passed wreckage once each per journey and clear em
     ));
     driver.inventory[vehicleType.itemId] = 1;
     driver.inventory[MAGNET_CATALOG.items[0].id] = 1;
+    const boltItemId = Number(catalog.settings.bolt_item_id);
+    const boltsBefore = driver.inventory[boltItemId] ?? 0;
+    driver.inventory[boltItemId] = boltsBefore + 1;
     store.savePlayer(driver);
     const vehicleId = store.activateVehicle(driver.id, vehicleType.itemId, 1000);
-    assert.equal(store.previewVehicleCargo(driver.id, vehicleId, {
+    const cargoPreview = store.previewVehicleCargo(driver.id, vehicleId, {
       [MAGNET_CATALOG.items[0].id]: 1
-    }).valid, true, 'Magnets are utility cargo for ordinary surface vehicles');
-    store.setVehicleCargo(driver.id, vehicleId, { [MAGNET_CATALOG.items[0].id]: 1 });
+    });
+    assert.equal(cargoPreview.valid, false);
+    assert.match(cargoPreview.reasons.join(' '), /fitted with a Bolt/u);
+    const fittingPreview = store.previewVehicleFittings(
+      driver.id, vehicleId, [MAGNET_CATALOG.mod.id], []
+    );
+    assert.equal(fittingPreview.valid, true);
+    assert.equal(fittingPreview.boltsRequired, 1);
+    store.fitVehicleLoadout(driver.id, vehicleId, [MAGNET_CATALOG.mod.id], []);
+    assert.equal(store.vehicleDetails(driver.id, vehicleId, 1000).mods[0].itemId,
+      MAGNET_CATALOG.items[0].id);
+    assert.equal(store.playerById(driver.id).inventory[boltItemId] ?? 0, boltsBefore);
     const wreckLocation = Number(route.length) / 3;
     const insertWreck = (sourceVehicleId, itemIds, wreckedAt) => {
       store.database.prepare(`
@@ -10332,12 +10428,11 @@ test('carried Magnets salvage passed wreckage once each per journey and clear em
     ], 1);
     assert.equal(store.database.prepare(`
       SELECT COUNT(*) AS count FROM sunken_items WHERE source_vehicle_id = 900001
-    `).get().count, 1, 'one carried Magnet makes one pull in a journey');
+    `).get().count, 1, 'one fitted Magnet makes one pull in a journey');
     assert.ok(store.database.prepare(
       'SELECT 1 FROM ghost_wrecks WHERE source_vehicle_id = 900001'
     ).get(), 'a wreck remains while it still contains a part');
 
-    store.setVehicleCargo(driver.id, vehicleId, { [MAGNET_CATALOG.items[0].id]: 1 });
     const secondRoute = store.routesForVehicle(driver.id, vehicleId, firstTrip.arrivesAt + 2)
       .find((entry) => entry.id === route.id);
     const secondTrip = store.sendVehicle(
@@ -10356,7 +10451,6 @@ test('carried Magnets salvage passed wreckage once each per journey and clear em
       WHERE key = 'magnet_intact_salvage_chance'
     `).run();
     insertWreck(900002, [looseThing.id], secondTrip.arrivesAt + 2);
-    store.setVehicleCargo(driver.id, vehicleId, { [MAGNET_CATALOG.items[0].id]: 1 });
     const thirdRoute = store.routesForVehicle(driver.id, vehicleId, secondTrip.arrivesAt + 3)
       .find((entry) => entry.id === route.id);
     const thirdTrip = store.sendVehicle(
@@ -10377,6 +10471,9 @@ test('carried Magnets salvage passed wreckage once each per journey and clear em
     `).all(vehicleId).map((entry) => JSON.parse(entry.details_json));
     assert.deepEqual(events.map((event) => event.outcome), ['cargo', 'cargo', 'scraps']);
     assert.ok(events.every((event) => event.wreckCleared === (event !== events[0])));
+    assert.ok(store.stonesForPlayer(driver.id).earned.some(
+      (stone) => stone.behaviorKey === 'Magnetised'
+    ));
   });
 
 test('rejecting incompatible cargo rolls back the existing vehicle loadout', (context) => {
@@ -10726,7 +10823,7 @@ test('migrates v111 shuttle state with live updates exactly once', (context) => 
   });
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.ok(store.database.prepare(`
     SELECT 1 FROM sqlite_master
     WHERE type = 'table' AND name = 'player_vehicle_shuttles'
@@ -10776,7 +10873,7 @@ test('migrates v111 shuttle state with live updates exactly once', (context) => 
 
   store.close();
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare(
     'SELECT COUNT(*) AS count FROM live_update_events'
   ).get().count, eventCount, 'reopening v115 does not replay the shuttle migration');
@@ -10802,7 +10899,7 @@ test('migrates v112 shuttle contracts as unrestricted mine-category selections',
 
   store = new SqliteStore(databaseFile);
 
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.ok(store.database.prepare('PRAGMA table_info(player_vehicle_shuttles)').all()
     .some((column) => column.name === 'mine_type_ids_json'));
   assert.equal(store.database.prepare(`
@@ -12790,7 +12887,7 @@ test('backfills durable unique Council docket numbers and preserves existing not
   );
   duplicate.docketNumber = migratedFirst.docketNumber;
   assert.throws(() => store.addPlayer(duplicate), /UNIQUE constraint failed/u);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
 });
 
 test('rolls back registration and grants when its welcome message cannot be created', (context) => {
@@ -13279,3 +13376,85 @@ test('v4 and v5 casino explosive migrations preserve unrelated live rule tuning'
     explosiveSmallMatchMinimum: 3
   });
 });
+
+test('retains privacy-limited shill signals and scores corroborating account evidence',
+  (context) => {
+    const store = new SqliteStore(':memory:');
+    context.after(() => store.close());
+    store.seedCatalog(catalog);
+    store.ensureWorldMaps(1000);
+    const currentTime = 50 * 86400000;
+    const first = store.addPlayer(createPlayer(
+      'Signal One', 'one@example.com', 'hash', catalog, currentTime - 7200000, () => 0.5
+    ));
+    const second = store.addPlayer(createPlayer(
+      'Signal Two', 'two@example.com', 'hash', catalog, currentTime - 3600000, () => 0.5
+    ));
+    const unrelated = store.addPlayer(createPlayer(
+      'Signal Three', 'three@example.com', 'hash', catalog, currentTime - 10 * 86400000,
+      () => 0.5
+    ));
+    const sharedToken = 'a'.repeat(64);
+    store.recordAccountNetworkObservation(unrelated.id, 'b'.repeat(64), 'local',
+      currentTime - 31 * 86400000);
+    store.recordAccountNetworkObservation(first.id, sharedToken, 'local', currentTime - 1000);
+    store.recordAccountNetworkObservation(second.id, sharedToken, 'google', currentTime - 500);
+
+    const item = store.database.prepare(`
+      SELECT id, gold_value_units FROM catalog_items
+      WHERE gold_value_units > 0 ORDER BY gold_value_units, id LIMIT 1
+    `).get();
+    const insertSale = store.database.prepare(`
+      INSERT INTO market_sales
+        (buyer_id, seller_id, city_id, item_id, price_units, quantity, created_at)
+      VALUES (?, ?, 1, ?, ?, 1, ?)
+    `);
+    const suspiciousPriceUnits = Math.max(item.gold_value_units * 10, 2000 * 10000);
+    insertSale.run(first.id, second.id, item.id, suspiciousPriceUnits, currentTime - 400);
+    insertSale.run(second.id, first.id, item.id, suspiciousPriceUnits, currentTime - 300);
+
+    const signals = store.adminShillSignals(currentTime);
+    assert.equal(signals.networkObservationCount, 2,
+      'an expired observation is pruned on the next successful sign-in');
+    const pair = signals.pairs.find((entry) =>
+      entry.firstId === Math.min(first.id, second.id)
+      && entry.secondId === Math.max(first.id, second.id));
+    assert.ok(pair);
+    assert.equal(pair.sharedNetworkCount, 1);
+    assert.equal(pair.tradeCount, 2);
+    assert.equal(pair.directions.length, 2);
+    assert.equal(pair.level, 'high');
+    assert.ok(pair.score >= 70);
+    assert.ok(pair.evidence.some((entry) => entry.includes('Shared recent network')));
+    assert.ok(pair.evidence.some((entry) => entry.includes('fixed value')));
+    assert.equal(pair.trades.length, 2);
+    assert.equal(store.adminShillSignals(currentTime, { playerId: unrelated.id }).pairs.length, 0);
+    assert.throws(() => store.recordAccountNetworkObservation(
+      first.id, 'not-a-token', 'local', currentTime
+    ), /Invalid network evidence token/);
+    assert.throws(() => store.recordAccountNetworkObservation(
+      first.id, 'c'.repeat(64), 'other', currentTime
+    ), /Invalid authentication method/);
+  });
+
+test('migrates a version 136 database to pseudonymous account network observations',
+  (context) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-shill-migration-'));
+    const databaseFile = path.join(directory, 'game.sqlite');
+    let store = new SqliteStore(databaseFile);
+    context.after(() => {
+      try { store.close(); } catch {}
+      fs.rmSync(directory, { recursive: true, force: true });
+    });
+    store.close();
+    const legacy = new DatabaseSync(databaseFile);
+    legacy.exec('DROP TABLE account_network_observations; PRAGMA user_version = 136;');
+    legacy.close();
+
+    store = new SqliteStore(databaseFile);
+    assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
+    assert.ok(store.database.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name = 'account_network_observations'
+    `).get());
+  });

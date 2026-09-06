@@ -873,7 +873,7 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
 
   await page.goto(`${base}/vehicles/${shipVehicleId}/customize`);
   await expect(page.getByRole('heading', { name: 'Current loadout' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /Ship cannons 1\/\d+ portals occupied/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Ship fittings and cannons 1\/\d+ portals occupied/ })).toBeVisible();
   await expect(page.getByText('Fitted in portal 1')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Ammunition \d+ shots loaded/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Proposed complete cannon set' })).toBeVisible();
@@ -882,7 +882,7 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   ).first();
   await expect(completeCannonQuantity).toHaveValue('1');
   await expect(page.locator('form[action$="/cannons/detach"]')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Preview cannon loadout' }).click();
+  await page.getByRole('button', { name: 'Preview ship loadout' }).click();
   await expect(page.getByRole('heading', { name: 'Proposed loadout' })).toBeVisible();
   await expect(page.getByText(/exact proposal is ready to commit/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Commit this exact loadout' })).toBeVisible();

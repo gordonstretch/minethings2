@@ -1,4 +1,4 @@
-export const LEGAL_VERSION = '2026-08-30';
+export const LEGAL_VERSION = '2026-09-05';
 
 export const LEGAL_VERSIONS = Object.freeze({
   '2026-08-22': Object.freeze({
@@ -9,8 +9,12 @@ export const LEGAL_VERSIONS = Object.freeze({
     effectiveDate: '23 August 2026',
     title: 'MineThings Terms, Payments and Privacy Notice'
   }),
-  [LEGAL_VERSION]: Object.freeze({
+  '2026-08-30': Object.freeze({
     effectiveDate: '30 August 2026',
+    title: 'MineThings Terms, Payments and Privacy Notice'
+  }),
+  [LEGAL_VERSION]: Object.freeze({
+    effectiveDate: '5 September 2026',
     title: 'MineThings Terms, Payments and Privacy Notice'
   })
 });

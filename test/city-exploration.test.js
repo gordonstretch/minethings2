@@ -447,6 +447,12 @@ test('street Ore, landmark visits, and notice reading persist and award completi
   for (const scrap of initial.interior.scraps) walk(scrap);
   progress = store.cityExploration(player.id).progress;
   assert.equal(progress.scrapsCollected, progress.totalScraps);
+  const ordinaryExplorationStones = new Set(store.stonesForPlayer(player.id).earned.map(
+    (stone) => stone.behaviorKey
+  ));
+  assert.equal(ordinaryExplorationStones.has('Scavenged'), true);
+  assert.equal(ordinaryExplorationStones.has('Sightseen'), true);
+  assert.equal(ordinaryExplorationStones.has('Informed'), true);
   assert.deepEqual(completionStones.map((stone) => stone.id), [CITY_COMPLETION_STONE.id]);
   assert.equal(completionStones[0].cityId, player.cityId);
   const completedAgain = walk(initial.interior.scraps[0]);
@@ -487,13 +493,13 @@ test('street Ore, landmark visits, and notice reading persist and award completi
   assert.equal(store.database.prepare(`
     SELECT COUNT(*) AS count FROM city_completion_stones WHERE player_id = ?
   `).get(player.id).count, 2);
-  assert.equal(store.playerById(player.id).stoneCount, 2);
+  assert.equal(store.playerById(player.id).stoneCount, 5);
   const balance = store.database.prepare(`
     SELECT quantity FROM recycling_scraps WHERE player_id = ? AND city_id = ?
   `).get(player.id, initial.city.cityId).quantity;
   assert.equal(balance, progress.scrapsCollected
     + CITY_LOCATION_REWARD_SCRAPS + CITY_NOTICE_REWARD_SCRAPS);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   store.close();
 });
 

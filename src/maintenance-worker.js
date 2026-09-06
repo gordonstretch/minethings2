@@ -7,6 +7,7 @@ if (!parentPort) throw new Error('The maintenance worker requires a parent threa
 const store = new SqliteStore(workerData.databaseFile, {
   busyTimeoutMs: workerData.busyTimeoutMs
 });
+let lastNetworkObservationExpiryAt = 0;
 
 parentPort.on('message', (message) => {
   if (message?.type === 'close') {
@@ -49,6 +50,14 @@ parentPort.on('message', (message) => {
     results.messages = store.expireMessages(message.now);
   } catch (error) {
     failure ??= error;
+  }
+  if (message.now - lastNetworkObservationExpiryAt >= 60 * 60 * 1000) {
+    try {
+      store.expireAccountNetworkObservations(message.now);
+      lastNetworkObservationExpiryAt = message.now;
+    } catch (error) {
+      failure ??= error;
+    }
   }
   if (!failure) {
     parentPort.postMessage({

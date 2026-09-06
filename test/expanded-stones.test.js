@@ -6,8 +6,9 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createPlayer } from '../src/game.js';
 import {
-  ASO_DISCOVERY_STONE, CITY_COMPLETION_STONE, EXPANDED_STONE_CATALOG, HOME_DISPLAY_STONE,
-  HOME_STONE, loadLegacyCatalog, STARTER_BOT_STONE
+  ADDITIONAL_STONE_CATALOG, ASO_DISCOVERY_STONE, CITY_COMPLETION_STONE,
+  EXPANDED_STONE_CATALOG, HOME_DISPLAY_STONE, HOME_STONE, loadLegacyCatalog,
+  STARTER_BOT_STONE
 } from '../src/legacy-catalog.js';
 import { SqliteStore } from '../src/store.js';
 
@@ -16,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 test('adds 27 varied Stones for the expanded game systems', () => {
   const catalog = loadLegacyCatalog();
   assert.equal(EXPANDED_STONE_CATALOG.length, 27);
-  assert.equal(catalog.stones.length, 69);
+  assert.equal(catalog.stones.length, 81);
   assert.deepEqual(new Set(EXPANDED_STONE_CATALOG.map((stone) => stone.id)).size, 27);
   assert.deepEqual(new Set(EXPANDED_STONE_CATALOG.map((stone) => stone.rank)).size, 27);
   assert.deepEqual(new Set(EXPANDED_STONE_CATALOG.map((stone) => stone.behaviorKey)).size, 27);
@@ -34,6 +35,41 @@ test('adds 27 varied Stones for the expanded game systems', () => {
       new RegExp(`awardStone\\([^\\n]+['"]${stone.behaviorKey}['"]`, 'u'),
       `${stone.name} must have a successful-action award hook`);
   }
+});
+
+test('adds 12 attainable Stones for ordinary play', () => {
+  const catalog = loadLegacyCatalog();
+  assert.equal(ADDITIONAL_STONE_CATALOG.length, 12);
+  assert.equal(catalog.stones.length, 81);
+  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.id)).size, 12);
+  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.rank)).size, 12);
+  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.behaviorKey)).size, 12);
+  assert.deepEqual([...new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.rarity))].sort(),
+    [1, 2, 3, 4]);
+
+  const storeSource = fs.readFileSync(path.join(ROOT, 'src', 'store.js'), 'utf8');
+  for (const stone of ADDITIONAL_STONE_CATALOG) {
+    assert.match(storeSource,
+      new RegExp(`awardStone\\([^\\n]+['"]${stone.behaviorKey}['"]`, 'u'),
+      `${stone.name} must have a successful-action award hook`);
+  }
+});
+
+test('all additional Stones can be cleared once and retain their catalog rarity', (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  const player = store.addPlayer(
+    createPlayer('Everyday Stone Keeper', '', 'hash', catalog, 1000, () => 0.5)
+  );
+  for (const [index, definition] of ADDITIONAL_STONE_CATALOG.entries()) {
+    const awarded = store.awardStone(player.id, definition.behaviorKey, 2000 + index);
+    assert.equal(awarded.id, definition.id);
+    assert.equal(awarded.rarity, definition.rarity);
+    assert.equal(store.awardStone(player.id, definition.behaviorKey, 3000 + index), null);
+  }
+  assert.equal(store.stonesForPlayer(player.id).earned.length, 12);
 });
 
 test('all expanded Stones can be cleared once and retain their catalog rarity', (context) => {
@@ -76,13 +112,86 @@ test('existing worlds gain expanded Stones without losing original progress', (c
   store = null;
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 69);
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 81);
   assert.deepEqual(store.stonesForPlayer(player.id).earned.map((stone) => stone.behaviorKey),
     ['Chatted']);
   const migration = store.database.prepare(`
     SELECT details_json FROM schema_migrations WHERE name = 'expanded-stones-v1'
   `).get();
   assert.deepEqual(JSON.parse(migration.details_json), { stones: 27, changes: 27 });
+});
+
+test('existing worlds gain additional Stones without losing original progress', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-additional-stones-'));
+  const databaseFile = path.join(directory, 'game.sqlite');
+  let store = new SqliteStore(databaseFile);
+  context.after(() => {
+    if (store) store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const catalog = loadLegacyCatalog();
+  store.seedCatalog(catalog);
+  const player = store.addPlayer(
+    createPlayer('Returning Stone Keeper', '', 'hash', catalog, 1000, () => 0.5)
+  );
+  store.awardStone(player.id, 'Chatted', 2000);
+  store.database.prepare('DELETE FROM catalog_stones WHERE id >= 70').run();
+  store.database.prepare("DELETE FROM schema_migrations WHERE name = 'additional-stones-v1'").run();
+  store.close();
+  store = null;
+
+  store = new SqliteStore(databaseFile);
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 81);
+  assert.deepEqual(store.stonesForPlayer(player.id).earned.map((stone) => stone.behaviorKey),
+    ['Chatted']);
+  const migration = store.database.prepare(`
+    SELECT details_json FROM schema_migrations WHERE name = 'additional-stones-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(migration.details_json), {
+    stones: 12,
+    changes: 12,
+    retroactiveAwards: { Scavenged: 0, Informed: 0, Sightseen: 0 }
+  });
+});
+
+test('existing city exploration earns the three durable everyday Stones on upgrade', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-city-stones-'));
+  const databaseFile = path.join(directory, 'game.sqlite');
+  let store = new SqliteStore(databaseFile);
+  context.after(() => {
+    if (store) store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const catalog = loadLegacyCatalog();
+  store.seedCatalog(catalog);
+  const player = store.addPlayer(
+    createPlayer('Experienced Explorer', '', 'hash', catalog, 1000, () => 0.5)
+  );
+  const insert = store.database.prepare(`
+    INSERT INTO city_exploration_progress
+      (player_id, city_id, progress_type, entry_key, completed_at)
+    VALUES (?, ?, ?, ?, 2000)
+  `);
+  insert.run(player.id, player.cityId, 'scrap', 'old-scrap');
+  insert.run(player.id, player.cityId, 'sign', 'old-sign');
+  insert.run(player.id, player.cityId, 'location', 'old-location');
+  store.database.prepare('DELETE FROM catalog_stones WHERE id >= 70').run();
+  store.database.prepare("DELETE FROM schema_migrations WHERE name = 'additional-stones-v1'").run();
+  store.close();
+  store = null;
+
+  store = new SqliteStore(databaseFile);
+  const earned = new Set(store.stonesForPlayer(player.id).earned.map(
+    (stone) => stone.behaviorKey
+  ));
+  assert.equal(earned.has('Scavenged'), true);
+  assert.equal(earned.has('Informed'), true);
+  assert.equal(earned.has('Sightseen'), true);
+  const migration = store.database.prepare(`
+    SELECT details_json FROM schema_migrations WHERE name = 'additional-stones-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(migration.details_json).retroactiveAwards,
+    { Scavenged: 1, Informed: 1, Sightseen: 1 });
 });
 
 test('existing complete city records gain one Completionist Stone per city on upgrade',

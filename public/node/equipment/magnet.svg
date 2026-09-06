@@ -1,7 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
-  <title id="title">Magnet</title>
-  <path fill="#252823" d="M24 18h30v45c0 11 4 17 10 17s10-6 10-17V18h30v45c0 30-16 49-40 49S24 93 24 63V18Z"/>
-  <path fill="#f59d1f" d="M32 26h14v37c0 16 7 25 18 25s18-9 18-25V26h14v37c0 25-12 41-32 41S32 88 32 63V26Z"/>
-  <path fill="#f4ead4" d="M24 18h30v16H24zm50 0h30v16H74z"/>
-  <path fill="none" stroke="#252823" stroke-width="5" d="M24 18h30v45c0 11 4 17 10 17s10-6 10-17V18h30v45c0 30-16 49-40 49S24 93 24 63V18Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">Vehicle salvage Magnet</title>
+  <desc id="description">An orange horseshoe magnet secured to a dark mounting plate with a steel bolt, pulling metal scraps toward it.</desc>
+  <path fill="#252823" stroke="#11130f" stroke-width="4" d="M42 8h44l8 13-8 13H42l-8-13 8-13Z"/>
+  <circle cx="64" cy="21" r="8" fill="#d8d9d2" stroke="#11130f" stroke-width="3"/>
+  <path fill="none" stroke="#74776f" stroke-width="3" d="m59 16 10 10m0-10L59 26"/>
+  <path fill="#252823" d="M18 28h34v40c0 12 4 18 12 18s12-6 12-18V28h34v40c0 33-18 53-46 53S18 101 18 68V28Z"/>
+  <path fill="#f59d1f" d="M28 38h14v30c0 20 8 30 22 30s22-10 22-30V38h14v30c0 27-13 43-36 43S28 95 28 68V38Z"/>
+  <path fill="#f4ead4" stroke="#252823" stroke-width="3" d="M18 28h34v18H18zm58 0h34v18H76z"/>
+  <path fill="none" stroke="#252823" stroke-linecap="round" stroke-width="3" d="M112 57h10m-12 13 9 4m-13 7 7 8"/>
+  <path fill="#777b73" stroke="#252823" stroke-width="2" d="m116 49 8-4 3 8-8 4zm2 24 8 2-2 8-8-2zm-5 18 7 6-6 7-7-6z"/>
 </svg>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1578,6 +1579,74 @@ test('lets administrators create, update from, restore, and delete database back
     ]) assert.ok(auditActions.includes(action), `${action} should be audited`);
   });
 
+test('shows privacy-limited shill signals only to administrators', async (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(catalog);
+  store.ensureWorldMaps(1000);
+  const password = 'shill review password';
+  const administrator = store.addPlayer(createPlayer(
+    'Signal Admin', '', hashPassword(password), catalog, 1000, () => 0.5
+  ));
+  const first = store.addPlayer(createPlayer(
+    'Signal Alpha', '', hashPassword(password), catalog, 1100, () => 0.5
+  ));
+  const second = store.addPlayer(createPlayer(
+    'Signal Beta', '', hashPassword(password), catalog, 1200, () => 0.5
+  ));
+  const secret = 'server-test-shill-secret-32-characters-long';
+  const sharedAddress = '198.51.100.25';
+  const sharedToken = crypto.createHmac('sha256', secret)
+    .update(`minethings-network-v1\0${sharedAddress}`).digest('hex');
+  const server = createApp({
+    store, now: () => 5000, adminNames: administrator.name,
+    shillSignalSecret: secret
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) =>
+      server.close((error) => error ? reject(error) : resolve()));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = async (name, address) => {
+    const response = await fetch(`${base}/login`, {
+      method: 'POST', redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': address
+      },
+      body: new URLSearchParams({ name, password })
+    });
+    assert.equal(response.status, 303);
+    return response.headers.get('set-cookie').split(';')[0];
+  };
+  const adminCookie = await login(administrator.name, '203.0.113.10');
+  const firstCookie = await login(first.name, sharedAddress);
+  await login(second.name, `192.0.2.99, ${sharedAddress}`);
+
+  assert.equal((await fetch(`${base}/admin/shills`, {
+    headers: { cookie: firstCookie }
+  })).status, 404);
+  const response = await fetch(`${base}/admin/shills?playerId=${first.id}`, {
+    headers: { cookie: adminCookie }
+  });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<h1>Shill signals<\/h1>/u);
+  assert.match(html, /Signal Alpha/u);
+  assert.match(html, /Signal Beta/u);
+  assert.match(html, /Shared recent network/u);
+  assert.match(html, /Network matching is active/u);
+  assert.match(html, /never proof or an automatic punishment/u);
+  assert.doesNotMatch(html, new RegExp(sharedAddress.replaceAll('.', '\\.'), 'u'));
+  assert.doesNotMatch(html, new RegExp(sharedToken, 'u'));
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM account_network_observations
+    WHERE network_token = ?
+  `).get(sharedToken).count, 2);
+});
+
 test('publishes live maintenance warnings and counts recently active signed-in miners',
   async (context) => {
     const catalog = loadLegacyCatalog();
@@ -2391,18 +2460,18 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   const response = await fetch(`${base}/vehicles/${vehicleId}/customize`, { headers: { cookie } });
   const html = await response.text();
   assert.equal(response.status, 200);
-  assert.match(html, /<h2>Ship cannons <small>0\/\d+ portals occupied<\/small><\/h2>/);
+  assert.match(html, /<h2>Ship fittings and cannons <small>0\/\d+ portals occupied<\/small><\/h2>/);
   assert.match(html, /<h2 id="vehicle-loadout-heading">Current loadout<\/h2>/);
   assert.match(html, new RegExp(`<dt>Hull<\\/dt><dd>${currentHull}\\/${bonusMaximumHull}<\\/dd>`));
-  assert.match(html, /Choose the complete cannon set you want fitted/);
-  assert.match(html, /ammunition remains aboard/);
-  assert.match(html, /Commit cannon changes before loading ammunition/);
+  assert.match(html, /Choose the complete fitting and cannon set/);
+  assert.match(html, /Ammunition remains aboard/);
+  assert.match(html, /commit it to unlock ammunition loading/);
   assert.match(html, /id="ammunition"/);
   assert.match(html, /shared ammunition hold/);
   assert.match(html, /Attach a cannon first/);
-  assert.match(html, /Choose a proposed quantity below, preview the cannon loadout, then commit it/);
+  assert.match(html, /Choose the proposed loadout below, preview it, then commit it/);
   assert.match(html, new RegExp(`action="/vehicles/${vehicleId}/customize"`));
-  assert.match(html, /Preview cannon loadout/);
+  assert.match(html, /Preview ship loadout/);
   const preview = await fetch(`${base}/vehicles/${vehicleId}/customize`, {
     method: 'POST', redirect: 'manual', headers: {
       cookie, 'content-type': 'application/x-www-form-urlencoded'
@@ -2902,7 +2971,24 @@ test('shows Things only in the current region, ordered by city, rarity, and item
     [secondRegionCity.id]: { [outsideOnlyItem.id]: 1 }
   };
   player.inventory = player.inventoryByCity[player.cityId];
-  store.addPlayer(player);
+  const saved = store.addPlayer(player);
+  const addFleetVehicle = store.database.prepare(`
+    INSERT INTO player_vehicles
+      (player_id, vehicle_type_id, item_id, city_id, status, rating)
+    VALUES (?, ?, ?, ?, ?, 1600)
+  `);
+  addFleetVehicle.run(saved.id, commonVehicle.id, commonVehicle.itemId,
+    firstCity.id, 'idle');
+  addFleetVehicle.run(saved.id, commonVehicle.id, commonVehicle.itemId,
+    firstCity.id, 'idle');
+  addFleetVehicle.run(saved.id, commonVehicle.id, commonVehicle.itemId,
+    secondCity.id, 'idle');
+  addFleetVehicle.run(saved.id, commonVehicle.id, commonVehicle.itemId,
+    firstCity.id, 'traveling');
+  assert.deepEqual(store.fleetStandingByCounts(saved.id), {
+    [firstCity.id]: 2,
+    [secondCity.id]: 1
+  });
 
   const server = createApp({ store, now: () => 2000 });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -2933,6 +3019,9 @@ test('shows Things only in the current region, ordered by city, rarity, and item
   const firstCityHtml = firstRegionHtml.slice(
     firstRegionHtml.indexOf(firstCityMarker), firstRegionHtml.indexOf(secondCityMarker)
   );
+  const secondCityHtml = firstRegionHtml.slice(firstRegionHtml.indexOf(secondCityMarker));
+  assert.match(firstCityHtml, /2 fleet vehicles standing by/);
+  assert.match(secondCityHtml, /1 fleet vehicle standing by/);
   const rareMarker = `data-item-id="${rareItem.id}"`;
   const firstTypeMarker = `data-item-id="${typedCommonItems[0].item.id}"`;
   const secondTypeMarker = `data-item-id="${typedCommonItems[1].item.id}"`;
@@ -3070,6 +3159,11 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.equal(market.listings[0].quantity, 3);
   assert.equal(market.listings[0].price, listingPrice);
   const afterHtml = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
+  const listedCardHtml = afterHtml.match(new RegExp(
+    `<article[^>]*data-item-id="${item.id}"[\\s\\S]*?</article>`
+  ))?.[0];
+  assert.ok(listedCardHtml);
+  assert.match(listedCardHtml, /3 listed/);
   assert.match(afterHtml, /Listed things remain in that city and still use inventory capacity/);
   assert.match(afterHtml, new RegExp(`href="/market/items/${item.id}"`));
   const exchangeHtml = await (await fetch(`${base}/exchange`, { headers: { cookie } })).text();
@@ -3146,6 +3240,12 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.equal(store.playerById(saved.id).inventory[item.id], 5);
   assert.equal(store.marketForItem(item.id, player.cityId).listings
     .reduce((sum, entry) => sum + entry.quantity, 0), 5);
+  const allListedHtml = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
+  const allListedCardHtml = allListedHtml.match(new RegExp(
+    `<article[^>]*data-item-id="${item.id}"[\\s\\S]*?</article>`
+  ))?.[0];
+  assert.ok(allListedCardHtml);
+  assert.match(allListedCardHtml, /5 listed/);
 
   store.database.prepare(
     "UPDATE catalog_settings SET value_json = '4321' WHERE key = 'starter_credits'"

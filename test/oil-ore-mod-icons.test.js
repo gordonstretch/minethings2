@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { loadLegacyCatalog } from '../src/legacy-catalog.js';
+import { loadLegacyCatalog, MAGNET_CATALOG } from '../src/legacy-catalog.js';
 import { MOD_ICON_ITEM_IDS, modIconPath } from '../src/mod-icons.js';
 import { OIL_ICON_ITEM_IDS, oilIconPath } from '../src/oil-icons.js';
 import { ORE_ICON_ITEM_IDS, oreIconPath } from '../src/ore-icons.js';
@@ -231,8 +231,22 @@ test('every Mod uses its required material name and tier accent colour', () => {
 
 test('fresh catalogs map all intact and damaged Oil, Ore, and Mod items to SVG art', () => {
   const catalog = loadLegacyCatalog();
-  assert.deepEqual(catalog.mods.map((mod) => mod.itemId), EXPECTED_MOD_ITEM_IDS,
+  assert.deepEqual(catalog.mods.map((mod) => mod.itemId), [
+    ...EXPECTED_MOD_ITEM_IDS,
+    MAGNET_CATALOG.items[0].id
+  ],
     'every live Mod record must have deliberate artwork');
+  assert.deepEqual({
+    icon: catalog.byId.get(MAGNET_CATALOG.items[0].id).icon,
+    iconSource: catalog.byId.get(MAGNET_CATALOG.items[0].id).iconSource,
+    largeImage: catalog.byId.get(MAGNET_CATALOG.items[0].id).largeImage,
+    hasLargeImage: catalog.byId.get(MAGNET_CATALOG.items[0].id).hasLargeImage
+  }, {
+    icon: '/node/equipment/magnet.svg',
+    iconSource: 'equipment-svg',
+    largeImage: '/node/equipment/magnet.svg',
+    hasLargeImage: true
+  }, 'Magnet uses its dedicated utility-fitting artwork');
   for (const family of FAMILIES) {
     const familyIdSet = new Set(family.ids);
     const damagedItems = catalog.items.filter((item) =>

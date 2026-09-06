@@ -74,6 +74,21 @@ npm start
 
 The console at `/admin` includes operational totals, miner search and moderation, credit/gold/item grants, global inbox announcements, database backups and updates, world-event controls, and an action log. Administrators can override the current weather on each map and spawn a Kraken or Land Whale on a compatible open route. Suspensions and chat/private-message bans are enforced by the server.
 
+The **Shill signals** page reviews corroborating market-integrity evidence without automatically
+penalising anyone. Existing market sale records provide economic signals. To also compare future
+successful sign-ins through a keyed pseudonymous network token, configure a deployment-only secret
+of at least 32 characters (for example, generate one with `openssl rand -hex 32`):
+
+```text
+SHILL_SIGNAL_SECRET=replace-with-a-private-random-secret
+```
+
+Keep the same secret across restarts and never commit it. Pseudonymous network observations expire
+after 30 days; the raw network address and token are never shown in the admin UI, and the raw address
+is not stored in the game database. MineThings trusts `X-Real-IP`, or the rightmost `X-Forwarded-For`
+address, only when the direct connection comes from the same host's loopback proxy. Without this setting, economic signals continue to work and
+the page clearly reports that network matching is off.
+
 The **Backups and updates** page uses SQLite's online backup API, so a manual backup does not
 require downtime and includes committed WAL data. Backups default to a `backups` directory beside
 `DATABASE_FILE`; set `DATABASE_BACKUP_DIRECTORY` to keep them elsewhere. Files and their directory

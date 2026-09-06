@@ -196,7 +196,7 @@ test('migrates a populated v115 catalog to v116 exactly once', (context) => {
   legacy.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   const columns = new Map(store.database.prepare('PRAGMA table_info(catalog_vehicles)')
     .all().map((column) => [column.name, column]));
   assert.deepEqual([...columns.keys()].filter((name) =>
@@ -297,7 +297,7 @@ test('migrates a populated v115 catalog to v116 exactly once', (context) => {
   };
   store.close();
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 136);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 137);
   assert.equal(store.database.prepare(
     'SELECT revision FROM catalog_cache_revision WHERE id = 1'
   ).get().revision, revision, 'reopening v116 does not replay the migration');
