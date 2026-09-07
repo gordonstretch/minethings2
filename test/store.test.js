@@ -13386,8 +13386,7 @@ test('runs quarterly PvP seasons, awards scaled transport prizes, and resets rat
   assert.equal(automaticStanding.battles, 0,
     'a current zero-battle vehicle participates automatically');
   const ghostStanding = landStandings.find((entry) => entry.name === ghostFleet.name);
-  assert.equal(ghostStanding.isNpc, true);
-  assert.equal(ghostStanding.battles, 0, 'an NPC or ghost fleet participates automatically');
+  assert.equal(ghostStanding, undefined, 'NPC ghost fleets stay out of public miner standings');
   assert.equal(landStandings[0].rating,
     1950, 'live standings use the participating vehicle current rating');
   assert.equal(standings.season.startsAt, q3Start);

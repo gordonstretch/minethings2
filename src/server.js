@@ -2744,23 +2744,15 @@ function exchangePage(player, catalog, purchaseListings, filters = {}) {
   const selectedSort = ['recommended', 'rarity', 'price-asc', 'price-desc', 'name']
     .includes(filters.sort) ? filters.sort : 'recommended';
   const needle = query.trim().toLocaleLowerCase('en');
-  const listingByItemId = new Map(purchaseListings.map((listing) => [listing.itemId, listing]));
-  const knownItemIds = new Set(purchaseListings.map((listing) => listing.itemId));
-  for (const discovery of player.discoveries ?? []) knownItemIds.add(Number(discovery.itemId));
-  for (const inventory of Object.values(player.inventoryByCity ?? {})) {
-    for (const itemId of Object.keys(inventory ?? {})) knownItemIds.add(Number(itemId));
-  }
-  for (const itemId of Object.keys(player.meldStash ?? {})) knownItemIds.add(Number(itemId));
-  const typedListings = [...knownItemIds].map((itemId) => {
+  const typedListings = purchaseListings.map((listing) => {
+    const itemId = Number(listing.itemId);
     const item = catalog.byId.get(itemId);
     if (!item) return null;
-    const listing = listingByItemId.get(itemId);
     return {
       itemId,
-      price: listing?.price ?? Number.POSITIVE_INFINITY,
-      totalQuantity: listing?.totalQuantity ?? 0,
-      sellerName: listing?.sellerName ?? null,
-      hasListing: Boolean(listing),
+      price: Number(listing.price),
+      totalQuantity: Number(listing.totalQuantity),
+      sellerName: listing.sellerName,
       meldable: Number(remainingMeldNeeds[itemId] ?? 0) > 0,
       item,
       itemType: itemMarketType(item, catalog)
@@ -2771,18 +2763,14 @@ function exchangePage(player, catalog, purchaseListings, filters = {}) {
     .sort((first, second) => first[1].localeCompare(second[1], 'en'));
   const compareName = (first, second) => first.item.name.localeCompare(second.item.name, 'en')
     || first.item.id - second.item.id;
-  const compareAvailability = (first, second) => Number(second.hasListing) - Number(first.hasListing);
   const sorters = {
     recommended: (first, second) => Number(second.item.rarity) - Number(first.item.rarity)
-      || compareAvailability(first, second)
       || Number(first.price > player.gold) - Number(second.price > player.gold) || first.price - second.price
       || second.totalQuantity - first.totalQuantity || compareName(first, second),
     rarity: (first, second) => compareItemsByRarity(first.item, second.item)
-      || compareAvailability(first, second) || first.price - second.price,
-    'price-asc': (first, second) => compareAvailability(first, second)
-      || first.price - second.price || compareName(first, second),
-    'price-desc': (first, second) => compareAvailability(first, second)
-      || second.price - first.price || compareName(first, second),
+      || first.price - second.price,
+    'price-asc': (first, second) => first.price - second.price || compareName(first, second),
+    'price-desc': (first, second) => second.price - first.price || compareName(first, second),
     name: compareName
   };
   const listings = typedListings.filter((listing) =>
@@ -2795,23 +2783,18 @@ function exchangePage(player, catalog, purchaseListings, filters = {}) {
       : '';
     const bidButton = `<a class="button secondary market-bid-button" href="/market/items/${listing.item.id}#place-bid">Bid</a>`;
     return itemCard(listing.item, {
-      count: listing.hasListing ? listing.totalQuantity : null,
+      count: listing.totalQuantity,
       countLabel: 'available', compact: true,
       showFixedValue: false, className: 'market-item-card',
-      meta: listing.hasListing
-        ? [`${formatGold(listing.price)}g each`, `Seller: ${listing.sellerName}`]
-        : null,
-      action: listing.hasListing
-        ? `<form class="market-buy-form" data-live-authoritative method="post" action="/market/items/${listing.item.id}/buy-now"><input type="hidden" name="price" value="${listing.price}"><label><span>Qty</span><input type="number" name="quantity" min="1" max="${listing.totalQuantity}" value="1" aria-label="${escapeHtml(listing.item.name)} quantity"></label><button${player.gold < listing.price ? ' disabled' : ''}>Buy now</button></form>${meldableBadge}${bidButton}`
-        : `${meldableBadge}${bidButton}`
+      meta: [`${formatGold(listing.price)}g each`, `Seller: ${listing.sellerName}`],
+      action: `<form class="market-buy-form" data-live-authoritative method="post" action="/market/items/${listing.item.id}/buy-now"><input type="hidden" name="price" value="${listing.price}"><label><span>Qty</span><input type="number" name="quantity" min="1" max="${listing.totalQuantity}" value="1" aria-label="${escapeHtml(listing.item.name)} quantity"></label><button${player.gold < listing.price ? ' disabled' : ''}>Buy now</button></form>${meldableBadge}${bidButton}`
     });
   }).join('');
   const typeOptions = types.map(([key, label]) => `<option value="${escapeHtml(key)}"${selectedType === key ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
-  const stockedCount = listings.filter((listing) => listing.hasListing).length;
-  return `<section class="page-title"><div><p class="eyebrow">Local exchange</p><h1>Item markets</h1></div><p>Browse known Things and buy local stock in ${escapeHtml(catalogCityForId(catalog, player.cityId).name)}. You have <strong>${formatGold(player.gold)}g</strong>.</p></section>
+  return `<section class="page-title"><div><p class="eyebrow">Local exchange</p><h1>Item markets</h1></div><p>Browse Things currently listed for sale in ${escapeHtml(catalogCityForId(catalog, player.cityId).name)}. You have <strong>${formatGold(player.gold)}g</strong>.</p></section>
     <form class="market-controls" method="get" action="/exchange"><label>Find<input name="q" value="${escapeHtml(query)}" placeholder="Item name"></label><label>Item type<select name="type"><option value="">All types</option>${typeOptions}</select></label><label>Sort<select name="sort"><option value="recommended"${selectedSort === 'recommended' ? ' selected' : ''}>Recommended</option><option value="rarity"${selectedSort === 'rarity' ? ' selected' : ''}>Rarity</option><option value="price-asc"${selectedSort === 'price-asc' ? ' selected' : ''}>Price: low to high</option><option value="price-desc"${selectedSort === 'price-desc' ? ' selected' : ''}>Price: high to low</option><option value="name"${selectedSort === 'name' ? ' selected' : ''}>Name</option></select></label><button>Apply</button>${query || selectedType || selectedSort !== 'recommended' ? '<a class="button secondary" href="/exchange">Reset</a>' : ''}</form>
-    <p class="market-result-count"><strong>${listings.length}</strong> known Thing${listings.length === 1 ? '' : 's'} · ${stockedCount} with local stock.</p>
-    <div class="item-grid market-item-grid">${cards || '<p>No matching known item markets.</p>'}</div>`;
+    <p class="market-result-count"><strong>${listings.length}</strong> locally listed Thing type${listings.length === 1 ? '' : 's'}.</p>
+    <div class="item-grid market-item-grid">${cards || '<p>No matching local listings.</p>'}</div>`;
 }
 
 function cryptoExchangePage(exchange, cityName) {
@@ -4413,10 +4396,10 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
       : `${escapeHtml(cityChoiceLabel(catalog, city.id))} · speed ${vehicle.speed} · ${vehicle.cargoSize}/${vehicle.capacity} capacity · rating ${Math.round(vehicle.rating)}${vehicle.reinforcement > 0
         ? ` · reinforcement ${vehicle.reinforcement}/${vehicle.reinforcementMax}` : ''}${shuttleSummary
         ? ` · SHUTTLE · ${escapeHtml(shuttleSummary.phaseDetail)}` : ''}`;
-    const normalActions = `${vehicle.type === 'sea' ? `<a class="button secondary" href="/vehicles/${vehicle.id}/customize#ammunition">Load ammunition</a>` : ''}${routes ? `<form method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId"${vehicle.damaged ? ' disabled' : ''}>${routes}</select></label><button${vehicle.damaged ? ' disabled' : ''}>Send</button></form>` : '<span>No compatible route here.</span>'}`;
+    const normalActions = `${vehicle.type === 'sea' ? `<a class="button secondary" href="/vehicles/${vehicle.id}/customize#ammunition">Load ammunition</a>` : ''}${routes ? `<form class="idle-vehicle-send" method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId"${vehicle.damaged ? ' disabled' : ''}>${routes}</select></label><button${vehicle.damaged ? ' disabled' : ''}>Send</button></form>` : '<span>No compatible route here.</span>'}`;
     const deactivate = vehicleCanDeactivate(vehicle, catalog)
       ? vehicleDeactivateForm(vehicle) : '';
-    return itemCard(vehicleItem, { meta: vehicle.name, details: `<p class="item-card-status">${vehicle.shuttle ? '<span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span> ' : ''}${status}</p>`,
+    return itemCard(vehicleItem, { meta: vehicle.name, className: 'idle-vehicle-card', details: `<p class="item-card-status">${vehicle.shuttle ? '<span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span> ' : ''}${status}</p>`,
       action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${deactivate}${vehicle.shuttle ? vehicleShuttleCancelForm(vehicle) : normalActions}` });
   };
   const localVehicles = vehicles.filter((vehicle) => vehicle.status !== 'traveling'
@@ -4457,11 +4440,211 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
     const cityRows = locations.map(({ city, count, storedThings }) => `<li><strong>${escapeHtml(cityChoiceLabel(catalog, city.id))}</strong><span>${count} idle vehicle${count === 1 ? '' : 's'} &middot; ${storedThings.toLocaleString('en-GB')} thing${storedThings === 1 ? '' : 's'} stored</span><form method="post" action="/cities/${city.id}/select"><button>Switch to ${escapeHtml(cityChoiceLabel(catalog, city.id))}</button></form></li>`).join('');
     return `<section class="vehicle-region" data-region-id="${region.id}"><header><div><p class="eyebrow">Region</p><h3>${escapeHtml(region.name)}</h3></div><p>${vehicleCount.toLocaleString('en-GB')} idle vehicle${vehicleCount === 1 ? '' : 's'} across ${locations.length.toLocaleString('en-GB')} cit${locations.length === 1 ? 'y' : 'ies'}</p></header><ul class="vehicle-location-list">${cityRows}</ul></section>`;
   }).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Fleet command</p><h1>Vehicles in ${escapeHtml(currentCity.name)}</h1></div><p>Idle vehicles and stored vehicle things are city-local. Traveling vehicles remain visible while underway.</p></section>
+  const comparableVehicleCount = vehicles.filter((vehicle) => vehicle.status === 'idle'
+    && Number(vehicle.cityId) === Number(player.cityId) && !vehicle.damaged
+    && !vehicle.aircraftDestroyed && !vehicle.shuttle && vehicle.routes?.length).length;
+  return `<section class="page-title"><div><p class="eyebrow">Fleet command</p><h1>Vehicles in ${escapeHtml(currentCity.name)}</h1></div><div class="fleet-title-actions"><p>Idle vehicles and stored vehicle things are city-local. Traveling vehicles remain visible while underway.</p><a class="button secondary" href="/vehicles/compare">Compare ready vehicles (${comparableVehicleCount.toLocaleString('en-GB')})</a></div></section>
     <section><h2>Idle vehicles in ${escapeHtml(currentCity.name)}</h2><p>Unloaded, unfitted transports can be deactivated here and activated again from stored vehicle things.</p><div class="vehicle-list">${localVehicles || `<p>No idle vehicles in ${escapeHtml(currentCity.name)}.</p>`}</div></section>
     ${travelingVehicles ? `<section><h2>Vehicles underway</h2><div class="vehicle-list">${travelingVehicles}</div></section>` : ''}
     ${elsewhere ? `<section><h2>Vehicles in other cities</h2><p>Regions follow world-map order; cities are alphabetical within each region. Switch city to manage cargo and fittings stored there.</p><div class="vehicle-region-list">${elsewhere}</div></section>` : ''}
     <section id="stored-vehicle-things" class="stored-vehicle-section"><div class="stored-vehicle-heading"><div><h2>Stored vehicle things in ${escapeHtml(currentCity.name)}</h2>${storedVehicleCount ? `<p>${activatableVehicleCount.toLocaleString('en-GB')} of ${storedVehicleCount.toLocaleString('en-GB')} can be activated here.</p>` : ''}</div>${storedVehicleCount ? `<form method="post" action="/vehicles/activate-all"><button${activatableVehicleCount ? '' : ' disabled'}>Activate all${activatableVehicleCount ? ` (${activatableVehicleCount.toLocaleString('en-GB')})` : ''}</button></form>` : ''}</div><div class="item-grid stored-vehicle-grid">${activate || `<p>No stored vehicles in ${escapeHtml(currentCity.name)}.</p>`}</div></section>`;
+}
+
+function vehicleComparisonNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '&mdash;';
+  const rounded = Math.round((number + Number.EPSILON) * 100) / 100;
+  return escapeHtml(rounded.toLocaleString('en-GB', { maximumFractionDigits: 2 }));
+}
+
+function vehicleComparisonSortValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? String(number) : '';
+}
+
+function vehicleComparisonPage(player, catalog, vehicles, currentTime) {
+  const city = catalogCityForId(catalog, player.cityId);
+  const ready = vehicles.filter((vehicle) => vehicle.status === 'idle'
+    && Number(vehicle.cityId) === Number(player.cityId) && !vehicle.damaged
+    && !vehicle.aircraftDestroyed && !vehicle.shuttle && vehicle.routes?.length)
+    .sort((first, second) => String(first.type).localeCompare(String(second.type), 'en')
+      || Number(second.rarity) - Number(first.rarity)
+      || String(first.name).localeCompare(String(second.name), 'en')
+      || Number(first.id) - Number(second.id));
+  const activeGadgets = new Map((player.gadgets ?? [])
+    .filter((gadget) => Number(gadget.expiresAt) > Number(currentTime))
+    .map((gadget) => [gadget.behaviorKey, gadget]));
+  const specialisation = catalogSpecialisationForId(catalog, player.profession);
+  const bonus = (key) => Number(specialisation.bonuses?.[key] ?? 0);
+  const percentage = (value) => `${vehicleComparisonNumber(Number(value) * 100)}%`;
+  const rowEntries = ready.map((vehicle) => {
+    const speedBonusKey = vehicle.type === 'air' ? 'aircraftSpeed'
+      : vehicle.type === 'land' ? 'loadedLandSpeed' : 'loadedSeaSpeed';
+    const speedSpecialisation = vehicle.type === 'air' || Number(vehicle.cargoSize) > 0
+      ? bonus(speedBonusKey) : 0;
+    const oilSpeed = Number(vehicle.oiledTrips) > 0
+      ? Number(catalog.settings.vehicle_oil_speed_bonus) : 0;
+    const turboSpeed = activeGadgets.has('turbo')
+      ? Number(catalog.settings.turbo_speed_bonus) : 0;
+    const effectiveSpeed = (Number(vehicle.baseSpeed) + oilSpeed + turboSpeed)
+      * (1 + speedSpecialisation);
+    const pillageKey = vehicle.type === 'land' ? 'landPillageOffense'
+      : vehicle.type === 'sea' ? 'seaPillageOffense' : null;
+    const patrolKey = vehicle.type === 'land' ? 'landPatrolDefense'
+      : vehicle.type === 'sea' ? 'seaPatrolDefense' : null;
+    const sharpenerBonus = activeGadgets.has('sharpener')
+      ? Number(catalog.settings.sharpener_offense_bonus) : 0;
+    const shieldBonus = activeGadgets.has('shield')
+      ? Number(catalog.settings.shield_defense_bonus) : 0;
+    const pillageSpecialisation = pillageKey ? bonus(pillageKey) : 0;
+    const patrolSpecialisation = patrolKey ? bonus(patrolKey) : 0;
+    const pillageBonus = sharpenerBonus + pillageSpecialisation;
+    const patrolBonus = shieldBonus + patrolSpecialisation;
+    const baseCombat = vehicle.combatStats;
+    const modAggressive = vehicle.mods.reduce(
+      (sum, mod) => sum + Number(mod.offense ?? 0), 0
+    );
+    const modDefensive = vehicle.mods.reduce(
+      (sum, mod) => sum + Number(mod.defense ?? 0), 0
+    );
+    const aggressive = baseCombat
+      ? (Number(baseCombat.offense) - modAggressive) * (1 + pillageBonus)
+        + modAggressive : null;
+    const defensive = baseCombat
+      ? (Number(baseCombat.defense) - modDefensive) * (1 + patrolBonus)
+        + modDefensive : null;
+    const meldCount = Number(player.meldIds?.length ?? 0);
+    const shipMeldFactor = vehicle.type === 'sea'
+      && Number(vehicle.rarity) >= Number(catalog.settings.ship_meld_min_rarity)
+      ? meldCount * Number(catalog.settings.ship_meld_hull_bonus) : 0;
+    const projectedHull = vehicle.type === 'sea'
+      ? Math.max(1, Number(vehicle.shipDefinition.hull) + Math.round(
+        Number(vehicle.shipDefinition.hull) * (shipMeldFactor + patrolBonus)
+      )) : null;
+    const ammunitionFields = [...new Set(Object.values(
+      catalog.settings.ammunition_rules ?? {}
+    ).map((rule) => rule.storageField))];
+    const ammunition = vehicle.ship ? ammunitionFields.reduce(
+      (sum, field) => sum + Number(vehicle.ship[field] ?? 0), 0
+    ) : 0;
+    const cannonDamage = vehicle.cannons.reduce(
+      (sum, cannon) => sum + Number(cannon.damage ?? 0), 0
+    );
+    const bombs = vehicle.cargo.reduce((sum, cargo) => {
+      const bomb = catalog.bombByItemId.get(Number(cargo.itemId));
+      return sum + (bomb ? Number(bomb.buckets) * Number(cargo.quantity) : 0);
+    }, 0);
+    const aircraftBombDamage = bombs > 0 && sharpenerBonus > 0
+      ? Math.round(bombs * Number(catalog.settings.aircraft_bombing_offense_multiplier)) : bombs;
+    const aircraftShotDownChance = vehicle.type === 'air'
+      ? Math.max(0, Number(catalog.settings.aircraft_shot_down_chance)
+        - (shieldBonus > 0 ? Number(catalog.settings.aircraft_shield_offset) : 0)) : null;
+    const capacity = vehicle.capacityBreakdown ?? {};
+    const speedSources = [
+      `Base ${vehicleComparisonNumber(vehicle.baseSpeed)}`,
+      oilSpeed ? `Oil +${vehicleComparisonNumber(oilSpeed)} (${Number(vehicle.oiledTrips).toLocaleString('en-GB')} trip${Number(vehicle.oiledTrips) === 1 ? '' : 's'})` : '',
+      turboSpeed ? `${escapeHtml(activeGadgets.get('turbo').displayName)} +${vehicleComparisonNumber(turboSpeed)}` : '',
+      speedSpecialisation ? `${escapeHtml(specialisation.name)} +${percentage(speedSpecialisation)}` : ''
+    ].filter(Boolean).join(' &middot; ');
+    const departureBonuses = [
+      oilSpeed ? `Oil: +${vehicleComparisonNumber(oilSpeed)} speed` : '',
+      turboSpeed ? `${escapeHtml(activeGadgets.get('turbo').displayName)}: +${vehicleComparisonNumber(turboSpeed)} speed` : '',
+      sharpenerBonus ? `${escapeHtml(activeGadgets.get('sharpener').displayName)}: +${percentage(sharpenerBonus)} aggressive` : '',
+      shieldBonus ? `${escapeHtml(activeGadgets.get('shield').displayName)}: +${percentage(shieldBonus)} defensive` : '',
+      speedSpecialisation ? `${escapeHtml(specialisation.name)}: +${percentage(speedSpecialisation)} speed` : '',
+      pillageSpecialisation ? `${escapeHtml(specialisation.name)}: +${percentage(pillageSpecialisation)} pillage` : '',
+      patrolSpecialisation ? `${escapeHtml(specialisation.name)}: +${percentage(patrolSpecialisation)} patrol` : '',
+      shipMeldFactor ? `${meldCount.toLocaleString('en-GB')} Melds: +${percentage(shipMeldFactor)} hull` : '',
+      activeGadgets.has('binoculars') ? `${escapeHtml(activeGadgets.get('binoculars').displayName)}: opponent identity` : ''
+    ].filter(Boolean);
+    const armorOrHull = baseCombat
+      ? `<strong>${vehicleComparisonNumber(baseCombat.armor)}</strong><small>Effective armour</small>`
+      : vehicle.type === 'sea'
+        ? `<strong>${vehicleComparisonNumber(projectedHull)}</strong><small>Projected patrol hull &middot; current ${vehicleComparisonNumber(vehicle.ship?.hull)}/${vehicleComparisonNumber(vehicle.ship?.max_hull)}</small>`
+        : '&mdash;';
+    const aggressiveStat = baseCombat
+      ? `<strong>${vehicleComparisonNumber(aggressive)}</strong><small>Pillage total &middot; base ${vehicleComparisonNumber(baseCombat.offense)}${pillageBonus ? ` &middot; +${percentage(pillageBonus)}` : ''}</small>`
+      : vehicle.type === 'sea'
+        ? `<strong>${percentage(pillageBonus)}</strong><small>Pillage critical chance</small>`
+        : bombs > 0
+          ? `<strong>${vehicleComparisonNumber(aircraftBombDamage)}</strong><small>Bombing damage${sharpenerBonus ? ' with gadget' : ''}</small>` : '&mdash;';
+    const defensiveStat = baseCombat
+      ? `<strong>${vehicleComparisonNumber(defensive)}</strong><small>Patrol total &middot; base ${vehicleComparisonNumber(baseCombat.defense)}${patrolBonus ? ` &middot; +${percentage(patrolBonus)}` : ''}</small>`
+      : vehicle.type === 'sea'
+        ? `<strong>${percentage(patrolBonus)}</strong><small>Patrol hull bonus</small>`
+        : `<strong>${percentage(aircraftShotDownChance)}</strong><small>Base-attack shot-down risk</small>`;
+    const shipCombat = vehicle.type === 'sea'
+      ? `<strong>${vehicleComparisonNumber(vehicle.ship?.crew)}/${vehicleComparisonNumber(vehicle.shipDefinition.crew)} crew</strong><small>${vehicle.cannons.length.toLocaleString('en-GB')}/${Number(vehicle.shipDefinition.cannonPortals).toLocaleString('en-GB')} cannons &middot; ${vehicleComparisonNumber(cannonDamage)} damage &middot; ${ammunition.toLocaleString('en-GB')} shots</small>`
+      : '&mdash;';
+    const nameCell = `<th scope="row" data-label="${vehicle.type === 'sea' ? 'Ship' : vehicle.type === 'air' ? 'Aircraft' : 'Vehicle'}" data-sort-value="${escapeHtml(vehicle.name.toLocaleLowerCase('en'))}" class="vehicle-comparison-name"><a class="thing-link rarity-${vehicle.rarity}" href="/vehicles/${vehicle.id}"><img class="table-icon" src="${escapeHtml(vehicle.icon)}" alt=""><span><strong>${escapeHtml(vehicle.name)}</strong><small>${escapeHtml(vehicle.itemName)} &middot; ${escapeHtml(catalogRarityName(catalog, vehicle.rarity))}</small></span></a></th>`;
+    const speedCell = `<td data-label="Speed" data-sort-value="${vehicleComparisonSortValue(effectiveSpeed)}" class="vehicle-comparison-number"><strong>${vehicleComparisonNumber(effectiveSpeed)}</strong><small>${speedSources}</small></td>`;
+    const capacityCell = `<td data-label="Capacity" data-sort-value="${vehicleComparisonSortValue(capacity.total ?? vehicle.capacity)}" class="vehicle-comparison-number"><strong>${Number(vehicle.cargoSize).toLocaleString('en-GB')}/${Number(vehicle.capacity).toLocaleString('en-GB')} cargo</strong><small>${vehicleComparisonNumber(capacity.free)} free of ${vehicleComparisonNumber(capacity.total)} total</small></td>`;
+    const bonusesCell = `<td data-label="Departure bonuses" class="vehicle-comparison-bonuses">${departureBonuses.length ? `<ul>${departureBonuses.map((entry) => `<li>${entry}</li>`).join('')}</ul>` : 'None'}</td>`;
+    const manageCell = `<td data-label="Action" class="vehicle-comparison-action"><a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a></td>`;
+    let cells;
+    if (vehicle.type === 'sea') {
+      cells = `${nameCell}${speedCell}${capacityCell}
+        <td data-label="Hull" data-sort-value="${vehicleComparisonSortValue(projectedHull)}" class="vehicle-comparison-number">${armorOrHull}</td>
+        <td data-label="Aggressive" data-sort-value="${vehicleComparisonSortValue(pillageBonus)}" class="vehicle-comparison-number">${aggressiveStat}</td>
+        <td data-label="Defensive" data-sort-value="${vehicleComparisonSortValue(patrolBonus)}" class="vehicle-comparison-number">${defensiveStat}</td>
+        <td data-label="Crew and cannons">${shipCombat}</td>${bonusesCell}${manageCell}`;
+    } else if (vehicle.type === 'air') {
+      cells = `${nameCell}${speedCell}${capacityCell}
+        <td data-label="Bombing" data-sort-value="${vehicleComparisonSortValue(aircraftBombDamage)}" class="vehicle-comparison-number">${aggressiveStat}</td>
+        <td data-label="Shot-down risk" data-sort-value="${vehicleComparisonSortValue(aircraftShotDownChance)}" class="vehicle-comparison-number">${defensiveStat}</td>
+        ${bonusesCell}${manageCell}`;
+    } else {
+      cells = `${nameCell}${speedCell}${capacityCell}
+        <td data-label="Base attack" data-sort-value="${vehicleComparisonSortValue(baseCombat?.attack)}" class="vehicle-comparison-number">${baseCombat ? `<strong>${vehicleComparisonNumber(baseCombat.attack)}</strong>` : '&mdash;'}</td>
+        <td data-label="Armour" data-sort-value="${vehicleComparisonSortValue(baseCombat?.armor)}" class="vehicle-comparison-number">${armorOrHull}</td>
+        <td data-label="Aggressive" data-sort-value="${vehicleComparisonSortValue(aggressive)}" class="vehicle-comparison-number">${aggressiveStat}</td>
+        <td data-label="Defensive" data-sort-value="${vehicleComparisonSortValue(defensive)}" class="vehicle-comparison-number">${defensiveStat}</td>
+        <td data-label="Dodge" data-sort-value="${vehicleComparisonSortValue(baseCombat?.dodge)}" class="vehicle-comparison-number">${baseCombat ? `<strong>${vehicleComparisonNumber(baseCombat.dodge)}</strong>` : '&mdash;'}</td>
+        ${bonusesCell}${manageCell}`;
+    }
+    return { type: vehicle.type, html: `<tr data-vehicle-id="${vehicle.id}">${cells}</tr>` };
+  });
+  const activeBonusNames = [...activeGadgets.values()].filter((gadget) =>
+    ['turbo', 'sharpener', 'shield', 'binoculars'].includes(gadget.behaviorKey))
+    .map((gadget) => gadget.displayName);
+  const tableFor = (type, title, headers) => {
+    const rows = rowEntries.filter((entry) => entry.type === type);
+    if (!rows.length) return '';
+    const headingId = `vehicle-comparison-${type}-heading`;
+    const headerCells = headers.map((header) => {
+      if (header.hidden) return `<th scope="col"><span class="visually-hidden">${escapeHtml(header.label)}</span></th>`;
+      if (!header.sortType) return `<th scope="col">${escapeHtml(header.label)}</th>`;
+      const defaultDirection = header.defaultDirection ?? (header.sortType === 'string' ? 'ascending' : 'descending');
+      return `<th scope="col" data-sort-type="${header.sortType}" aria-sort="none"><button type="button" class="vehicle-comparison-sort" data-sort-default="${defaultDirection}" title="Sort by ${escapeHtml(header.label.toLocaleLowerCase('en'))}"><span>${escapeHtml(header.label)}</span><span data-sort-indicator aria-hidden="true">&#x2195;</span></button></th>`;
+    }).join('');
+    return `<section class="vehicle-comparison-group"><h2 id="${headingId}">${escapeHtml(title)} <small>(${rows.length.toLocaleString('en-GB')})</small></h2><table class="vehicle-comparison-table vehicle-comparison-${type}" aria-labelledby="${headingId}"><thead><tr>${headerCells}</tr></thead><tbody>${rows.map((entry) => entry.html).join('')}</tbody></table></section>`;
+  };
+  const comparisonTables = [
+    tableFor('land', 'Land vehicles', [
+      { label: 'Vehicle', sortType: 'string' }, { label: 'Speed', sortType: 'number' },
+      { label: 'Capacity', sortType: 'number' }, { label: 'Base attack', sortType: 'number' },
+      { label: 'Armour', sortType: 'number' }, { label: 'Aggressive', sortType: 'number' },
+      { label: 'Defensive', sortType: 'number' }, { label: 'Dodge', sortType: 'number' },
+      { label: 'Departure bonuses' }, { label: 'Actions', hidden: true }
+    ]),
+    tableFor('sea', 'Ships', [
+      { label: 'Ship', sortType: 'string' }, { label: 'Speed', sortType: 'number' },
+      { label: 'Capacity', sortType: 'number' }, { label: 'Hull', sortType: 'number' },
+      { label: 'Aggressive', sortType: 'number' }, { label: 'Defensive', sortType: 'number' },
+      { label: 'Crew and cannons' }, { label: 'Departure bonuses' },
+      { label: 'Actions', hidden: true }
+    ]),
+    tableFor('air', 'Aircraft', [
+      { label: 'Aircraft', sortType: 'string' }, { label: 'Speed', sortType: 'number' },
+      { label: 'Capacity', sortType: 'number' }, { label: 'Bombing', sortType: 'number' },
+      { label: 'Shot-down risk', sortType: 'number', defaultDirection: 'ascending' },
+      { label: 'Departure bonuses' }, { label: 'Actions', hidden: true }
+    ])
+  ].join('');
+  return `<section class="page-title"><div><p class="eyebrow">Fleet command &middot; ${escapeHtml(city.name)}</p><h1>Compare ready vehicles</h1></div><a class="text-link" href="/vehicles">Back to fleet</a></section>
+    <p class="vehicle-comparison-intro">${ready.length.toLocaleString('en-GB')} idle vehicle${ready.length === 1 ? '' : 's'} in ${escapeHtml(city.name)} can be sent now. Effective departure figures include current cargo, oil, active vehicle gadgets and ${escapeHtml(specialisation.name)} specialisation bonuses.${activeBonusNames.length ? ` Active vehicle gadgets: ${escapeHtml(activeBonusNames.join(', '))}.` : ''}</p>
+    <div class="vehicle-comparison-groups">${comparisonTables || '<p>No vehicles in this city are currently ready to send.</p>'}</div>
+    <script src="/node/vehicle-comparison-sort.js?v=20260907a" defer></script>`;
 }
 
 function remoteVehiclePage(player, catalog, vehicle) {
@@ -5099,13 +5282,13 @@ function combatSeasonDate(timestamp) {
 function ratingsPage(report, catalog) {
   const sections = report.ratings.map((group) => `<section><h2>${escapeHtml(
     catalogLabel(catalog, 'vehicle_type', group.routeType))} ranks</h2><ol class="ratings-list">${group.players.map((entry) => {
-    const name = entry.playerId === null
+    const name = entry.playerId === null || entry.isNpc
       ? `<strong>${escapeHtml(entry.name)}</strong>`
       : `<a class="text-link" href="/miners/${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a>`;
     const participation = entry.participantType === 'creature'
       ? 'Event creature'
-      : `${entry.vehicleCount} participating vehicle${entry.vehicleCount === 1 ? '' : 's'} · ${entry.meldCount} melds${entry.isNpc ? ' · NPC fleet' : ''}`;
-    return `<li><span>${entry.rank}.</span>${rankBadge(entry.tierRank, entry.vehicleCount, catalog)}${name}<small>${entry.wins} wins from ${entry.battles} battles · ${Math.round(entry.rating)} rating · ${participation}</small></li>`;
+      : `${entry.vehicleCount} participating vehicle${entry.vehicleCount === 1 ? '' : 's'} · ${entry.meldCount} melds`;
+    return `<li><span>${entry.rank}.</span>${rankBadge(entry.tierRank, entry.vehicleCount, catalog)}${name}<small>${entry.wins} wins from ${entry.battles} battles · ${participation}</small></li>`;
   }).join('') || '<li>No participants in this division.</li>'}</ol></section>`).join('');
   const classes = [...new Set(catalog.settings.combat_class_by_rarity.map(Number)
     .filter((value) => value > 0))];
@@ -5115,7 +5298,7 @@ function ratingsPage(report, catalog) {
   }).join('');
   const seasonEnd = report.season.endsAt - 24 * 60 * 60 * 1000;
   return `<section class="page-title"><div><p class="eyebrow">Live combat ranks · Combat season ${report.season.number}</p><h1>Vehicle rankings</h1></div><div class="page-title-actions"><a class="button" href="/ratings/prizes">View season prizes</a><a class="text-link" href="/vehicles">Back to vehicles</a></div></section><nav class="rating-tabs">${tabs}</nav>
-    <p><strong>${combatSeasonDate(report.season.startsAt)}–${combatSeasonDate(seasonEnd)}.</strong> Every vehicle, ship, ghost fleet, and event creature participates automatically from its live rating. Every resolved vehicle or creature fight changes the combatants' ratings; no win is required to appear. Miner and ghost standings use the current strongest vehicle in that division. Player prizes are limited to non-NPC miners with at least one resolved fight. Ratings reset when the season closes.</p><div class="ratings-grid">${sections}</div>`;
+    <p><strong>${combatSeasonDate(report.season.startsAt)}–${combatSeasonDate(seasonEnd)}.</strong> Every miner vehicle, ship, and event creature participates automatically from its live rating. Every resolved vehicle or creature fight changes the combatants' ratings; no win is required to appear. Miner standings use the current strongest vehicle in that division. Player prizes require at least one resolved fight. Ratings reset when the season closes.</p><div class="ratings-grid">${sections}</div>`;
 }
 
 function combatSeasonPrizesPage(report, prizes, catalog) {
@@ -7094,6 +7277,10 @@ export function createApp(options = {}) {
       if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-shuttle.js', 'no-store')) response.writeHead(404).end('Not found');
       return;
     }
+    if (url.pathname === '/node/vehicle-comparison-sort.js') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-comparison-sort.js', 'no-store')) response.writeHead(404).end('Not found');
+      return;
+    }
     if (url.pathname === '/node/flash-modal.js') {
       if (!staticFile(request, response, PUBLIC_ROOT, '/flash-modal.js', 'no-store')) response.writeHead(404).end('Not found');
       return;
@@ -8227,6 +8414,18 @@ export function createApp(options = {}) {
         responseHtml(response, 200, layout('Vehicles',
           vehiclesPage(fleetPlayer, catalog, vehicles, vehicleTime,
             activationAvailability), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/vehicles/compare') {
+        if (!requirePlayer()) return;
+        const comparisonTime = now();
+        const vehicles = store.vehiclesForPlayer(player.id, comparisonTime, {
+          includeRoutes: true, settle: !maintenanceRunning
+        });
+        const comparisonPlayer = store.playerById(
+          player.id, comparisonTime, { settle: false }
+        );
+        responseHtml(response, 200, layout('Compare vehicles',
+          vehicleComparisonPage(comparisonPlayer, catalog, vehicles, comparisonTime),
+          player, flash));
       } else if (request.method === 'GET' && url.pathname === '/vehicles/boxes') {
         if (!requirePlayer()) return;
         const requestedVehicleId = Number(url.searchParams.get('vehicleId'));
@@ -9786,7 +9985,7 @@ export function createApp(options = {}) {
           store.awardStone(player.id, 'Liquidated', now());
           setFlash(`Sold ${trade.quantity} ${item.name} at ${formatGold(trade.price)}g each · ${formatGold(trade.gold)}g total.`);
         }
-        redirect(response, `/market/items/${itemId}`);
+        redirect(response, requestDestination(request, `/market/items/${itemId}`));
       } else if (request.method === 'POST' && /^\/market\/orders\/\d+\/(cancel|buy|sell)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');

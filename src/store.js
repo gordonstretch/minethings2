@@ -29664,6 +29664,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       FROM participants
       JOIN players ON players.id = participants.player_id
       LEFT JOIN totals ON totals.player_id = players.id
+      WHERE players.is_npc = 0
       GROUP BY players.id, players.name, players.created_at, players.is_npc,
         totals.wins, totals.battles
     `).all().map((entry) => ({

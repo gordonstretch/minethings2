@@ -314,7 +314,9 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
     'INSERT INTO player_melds (player_id, meld_id, created_at) VALUES (?, ?, 1000)'
   );
   for (const meld of catalog.melds.slice(0, 10)) addMeld.run(player.id, meld.id);
-  store.activateVehicle(player.id, catalog.settings.search_plane_item_id);
+  const searchPlaneId = store.activateVehicle(
+    player.id, catalog.settings.search_plane_item_id
+  );
 
   store.database.prepare('DELETE FROM thief_bases').run();
   assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM thief_bases').get().count, 0);
@@ -355,6 +357,10 @@ test('shows the staged ore-thief operation only on the Airfield page', async (co
   assert.match(hiddenHtml, /Cinderwake[\s\S]*this region's mission airfield/);
   const readyFleetHtml = await getHtml('/vehicles');
   assert.match(readyFleetHtml, /Search for the ore-thief base/);
+  const comparisonHtml = await getHtml('/vehicles/compare');
+  assert.match(comparisonHtml, new RegExp(`data-vehicle-id="${searchPlaneId}"`));
+  assert.match(comparisonHtml, /Search Plane/);
+  assert.match(comparisonHtml, /Base-attack shot-down risk/);
 
   const baseId = store.database.prepare('SELECT id FROM thief_bases ORDER BY id DESC LIMIT 1')
     .get().id;
@@ -2392,6 +2398,14 @@ test('renders an armed ship on an inter-map voyage without treating its null cit
   assert.equal(vehicles.headers.get('location'), null);
   assert.match(await vehicles.text(), /Traveling to/);
 
+  const comparison = await fetch(`${base}/vehicles/compare`, {
+    redirect: 'manual', headers: { cookie, referer: `${base}/vehicles` }
+  });
+  assert.equal(comparison.status, 200);
+  const comparisonHtml = await comparison.text();
+  assert.match(comparisonHtml, /No vehicles in this city are currently ready to send\./);
+  assert.doesNotMatch(comparisonHtml, new RegExp(`data-vehicle-id="${vehicleId}"`));
+
   const details = await fetch(`${base}/vehicles/${vehicleId}`, {
     redirect: 'manual', headers: { cookie, referer: `${base}/vehicles/${vehicleId}` }
   });
@@ -2443,14 +2457,33 @@ test('lists inter-region vehicle routes last and cycles unaltered transports thr
   const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType === routeType
     && vehicle.routePolicy !== 'capital-link');
   assert.ok(region && Number.isSafeInteger(routeType) && vehicleType);
+  const routeBehavior = routeType === catalog.settings.route_type_ids.land ? 'land'
+    : routeType === catalog.settings.route_type_ids.sea ? 'sea' : 'air';
+  const comparisonBonusKey = routeBehavior === 'land' ? 'landPillageOffense'
+    : routeBehavior === 'sea' ? 'seaPillageOffense' : 'aircraftSpeed';
+  const comparisonSpecialisation = catalog.specialisations.find(
+    (entry) => Number(entry.bonuses[comparisonBonusKey]) > 0
+  );
+  assert.ok(comparisonSpecialisation);
+  const comparisonGadgets = ['turbo', 'sharpener', 'shield'].map((behaviorKey) => {
+    const gadget = catalog.gadgets.find((entry) => entry.behaviorKey === behaviorKey);
+    const gadgetItem = catalog.gadgetItems.find((entry) => entry.gadgetId === gadget?.id);
+    assert.ok(gadget && gadgetItem);
+    return { ...gadget, itemId: gadgetItem.itemId };
+  });
   const player = createPlayer('Fleet Deactivator', '', hashPassword(password), catalog, 1000,
     () => 0.5);
+  player.profession = comparisonSpecialisation.id;
   player.cityId = capitalId;
   player.knownCityIds = [capitalId];
-  player.inventoryByCity = { [capitalId]: { [vehicleType.itemId]: 1 } };
+  player.inventoryByCity = { [capitalId]: {
+    [vehicleType.itemId]: 1,
+    ...Object.fromEntries(comparisonGadgets.map((gadget) => [gadget.itemId, 1]))
+  } };
   player.inventory = player.inventoryByCity[capitalId];
   const saved = store.addPlayer(player);
   const vehicleId = store.activateVehicle(saved.id, vehicleType.itemId, 1000);
+  for (const gadget of comparisonGadgets) store.activateGadget(saved.id, gadget.itemId, 1000);
   const routes = store.routesForVehicle(saved.id, vehicleId, 2000);
   const firstInterRegion = routes.findIndex((route) => route.interMap);
   const finalRegional = routes.findLastIndex((route) => !route.interMap);
@@ -2471,12 +2504,47 @@ test('lists inter-region vehicle routes last and cycles unaltered transports thr
   });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const fleetHtml = await (await fetch(`${base}/vehicles`, { headers: { cookie } })).text();
+  assert.match(fleetHtml, /class="[^"]*idle-vehicle-card[^"]*"/);
+  assert.match(fleetHtml, /href="\/vehicles\/compare">Compare ready vehicles \(1\)<\/a>/);
+  assert.match(fleetHtml, new RegExp(
+    `class="idle-vehicle-send" method="post" action="/vehicles/${vehicleId}/send"`
+  ));
   assert.match(fleetHtml, new RegExp(
     `action="/vehicles/${vehicleId}/store"><button class="secondary">Deactivate</button>`
   ));
   const regionalPosition = fleetHtml.indexOf(`value="${routes[finalRegional].id}"`);
   const interRegionPosition = fleetHtml.indexOf(`value="${routes[firstInterRegion].id}"`);
   assert.ok(regionalPosition >= 0 && interRegionPosition > regionalPosition);
+
+  store.database.prepare(
+    'UPDATE player_vehicles SET oiled_trips = 2 WHERE id = ?'
+  ).run(vehicleId);
+  const comparison = await fetch(`${base}/vehicles/compare`, { headers: { cookie } });
+  assert.equal(comparison.status, 200);
+  const comparisonHtml = await comparison.text();
+  assert.match(comparisonHtml, /Compare ready vehicles/);
+  assert.match(comparisonHtml, new RegExp(`data-vehicle-id="${vehicleId}"`));
+  assert.match(comparisonHtml, /class="vehicle-comparison-table vehicle-comparison-land"/);
+  assert.match(comparisonHtml, /Land vehicles <small>\(1\)<\/small>/);
+  assert.match(comparisonHtml, /Base attack/);
+  assert.match(comparisonHtml, /Armour/);
+  assert.match(comparisonHtml, /Departure bonuses/);
+  assert.match(comparisonHtml,
+    /data-sort-type="string" aria-sort="none"><button type="button" class="vehicle-comparison-sort"/);
+  assert.match(comparisonHtml, /data-sort-default="descending" title="Sort by speed"/);
+  assert.match(comparisonHtml, /src="\/node\/vehicle-comparison-sort\.js\?v=20260907a" defer/);
+  const comparisonSortScript = await fetch(`${base}/node/vehicle-comparison-sort.js`);
+  assert.equal(comparisonSortScript.status, 200);
+  assert.match(await comparisonSortScript.text(), /header\.setAttribute\('aria-sort', direction\)/);
+  assert.doesNotMatch(comparisonHtml,
+    /<th scope="col">(?:Class|Rating|Condition|Loadout)<\/th>/u);
+  assert.match(comparisonHtml, /Effective departure figures include current cargo, oil, active vehicle gadgets/);
+  assert.match(comparisonHtml, /Oil: \+5 speed/);
+  assert.match(comparisonHtml, new RegExp(`${comparisonGadgets[0].displayName}: \\+5 speed`));
+  assert.match(comparisonHtml, new RegExp(`${comparisonSpecialisation.name}: \\+20%`));
+  store.database.prepare(
+    'UPDATE player_vehicles SET oiled_trips = 0 WHERE id = ?'
+  ).run(vehicleId);
 
   const deactivate = await fetch(`${base}/vehicles/${vehicleId}/store`, {
     method: 'POST', redirect: 'manual', headers: { cookie }
@@ -2534,6 +2602,12 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   assert.match(fleetHtml, new RegExp(
     `/vehicles/${vehicleId}/customize#ammunition[^>]*>Load ammunition</a>`
   ));
+  const comparisonHtml = await (await fetch(`${base}/vehicles/compare`, {
+    headers: { cookie }
+  })).text();
+  assert.match(comparisonHtml, new RegExp(`data-vehicle-id="${vehicleId}"`));
+  assert.match(comparisonHtml, /Projected patrol hull/);
+  assert.match(comparisonHtml, /0\/\d+ cannons/);
 
   const statusResponse = await fetch(`${base}/vehicles/${vehicleId}`, { headers: { cookie } });
   const statusHtml = await statusResponse.text();
@@ -3268,23 +3342,9 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.match(afterHtml, /Listed things remain in that city and still use inventory capacity/);
   assert.match(afterHtml, new RegExp(`href="/market/items/${item.id}"`));
   const exchangeHtml = await (await fetch(`${base}/exchange`, { headers: { cookie } })).text();
-  const unlistedCardHtml = exchangeHtml.match(new RegExp(
-    `<article[^>]*data-item-id="${item.id}"[\\s\\S]*?</article>`
-  ))?.[0];
-  assert.ok(unlistedCardHtml);
-  assert.match(unlistedCardHtml, new RegExp(
-    `href="/market/items/${item.id}#place-bid">Bid</a>`
-  ));
-  assert.doesNotMatch(unlistedCardHtml, /Collectible|No current listing/);
+  assert.doesNotMatch(exchangeHtml, new RegExp(`data-item-id="${item.id}"`));
+  assert.match(exchangeHtml, /No matching local listings/);
   assert.doesNotMatch(exchangeHtml, /Open order book|Order book/);
-  const listerMeldNeeds = store.remainingMeldItemNeeds(saved.id);
-  const meldableKnownItemId = store.playerById(saved.id).discoveries
-    .map((entry) => entry.itemId).find((itemId) => Number(listerMeldNeeds[itemId]) > 0);
-  assert.ok(meldableKnownItemId, 'the player should know a Thing needed by an unfinished Meld');
-  const meldableCardHtml = exchangeHtml.match(new RegExp(
-    `<article[^>]*data-item-id="${meldableKnownItemId}"[\\s\\S]*?</article>`
-  ))?.[0];
-  assert.match(meldableCardHtml, /class="market-meldable-badge"[^>]*>Meldable<\/span>/);
   const buyerLogin = await fetch(`${base}/login`, {
     method: 'POST', redirect: 'manual',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -3309,9 +3369,7 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.doesNotMatch(buyerExchangeHtml, /Open order book|Order book/);
   const knownUnlistedItemId = buyer.discoveries.find((entry) => entry.itemId !== item.id)?.itemId;
   assert.ok(knownUnlistedItemId, 'buyer should know an unlisted item');
-  assert.match(buyerExchangeHtml, new RegExp(
-    `href="/market/items/${knownUnlistedItemId}#place-bid">Bid</a>`
-  ));
+  assert.doesNotMatch(buyerExchangeHtml, new RegExp(`data-item-id="${knownUnlistedItemId}"`));
   const bidPageHtml = await (await fetch(`${base}/market/items/${knownUnlistedItemId}`, {
     headers: { cookie: buyerCookie }
   })).text();
@@ -3324,7 +3382,7 @@ test('opens the original local order book from Your Things and preserves listed 
     `${base}/exchange?type=definitely-not-a-type&sort=price-asc`,
     { headers: { cookie: buyerCookie } }
   )).text();
-  assert.match(filteredExchangeHtml, /No matching known item markets/);
+  assert.match(filteredExchangeHtml, /No matching local listings/);
   assert.match(filteredExchangeHtml, /value="price-asc" selected/);
 
   const listAll = await fetch(`${base}/market/items/${item.id}/listings`, {
@@ -3347,6 +3405,21 @@ test('opens the original local order book from Your Things and preserves listed 
   ))?.[0];
   assert.ok(allListedCardHtml);
   assert.match(allListedCardHtml, /5 listed/);
+
+  const buyNow = await fetch(`${base}/market/items/${item.id}/buy-now`, {
+    method: 'POST', redirect: 'manual',
+    headers: {
+      cookie: buyerCookie,
+      referer: `${base}/exchange`,
+      'content-type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({ price: String(listingPrice), quantity: '1' })
+  });
+  assert.equal(buyNow.status, 303);
+  assert.equal(buyNow.headers.get('location'), '/exchange');
+  assert.equal(store.playerById(saved.id).inventory[item.id], 4);
+  assert.equal(store.marketForItem(item.id, player.cityId).listings
+    .reduce((sum, entry) => sum + entry.quantity, 0), 4);
 
   store.database.prepare(
     "UPDATE catalog_settings SET value_json = '4321' WHERE key = 'starter_credits'"
@@ -3547,6 +3620,8 @@ test('opens a Safe Travel Kit from Things and reveals its kept instruction card'
   assert.match(beforeHtml, new RegExp(
     `class="safe-travel-kit-open-form" method="post" action="/inventory/${SAFE_TRAVEL_KIT_CATALOG.itemId}/open"`
   ));
+  assert.match(beforeHtml,
+    /<img src="\/node\/safe-travel-kit\.svg" alt="Safe Travel Kit">/u);
   assert.match(beforeHtml, /Open kit · unpack supplies and read instructions/u);
 
   const response = await fetch(`${base}/inventory/${SAFE_TRAVEL_KIT_CATALOG.itemId}/open`, {
@@ -3576,6 +3651,7 @@ test('opens a Safe Travel Kit from Things and reveals its kept instruction card'
   const artwork = await fetch(`${base}/node/safe-travel-kit.svg`);
   assert.equal(artwork.status, 200);
   assert.match(artwork.headers.get('content-type'), /image\/svg\+xml/u);
+  assert.match(await artwork.text(), /<title id="title">Safe Travel Kit<\/title>/u);
 });
 
 test('disables city and crypto Sell now tickets without local stock and renders a price line', async (context) => {
@@ -3708,14 +3784,8 @@ test('keeps an unneeded Meld-button item in Things and explains why', async (con
   ));
   assert.match(disabledHtml, /is not needed for any remaining meld/);
   const exchangeHtml = await (await fetch(`${base}/exchange`, { headers: { cookie } })).text();
-  const unneededCardHtml = exchangeHtml.match(new RegExp(
-    `<article[^>]*data-item-id="${itemId}"[\\s\\S]*?</article>`
-  ))?.[0];
-  assert.ok(unneededCardHtml);
-  assert.match(unneededCardHtml, new RegExp(
-    `href="/market/items/${itemId}#place-bid">Bid</a>`
-  ));
-  assert.doesNotMatch(unneededCardHtml, /market-meldable-badge|Meldable/);
+  assert.doesNotMatch(exchangeHtml, new RegExp(`data-item-id="${itemId}"`));
+  assert.match(exchangeHtml, /No matching local listings/);
 
   const response = await fetch(`${base}/inventory/${itemId}/meld`, {
     method: 'POST', redirect: 'manual',
@@ -5692,6 +5762,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(ratingsHtml, /href="\/ratings\/prizes"/);
   assert.match(ratingsHtml, /participates automatically from its live rating/);
   assert.match(ratingsHtml, /Every resolved vehicle or creature fight/);
+  assert.doesNotMatch(ratingsHtml, /\d[\d,]* rating/u);
   assert.doesNotMatch(ratingsHtml, /trial waves/i);
   const seasonPrizes = await fetch(`${base}/ratings/prizes`, { headers: { cookie } });
   assert.equal(seasonPrizes.status, 200);

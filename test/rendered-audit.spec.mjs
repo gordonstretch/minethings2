@@ -896,10 +896,11 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.getByRole('heading', { name: 'Vehicle rankings' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View season prizes' })).toBeVisible();
   await expect(page.getByText(/participates automatically from its live rating/)).toBeVisible();
+  await expect(page.locator('.ratings-list')).not.toContainText(/\d[\d,]* rating/u);
   expect(await page.locator('.ratings-list').getByText(/Event creature/).count())
     .toBeGreaterThanOrEqual(2);
-  expect(await page.locator('.ratings-list').getByText(/NPC fleet/).count())
-    .toBeGreaterThanOrEqual(1);
+  await expect(page.locator('.ratings-list').getByText(/NPC fleet/)).toHaveCount(0);
+  await expect(page.locator('.ratings-list').getByText('The Restless Dead')).toHaveCount(0);
   await expect(page.getByText(/Legendary T-Rex #/)).toBeVisible();
   await expect(page.getByText(/Legendary Kraken #/)).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 900 });
