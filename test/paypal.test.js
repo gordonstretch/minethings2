@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { paypalConfiguration, paypalOrderSummary, paypalReadiness } from '../src/paypal.js';
+import {
+  PayPalClient, paypalConfiguration, paypalOrderSummary, paypalReadiness
+} from '../src/paypal.js';
 
 test('hard-gates live PayPal checkout on HTTPS, webhook and published seller identity', () => {
   const incomplete = paypalConfiguration({
@@ -33,4 +35,38 @@ test('summarises PayPal orders without trusting browser-provided purchase values
     invoiceId: 'MT-7', customId: '7', amountMinor: 499, currency: 'GBP',
     captureId: 'CAPTURE-1', captureStatus: 'COMPLETED'
   });
+});
+
+test('reports rejected credentials without exposing them and caches valid authentication', async () => {
+  const rejected = new PayPalClient(paypalConfiguration({
+    enabled: true, environment: 'live', clientId: 'live-id', clientSecret: 'live-secret'
+  }, {}), async (url, options) => {
+    assert.equal(url, 'https://api-m.paypal.com/v1/oauth2/token');
+    assert.equal(options.body, 'grant_type=client_credentials');
+    assert.equal(Buffer.from(options.headers.authorization.slice('Basic '.length), 'base64')
+      .toString(), 'live-id:live-secret');
+    return new Response(JSON.stringify({ error: 'invalid_client' }), {
+      status: 401, headers: { 'content-type': 'application/json', 'paypal-debug-id': 'debug-1' }
+    });
+  });
+  await assert.rejects(() => rejected.authenticate(), (error) => {
+    assert.equal(error.code, 'PAYPAL_CREDENTIALS_REJECTED');
+    assert.equal(error.paypalDebugId, 'debug-1');
+    assert.match(error.message, /No payment was attempted/u);
+    assert.doesNotMatch(error.message, /live-(?:id|secret)/u);
+    return true;
+  });
+
+  let tokenRequests = 0;
+  const accepted = new PayPalClient(paypalConfiguration({
+    enabled: true, environment: 'sandbox', clientId: 'id', clientSecret: 'secret'
+  }, {}), async () => {
+    tokenRequests += 1;
+    return new Response(JSON.stringify({ access_token: 'token', expires_in: 300 }), {
+      status: 200, headers: { 'content-type': 'application/json' }
+    });
+  });
+  assert.equal(await accepted.authenticate(), true);
+  assert.equal(await accepted.authenticate(), true);
+  assert.equal(tokenRequests, 1);
 });

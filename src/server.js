@@ -6,9 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import {
-  activeMineLimit, assignRobot, buyMine, createPlayer,
+  activeMineLimit, assignRobot, createPlayer,
   equipMine, mineBucketsPerHour, mineIntervalMs,
-  mineRefundCredits, oilMineBot, prioritizeMine, rentMine, sellMine, setMineMode,
+  mineRentalOffers, oilMineBot, prioritizeMine, rentMine, setMineMode,
   unassignRobot, unequipMine
 } from './game.js';
 import { loadLegacyCatalog } from './legacy-catalog.js';
@@ -19,6 +19,7 @@ import { renderCityLandmarkArt } from './city-landmark-art.js';
 import { renderDwarfParkArt } from './dwarf-park-art.js';
 import {
   CITY_VEHICLE_REPAIR_DURATION_MS, FACTORY_QUEUE_MAX_JOBS, SHUTTLE_OIL_CATEGORY_ID, SqliteStore,
+  VEHICLE_CONVOY_MAX_SIZE, VEHICLE_CONVOY_MAX_STAGGER_MS, VEHICLE_CONVOY_MIN_SIZE,
   hashPasswordAsync, verifyPasswordAsync
 } from './store.js';
 import { specialisationMultiplier } from './specialisations.js';
@@ -79,7 +80,11 @@ const MIME_TYPES = new Map([
   ['.svg', 'image/svg+xml; charset=utf-8'], ['.webp', 'image/webp'], ['.woff2', 'font/woff2']
 ]);
 const STATIC_ASSET_CACHE_CONTROL = 'public, max-age=3600';
+const VERSIONED_STATIC_ASSET_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const IMAGE_CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400';
+const MAP_ASSET_VERSION = '20260908a';
+const MAP_PAGE_CACHE_TTL_MS = 30_000;
+const MAP_PAGE_CACHE_LIMIT = 256;
 const SECURITY_HEADERS = Object.freeze({
   'Content-Security-Policy': "default-src 'self'; base-uri 'none'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'",
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -102,7 +107,10 @@ function formatDuration(milliseconds) {
   if (milliseconds <= 0) return 'ready now';
   const minutes = Math.ceil(milliseconds / 60000);
   if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days.toLocaleString('en-GB')}d ${hours % 24}h ${minutes % 60}m`;
 }
 
 const WEATHER_PRESENTATION = Object.freeze({
@@ -393,6 +401,27 @@ function responseHtml(response, status, html) {
   response.end(html);
 }
 
+function responseRevalidatedHtml(request, response, status, html, extraHeaders = {}) {
+  const body = Buffer.from(html);
+  const etag = `"${crypto.createHash('sha256').update(body).digest('base64url')}"`;
+  const headers = {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': body.length,
+    'Cache-Control': 'private, no-cache',
+    ETag: etag,
+    Vary: 'Cookie',
+    ...extraHeaders
+  };
+  const validators = String(request.headers['if-none-match'] ?? '')
+    .split(',').map((value) => value.trim());
+  if (status === 200 && validators.includes(etag)) {
+    delete headers['Content-Length'];
+    response.writeHead(304, headers).end();
+    return;
+  }
+  response.writeHead(status, headers).end(body);
+}
+
 function responseJson(response, status, value) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -454,12 +483,13 @@ function staticFile(request, response, root, relativePath,
     const contentType = MIME_TYPES.get(path.extname(filename).toLowerCase());
     if (!contentType) return false;
     const etag = `"${stats.size.toString(16)}-${Math.trunc(stats.mtimeMs).toString(16)}"`;
+    const versioned = Boolean(new URL(request.url, 'http://localhost').searchParams.get('v'));
     const headers = {
       'Content-Type': contentType,
       'Content-Length': stats.size,
-      'Cache-Control': cacheControl ?? (contentType.startsWith('image/')
-        ? IMAGE_CACHE_CONTROL
-        : STATIC_ASSET_CACHE_CONTROL),
+      'Cache-Control': cacheControl ?? (versioned
+        ? VERSIONED_STATIC_ASSET_CACHE_CONTROL
+        : contentType.startsWith('image/') ? IMAGE_CACHE_CONTROL : STATIC_ASSET_CACHE_CONTROL),
       ETag: etag,
       'Last-Modified': stats.mtime.toUTCString()
     };
@@ -698,7 +728,7 @@ function layout(title, content, player, flash) {
   const sideNavigation = player ? `<aside id="left" aria-label="Player navigation"><button id="player-nav-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="player-nav-panel"><span>Game menu</span><strong>All operations</strong><b aria-hidden="true">+</b></button><div id="player-nav-panel"><div class="sidebar-context"><p class="sidebar-location-heading">You are here:</p><div class="sidebar-location-value"><span>Region</span> <a class="text-link" href="/map?world=${encodeURIComponent(player.mapSlug)}">${escapeHtml(player.mapName)}</a></div><div class="sidebar-location-value"><span>City</span> <a class="text-link" href="/map?world=${encodeURIComponent(player.mapSlug)}#city-${player.cityId}">${sidebarCapitalIcon}${escapeHtml(player.cityName)}</a></div>${sidebarWeather}<a class="sidebar-map-link" href="/map">Open world map <span aria-hidden="true">→</span></a></div><nav id="navlist" aria-label="Game sections">
     ${sideGroup('Extraction', [sideLink('/', countedSideLabel('Mines', 'mines'), ['/'], true), sideLink('/inventory', countedSideLabel('Things', 'things'), ['/inventory', '/items']), sideLink('/dwarves', countedSideLabel('Dwarves', 'dwarves')), sideLink('/gadgets', countedSideLabel('Gadgets', 'gadgets')), sideLink('/melds', countedSideLabel('Melds', 'melds'))])}
     ${sideGroup('Industry', [sideLink('/vehicles', countedSideLabel('Fleet', 'fleet')), sideLink('/factories', countedSideLabel('Factories', 'factories')), sideLink('/mills', countedSideLabel('Mills', 'mills')), sideLink('/oil-field', countedSideLabel('Oil Field', 'oilFields')), sideLink('/containers', 'Containers'), sideLink('/market', 'Mine shop', ['/market'], true)])}
-    ${sideGroup('World', [sideLink('/explore', 'Explore city'), sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/mines', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events')])}
+    ${sideGroup('World', [sideLink('/explore', 'Explore city'), sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events')])}
     ${sideGroup('Network', [sideLink('/chat', unseenLabel('Chat', player.unseenChatMessages)), sideLink('/casino', 'Casino'), sideLink('/guilds', unseenLabel('Guilds', player.unseenGuildChatMessages)), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', `Miners (${Number(player.minerCount).toLocaleString('en-GB')})`, ['/miners'], true), sideLink('/ratings', 'Ratings')])}
     ${sideGroup('Miner', [sideLink('/professions', 'Specialisation'), sideLink(`/miners/${encodeURIComponent(player.name)}`, 'Profile', [`/miners/${encodeURIComponent(player.name)}`], true), sideLink('/account', 'Account'), sideLink('/stats', 'Server stats'), sideLink('/guide', 'Field guide'), sideLink('/credits', 'Buy credits')])}
     ${player.authority > 0 ? sideGroup('Command', [sideLink('/admin', 'Administration')]) : ''}
@@ -713,7 +743,7 @@ function layout(title, content, player, flash) {
   const noticeKey = player?.findingNotice?.noticeKey ?? (flash ? `flash:${flash}` : '');
   const noticeTitle = foundItems.length
     ? player?.findingNotice?.title ?? 'Things found' : 'Update';
-  const flashDialog = `<aside id="flash-dialog" class="flash-notice" hidden aria-labelledby="flash-dialog-title" data-notice-key="${escapeHtml(noticeKey)}"><header><span class="flash-notice-mark" aria-hidden="true">${foundItems.length ? '✦' : '✓'}</span><strong id="flash-dialog-title">${escapeHtml(noticeTitle)}</strong><button type="button" aria-label="Dismiss notification">×</button></header><p id="flash-dialog-message" role="status" aria-live="polite">${escapeHtml(noticeMessage)}</p><ul id="flash-dialog-items" class="flash-item-list" aria-label="${foundItems.length ? 'Items found' : 'Notification details'}">${findingNoticeListHtml(foundItems)}</ul></aside><script src="/node/flash-modal.js?v=20260831c" defer></script>`;
+  const flashDialog = `<aside id="flash-dialog" class="flash-notice" hidden aria-labelledby="flash-dialog-title" data-notice-key="${escapeHtml(noticeKey)}"><header><span class="flash-notice-mark" aria-hidden="true">${foundItems.length ? '✦' : '✓'}</span><strong id="flash-dialog-title">${escapeHtml(noticeTitle)}</strong><button type="button" aria-label="Dismiss notification">×</button></header><p id="flash-dialog-message" role="status" aria-live="polite">${escapeHtml(noticeMessage)}</p><ul id="flash-dialog-items" class="flash-item-list" aria-label="${foundItems.length ? 'Items found' : 'Notification details'}">${findingNoticeListHtml(foundItems)}</ul></aside><script src="/node/flash-modal.js?v=20260908a" defer></script>`;
   const botBuildNotice = player?.botBuildNotice ?? null;
   const botBuildProgress = botBuildNotice
     ? `Part ${botBuildNotice.step} of ${botBuildNotice.total}` : '';
@@ -1294,8 +1324,7 @@ function dashboardPage(player, catalog, now) {
       .map(([value, label]) => `<option value="${value}"${value === modeValue ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
     const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
     const oilOwned = player.inventoryByCity[mine.cityId]?.[oilItem.id] ?? 0;
-    const permanentCount = player.mines.filter((candidate) => !candidate.rentalUntil).length;
-  return `<article class="mine${mine.active ? '' : ' inactive'}">${equipmentBot(mine, catalog, true)}<div><h3><span class="mine-priority">${mine.priority}</span> ${escapeHtml(type.name)} Mine</h3><p>${mine.active ? miningStatus : '<strong>Paused by the active-mine limit.</strong>'}${mine.oilExpiresAt > now ? ` · oiled for ${formatDuration(mine.oilExpiresAt - now)}` : ''}${mine.rentalUntil ? ` · rental expires in ${formatDuration(mine.rentalUntil - now)}` : ''}${mine.sourceKind === 'profession-kit' ? ' · Profession Kit grant · non-refundable' : ''}</p>${mine.active ? `<div class="button-row mine-tool-links"><a class="button secondary" href="/mines/${mine.id}/explosives">Mine with explosives</a><a class="button secondary" href="/mines/${mine.id}/equipment">Equip your miner</a></div>` : ''}</div><div class="mine-actions"><form method="post" action="/mines/${mine.id}/prioritize"><button class="secondary" ${mine.priority === 1 ? 'disabled' : ''}>Make top</button></form>${mine.active ? `<form method="post" action="/mines/${mine.id}/mode"><label>Mine for<select name="mode">${modeOptions}</select></label><button class="secondary">Set mode</button></form><form method="post" action="/mines/${mine.id}/oil"><button class="secondary" ${oilOwned < 1 ? 'disabled' : ''}>Oil bot</button></form>` : ''}${!mine.rentalUntil && mine.sourceKind !== 'profession-kit' && type.refundable ? `<form method="post" action="/mines/${mine.id}/sell"><button class="secondary" ${permanentCount <= Number(catalog.settings.minimum_permanent_mines) ? 'disabled' : ''}>Resell for ${mineRefundCredits(catalog, type)}c</button></form>` : ''}</div></article>`;
+  return `<article class="mine${mine.active ? '' : ' inactive'}">${equipmentBot(mine, catalog, true)}<div><h3><span class="mine-priority">${mine.priority}</span> ${escapeHtml(type.name)} Mine</h3><p>${mine.active ? miningStatus : '<strong>Paused by the active-mine limit.</strong>'}${mine.oilExpiresAt > now ? ` · oiled for ${formatDuration(mine.oilExpiresAt - now)}` : ''}${mine.rentalUntil ? ` · rental expires in ${formatDuration(mine.rentalUntil - now)}` : ''}</p>${mine.active ? `<div class="button-row mine-tool-links"><a class="button secondary" href="/mines/${mine.id}/explosives">Mine with explosives</a><a class="button secondary" href="/mines/${mine.id}/equipment">Equip your miner</a></div>` : ''}</div><div class="mine-actions"><form method="post" action="/mines/${mine.id}/prioritize"><button class="secondary" ${mine.priority === 1 ? 'disabled' : ''}>Make top</button></form>${mine.active ? `<form method="post" action="/mines/${mine.id}/mode"><label>Mine for<select name="mode">${modeOptions}</select></label><button class="secondary">Set mode</button></form><form method="post" action="/mines/${mine.id}/oil"><button class="secondary" ${oilOwned < 1 ? 'disabled' : ''}>Oil bot</button></form>` : ''}</div></article>`;
   }).join('');
   const capacityWarning = player.itemCount > player.itemLimit
     ? `<p class="capacity-warning">You are ${player.itemCount - player.itemLimit} things over your ${player.itemLimit}-thing limit. <a class="text-link" href="/mines/auto-recycle">Open Auto-Recycle</a>.</p>` : '';
@@ -1936,7 +1965,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
     : `<div class="chat-color-control" style="--chat-preview:#${appearanceColor}"><span class="chat-control-label">Signal colour</span><p><i aria-hidden="true"></i>Meld colour</p><small>Your signal advances with melds (${appearance.meldCount}/${appearance.customMinimumMelds} for a custom colour).</small></div>`;
   const composer = player.chatBanned
     ? `<div class="chat-compose chat-compose-locked" role="note"><div><span class="chat-control-label">Broadcast disabled</span><strong>Your account is not permitted to use public chat.</strong></div></div>`
-    : `<form id="chat-compose-form" class="chat-compose" method="post" action="/chat"><label class="chat-message-control" for="chat-message"><span>Transmit from this region</span><input id="chat-message" name="body" maxlength="${Number(catalog.settings.chat_message_max_length)}" placeholder="What is happening out there?" autocomplete="off" required></label>${colorPicker}<button class="chat-send"><span>Send</span><b aria-hidden="true">&nearr;</b></button></form>`;
+    : `<form id="chat-compose-form" class="chat-compose" method="post" action="/chat"><label class="chat-message-control" for="chat-message"><span>Transmit from this region</span><input id="chat-message" name="body" maxlength="${Number(catalog.settings.chat_message_max_length)}" placeholder="What is happening out there?" autocomplete="off" required><small class="chat-compose-status" data-chat-compose-status role="status" aria-live="polite" hidden></small></label>${colorPicker}<button class="chat-send"><span>Send</span><b aria-hidden="true">&nearr;</b></button></form>`;
   const discoveredMapIds = playerDiscoveredMapIds(player, catalog);
   const regions = catalog.maps.filter((map) => discoveredMapIds.has(Number(map.id)))
     .sort((first, second) => Number(first.sortOrder) - Number(second.sortOrder)
@@ -1956,7 +1985,7 @@ function chatPage(player, chats, ignores, catalog, appearance, historyWindowMs,
     <dl class="chat-facts"><div><dt>Channel status</dt><dd><span id="chat-live-status" class="chat-live-status" data-state="connecting" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-live-label>Connecting</span></span></dd></div><div><dt>Open record</dt><dd>${historyHours.toLocaleString('en-GB')} hours</dd></div><div><dt>Traffic in view</dt><dd id="chat-traffic-count">${transmissionCount} ${transmissionLabel}</dd></div></dl>
     <div class="chat-workspace"><section class="chat-console" aria-labelledby="chat-console-title"><header class="chat-console-header"><div><p>MT2 // Worldwire</p><h2 id="chat-console-title">Open frequency</h2></div><p>Showing the latest ${historyHours.toLocaleString('en-GB')} hours. New traffic arrives live.</p></header><div id="chat-log" class="chat-list" role="log" aria-label="Public chat messages" aria-live="polite" aria-relevant="additions text" tabindex="0">${rows || '<div class="chat-empty" data-chat-unfiltered-empty><span aria-hidden="true">◇</span><h3>The frequency is quiet.</h3><p>Be the first miner to break the silence.</p></div>'}<div id="chat-filter-empty" class="chat-empty chat-filter-empty" hidden><span aria-hidden="true">◇</span><h3>No matching traffic.</h3><p>Change or reset your chat filters.</p></div></div>${composer}</section>
     <aside class="chat-sidecar" aria-label="Public chat controls">${filterPanel}<section class="chat-signal-card" style="--chat-preview:#${appearanceColor}"><p class="chat-side-label">Your signal</p><div><i aria-hidden="true"></i><strong>${escapeHtml(player.name)}</strong></div><p>${appearance.canChooseColor ? 'Custom colour unlocked. Choose it when you transmit.' : `Meld tier colour · ${appearance.meldCount}/${appearance.customMinimumMelds} melds`}</p></section><details class="chat-ignores"><summary><span><b>Channel controls</b><small>Ignored miners</small></span><strong>${ignores.length}</strong></summary><ul>${ignoredRows || '<li>Nobody ignored.</li>'}</ul></details><section class="chat-channel-note"><p class="chat-side-label">On this channel</p><p>World events and captured Dwarves from your discovered regions are public record.</p></section></aside></div>
-  </article><script src="/node/chat-filters.js?v=20260905a" defer></script>`;
+  </article><script src="/node/chat-filters.js?v=20260908a" defer></script>`;
 }
 
 function legacyCasinoPage(state) {
@@ -2724,16 +2753,32 @@ function marketPage(player, catalog) {
     throw new Error(`Missing catalog mine availability for city ${player.cityId}.`);
   }
   const availableMineTypes = catalog.mineTypesByCity.get(player.cityId);
-  const mines = availableMineTypes.filter((type) => type.creditCost > 0 && catalog.byMineType.has(type.id)).map((type) => `<article class="shop-card"><img src="${escapeHtml(type.icon)}" alt=""><div><h3>${escapeHtml(type.name)} Mine</h3><p>${type.creditCost} credits to buy · ${type.rentCost} credits for ${formatDuration(Number(catalog.settings.mine_rental_duration_ms))} · ${catalog.settings.starter_find_count} discoveries included</p></div><div><a class="button secondary" href="/market/mines/${type.id}">Buy with Crypto</a><form method="post" action="/market/mines/${type.id}/buy"><button ${player.credits < type.creditCost ? 'disabled' : ''}>Buy</button></form><form method="post" action="/market/mines/${type.id}/rent"><button class="secondary" ${player.credits < type.rentCost ? 'disabled' : ''}>Rent</button></form>${voucherUsable ? `<form method="post" action="/market/mines/${type.id}/rent-with-voucher"><button>Use free voucher</button></form>` : ''}</div></article>`).join('');
-  const containers = (player.containers ?? []).map((container) => `<article class="container-card"><div><h3>${escapeHtml(container.name)}</h3><p>+${container.capacity} permanent inventory capacity · ${container.owned} owned</p></div><form method="post" action="/market/containers/${container.id}/buy"><button ${player.credits < container.credits ? 'disabled' : ''}>Buy for ${container.credits} credits</button></form></article>`).join('');
+  const mines = availableMineTypes.filter((type) =>
+    type.rentCost > 0 && catalog.byMineType.has(type.id)).map((type) => {
+    const offers = mineRentalOffers(catalog, type);
+    const baseDailyRate = offers[0].priceCredits / offers[0].durationMs;
+    const forms = offers.map((offer) => {
+      const dailySaving = Math.round(
+        (1 - (offer.priceCredits / offer.durationMs) / baseDailyRate) * 100
+      );
+      const saving = dailySaving > 0 ? ` · ${dailySaving}% cheaper per day` : '';
+      const price = `${offer.priceCredits} ${offer.priceCredits === 1 ? 'credit' : 'credits'}`;
+      return `<form method="post" action="/market/mines/${type.id}/rent" data-native-navigation><input type="hidden" name="termKey" value="${escapeHtml(offer.key)}"><button class="secondary" ${player.credits < offer.priceCredits ? 'disabled' : ''}>${escapeHtml(offer.label)} · ${price}${saving}</button></form>`;
+    }).join('');
+    return `<article class="shop-card"><img src="${escapeHtml(type.icon)}" alt=""><div><h3>${escapeHtml(type.name)} Mine</h3><p>${catalog.settings.starter_find_count} discoveries included. Longer rentals cost less per day.</p></div><div>${forms}${voucherUsable ? `<form method="post" action="/market/mines/${type.id}/rent-with-voucher" data-native-navigation><button>Use voucher for 2 weeks</button></form>` : ''}</div></article>`;
+  }).join('');
+  const containers = (player.containers ?? []).map((container) => {
+    const owned = Number(container.owned) > 0;
+    return `<article class="container-card"><div><h3>${escapeHtml(container.name)}</h3><p>+${container.capacity} permanent inventory capacity · ${owned ? 'Owned' : 'Available'}</p></div><form method="post" action="/market/containers/${container.id}/buy"><button ${owned || player.credits < container.credits ? 'disabled' : ''}>${owned ? 'Owned' : `Buy for ${container.credits} credits`}</button></form></article>`;
+  }).join('');
   const voucherNotice = voucherAvailable
     ? `<aside class="mine-voucher-notice"><p class="eyebrow">Dissolved estate disbursement</p><h2>Council mine rental voucher</h2><p>${voucherUsable
-      ? 'Ready to redeem here for one mine rental. Paid for from your dissolved estate; choose carefully.'
+      ? 'Ready to redeem here for one two-week mine rental. Paid for from your dissolved estate; choose carefully.'
       : 'This voucher is safe, but the Council permits redemption only while you are in Aso.'}</p></aside>`
     : '';
   return `<section class="page-title"><div><p class="eyebrow">Mine shop</p><h1>Credits shop</h1></div><p>You have <strong>${player.credits} credits</strong>.</p></section>
-    ${voucherNotice}<section><h2>Buy a new mine in ${escapeHtml(cityName)}</h2><p>Mine types vary by city. Each mine includes ${catalog.settings.starter_find_count} waiting discoveries; active-mine limits still apply.</p><div class="shop-grid">${mines || '<p>No mines are sold in this city.</p>'}</div></section>
-    <section><h2>Inventory containers</h2><p>Capacity starts at 500 Things. Each container type grants its capacity once, up to the absolute 1,000-Thing limit; duplicate purchases remain owned but add no further capacity. Current capacity: <strong>${player.itemCount}/${player.itemLimit}</strong>${player.warehouseBonus ? ` including an active ${escapeHtml(warehouseName)} bonus` : ''}.</p><div class="container-grid">${containers}</div></section>
+    ${voucherNotice}<section><h2>Rent a mine in ${escapeHtml(cityName)}</h2><p>All mines are rented and cannot be bought, sold, or traded between players. Choose 2 weeks, 3 months, or 1 year; longer terms have progressively lower daily prices. Each rental includes ${catalog.settings.starter_find_count} waiting discoveries, and active-mine limits still apply.</p><div class="shop-grid">${mines || '<p>No mines can be rented in this city.</p>'}</div></section>
+    <section><h2>Inventory containers</h2><p>Capacity starts at 500 Things. Containers are account-bound and cannot be sold or traded between players. Each container type can be bought once and permanently grants its listed capacity, up to the absolute 1,000-Thing limit. Current capacity: <strong>${player.itemCount}/${player.itemLimit}</strong>${player.warehouseBonus ? ` including an active ${escapeHtml(warehouseName)} bonus` : ''}.</p><div class="container-grid">${containers}</div></section>
     <section class="battery-extension"><h2>Battery extension</h2><p>This purchase is optional: visiting Mines still recharges batteries for free. Each purchase first restores the normal meld-scaled charge when eligible, then adds ${formatDuration(Number(catalog.settings.battery_extension_ms))}.</p><form method="post" action="/market/battery-extension"><strong>+${formatDuration(Number(catalog.settings.battery_extension_ms))} · ${catalog.settings.battery_extension_cost_credits} credits</strong><button ${player.credits < Number(catalog.settings.battery_extension_cost_credits) || player.batteryRemaining <= 0 ? 'disabled' : ''}>Buy extension</button></form></section>`;
 }
 
@@ -2877,32 +2922,6 @@ function itemMarketPage(player, item, market, cityName, catalog) {
     <section class="market-dealing-desk"><article class="market-ticket market-ticket-buy"><p class="eyebrow">Immediate</p><h2>Buy now</h2>${market.bestListing ? `<p><strong>${formatGold(market.bestListing.price)}g</strong> each · ${market.bestListing.quantity} at the best price</p><form data-live-authoritative method="post" action="/market/items/${item.id}/buy-now"><input type="hidden" name="price" value="${market.bestListing.price}"><label>Quantity<input type="number" name="quantity" min="1" max="${market.bestListing.quantity}" value="1" required></label><button${player.gold < market.bestListing.price ? ' disabled' : ''}>Buy now</button></form>` : '<p class="market-ticket-empty">No one is listing this item.</p>'}</article><article class="market-ticket market-ticket-sell"><p class="eyebrow">Immediate</p><h2>Sell now</h2>${market.bestBid ? `<p><strong>${formatGold(market.bestBid.price)}g</strong> each · ${market.bestBid.quantity} wanted</p><form data-live-authoritative method="post" action="/market/items/${item.id}/sell-now"><input type="hidden" name="price" value="${market.bestBid.price}"><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, sellMaximum)}" value="1" required${sellMaximum < 1 ? ' disabled' : ''}></label><button${sellMaximum < 1 ? ` disabled title="You have no ${escapeHtml(item.name)} in ${escapeHtml(cityName)}."` : ''}>Sell now</button></form>` : '<p class="market-ticket-empty">No open bids.</p>'}</article><form id="place-bid" class="market-ticket" method="post" action="/market/items/${item.id}/bids"><p class="eyebrow">Limit order</p><h2>Place bid</h2><label>Price each (gold)<input type="number" name="price" min="${market.listingStartPrice}" step="0.01" value="${market.bidPriceHint}" required></label><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><button>Place bid</button><small>Minimum ${formatGold(localPrice)}g · your gold remains available until somebody sells into the bid.</small></form><form class="market-ticket" method="post" action="/market/items/${item.id}/listings"><p class="eyebrow">Limit order</p><h2>Place listing</h2><label>Price each (gold)<input type="number" name="price" min="${market.listingStartPrice}" step="0.01" value="${market.listingPriceHint}" required${availableToList < 1 ? ' disabled' : ''}></label><label>Quantity<input type="number" name="quantity" min="1" max="${Math.max(1, availableToList)}" value="1" required${availableToList < 1 ? ' disabled' : ''}></label><button${availableToList < 1 ? ' disabled' : ''}>Place listing</button><small>${availableToList} unlisted in ${escapeHtml(cityName)} · listed things stay in your inventory.</small></form></section>
     <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th>Status</th></tr></thead><tbody>${orderRows(market.listings) || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
     <section><h2>Bids</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Quantity</th><th>Each</th><th>Status</th></tr></thead><tbody>${orderRows(market.bids) || '<tr><td colspan="4">No bids.</td></tr>'}</tbody></table></div></section>
-    <section><h2>Recent sales</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Seller</th><th>Quantity</th><th>Each</th></tr></thead><tbody>${sales || '<tr><td colspan="4">No sales yet.</td></tr>'}</tbody></table></div></section>`;
-}
-
-function mineMarketPage(player, market, cityName) {
-  const cryptoPrice = (entry) => `${Number(entry.cryptoQuantity).toLocaleString('en-GB')} ${escapeHtml(entry.cryptoSymbol)} <small>(about ${formatGold(entry.currentGoldValue ?? entry.price)}g now)</small>`;
-  const orderRows = (orders, action, label) => orders.map((order) => {
-    const available = action === 'sell'
-      ? Math.min(market.sellable, order.quantity)
-      : Math.min(order.quantity, order.affordable);
-    const canTrade = available > 0 && order.validAtCurrentPrice;
-    return `<tr><td>${escapeHtml(order.playerName)}</td><td>${order.quantity}</td><td>${cryptoPrice(order)}${order.validAtCurrentPrice ? '' : '<br><small>Below the 10,000g minimum; cannot execute</small>'}</td><td>${order.playerId === player.id
-    ? `<form method="post" action="/market/mine-orders/${order.id}/cancel"><button class="secondary">Cancel</button></form>`
-    : `<form class="inline-order" data-live-authoritative method="post" action="/market/mine-orders/${order.id}/${action}"><input type="number" name="quantity" min="1" max="${Math.max(1, available)}" value="1" aria-label="Quantity"${canTrade ? '' : ' disabled'}><button${canTrade ? '' : ' disabled'}>${label}</button></form>`}</td></tr>`;
-  }).join('');
-  const sales = market.sales.map((sale) => `<tr><td>${escapeHtml(sale.buyerName)}</td><td>${escapeHtml(sale.sellerName)}</td><td>${sale.quantity}</td><td>${sale.cryptoSymbol ? `${Number(sale.cryptoQuantity).toLocaleString('en-GB')} ${escapeHtml(sale.cryptoSymbol)} <small>(${formatGold(sale.price)}g at execution)</small>` : `${formatGold(sale.price)}g <small>(legacy)</small>`}</td></tr>`).join('');
-  const currencyOptions = market.currencies.map((currency) => `<option value="${currency.id}">${escapeHtml(currency.symbol)} · ${formatGold(currency.currentPrice)}g now · minimum ${currency.minimumQuantity.toLocaleString('en-GB')}</option>`).join('');
-  const firstMinimum = market.currencies[0]?.minimumQuantity ?? 1;
-  const wallet = market.currencies.map((currency) => `${escapeHtml(currency.symbol)} <strong>${currency.balance.toLocaleString('en-GB')}</strong>`).join(' · ');
-  return `<section class="page-title"><div><p class="eyebrow">${escapeHtml(cityName)} mine market</p><h1><img class="table-icon" src="${escapeHtml(market.icon)}" alt=""> ${escapeHtml(market.name)} Mine</h1></div><p>You own <strong>${market.owned}</strong> here and may list <strong>${market.sellable}</strong>. Wallet: ${wallet || 'no regional cryptocurrencies'}.</p></section>
-    <p>Buy or sell an entire mine for one cryptocurrency. Every price must be worth at least ${formatGold(market.minimumGoldValue)}g per mine at the coin's current exchange price, both when placed and executed. A miner must always keep at least one permanent mine. Purchased mines retain installed equipment, reset to things mode, and join the buyer's priority queue.</p>
-    <section class="trade-forms">
-      <form method="post" action="/market/mines/${market.mineTypeId}/listings"><h2>List mines</h2><label>Cryptocurrency<select name="cryptoTypeId" required${market.sellable < 1 ? ' disabled' : ''}>${currencyOptions}</select></label><label>Coins per mine<input type="number" name="cryptoQuantity" min="1" step="1" value="${firstMinimum}" required${market.sellable < 1 ? ' disabled' : ''}></label><label>Number of mines<input type="number" name="quantity" min="1" max="${Math.max(1, market.sellable)}" value="1" required${market.sellable < 1 ? ' disabled' : ''}></label><button ${market.sellable < 1 || !market.currencies.length ? 'disabled' : ''}>Place listing</button></form>
-      <form method="post" action="/market/mines/${market.mineTypeId}/bids"><h2>Place bid</h2><label>Cryptocurrency<select name="cryptoTypeId" required>${currencyOptions}</select></label><label>Coins per mine<input type="number" name="cryptoQuantity" min="1" step="1" value="${firstMinimum}" required></label><label>Number of mines<input type="number" name="quantity" min="1" value="1" required></label><button${market.currencies.length ? '' : ' disabled'}>Place bid</button><small>The full cryptocurrency amount is reserved until the bid fills or is cancelled.</small></form>
-    </section>
-    <section><h2>Listings</h2><div class="table-scroll"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.listings, 'buy', 'Buy') || '<tr><td colspan="4">No listings.</td></tr>'}</tbody></table></div></section>
-    <section><h2>Bids</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Quantity</th><th>Each</th><th></th></tr></thead><tbody>${orderRows(market.bids, 'sell', 'Sell') || '<tr><td colspan="4">No bids.</td></tr>'}</tbody></table></div></section>
     <section><h2>Recent sales</h2><div class="table-scroll"><table><thead><tr><th>Buyer</th><th>Seller</th><th>Quantity</th><th>Each</th></tr></thead><tbody>${sales || '<tr><td colspan="4">No sales yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
@@ -3788,7 +3807,6 @@ function messageCombatReportHtml(message, catalog) {
           ['Tier health multiplier', number(snapshot?.healthMultiplier, '×')],
           ['Speed', number(snapshot?.speed, ' km/h')],
           ['Tier speed multiplier', number(snapshot?.speedMultiplier, '×')],
-          ['Rating', number(snapshot?.rating)],
           ['Attack', textValue(snapshot?.attackName)],
           ['Counter-force ratio', percent(snapshot?.counterDamageRatio)],
           ['Tier damage multiplier', number(snapshot?.damageMultiplier, '×')],
@@ -3811,7 +3829,6 @@ function messageCombatReportHtml(message, catalog) {
             : snapshot?.ship?.sunk ? 'Sunk' : snapshot?.damaged ? 'Damaged' : 'Operational'],
           ['Travel order', textValue(snapshot?.travelOrder)],
           ['Speed', `${number(snapshot?.speed, ' km/h')} (${number(snapshot?.baseSpeed, ' km/h')} base)`],
-          ['Rating', number(snapshot?.rating)],
           ['Reinforcement', `${number(snapshot?.reinforcement)} / ${number(snapshot?.reinforcementMax)}`],
           ['Oil-boosted trips remaining', number(snapshot?.oiledTrips)],
           ['Stolen Oil trips remaining', number(snapshot?.tripsStolen)],
@@ -3978,7 +3995,7 @@ function messageCombatReportHtml(message, catalog) {
   const pillage = details.pillage;
   const pillageText = pillage
     ? `<p><strong>Pillage:</strong> ${pillage.direction === 'taken' ? 'taken from the opponent' : 'lost to the opponent'}${pillage.kind === 'oil' ? ` (${format(pillage.trips)} oil trips)` : ''}.</p>` : '';
-  return `<section class="message-combat-report" aria-label="Complete combat report"><h2>Combat phases</h2>${stance}${phases}${captiveSection}<section class="message-combat-phase"><h3>Outcome</h3><p>${details.outcome === 'won' ? 'Victory' : details.outcome === 'lost' ? 'Defeat' : 'Draw'}. Rating ${format(details.ratingBefore)} → ${format(details.ratingAfter)}.</p>${pillageText}</section></section>`;
+  return `<section class="message-combat-report" aria-label="Complete combat report"><h2>Combat phases</h2>${stance}${phases}${captiveSection}<section class="message-combat-phase"><h3>Outcome</h3><p>${details.outcome === 'won' ? 'Victory' : details.outcome === 'lost' ? 'Defeat' : 'Draw'}.</p>${pillageText}</section></section>`;
 }
 
 function messageItemGroupsHtml(message, catalog) {
@@ -4314,12 +4331,82 @@ function vehicleCanDeactivate(vehicle, catalog) {
     .some((rule) => Number(vehicle.ship[rule.storageField]) > 0);
   const hullRepairing = vehicle.ship
     && Number(vehicle.ship.hull) < Number(vehicle.ship.max_hull);
-  return vehicle.status === 'idle' && !vehicle.shuttle && !vehicle.damaged
+  return vehicle.status === 'idle' && !vehicle.shuttle
+    && vehicle.convoy?.memberStatus !== 'queued' && !vehicle.damaged
     && !vehicle.aircraftDestroyed && Number(vehicle.reinforcement) <= 0
     && Number(vehicle.cargoSize) === 0 && vehicle.mods.length === 0
     && vehicle.weapons.length === 0 && vehicle.cannons.length === 0
     && !hasAmmunition && !hullRepairing
     && Number(vehicle.oiledTrips) <= 0 && Number(vehicle.tripsStolen) <= 0;
+}
+
+function vehicleConvoyPanel(catalog, vehicle, now) {
+  const convoy = vehicle.convoy;
+  if (!convoy) return '';
+  const orderName = (order) => {
+    const name = catalog.settings.travel_order_names?.[order];
+    if (!name) throw new Error(`Missing travel-order name: ${order}.`);
+    return name;
+  };
+  const memberState = (member) => {
+    if (member.status === 'queued') {
+      return member.blockedReason
+        ? `Waiting: ${member.blockedReason}`
+        : `Departs in ${formatDuration(Math.max(0, member.scheduledDepartureAt - now))}`;
+    }
+    if (member.status === 'traveling') return 'Underway';
+    if (member.status === 'arrived') return 'Arrived';
+    if (member.status === 'lost') return 'Lost';
+    return 'Cancelled';
+  };
+  const rows = convoy.members.map((member) => `<tr${Number(member.id) === Number(convoy.memberId)
+    ? ' class="current-convoy-member"' : ''}><td>${member.position}</td><td>${escapeHtml(member.vehicleName)}</td><td>${escapeHtml(orderName(member.travelOrder))}</td><td>${escapeHtml(memberState(member))}</td></tr>`).join('');
+  const queued = convoy.status === 'active'
+    && convoy.members.some((member) => member.status === 'queued');
+  return `<section class="vehicle-convoy-panel" aria-labelledby="vehicle-convoy-heading"><p class="eyebrow vehicle-convoy-badge">CONVOY ${convoy.position}/${convoy.size}</p><h2 id="vehicle-convoy-heading">${escapeHtml(convoy.originCityName)} &rarr; ${escapeHtml(convoy.destinationCityName)}</h2><p>This transport keeps its recorded <strong>${escapeHtml(orderName(convoy.travelOrder))}</strong> stance. Departures are staggered by ${formatDuration(convoy.staggerMs)}.</p><div class="table-scroll"><table><thead><tr><th>Departure</th><th>Transport</th><th>Stance</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>${queued ? `<form method="post" action="/vehicle-convoys/${convoy.id}/cancel"><p>Cancellation releases transports that have not departed. Those underway finish their current journey.</p><button class="secondary">Cancel remaining convoy departures</button></form>` : ''}</section>`;
+}
+
+function vehicleConvoySetupPage(player, catalog, leader, vehicles) {
+  const routes = (leader.routes ?? []).filter((route) => !route.mission
+    && Number(route.destinationCityId) !== Number(leader.cityId));
+  const companions = vehicles.filter((vehicle) => vehicle.id !== leader.id
+    && vehicle.status === 'idle' && Number(vehicle.cityId) === Number(leader.cityId)
+    && Number(vehicle.vehicleTypeId) === Number(leader.vehicleTypeId)
+    && !vehicle.damaged && !vehicle.aircraftDestroyed && !vehicle.shuttle
+    && vehicle.convoy?.memberStatus !== 'queued');
+  const stance = (vehicle) => {
+    const name = catalog.settings.travel_order_names?.[vehicle.travelOrder];
+    if (!name) throw new Error(`Missing travel-order name: ${vehicle.travelOrder}.`);
+    return name;
+  };
+  const routeOptions = routes.map((route) => `<option value="${route.id}">${escapeHtml(
+    vehicleRouteDestinationLabel(player, catalog, leader.cityId, route.destinationCityId)
+  )} &middot; ${Number(route.length).toLocaleString('en-GB')} km</option>`).join('');
+  const cargoState = (vehicle) => {
+    const quantity = Number(vehicle.cargoSize);
+    return quantity > 0
+      ? `<strong class="vehicle-convoy-cargo is-loaded">LOADED &middot; ${quantity.toLocaleString('en-GB')} ${quantity === 1 ? 'thing' : 'things'}</strong>`
+      : '<span class="vehicle-convoy-cargo is-empty">EMPTY</span>';
+  };
+  const memberChoice = (vehicle, index, included = false) => {
+    const name = escapeHtml(vehicle.name);
+    const selection = included
+      ? `<div class="vehicle-convoy-choice-main"><span class="vehicle-convoy-position" data-convoy-position>1</span><span class="vehicle-convoy-included">Included</span><span class="vehicle-convoy-choice-details"><strong>${name}</strong><small>${escapeHtml(stance(vehicle))}</small>${cargoState(vehicle)}</span></div>`
+      : `<label class="vehicle-convoy-choice-main"><span class="vehicle-convoy-position" data-convoy-position></span><input type="checkbox" name="vehicle_${vehicle.id}" value="1" aria-label="Include ${name} in the convoy"><span class="vehicle-convoy-choice-details"><strong>${name}</strong><small>${escapeHtml(stance(vehicle))}</small>${cargoState(vehicle)}</span></label>`;
+    return `<div class="vehicle-convoy-choice${included ? ' is-selected is-leader' : ''}" data-convoy-choice data-vehicle-id="${vehicle.id}" data-original-index="${index}"${included ? ' data-convoy-locked' : ''}>${selection}<div class="vehicle-convoy-order-actions"><button type="button" class="secondary" data-convoy-move="earlier" aria-label="Send ${name} earlier">Earlier</button><button type="button" class="secondary" data-convoy-move="later" aria-label="Send ${name} later">Later</button></div></div>`;
+  };
+  const leaderChoice = memberChoice(leader, -1, true);
+  const memberChoices = companions.map((vehicle, index) =>
+    memberChoice(vehicle, index)).join('');
+  const leaderItem = catalog.byId.get(leader.itemId);
+  if (!leaderItem) throw new Error(`Missing catalog item: ${leader.itemId}.`);
+  const leaderCargoQuantity = Number(leader.cargoSize);
+  const leaderCargoSummary = leaderCargoQuantity > 0
+    ? `${leaderCargoQuantity.toLocaleString('en-GB')} ${leaderCargoQuantity === 1
+      ? 'thing' : 'things'} loaded`
+    : 'Empty cargo hold';
+  const canLaunch = routes.length && companions.length;
+  return `<section class="page-title"><div><p class="eyebrow">Build a convoy</p><h1>${escapeHtml(leader.name)}</h1></div><a class="text-link" href="/vehicles/${leader.id}">Back to vehicle status</a></section><section class="vehicle-hero vehicle-hero-compact">${itemCard(leaderItem, { compact: true, meta: [leader.name, `${stance(leader)} stance`, leaderCargoSummary] })}<div><p>Create a durable convoy of ${VEHICLE_CONVOY_MIN_SIZE}&ndash;${VEHICLE_CONVOY_MAX_SIZE} identical transports. Membership, sending order, stagger, and recorded stances persist while the convoy is underway.</p><p><strong>Stances are read-only here.</strong> Every member keeps its own last recorded Peaceful, Pillage, or Patrol stance.</p></div></section><form class="vehicle-convoy-form" method="post" action="/vehicles/${leader.id}/convoy" data-vehicle-convoy-form data-min-size="${VEHICLE_CONVOY_MIN_SIZE}" data-max-size="${VEHICLE_CONVOY_MAX_SIZE}"><input type="hidden" name="memberOrder" value="${leader.id}" data-convoy-member-order disabled><section><h2>Route and timing</h2>${routeOptions ? `<label>Destination<select name="routeId" required>${routeOptions}</select></label>` : '<p>No compatible direct route is available.</p>'}<label>Stagger interval (minutes)<input type="number" name="staggerMinutes" min="0" max="${VEHICLE_CONVOY_MAX_STAGGER_MS / 60000}" step="1" value="5" required></label><p class="field-help">0 sends all transports together. The maximum interval between departures is one hour.</p></section><section><h2>Convoy members and sending order</h2><p>Select 1&ndash;${VEHICLE_CONVOY_MAX_SIZE - 1} additional ${escapeHtml(leader.itemName)} transport${companions.length === 1 ? '' : 's'}, then use <strong>Earlier</strong> and <strong>Later</strong> to set the exact departure order. The transport used to open this page is included but does not have to remain first.</p><p class="field-help" data-convoy-selection-status aria-live="polite">1 of ${VEHICLE_CONVOY_MAX_SIZE} transports selected. Select at least 1 more.</p><h3>Sending order</h3><div class="vehicle-convoy-order" data-convoy-order>${leaderChoice}</div><h3>Available identical transports</h3><div class="vehicle-convoy-available" data-convoy-available>${memberChoices || '<p>No other ready transport of this exact type is in this city.</p>'}</div></section><button${canLaunch ? '' : ' disabled'}>Launch convoy</button></form><script src="/node/vehicle-convoy.js?v=20260907b" defer></script>`;
 }
 
 function vehicleDeactivateForm(vehicle) {
@@ -4349,6 +4436,10 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
     const vehicleItem = catalog.byId.get(vehicle.itemId);
     if (!vehicleItem) throw new Error(`Missing catalog item: ${vehicle.itemId}.`);
     const shuttleSummary = vehicleShuttleSummary(player, catalog, vehicle);
+    const convoySummary = vehicle.convoy
+      ? `CONVOY ${vehicle.convoy.position}/${vehicle.convoy.size} · ${
+        catalog.settings.travel_order_names?.[vehicle.convoy.travelOrder] ?? vehicle.convoy.travelOrder}`
+      : '';
     const destination = vehicle.destinationCityId == null ? null
       : catalogCityForId(catalog, vehicle.destinationCityId);
     if (vehicle.status === 'traveling') {
@@ -4371,10 +4462,12 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
           ? [destinationLabel, `Returns in ${formatDuration(vehicle.arrivesAt - now)}`]
           : [`Traveling to ${destinationLabel}`, `Arrives in ${formatDuration(vehicle.arrivesAt - now)}`];
       return itemCard(vehicleItem, { meta: [vehicle.name, ...journey,
+        ...(convoySummary ? [convoySummary] : []),
         ...(vehicle.reinforcement > 0
           ? [`Reinforcement ${vehicle.reinforcement}/${vehicle.reinforcementMax}`] : [])],
         details: vehicle.shuttle
-          ? '<p class="item-card-status"><span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span></p>' : '',
+          ? '<p class="item-card-status"><span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span></p>'
+          : vehicle.convoy ? '<p class="item-card-status"><span class="eyebrow vehicle-convoy-badge">CONVOY</span></p>' : '',
         action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${vehicle.shuttle ? vehicleShuttleCancelForm(vehicle) : ''}` });
     }
     const city = catalogCityForId(catalog, vehicle.cityId);
@@ -4393,14 +4486,14 @@ function vehiclesPage(player, catalog, vehicles, now, activationAvailability = n
       : '';
     const status = vehicle.damaged ? `<strong class="capacity-warning">${
       vehicle.aircraftDestroyed ? 'Shot down by the ore thieves' : 'Damaged'} · ${repairStatus}</strong>`
-      : `${escapeHtml(cityChoiceLabel(catalog, city.id))} · speed ${vehicle.speed} · ${vehicle.cargoSize}/${vehicle.capacity} capacity · rating ${Math.round(vehicle.rating)}${vehicle.reinforcement > 0
+      : `${escapeHtml(cityChoiceLabel(catalog, city.id))} · speed ${vehicle.speed} · ${vehicle.cargoSize}/${vehicle.capacity} capacity${vehicle.reinforcement > 0
         ? ` · reinforcement ${vehicle.reinforcement}/${vehicle.reinforcementMax}` : ''}${shuttleSummary
         ? ` · SHUTTLE · ${escapeHtml(shuttleSummary.phaseDetail)}` : ''}`;
     const normalActions = `${vehicle.type === 'sea' ? `<a class="button secondary" href="/vehicles/${vehicle.id}/customize#ammunition">Load ammunition</a>` : ''}${routes ? `<form class="idle-vehicle-send" method="post" action="/vehicles/${vehicle.id}/send"><label>Route<select name="routeId"${vehicle.damaged ? ' disabled' : ''}>${routes}</select></label><button${vehicle.damaged ? ' disabled' : ''}>Send</button></form>` : '<span>No compatible route here.</span>'}`;
     const deactivate = vehicleCanDeactivate(vehicle, catalog)
       ? vehicleDeactivateForm(vehicle) : '';
-    return itemCard(vehicleItem, { meta: vehicle.name, className: 'idle-vehicle-card', details: `<p class="item-card-status">${vehicle.shuttle ? '<span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span> ' : ''}${status}</p>`,
-      action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${deactivate}${vehicle.shuttle ? vehicleShuttleCancelForm(vehicle) : normalActions}` });
+    return itemCard(vehicleItem, { meta: vehicle.name, className: 'idle-vehicle-card', details: `<p class="item-card-status">${vehicle.shuttle ? '<span class="eyebrow vehicle-shuttle-badge">SHUTTLE</span> ' : ''}${vehicle.convoy?.memberStatus === 'queued' ? '<span class="eyebrow vehicle-convoy-badge">CONVOY</span> ' : ''}${status}${vehicle.convoy?.memberStatus === 'queued' ? ` · departure ${vehicle.convoy.position}/${vehicle.convoy.size} in ${formatDuration(Math.max(0, vehicle.convoy.scheduledDepartureAt - now))} · ${escapeHtml(catalog.settings.travel_order_names?.[vehicle.convoy.travelOrder] ?? vehicle.convoy.travelOrder)}` : ''}</p>`,
+      action: `${rankBadge(vehicle.rank, 1, catalog)}<a class="button secondary" href="/vehicles/${vehicle.id}">Manage</a>${deactivate}${vehicle.shuttle ? vehicleShuttleCancelForm(vehicle) : vehicle.convoy?.memberStatus === 'queued' ? '' : normalActions}` });
   };
   const localVehicles = vehicles.filter((vehicle) => vehicle.status !== 'traveling'
     && vehicle.cityId === player.cityId).sort(compareItemsByRarity).map(vehicleCard).join('');
@@ -4732,6 +4825,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const local = player.inventoryByCity[vehicle.cityId] ?? {};
   const vehicleItem = catalog.byId.get(vehicle.itemId);
   if (!vehicleItem) throw new Error(`Missing catalog item for vehicle: ${vehicle.itemId}.`);
+  const convoyQueued = vehicle.convoy?.memberStatus === 'queued';
   const transportPolicy = vehicle.cargoPolicy === 'oil-only'
     ? `<p class="vehicle-policy-note"><strong>Dedicated Oil hold:</strong> carries Oil only, up to ${
       Number(vehicle.capacityCap ?? vehicle.capacity).toLocaleString('en-GB')} barrels. Fittings cannot expand this hold.</p>`
@@ -4801,7 +4895,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     const onwardJourney = vehicle.queuedJourneyLegs.length
       ? `<section class="vehicle-itinerary-status"><h2>Onward itinerary</h2><p>Each leg departs immediately when the previous one arrives.</p><ol>${vehicle.queuedJourneyLegs.map((leg) => `<li>${escapeHtml(vehicleRouteDestinationLabel(player, catalog, leg.originCityId, leg.destinationCityId))} <small>${Number(leg.length).toLocaleString('en-GB')} km</small></li>`).join('')}</ol></section>`
       : '';
-    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></div></section>${vehicleShuttlePanel(player, catalog, vehicle)}${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
+    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></div></section>${vehicleShuttlePanel(player, catalog, vehicle)}${vehicleConvoyPanel(catalog, vehicle, now)}${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
   }
   const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
   const boltItem = catalogItemForSetting(catalog, 'bolt_item_id');
@@ -5068,7 +5162,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
         ? 'Let dockyard repairs restore the hull completely before deactivating this ship.'
     : 'Unload cargo and remove every fitting, cannon, and ammunition shot before storing this vehicle as a thing.';
   const pageTitle = `<section class="page-title"><div><p class="eyebrow">${escapeHtml(vehicle.type)} in ${escapeHtml(city.name)} ${rankBadge(vehicle.rank, 1, catalog)}</p><h1>${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="${view === 'status' ? '/vehicles' : `/vehicles/${vehicle.id}`}">${view === 'status' ? 'Back to vehicles' : 'Back to vehicle status'}</a></section>`;
-  const hero = `<section class="vehicle-hero vehicle-hero-compact">${itemCard(vehicleItem, { compact: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p></div></section>`;
+  const hero = `<section class="vehicle-hero vehicle-hero-compact">${itemCard(vehicleItem, { compact: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p></div></section>`;
   const journeyRouteData = JSON.stringify(
     vehicleJourneyRouteGraph(player, catalog, vehicle)
   ).replace(/</g, '\\u003c');
@@ -5087,6 +5181,8 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
           <div class="vehicle-tier-targeting"><p>Combat targets are limited automatically to this vehicle's tier.</p><label><input type="checkbox" name="attackSentry"${vehicle.aggressiveVsSentry ? ' checked' : ''}${vehicle.damaged ? ' disabled' : ''}>Also engage patrols in this tier</label></div>`}
       <button${vehicle.damaged ? ' disabled' : ''}>Send itinerary</button>
     </form><script src="/node/vehicle-journey.js?v=20260825b" defer></script>` : '<p>No compatible routes from this city.</p>'}</section>`;
+  const convoySetupSection = ['land', 'sea'].includes(vehicle.type) && routeOptions
+    ? `<section class="vehicle-send-panel vehicle-convoy-setup"><p class="eyebrow">Coordinated transport</p><h2>Build a convoy</h2><p>Send 2&ndash;8 identical transports on this route while preserving every member's recorded stance.</p><a class="button secondary" href="/vehicles/${vehicle.id}/convoy">Choose convoy members</a></section>` : '';
   const shuttleSetupControls = Number(vehicle.capacity) <= 0
     ? `<p class="capacity-warning"><strong>No cargo space is available.</strong> Fittings or ammunition use every capacity slot. <a class="text-link" href="/vehicles/${vehicle.id}/customize">Free at least one slot</a> before setting up a shuttle.</p>`
     : shuttleRouteOptions
@@ -5097,7 +5193,8 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const shuttleSetupSection = vehicle.cargoSize === 0 ? `<section class="vehicle-send-panel vehicle-shuttle-setup"><p class="eyebrow">Automatic transport</p><h2>Set up a shuttle</h2><p>Each outbound trip loads as many eligible things as will fit, rarest first, unloads them at the destination, then returns empty and repeats until cancelled. Protected factory output is never loaded. Deactivated transports can travel as ordinary cargo when Vehicles or Ships are selected. Oil Field machine parts stay in their Oil Field home city.</p>${shuttleSetupControls}</section>` : '';
   const sendSection = vehicle.shuttle
     ? vehicleShuttlePanel(player, catalog, vehicle)
-    : `${ordinarySendSection}${shuttleSetupSection}`;
+    : convoyQueued ? vehicleConvoyPanel(catalog, vehicle, now)
+      : `${vehicleConvoyPanel(catalog, vehicle, now)}${ordinarySendSection}${convoySetupSection}${shuttleSetupSection}`;
   if (view === 'cargo') {
     const rarestDisabled = vehicle.damaged || !cargoRows || vehicle.capacity < 1;
     return `${pageTitle}${hero}${loadoutOverview}<section><h2>Cargo</h2><p>${cargoPolicyCopy} Preview its capacity and combat effects, then commit that exact proposal. Carried land weapons add aggressive power when pillaging and defensive power when patrolling; they are still cargo, not fitted weapons. Cannons and ammunition carried as cargo cannot fire.</p><div id="vehicle-loadout-editor" data-live-preview-scope>${previewPanel}<form method="post" action="/vehicles/${vehicle.id}/cargo" data-live-preview-form>${previewBindingInput}<div class="table-scroll"><table class="cargo-loadout-table"><thead><tr><th>Thing</th><th>Available here</th><th>Proposed cargo</th></tr></thead><tbody>${cargoRows || '<tr><td colspan="3">No compatible cargo in this city.</td></tr>'}</tbody></table></div><div class="customization-actions"><button class="secondary" name="intent" value="rarest"${rarestDisabled ? ' disabled' : ''}>Take as much of the rarest things as we can</button><button name="intent" value="preview">Preview cargo</button>${commitButton}</div></form></div></section>`;
@@ -5107,13 +5204,15 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   }
   const manageSection = vehicle.shuttle
     ? '<section class="vehicle-manage-actions"><h2>Automatic cargo</h2><p>This shuttle controls its cargo hold until its route is cancelled.</p></section>'
+    : convoyQueued
+      ? '<section class="vehicle-manage-actions"><h2>Reserved for convoy</h2><p>Cargo, fittings, Oil, name, and stance remain read-only until this transport departs or its convoy departure is cancelled.</p></section>'
     : `<section class="vehicle-manage-actions"><h2>Manage vehicle</h2><p>${vehicle.type === 'air' ? 'Cargo has its own focused screen.' : 'Cargo and customization are separate so you can focus on one job at a time.'}</p><div class="button-row"><a class="button" href="/vehicles/${vehicle.id}/cargo">Manage cargo</a>${vehicle.type === 'air' ? '' : `<a class="button" href="/vehicles/${vehicle.id}/customize${vehicle.type === 'sea' ? '#ammunition' : ''}">${vehicle.type === 'sea' ? 'Load ammunition or change cannons' : 'Customize mods and weapons'}</a>`}</div></section>`;
   return `${pageTitle}
-    <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free · rating ${Math.round(vehicle.rating)}${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p>${vehicle.shuttle ? '' : `<form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form>`}</div></section>${sendSection}${loadoutOverview}
+    <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p>${vehicle.shuttle || convoyQueued ? '' : `<form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form>`}</div></section>${sendSection}${loadoutOverview}
     ${manageSection}
-    ${vehicle.shuttle ? '' : `<section><h2>Oil</h2>${oilItem ? itemCard(oilItem, { count: local[oilItem.id] ?? 0, compact: true, meta: [`${vehicle.oiledTrips} boosted trips loaded`, `${vehicle.tripsStolen} stolen trips`], action: `<form method="post" action="/vehicles/${vehicle.id}/oil"><button ${vehicle.routeType === airRouteType || !(local[oilItem.id] ?? 0) ? 'disabled' : ''}>Load one barrel</button></form>${vehicle.tripsStolen ? `<form method="post" action="/vehicles/${vehicle.id}/oil/unload"><button class="secondary">Reclaim a barrel</button></form>` : ''}` }) : ''}</section>`}
+    ${vehicle.shuttle || convoyQueued ? '' : `<section><h2>Oil</h2>${oilItem ? itemCard(oilItem, { count: local[oilItem.id] ?? 0, compact: true, meta: [`${vehicle.oiledTrips} boosted trips loaded`, `${vehicle.tripsStolen} stolen trips`], action: `<form method="post" action="/vehicles/${vehicle.id}/oil"><button ${vehicle.routeType === airRouteType || !(local[oilItem.id] ?? 0) ? 'disabled' : ''}>Load one barrel</button></form>${vehicle.tripsStolen ? `<form method="post" action="/vehicles/${vehicle.id}/oil/unload"><button class="secondary">Reclaim a barrel</button></form>` : ''}` }) : ''}</section>`}
     <section><h2>History</h2><table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No journeys yet.</td></tr>'}</tbody></table></section>
-    ${vehicle.shuttle ? '' : `<form method="post" action="/vehicles/${vehicle.id}/store"><p>${deactivateBlocked ? deactivateWarning : 'Return this unaltered transport to stored vehicle things. You can activate it again in this city later.'}</p><button class="secondary"${deactivateBlocked ? ' disabled' : ''}>Deactivate</button></form>`}`;
+    ${vehicle.shuttle || convoyQueued ? '' : `<form method="post" action="/vehicles/${vehicle.id}/store"><p>${deactivateBlocked ? deactivateWarning : 'Return this unaltered transport to stored vehicle things. You can activate it again in this city later.'}</p><button class="secondary"${deactivateBlocked ? ' disabled' : ''}>Deactivate</button></form>`}`;
 }
 
 export function battlePage(report) {
@@ -5262,7 +5361,7 @@ export function battlePage(report) {
   return `<section class="page-title"><div><p class="eyebrow">Battle report</p><h1>${outcome}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section>
     <section class="battle-summary"><h2>${escapeHtml(report.opponent.player_name)}'s ${escapeHtml(opponentVehicleName)}</h2>
     <p>Your vehicle was <strong>${report.aggressive ? 'aggressive' : 'defensive'}</strong>; the enemy was <strong>${enemyAggressive ? 'aggressive' : 'defensive'}</strong>.</p>${details}
-    <p class="battle-outcome">${report.tied ? 'You tied.' : report.won ? 'You won.' : 'You lost.'}</p><p>Rating ${Math.round(report.ratingBefore)} → <strong>${Math.round(report.ratingAfter)}</strong></p></section>`;
+    <p class="battle-outcome">${report.tied ? 'You tied.' : report.won ? 'You won.' : 'You lost.'}</p></section>`;
 }
 
 function combatDivisionLabel(catalog, classValue) {
@@ -5346,9 +5445,12 @@ function ammoBoxesPage(player, catalog, vehicleId = null) {
 }
 
 function containersPage(data) {
-  const rows = data.containers.map((container) => `<tr><td>${escapeHtml(container.name)}</td><td>+${container.capacity}</td><td>${container.quantity}</td><td>${container.credits} credits</td><td><form method="post" action="/containers/${container.id}/buy"><button ${data.credits < container.credits ? 'disabled' : ''}>Buy</button></form></td></tr>`).join('');
+  const rows = data.containers.map((container) => {
+    const owned = Number(container.quantity) > 0;
+    return `<tr><td>${escapeHtml(container.name)}</td><td>+${container.capacity}</td><td>${owned ? 'Owned' : 'Available'}</td><td>${container.credits} credits</td><td><form method="post" action="/containers/${container.id}/buy"><button ${owned || data.credits < container.credits ? 'disabled' : ''}>${owned ? 'Owned' : 'Buy'}</button></form></td></tr>`;
+  }).join('');
   return `<section class="page-title page-title-long"><div><p class="eyebrow">Credits shop</p><h1>Inventory containers</h1></div><p>${data.credits} credits · current inventory capacity ${data.itemLimit}/${data.maximumItemLimit}</p></section>
-    <p>Capacity starts at ${data.baseItemLimit}. Each container type permanently adds its capacity once, and owning every type raises it to ${data.maximumItemLimit}. Extra copies remain owned but do not increase your limit again.</p><table><thead><tr><th>Name</th><th>Capacity</th><th>Owned</th><th>Price</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    <p>Capacity starts at ${data.baseItemLimit}. Containers are account-bound and cannot be sold or traded between players. Each container type can be bought once and permanently adds its listed capacity. Owning every type raises it to ${data.maximumItemLimit}.</p><table><thead><tr><th>Name</th><th>Capacity</th><th>Status</th><th>Price</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function machineDescription(machineType, rarity, settings = {}) {
@@ -5821,8 +5923,8 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
   const mapBackgroundFilename = `${currentMap.slug}.png`;
   const hasDimensionBackground = /^[a-z0-9-]+$/.test(currentMap.slug)
     && fs.existsSync(path.join(PUBLIC_ROOT, 'img', mapBackgroundFilename));
-  const mapBackgroundPath = hasDimensionBackground
-    ? `/node/maps/${mapBackgroundFilename}` : '/node/map-background.png';
+  const mapBackgroundPath = `${hasDimensionBackground
+    ? `/node/maps/${mapBackgroundFilename}` : '/node/map-background.png'}?v=${MAP_ASSET_VERSION}`;
   const terrain = `<image class="map-background" href="${escapeHtml(mapBackgroundPath)}" x="0" y="0" width="900" height="600" preserveAspectRatio="xMidYMid slice" />`;
   const cityNodes = mapCities.map((city) => {
     const position = positions.get(city.id);
@@ -6133,13 +6235,14 @@ function historyPage() {
     <nav class="editorial-switcher" aria-label="Public records"><a class="text-link" href="/history" aria-current="page">History</a><a class="text-link" href="/legal">Legal</a></nav>
     <section class="page-title"><div><p class="eyebrow">MineThings archive · Record 01</p><h1>History</h1></div><p>The story of MineThings: first listed on 16 October 2009, closed in March 2020, and reopened as MineThings 2 in August 2026.</p></section>
     <div class="editorial-facts" aria-label="History at a glance"><div><span>Original world</span><strong>16 Oct 2009—Mar 2020</strong></div><div><span>First revival</span><strong>Nov 2019—10 Feb 2020</strong></div><div><span>Current restoration</span><strong>23 Aug 2026 onward</strong></div></div>
-    <div class="editorial-layout"><nav class="article-index" aria-label="History sections"><strong>On this page</strong><a class="text-link" href="#beginnings">16 October 2009</a><a class="text-link" href="#players">2010 · Players</a><a class="text-link" href="#economy">2011 · Bitcoin</a><a class="text-link" href="#reception">2012–2013 · Reception</a><a class="text-link" href="#world">2014 · The world</a><a class="text-link" href="#community">2014–2016 · Tools</a><a class="text-link" href="#first-restoration">2019–2020 · First revival</a><a class="text-link" href="#shutdown">March 2020 · Shutdown</a><a class="text-link" href="#memory">2021 · Remembering</a><a class="text-link" href="#memorial">2023–2024 · Mini MineThings</a><a class="text-link" href="#restoration">By 22 August 2026</a><a class="text-link" href="#repository">23–27 August 2026</a><a class="text-link" href="#reflection">28 August 2026</a><a class="text-link" href="#rebuilding">29–30 August 2026</a><a class="text-link" href="#continuation">31 August–2 September 2026</a><a class="text-link" href="#sources">2 September 2026 · Sources</a></nav><div class="editorial-copy history-timeline">
+    <div class="editorial-layout"><nav class="article-index" aria-label="History sections"><strong>On this page</strong><a class="text-link" href="#beginnings">16 October 2009</a><a class="text-link" href="#players">2010 · Players</a><a class="text-link" href="#economy">2011 · Bitcoin</a><a class="text-link" href="#reception">2012–2013 · Reception</a><a class="text-link" href="#world">2014 · The world</a><a class="text-link" href="#community">2014–2016 · Tools</a><a class="text-link" href="#newrpg">2015–2017 · Player testimony</a><a class="text-link" href="#first-restoration">2019–2020 · First revival</a><a class="text-link" href="#shutdown">March 2020 · Shutdown</a><a class="text-link" href="#memory">2021 · Remembering</a><a class="text-link" href="#memorial">2023–2024 · Mini MineThings</a><a class="text-link" href="#restoration">By 22 August 2026</a><a class="text-link" href="#repository">23–27 August 2026</a><a class="text-link" href="#reflection">28 August 2026</a><a class="text-link" href="#rebuilding">29–30 August 2026</a><a class="text-link" href="#continuation">31 August–2 September 2026</a><a class="text-link" href="#sources">7 September 2026 · Sources</a></nav><div class="editorial-copy history-timeline">
     <section id="beginnings"><p class="source-kind">Dated public record</p><h2><time datetime="2009-10-16">16 October 2009</time>: a world under the ash</h2><p>MineThings appeared in a browser-game directory on 16 October 2009. Its premise skipped two thousand years beyond the Yellowstone eruption: humanity had returned to a buried Earth and made an economy from whatever its miners could recover. It was free to play, persistent, deliberately slow and more interested in ownership and trade than in a conventional quest line.</p></section>
     <section id="players"><p class="source-kind">Dated community artefacts and player record</p><h2><time datetime="2010-06-11">11 June 2010</time>–<time datetime="2010-10-20">20 October 2010</time>: players rebuilt the interface around themselves</h2><p>On 11 June 2010, the first Lazy Newb Pack bundled community graphics, utilities and configuration for <em>Dwarf Fortress</em>. Together with Dwarf Therapist's tabular labour interface, it provides a useful parallel: these community projects did not replace the simulation; players built a more usable interface around it.</p><p>On 7 October 2010, a MineThings player published a Python screen scraper that collected a census of miners, professions and home cities together with asking prices, bids and sales. It is unusually direct evidence that MineThings was already being treated as both a persistent world and an economic simulation. Its players were beginning to build their own interface around a smaller browser canvas.</p><p>An Ars Technica discussion begun on 20 October 2010 records starter mines, rarity tiers, melding, mine purchase and rental, discovering towns, moving goods, pirates and highwaymen. Players also argued about the slow opening pace, paid acceleration and controls that were not always obvious. The same dated thread records separate Aso and Bromo servers with different economies: veterans could make Aso easier through cheap equipment and loans, while Bromo offered a more even race to discover things.</p></section>
     <section id="economy"><p class="source-kind">Dated contemporary public record</p><h2><time datetime="2011-03">March 2011</time>–<time datetime="2011-08-29">29 August 2011</time>: experiments in value and Bitcoin</h2><p>MineThings was documented as accepting Bitcoin by March 2011. A 24 May AnandTech recommendation shows the game travelling by ordinary word of mouth. On 1 July, a BitcoinTalk promotion offered an in-game starter pack and credited MineThings with introducing its author to Bitcoin; the apparent operator account, <strong>nextnonce</strong>, joined the discussion.</p><p>On 29 August 2011, that account announced that MineThings had removed PayPal and moved exclusively to Bitcoin, claiming approximately 1,500 active players. The number is historically useful but remains an operator-supplied population claim, not an independently audited count. Replies welcomed the experiment while warning that obtaining Bitcoin was difficult and that the public explanation of payments and premium content was thin.</p></section>
     <section id="reception"><p class="source-kind">Dated friend testimony and independent review</p><h2><time datetime="2012-07-08">8 July 2012</time>–<time datetime="2013-01-04">4 January 2013</time>: the patient loop in public</h2><p>On 8 July 2012, a MartialTalk recommendation from a friend identified <strong>Japhet Stevens</strong> as the creator and described MineThings as a once-a-day game. It is useful first-hand social testimony, not independent reporting about authorship.</p><p>An independent review on 4 January 2013 described the same rhythm—checking once or twice a day—along with hundreds of common things, still-undiscovered Orange things, Melds that unlocked professions, player-set prices and risky travel. Together these accounts show that scarcity, cooperation, advantage and inconvenience were the game, not incidental friction.</p></section>
     <section id="world"><p class="source-kind">Dated player guide and surviving code</p><h2><time datetime="2014-04-25">25 April 2014</time>–<time datetime="2014-05-25">25 May 2014</time>: a game made from distance</h2><p>On 25 April 2014, the long-running f13 guide described the Oil Field as a resource-management puzzle made from randomly found parts and compared its pipe work to <em>Pipe Mania</em>. By 25 May, the guide had documented city-scoped things, global gold, local markets, hidden cities, Meld creation, vehicles, convoy tactics and route combat.</p><p>Mines kept working while their owners were away. Land vehicles, ships and aircraft made geography matter; weapons, modifications, piracy, professions, factories, Melds and the Oil Field turned an idle collection game into an intricate social simulation. The preserved PHP, MySQL and Python implementation corroborates those systems in code and data.</p></section>
     <section id="community"><p class="source-kind">Dated surviving community artefacts</p><h2><time datetime="2014-09">September 2014</time>–<time datetime="2016">2016</time>: players kept rebuilding the interface</h2><p>The MineThings transport extension was published in September 2014. It added sorting, filtering, colour coding, ETA calculations, radar and gadget details, live refresh, journey statistics and event histories. By July 2015, related scripts had reworked chat, messages, findings and wasted screen space. In 2016, the smaller “Machine Owners” tool grouped Oil Field machines by owner.</p><p>These were not cosmetic curiosities. They preserve the information and controls players needed badly enough to construct for themselves, just as the Dwarf Fortress community had done around its own difficult interface.</p></section>
+    <section id="newrpg"><p class="source-kind">Dated player testimony on a browser-game directory</p><h2><time datetime="2015-07-07">7 July 2015</time>–<time datetime="2017-09-06">6 September 2017</time>: players explain why they stayed</h2><p>A surviving NewRPG listing describes MineThings as a strategy game built around real-time collection while logged out, bots, local and foreign trade, twelve professions and valuable collections. The page now marks the original game offline.</p><figure class="history-quote"><blockquote><p>“one of the most immersive and compulsive games I've ever played … curiously addictive”</p></blockquote><figcaption>scottlarock, NewRPG player comment · 7 July 2015. After ten years playing <em>EVE Online</em>, the commenter said MineThings mattered more.</figcaption></figure><p>Other dated comments add further first-hand player testimony. Long-term miners described the slow start, demanding profession changes and persistent pull of the community; one reported playing since 2009. A 2017 comment independently listed mining, explosives, land vehicles, ships, aircraft, city markets, combat and chat as the activities that kept the world busy. These are self-reported experiences, not an independent audit of the game or its audience.</p></section>
     <section id="first-restoration"><p class="source-kind operator-account">Public failure record; operator-supplied identity</p><h2><time datetime="2019-11">November 2019</time>–<time datetime="2020-02-10">10 February 2020</time>: Serif's first restoration attempt fails</h2><p>A contemporary shutdown discussion records that the original owner offered to hand over the keys in November 2019 if somebody assumed the server bill. By 10 February 2020, a server upgrade had left parts of the ageing game broken, and one selected player-programmer had investigated taking over and updating its CakePHP 1.2, PHP, MySQL, Python and CentOS service. The scale of the code, broken systems and resources required defeated that attempt.</p><p>The public record confirms the failed attempt and its date range but leaves the successor unnamed. Serif identifies himself as that successor and says the private source and database were transferred to him. Serif's first repair and port stalled under the system's scope, obsolete dependencies and the time available. The identity and private transfer are therefore recorded as first-hand operator testimony, not independently established fact.</p></section>
     <section id="shutdown"><p class="source-kind">Dated public record</p><h2><time datetime="2020-03">March 2020</time>: the machinery stops</h2><p>After the failed handover, support had become exhausting and the monthly infrastructure bill was difficult to justify. MineThings closed in March 2020. Contemporary comments establish the month but not a reliable exact day.</p></section>
     <section id="memory"><p class="source-kind">Dated post-closure recollection</p><h2><time datetime="2021">2021</time>: memory outlives the service</h2><p>In 2021, players still tried to identify or replace MineThings. A 3 February similar-games request remembered automatic randomised loot and crafting; an 8 December identification thread successfully named MineThings from a partial memory of a browser mining game. These recollections show what endured, but they are not treated as authoritative records of the original mechanics.</p></section>
@@ -6149,7 +6252,7 @@ function historyPage() {
     <section id="reflection"><p class="source-kind operator-account">Dated first-hand player and operator testimony</p><h2><time datetime="2026-08-28">28 August 2026</time>: “But it stuck”</h2><figure class="history-quote"><blockquote><p>MineThings folk were a weird community. It attracted all sorts: griefer kids; whales (in the gaming sense); triers; chatters; people on drugs who would leave long monologues inspired by their mushroom trips; shills; young professionals; rich folks; idealists; habitualists. But it stuck—in people’s heads. It was a true sandbox, and Japhet Stevens put a huge amount of effort and creativity into it, yet received so little in return beyond abuse and suggestions about how to ‘improve his game’.</p><p>So many groundbreaking games were emerging at the time. Minecraft, FFS. Sandboxes were appearing everywhere. WoW had started as a sandbox. MineThings had a sense of an accepting community long before LGBTQ inclusion, invisible disabilities, and DEI became common topics of discussion. It connected people while, at the same time, providing a way for them to piss anonymous people off. The game had pariahs and legends.</p><p>I really want to bring this legacy forward, and I feel that it is a privilege to be in a position to do so.</p></blockquote><figcaption>Serif, original player and current restoration operator · 28 August 2026</figcaption></figure></section>
     <section id="rebuilding"><p class="source-kind">Dated repository and working-tree evidence</p><h2><time datetime="2026-08-29">29 August 2026</time>–<time datetime="2026-08-30">30 August 2026</time>: the reopened world keeps growing</h2><p>On 29 August, the casino became a multi-machine system. On 30 August, Council sentencing and a fuller starter experience gave new miners a proper arrival; maps and city labels were rebuilt; transport and combat continued to be refined; and hundreds of catalogue items gained a coherent SVG icon language while original PNGs remained available for layered avatars and miners.</p></section>
     <section id="continuation"><p class="source-kind">Dated repository and working-tree evidence; operator account</p><h2><time datetime="2026-08-31">31 August 2026</time>–<time datetime="2026-09-02">2 September 2026</time>: Serif makes the restored world inhabitable</h2><p>After the previous development update, Serif added explorable city interiors. Every city acquired its own persistent street plan and regional character, with readable lore signs, sparse Ore scraps, temporary Charged Ore power, roaming Dwarves and restless dead, parks, transport terminals and detailed architectural landmarks. A miner can now enter mines, Oil Fields, airfields, harbours and vehicle yards on foot; visit a local bar; and find a home with storage, a display space, messages, a proper bed and drifting Legendary dreams.</p><p>Serif expanded transport from single journeys into a working logistics network. Shuttles can repeatedly carry selected categories, including Oil and Ore, under peaceful, patrol or pillage orders. The Oil Tanker carries up to 100 barrels, while the Train Carriage moves up to 200 loaded things between regional capitals. Parked transports repair slowly; closed routes reject new departures and reopen after existing journeys finish; and the administration record separates live traffic from world events.</p><p>The routes themselves became more dangerous and more legible. Creature rolls now cover every region, destroyed road vehicles and sunken ships can leave wrecks from which Wraith Riders or Ghost Ships may rise, and living and restless threats have linked records and tier-correct hunt controls. Combat reports gained complete opening and closing statistics, condition labels and cleaner notifications; bounties were tied back to threat rarity; and closures, destruction, sightings and other world events gained varied linked chat announcements without flooding player inboxes.</p><p>New-player life also grew beyond a starter mine. Council sentencing now generates thousands of context-safe offences under a permanently unique docket number, explains the dissolved-estate grants, and points the exile toward a starter-miner bot, Aso exploration, Stones and a one-use outpost mine-rental voucher. Starter property now includes an Oil Field kit and five M-80s. More Stones recognise city discovery, entering a home, displaying a Thing and assembling the bot, while contextual navigation counts show what is actually available where the miner stands.</p><p>Finally, Serif added a distinct casino cabinet for every region and a durable global spin counter; broadened the SVG artwork across Things, mines, transports, threats and architecture; added private city-bar conversation, unseen chat counts and offline finding summaries; tightened database migrations, image caching and state cleanup; and extended the automated checks around the growing world. This phase changed MineThings 2 from a recovered set of systems into a place miners could travel through, inhabit and leave stories in.</p></section>
-    <section id="sources" class="source-notes"><h2><time datetime="2026-09-02">2 September 2026</time>: sources and provenance</h2><ol>
+    <section id="sources" class="source-notes"><h2><time datetime="2026-09-07">7 September 2026</time>: sources and provenance</h2><ol>
       <li><a class="text-link" href="https://www.bay12games.com/dwarves/dev_2006.html" rel="external noreferrer">Bay 12's 2006 development log</a>—the 8 August 2006 public Dwarf Fortress release.</li>
       <li><a class="text-link" href="https://github.com/Dwarf-Therapist/Manual/blob/master/Dwarf%20Therapist.tex" rel="external noreferrer">Dwarf Therapist manual</a>—the utility's 2009 release and tabular labour-management purpose.</li>
       <li><a class="text-link" href="https://browsermmorpg.com/game-mine-things--335" rel="external noreferrer">BrowserMMORPG listing</a>—the 16 October 2009 listing date, setting and overview.</li>
@@ -6166,13 +6269,14 @@ function historyPage() {
       <li><a class="text-link" href="https://openuserjs.org/scripts/i-machine/Mine_Things_-_Transport_page" rel="external noreferrer">OpenUserJS transport extension</a>—its September 2014 publication and detailed transport, radar, gadget and journey tooling.</li>
       <li><a class="text-link" href="https://openuserjs.org/?orderBy=updated&amp;orderDir=asc&amp;p=50&amp;version=23.05.13" rel="external noreferrer">OpenUserJS MineThings index</a>—the July 2015 transport, chat, layout and message tools and platform counters.</li>
       <li><a class="text-link" href="https://openuserjs.org/?limit=bktxxvsgrqlztl&amp;p=192" rel="external noreferrer">OpenUserJS Machine Owners</a>—the 2016 machine-ownership analysis tool.</li>
+      <li><a class="text-link" href="https://newrpg.com/browser-games/minethings/" rel="external noreferrer">NewRPG MineThings listing and comments</a>—the surviving game overview and dated player testimony from 7 July 2015 to 6 September 2017.</li>
       <li><a class="text-link" href="https://www.reddit.com/r/incremental_games/comments/f1tqlo" rel="external noreferrer">Shutdown discussion</a>—the 10 February 2020 technical state, failed succession attempt and impending closure.</li>
       <li><a class="text-link" href="https://www.reddit.com/r/gamingsuggestions/comments/lbbijg" rel="external noreferrer">Similar-games request</a>—the 3 February 2021 memory of automatic randomised loot and crafting.</li>
       <li><a class="text-link" href="https://www.reddit.com/r/tipofmyjoystick/comments/rbl577" rel="external noreferrer">Identification thread</a>—the 8 December 2021 residual recognition after shutdown.</li>
       <li><a class="text-link" href="https://www.newgrounds.com/portal/view/869633" rel="external noreferrer">Mini MineThings release</a>—the dated 4 January 2023 upload and author's gameplay description.</li>
       <li><a class="text-link" href="https://www.reddit.com/r/AndroidGaming/comments/10d7hts" rel="external noreferrer">AndroidGaming reminiscence</a>—the 16 January 2023 classification as a scavenging and item-collection game.</li>
       <li><a class="text-link" href="https://www.newgrounds.com/portal/view/869633" rel="external noreferrer">Mini MineThings revival comment</a>—the dated 20 February 2024 recognition of the game as a revival.</li>
-    </ol><p>All public sources and displayed OpenUserJS counters were reviewed on 30 August 2026. At that review, OpenUserJS recorded 17,520 installations for transport, 10,009 for chat, 11,039 for screen-space changes, 8,594 for messages and 170 for Machine Owners. These are platform counters, not verified unique-player totals.</p><p>Repository evidence means the archived source, SQL material, commits and current implementation shipped with this restoration. Operator-supplied history is first-hand testimony from Serif and is labelled wherever public records do not corroborate it. The name <strong>Japhet Stevens</strong> follows both the dated 2012 friend attribution and Serif's correction.</p></section>
+    </ol><p>The original public-source review and displayed OpenUserJS counters were recorded on 30 August 2026; the NewRPG listing was added and reviewed on 7 September 2026. The OpenUserJS review recorded 17,520 installations for transport, 10,009 for chat, 11,039 for screen-space changes, 8,594 for messages and 170 for Machine Owners. These are platform counters, not verified unique-player totals.</p><p>Repository evidence means the archived source, SQL material, commits and current implementation shipped with this restoration. Operator-supplied history is first-hand testimony from Serif and is labelled wherever public records do not corroborate it. The name <strong>Japhet Stevens</strong> follows both the dated 2012 friend attribution and Serif's correction.</p></section>
     </div></div>
   </article>`;
 }
@@ -6204,37 +6308,11 @@ function formatMoneyMinor(amountMinor, currency = 'GBP') {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(Number(amountMinor) / 100);
 }
 
-function dateTimeLocalValue(timestamp) {
-  if (!Number(timestamp)) return '';
-  const date = new Date(Number(timestamp));
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-function creditsPage(player, bundles, professionKits, purchases, readiness, paymentConfig, currentTime) {
+function creditsPage(player, bundles, purchases, readiness, paymentConfig) {
   const unavailable = readiness.ready ? '' : `<p class="legal-notice"><strong>Checkout unavailable.</strong> ${escapeHtml(readiness.missing.join(', '))}.</p>`;
-  const kitCards = professionKits.map((kit) => {
-    const mineList = kit.mines.map((mine) => `<li><img src="${escapeHtml(mine.icon)}" alt=""><span><strong>${escapeHtml(mine.name)} Mine</strong><small>${escapeHtml(mine.cityName)}${mine.quantity > 1 ? ` × ${mine.quantity}` : ''}</small></span></li>`).join('');
-    const offer = kit.free
-      ? `<strong class="profession-kit-price free">Free now</strong><span>Until ${new Date(kit.freeUntil).toLocaleString('en-GB')} · then ${kit.configuredPriceCredits.toLocaleString('en-GB')} credits</span><small>${escapeHtml(formatDuration(kit.freeUntil - currentTime))} remaining</small>`
-      : `<strong class="profession-kit-price">${kit.priceCredits.toLocaleString('en-GB')} credits</strong>`;
-    let button = kit.priceCredits === 0 ? 'Claim free kit' : `Buy for ${kit.priceCredits.toLocaleString('en-GB')} credits`;
-    let disabled = '';
-    if (kit.claimedAt) {
-      button = `Claimed ${new Date(kit.claimedAt).toLocaleDateString('en-GB')}`;
-      disabled = ' disabled';
-    } else if (!kit.inAso) {
-      button = 'Return to Aso to claim';
-      disabled = ' disabled';
-    } else if (!kit.affordable) {
-      button = 'Not enough credits';
-      disabled = ' disabled';
-    }
-    return `<article class="profession-kit${kit.claimedAt ? ' claimed' : ''}"><header><p class="eyebrow">Profession Kit · ${kit.mineCount} ${kit.mineCount === 1 ? 'mine' : 'mines'}</p><h2>${escapeHtml(kit.name)}</h2><p>${escapeHtml(kit.description)}</p></header><ul class="profession-kit-mines">${mineList}</ul><div class="profession-kit-offer">${offer}</div><form method="post" action="/credits/profession-kits/${kit.id}/claim"><button${disabled}>${escapeHtml(button)}</button></form>${kit.claimedAt ? `<small>Paid ${kit.pricePaid.toLocaleString('en-GB')} credits. These mines cannot be sold back.</small>` : ''}</article>`;
-  }).join('');
   const bundleCards = bundles.map((bundle) => `<article class="credit-bundle"><p class="eyebrow">${escapeHtml(bundle.name)}</p><strong>${bundle.credits.toLocaleString('en-GB')} credits</strong><span>${escapeHtml(formatMoneyMinor(bundle.amountMinor, bundle.currency))}</span><form method="post" action="/credits/paypal/orders"><input type="hidden" name="bundleId" value="${bundle.id}"><label class="check-row"><input type="checkbox" name="acceptPaymentTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">payment terms</a> (version ${LEGAL_VERSION}).</span></label><label class="check-row"><input type="checkbox" name="immediateDelivery" value="1" required><span>Supply my credits immediately; I understand this affects my 14-day cancellation right.</span></label><button${readiness.ready ? '' : ' disabled'}>Continue to PayPal</button></form></article>`).join('');
   const history = purchases.map((purchase) => `<tr><td><a class="text-link" href="/credits/receipts/${purchase.id}">MT-${purchase.id}</a></td><td>${new Date(purchase.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td><span class="payment-status payment-${escapeHtml(purchase.status)}">${escapeHtml(purchase.status)}</span></td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Optional support</p><h1>Buy credits</h1></div><p>Balance: <strong>${player.credits.toLocaleString('en-GB')} credits</strong> · ${escapeHtml(paymentConfig.environment)} checkout</p></section><section class="profession-kits-section"><div class="section-heading"><div><p class="eyebrow">Aso opportunities</p><h2>Profession Kits</h2></div><p>Claim each kit once while you are in Aso. Its permanent, non-refundable mines are opened in the Aso cities where those mine types belong.</p></div><div class="profession-kits">${kitCards || '<p>No Profession Kits are currently available.</p>'}</div></section>${unavailable}<section><h2>Credit bundles</h2><p>PayPal hosts the approval step. MineThings never sees your card details.</p><div class="credit-bundles">${bundleCards}</div></section><section><h2>Purchase history</h2><div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Created</th><th>Bundle</th><th>Paid</th><th>Status</th></tr></thead><tbody>${history || '<tr><td colspan="5">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
+  return `<section class="page-title"><div><p class="eyebrow">Optional support</p><h1>Buy credits</h1></div><p>Balance: <strong>${player.credits.toLocaleString('en-GB')} credits</strong> · ${escapeHtml(paymentConfig.environment)} checkout</p></section>${unavailable}<section><h2>Credit bundles</h2><p>PayPal hosts the approval step. MineThings never sees your card details.</p><div class="credit-bundles">${bundleCards}</div></section><section><h2>Purchase history</h2><div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Created</th><th>Bundle</th><th>Paid</th><th>Status</th></tr></thead><tbody>${history || '<tr><td colspan="5">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function receiptPage(purchase) {
@@ -6259,18 +6337,12 @@ function verifyCapturedOrder(order, purchase) {
   return summary;
 }
 
-function adminPaymentsPage(bundles, professionKits, purchases, currentTime) {
+function adminPaymentsPage(bundles, purchases) {
   const bundleRows = [...bundles].sort((first, second) =>
     first.name.localeCompare(second.name) || first.id - second.id)
     .map((bundle) => { const formId = `bundle-${bundle.id}`; return `<tr><td><input form="${formId}" name="name" value="${escapeHtml(bundle.name)}" maxlength="80" required></td><td><input form="${formId}" type="number" name="credits" value="${bundle.credits}" min="1" required></td><td><input form="${formId}" type="number" name="amountMinor" value="${bundle.amountMinor}" min="1" required> pence</td><td><label class="check-row"><input form="${formId}" type="checkbox" name="enabled" value="1"${bundle.enabled ? ' checked' : ''}><span>Enabled</span></label></td><td><form id="${formId}" method="post" action="/admin/credit-bundles/${bundle.id}"><button>Save</button></form></td></tr>`; }).join('');
-  const kitRows = professionKits.map((kit) => {
-    const formId = `profession-kit-${kit.id}`;
-    const contents = kit.mines.map((mine) => `${mine.quantity > 1 ? `${mine.quantity}× ` : ''}${mine.name} (${mine.cityName})`).join(', ');
-    const state = kit.enabled ? (kit.free ? `Free for ${formatDuration(kit.freeUntil - currentTime)}` : 'Paid') : 'Hidden';
-    return `<tr><td><input form="${formId}" name="name" value="${escapeHtml(kit.name)}" maxlength="80" required><small>${escapeHtml(contents)}</small></td><td><textarea form="${formId}" name="description" maxlength="300" rows="3" required>${escapeHtml(kit.description)}</textarea></td><td><input form="${formId}" type="number" name="priceCredits" value="${kit.configuredPriceCredits}" min="1" required> credits</td><td><input form="${formId}" type="datetime-local" name="freeUntil" value="${dateTimeLocalValue(kit.freeUntil)}"><small>${escapeHtml(state)}</small></td><td><label class="check-row"><input form="${formId}" type="checkbox" name="enabled" value="1"${kit.enabled ? ' checked' : ''}><span>Enabled</span></label></td><td><form id="${formId}" method="post" action="/admin/profession-mine-kits/${kit.id}"><button>Save</button></form></td></tr>`;
-  }).join('');
   const purchaseRows = purchases.map((purchase) => `<tr><td><a class="text-link" href="/admin/players/${purchase.playerId}">${escapeHtml(purchase.playerName)}</a></td><td>MT-${purchase.id}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td>${escapeHtml(purchase.status)}</td><td>${escapeHtml(purchase.providerOrderId || '—')}</td><td>${escapeHtml(purchase.reviewReason || '')}</td></tr>`).join('');
-  return `${adminTabs('payments')}<section class="page-title"><div><p class="eyebrow">Payment operations</p><h1>Credits and PayPal</h1></div><p>Bundle changes affect new orders only. Every purchase keeps its original price and credit snapshot.</p></section><section><h2>Profession Kits</h2><p>A future free-until date makes a kit free. When that moment passes, its configured credit price takes over automatically. Kit contents remain fixed Aso mine collections.</p><div class="table-scroll"><table class="bundle-admin-table profession-kit-admin-table"><thead><tr><th>Name and mines</th><th>Description</th><th>Paid price</th><th>Free until</th><th>State</th><th></th></tr></thead><tbody>${kitRows}</tbody></table></div></section><section><h2>Credit bundles</h2><div class="table-scroll"><table class="bundle-admin-table"><thead><tr><th>Name</th><th>Credits</th><th>Price</th><th>State</th><th></th></tr></thead><tbody>${bundleRows}</tbody></table></div></section><section><h2>Recent purchases</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Receipt</th><th>Bundle</th><th>Amount</th><th>Status</th><th>Order</th><th>Review</th></tr></thead><tbody>${purchaseRows || '<tr><td colspan="7">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
+  return `${adminTabs('payments')}<section class="page-title"><div><p class="eyebrow">Payment operations</p><h1>Credits and PayPal</h1></div><p>Bundle changes affect new orders only. Every purchase keeps its original price and credit snapshot.</p></section><section><h2>Credit bundles</h2><div class="table-scroll"><table class="bundle-admin-table"><thead><tr><th>Name</th><th>Credits</th><th>Price</th><th>State</th><th></th></tr></thead><tbody>${bundleRows}</tbody></table></div></section><section><h2>Recent purchases</h2><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Receipt</th><th>Bundle</th><th>Amount</th><th>Status</th><th>Order</th><th>Review</th></tr></thead><tbody>${purchaseRows || '<tr><td colspan="7">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function thingCategoryGlossary(catalog) {
@@ -6705,6 +6777,9 @@ export function createApp(options = {}) {
   const paymentConfig = paypalConfiguration(options.paypal ?? {});
   const seller = sellerConfiguration(options.seller ?? {});
   const paymentReadiness = paypalReadiness(paymentConfig, seller);
+  let paymentRuntimeFailure = '';
+  const currentPaymentReadiness = () => paymentRuntimeFailure
+    ? Object.freeze({ ready: false, missing: [paymentRuntimeFailure] }) : paymentReadiness;
   const paypalClient = options.paypalClient ?? new PayPalClient(paymentConfig);
   const emailConfig = emailConfiguration(options.email ?? {});
   const emailStatus = emailReadiness(emailConfig, production);
@@ -6727,6 +6802,34 @@ export function createApp(options = {}) {
   }
   const now = options.now ?? Date.now;
   const random = options.random ?? Math.random;
+  const mapPageCache = new Map();
+  const cachedMapPage = (player, catalog, requestedMapSlug, snapshotAt) => {
+    const mapRevision = () => store.latestLiveUpdateId([
+      `player:${player.id}`, 'topic:catalog'
+    ]);
+    const cacheKeyForRevision = (revision) =>
+      [player.id, player.cityId, requestedMapSlug, revision].join(':');
+    const cacheKey = cacheKeyForRevision(mapRevision());
+    const cached = mapPageCache.get(cacheKey);
+    if (cached && cached.expiresAt > snapshotAt) {
+      return { html: cached.html, cacheStatus: 'HIT' };
+    }
+    if (cached) mapPageCache.delete(cacheKey);
+    const html = mapPage(player, catalog,
+      store.knownCityIds(player.id, snapshotAt), requestedMapSlug,
+      store.oilFieldCityIds(), store.mapOperationsSnapshot(player.id, snapshotAt));
+    const settledCacheKey = cacheKeyForRevision(mapRevision());
+    mapPageCache.set(settledCacheKey, {
+      html, expiresAt: snapshotAt + MAP_PAGE_CACHE_TTL_MS
+    });
+    for (const [key, entry] of mapPageCache) {
+      if (entry.expiresAt <= snapshotAt) mapPageCache.delete(key);
+    }
+    while (mapPageCache.size > MAP_PAGE_CACHE_LIMIT) {
+      mapPageCache.delete(mapPageCache.keys().next().value);
+    }
+    return { html, cacheStatus: 'MISS' };
+  };
   const shillSignalSecret = String(
     options.shillSignalSecret ?? process.env.SHILL_SIGNAL_SECRET ?? ''
   ).trim();
@@ -7250,71 +7353,75 @@ export function createApp(options = {}) {
       return;
     }
     if (url.pathname === '/node/live-updates.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/live-updates.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/live-updates.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/navigation.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/navigation.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/navigation.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/casino.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/casino.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/casino.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/messages.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/messages.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/messages.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/chat-filters.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/chat-filters.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/chat-filters.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/vehicle-journey.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-journey.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-journey.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/vehicle-shuttle.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-shuttle.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-shuttle.js')) response.writeHead(404).end('Not found');
+      return;
+    }
+    if (url.pathname === '/node/vehicle-convoy.js') {
+      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-convoy.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/vehicle-comparison-sort.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-comparison-sort.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/vehicle-comparison-sort.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/flash-modal.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/flash-modal.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/flash-modal.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/bot-build-burst.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/bot-build-burst.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/bot-build-burst.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/meld-modal.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/meld-modal.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/meld-modal.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/auto-recycle.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/auto-recycle.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/auto-recycle.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/map.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/map.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/map.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/city-explore.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/city-explore.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/city-explore.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/bar-chat.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/bar-chat.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/bar-chat.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/home-dream.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/home-dream.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/home-dream.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/admin-weather.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/admin-weather.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/admin-weather.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/map-background.png') {
@@ -7487,11 +7594,11 @@ export function createApp(options = {}) {
       return;
     }
     if (url.pathname === '/node/oil-field.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/oil-field.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/oil-field.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/oil-field-renderers.js') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/oil-field-renderers.js', 'no-store')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/oil-field-renderers.js')) response.writeHead(404).end('Not found');
       return;
     }
     if (url.pathname === '/node/svgjs.min.js') {
@@ -7530,7 +7637,7 @@ export function createApp(options = {}) {
       return;
     }
     if (url.pathname === '/app.css') {
-      if (!staticFile(request, response, PUBLIC_ROOT, '/app.css', 'no-cache')) response.writeHead(404).end('Not found');
+      if (!staticFile(request, response, PUBLIC_ROOT, '/app.css')) response.writeHead(404).end('Not found');
       return;
     }
 
@@ -8451,13 +8558,30 @@ export function createApp(options = {}) {
         const vehicleId = Number(url.searchParams.get('vehicleId'));
         redirect(response, Number.isSafeInteger(vehicleId) && vehicleId > 0
           ? `/vehicles/boxes?vehicleId=${vehicleId}` : '/vehicles/boxes');
+      } else if (request.method === 'GET' && /^\/vehicles\/\d+\/convoy$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const vehicleId = Number(url.pathname.split('/')[2]);
+        const actionTime = now();
+        const vehicles = store.vehiclesForPlayer(player.id, actionTime, { includeRoutes: true });
+        const leader = vehicles.find((vehicle) => Number(vehicle.id) === vehicleId);
+        if (!leader) throw new Error('Vehicle not found.');
+        if (leader.status !== 'idle' || Number(leader.cityId) !== Number(player.cityId)
+          || !['land', 'sea'].includes(leader.type) || leader.damaged
+          || leader.aircraftDestroyed || leader.shuttle
+          || leader.convoy?.memberStatus === 'queued') {
+          redirect(response, `/vehicles/${vehicleId}`);
+          return;
+        }
+        responseHtml(response, 200, layout(`Build a convoy · ${leader.name}`,
+          vehicleConvoySetupPage(player, catalog, leader, vehicles), player, flash));
       } else if (request.method === 'GET' && /^\/vehicles\/\d+\/(cargo|customize)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const parts = url.pathname.split('/');
         const vehicleId = Number(parts[2]);
         const view = parts[3];
         const vehicle = store.vehicleDetails(player.id, vehicleId, now());
-        if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle) {
+        if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle
+          || vehicle.convoy?.memberStatus === 'queued') {
           redirect(response, `/vehicles/${vehicleId}`);
           return;
         }
@@ -8498,6 +8622,47 @@ export function createApp(options = {}) {
             ? `No stored vehicles can be activated in ${result.cityName}. ${skipped}`
             : `There are no stored vehicles in ${result.cityName}.`);
         redirect(response, '/vehicles#stored-vehicle-things');
+      } else if (request.method === 'POST' && /^\/vehicles\/\d+\/convoy$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const vehicleId = Number(url.pathname.split('/')[2]);
+        const form = await readForm(request);
+        const staggerMinutes = Number(form.staggerMinutes);
+        if (!Number.isSafeInteger(staggerMinutes) || staggerMinutes < 0
+          || staggerMinutes * 60 * 1000 > VEHICLE_CONVOY_MAX_STAGGER_MS) {
+          throw new Error('Choose a whole-minute stagger interval from 0 to 60 minutes.');
+        }
+        const companionIds = Object.keys(form).filter((key) => /^vehicle_\d+$/.test(key))
+          .map((key) => Number(key.slice('vehicle_'.length)));
+        const selectedIds = [vehicleId, ...companionIds];
+        let memberIds = selectedIds;
+        if (form.memberOrder) {
+          memberIds = String(form.memberOrder).split(',').map((value) => Number(value));
+          const orderedSet = new Set(memberIds);
+          const selectedSet = new Set(selectedIds);
+          if (memberIds.some((id) => !Number.isSafeInteger(id) || id < 1)
+            || orderedSet.size !== memberIds.length
+            || orderedSet.size !== selectedSet.size
+            || [...orderedSet].some((id) => !selectedSet.has(id))) {
+            throw new Error('The convoy sending order does not match the selected transports.');
+          }
+        }
+        if (memberIds.length < VEHICLE_CONVOY_MIN_SIZE) {
+          throw new Error('The lead transport is already included. Select at least one additional transport.');
+        }
+        if (memberIds.length > VEHICLE_CONVOY_MAX_SIZE) {
+          throw new Error(`The lead transport is already included. Select no more than ${VEHICLE_CONVOY_MAX_SIZE - 1} additional transports.`);
+        }
+        const started = store.startVehicleConvoy(player.id, memberIds, Number(form.routeId),
+          staggerMinutes * 60 * 1000, now());
+        setFlash(`Convoy launched with ${started.size} transports. Each member keeps its recorded stance; departures are staggered by ${formatDuration(started.staggerMs)}.`);
+        redirect(response, `/vehicles/${vehicleId}`);
+      } else if (request.method === 'POST'
+        && /^\/vehicle-convoys\/\d+\/cancel$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const convoyId = Number(url.pathname.split('/')[2]);
+        const cancelled = store.cancelVehicleConvoy(player.id, convoyId, now());
+        setFlash(`Convoy cancelled. ${cancelled.queuedCancelled} queued transport${cancelled.queuedCancelled === 1 ? '' : 's'} released.${cancelled.traveling ? ` ${cancelled.traveling} underway transport${cancelled.traveling === 1 ? '' : 's'} will finish the journey.` : ''}`);
+        redirect(response, '/vehicles');
       } else if (request.method === 'POST' && /^\/vehicles\/\d+\/shuttle$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const vehicleId = Number(url.pathname.split('/')[2]);
@@ -8507,6 +8672,9 @@ export function createApp(options = {}) {
           throw new Error('Only an idle vehicle in your selected city can start a shuttle route.');
         }
         if (vehicle.shuttle) throw new Error('That vehicle already has a shuttle route.');
+        if (vehicle.convoy?.memberStatus === 'queued') {
+          throw new Error('Cancel that vehicle\'s queued convoy departure first.');
+        }
         if (vehicle.cargoSize !== 0) {
           throw new Error('Empty this vehicle\'s cargo hold before starting a shuttle route.');
         }
@@ -8588,7 +8756,8 @@ export function createApp(options = {}) {
         const vehicleId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
         const vehicle = store.vehicleDetails(player.id, vehicleId, now());
-        if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle) {
+        if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle
+          || vehicle.convoy?.memberStatus === 'queued') {
           throw new Error('Only an idle vehicle in your selected city can change cargo.');
         }
         const cargo = form.intent === 'rarest'
@@ -8625,7 +8794,8 @@ export function createApp(options = {}) {
         const vehicleId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
         const vehicle = store.vehicleDetails(player.id, vehicleId, now());
-        if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle) {
+        if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle
+          || vehicle.convoy?.memberStatus === 'queued') {
           throw new Error('Only an idle vehicle in your selected city can be customized.');
         }
         const expandCounts = (prefix) => {
@@ -8935,10 +9105,13 @@ export function createApp(options = {}) {
       } else if (request.method === 'GET' && url.pathname === '/map') {
         if (!requirePlayer()) return;
         const mapSnapshotAt = now();
-        responseHtml(response, 200, layout('Map', mapPage(player, catalog,
-          store.knownCityIds(player.id, mapSnapshotAt), url.searchParams.get('world') ?? '',
-          store.oilFieldCityIds(), store.mapOperationsSnapshot(player.id, mapSnapshotAt)),
-        player, flash));
+        const mapView = cachedMapPage(
+          player, catalog, url.searchParams.get('world') ?? '', mapSnapshotAt
+        );
+        responseRevalidatedHtml(request, response, 200,
+          layout('Map', mapView.html, player, flash), {
+            'X-MineThings-Map-Cache': mapView.cacheStatus
+          });
       } else if (url.pathname === '/move' && ['GET', 'POST'].includes(request.method)) {
         if (request.method === 'POST') request.resume();
         responseHtml(response, 410, layout('Regional capitals',
@@ -8953,34 +9126,35 @@ export function createApp(options = {}) {
         redirect(response, requestDestination(request, '/'));
       } else if (request.method === 'GET' && url.pathname === '/credits') {
         if (requirePlayer()) {
-          const viewedAt = now();
           responseHtml(response, 200, layout('Buy credits', creditsPage(
             player, store.creditBundles(true),
-            store.professionMineKits(player.id, viewedAt, true),
-            store.playerCreditPurchases(player.id), paymentReadiness, paymentConfig, viewedAt
+            store.playerCreditPurchases(player.id), currentPaymentReadiness(), paymentConfig
           ), player, flash));
         }
       } else if (request.method === 'POST'
         && /^\/credits\/profession-kits\/\d+\/claim$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const claimedAt = now();
-        const result = store.claimProfessionMineKit(
-          player.id, Number(url.pathname.split('/')[3]), catalog, claimedAt, random
-        );
-        setFindingNotice(result.findingEvents, { source: 'new-mine', foundAt: claimedAt });
-        store.awardStone(player.id, 'Invested', claimedAt);
-        setFlash(result.priceCredits === 0
-          ? `${result.kit.name} claimed free. ${result.mines.length} permanent Aso mines granted.`
-          : `${result.kit.name} purchased for ${result.priceCredits.toLocaleString('en-GB')} credits. ${result.mines.length} permanent Aso mines granted.`);
-        redirect(response, '/credits');
+        request.resume();
+        responseHtml(response, 410, layout('Profession Kits retired',
+          '<section class="page-title"><div><p class="eyebrow">Credits shop</p><h1>Profession Kits have been retired</h1></div><a class="text-link" href="/market">Rent a mine</a></section><p>All mines are now available only as rentals from the credits shop.</p>',
+          player, flash));
       } else if (request.method === 'POST' && url.pathname === '/credits/paypal/orders') {
         if (!requirePlayer()) return;
-        if (!paymentReadiness.ready) {
-          throw new Error(`Checkout is unavailable: ${paymentReadiness.missing.join(', ')}.`);
+        const checkoutReadiness = currentPaymentReadiness();
+        if (!checkoutReadiness.ready) {
+          throw new Error(`Checkout is unavailable: ${checkoutReadiness.missing.join(', ')}.`);
         }
         const form = await readForm(request);
         if (form.acceptPaymentTerms !== '1' || form.immediateDelivery !== '1') {
           throw new Error('Accept the payment terms and immediate delivery statement to continue.');
+        }
+        try {
+          await paypalClient.authenticate();
+        } catch (error) {
+          if (error.code === 'PAYPAL_CREDENTIALS_REJECTED') {
+            paymentRuntimeFailure = 'PayPal server credentials were rejected';
+          }
+          throw error;
         }
         const purchase = store.createCreditPurchase(player.id, Number(form.bundleId), {
           termsVersion: LEGAL_VERSION,
@@ -9371,11 +9545,9 @@ export function createApp(options = {}) {
         redirect(response, '/admin');
       } else if (request.method === 'GET' && url.pathname === '/admin/payments') {
         if (!requireAdmin()) return;
-        const paymentAdminTime = now();
         responseHtml(response, 200, layout('Admin · Payments', adminPaymentsPage(
           store.creditBundles(false),
-          store.professionMineKits(null, paymentAdminTime, false),
-          store.adminCreditPurchases(), paymentAdminTime
+          store.adminCreditPurchases()
         ), player, flash));
       } else if (request.method === 'POST' && /^\/admin\/credit-bundles\/\d+$/.test(url.pathname)) {
         if (!requireAdmin()) return;
@@ -9390,22 +9562,10 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST'
         && /^\/admin\/profession-mine-kits\/\d+$/.test(url.pathname)) {
         if (!requireAdmin()) return;
-        const form = await readForm(request);
-        const freeUntil = String(form.freeUntil ?? '').trim()
-          ? new Date(form.freeUntil).getTime() : 0;
-        if (!Number.isSafeInteger(freeUntil) || freeUntil < 0) {
-          throw new Error('Enter a valid free-until date and time, or leave it blank.');
-        }
-        const kit = store.adminUpdateProfessionMineKit(player.id,
-          Number(url.pathname.split('/').pop()), {
-            name: form.name, description: form.description,
-            priceCredits: form.priceCredits, freeUntil,
-            enabled: form.enabled === '1'
-          }, now());
-        setFlash(`${kit.name} updated. It is ${kit.enabled
-          ? (kit.free ? 'currently free' : `${kit.priceCredits.toLocaleString('en-GB')} credits`)
-          : 'hidden'}.`);
-        redirect(response, '/admin/payments');
+        request.resume();
+        responseHtml(response, 410, layout('Profession Kits retired',
+          '<section class="page-title"><div><p class="eyebrow">Payment operations</p><h1>Profession Kits have been retired</h1></div><a class="text-link" href="/admin/payments">Back to payments</a></section>',
+          player, flash));
       } else if (request.method === 'GET' && url.pathname === '/admin/players') {
         if (!requireAdmin()) return;
         const query = url.searchParams.get('q') ?? '';
@@ -9633,6 +9793,22 @@ export function createApp(options = {}) {
           ? `/casino?spin=${spin.id}`
           : `/casino?machine=${encodeURIComponent(machineKey)}&spin=${spin.id}`);
       } else if (request.method === 'POST' && url.pathname === '/chat') {
+        const smoothChat = request.headers['x-minethings-chat'] === '1';
+        if (smoothChat) {
+          if (!player) {
+            responseJson(response, 401, { ok: false, error: 'Log in to use public chat.' });
+            return;
+          }
+          try {
+            const form = await readForm(request);
+            const chat = store.addChat(player.id, form.body, now(), form.color || null);
+            store.awardStone(player.id, 'Chatted', now());
+            responseJson(response, 201, { ok: true, chatId: chat.id });
+          } catch (error) {
+            responseJson(response, 409, { ok: false, error: error.message });
+          }
+          return;
+        }
         if (!requirePlayer()) return;
         const form = await readForm(request);
         store.addChat(player.id, form.body, now(), form.color || null);
@@ -9683,11 +9859,9 @@ export function createApp(options = {}) {
           factoryMarketPage(player, market, cityName, catalog), player, flash));
       } else if (request.method === 'GET' && /^\/market\/mines\/\d+$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const mineTypeId = Number(url.pathname.split('/').pop());
-        const market = store.mineMarket(mineTypeId, player.cityId, player.id, now());
-        const cityName = catalogCityForId(catalog, player.cityId).name;
-        responseHtml(response, 200, layout(`${market.name} Mine Market`,
-          mineMarketPage(player, market, cityName), player, flash));
+        responseHtml(response, 410, layout('Mine market retired',
+          '<section class="page-title"><div><p class="eyebrow">Credits shop</p><h1>Mine purchasing has ended</h1></div><a class="button" href="/market">View mine rentals</a></section><p>All mines are now rented directly from the credits shop and cannot be traded between players.</p>',
+          player, flash));
       } else if (request.method === 'GET' && /^\/market\/items\/\d+$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const item = catalog.byId.get(Number(url.pathname.split('/').pop()));
@@ -9851,62 +10025,35 @@ export function createApp(options = {}) {
         redirect(response, requestDestination(request, '/factories'));
       } else if (request.method === 'POST' && /^\/market\/mines\/\d+\/(listings|bids)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const parts = url.pathname.split('/');
-        const form = await readForm(request);
-        const orderId = parts[4] === 'listings'
-          ? store.placeMineSellOrder(player.id, Number(parts[3]), form.cryptoTypeId,
-            form.cryptoQuantity, form.quantity, now())
-          : store.placeMineBuyOrder(player.id, Number(parts[3]), form.cryptoTypeId,
-            form.cryptoQuantity, form.quantity, now());
-        setFlash(`${parts[4] === 'listings' ? 'Mine listing' : 'Mine bid'} #${orderId} placed.`);
-        redirect(response, `/market/mines/${parts[3]}`);
+        request.resume();
+        responseHtml(response, 410, layout('Mine market retired',
+          '<section class="page-title"><div><p class="eyebrow">Credits shop</p><h1>Mine purchasing has ended</h1></div><a class="button" href="/market">View mine rentals</a></section>',
+          player, flash));
       } else if (request.method === 'POST' && /^\/market\/mine-orders\/\d+\/(cancel|buy|sell)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const parts = url.pathname.split('/');
-        const orderId = Number(parts[3]);
-        if (parts[4] === 'cancel') {
-          store.cancelMineMarketOrder(player.id, orderId);
-          setFlash('Mine market order cancelled.');
-        } else {
-          const form = await readForm(request);
-          const result = parts[4] === 'buy'
-            ? store.buyMineListing(player.id, orderId, form.quantity, now())
-            : store.sellMineToBid(player.id, orderId, form.quantity, now());
-          if (parts[4] === 'buy') store.awardStone(player.id, 'Invested', now());
-          setFlash(`${parts[4] === 'buy' ? 'Purchased' : 'Sold'} ${result.quantity} mine${result.quantity === 1 ? '' : 's'} for ${result.cryptoQuantity.toLocaleString('en-GB')} ${result.currency.symbol} (worth ${formatGold(result.goldValue)}g at execution).`);
-        }
-        redirect(response, requestDestination(request, '/market'));
+        request.resume();
+        responseHtml(response, 410, layout('Mine market retired',
+          '<section class="page-title"><div><p class="eyebrow">Credits shop</p><h1>Mine purchasing has ended</h1></div><a class="button" href="/market">View mine rentals</a></section>',
+          player, flash));
       } else if (request.method === 'POST' && /^\/market\/mines\/\d+\/buy$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const mineTypeId = Number(url.pathname.split('/')[3]);
-        const purchasedAt = now();
-        const { result: mine, findingEvents } = store.mutatePlayer(
-          player.id,
-          (current) => buyMine(current, catalog, mineTypeId, purchasedAt, random),
-          (createdMine, current) => ({
-            source: 'new-mine',
-            findings: current.discoveries.filter(
-              (finding) => finding.mineId === createdMine.id
-            ),
-            recordedAt: purchasedAt
-          }),
-          purchasedAt
-        );
-        setFindingNotice(
-          findingEvents,
-          { source: 'new-mine', cityId: mine.cityId, foundAt: purchasedAt }
-        );
-        store.awardStone(player.id, 'Invested', purchasedAt);
-        const type = catalog.mineTypes.find((candidate) => candidate.id === mine.mineTypeId);
-        setFlash(`${type.name} Mine purchased with ${catalog.settings.starter_find_count} discoveries.`);
-        redirect(response, '/');
+        request.resume();
+        responseHtml(response, 410, layout('Mine purchasing retired',
+          '<section class="page-title"><div><p class="eyebrow">Credits shop</p><h1>Mines are rental-only</h1></div><a class="button" href="/market">Choose a rental</a></section>',
+          player, flash));
       } else if (request.method === 'POST' && /^\/market\/mines\/\d+\/rent$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const mineTypeId = Number(url.pathname.split('/')[3]);
+        const form = await readForm(request);
         const rentedAt = now();
+        const type = catalog.mineTypes.find((candidate) => candidate.id === mineTypeId);
+        const offer = mineRentalOffers(catalog, type)
+          .find((candidate) => candidate.key === String(form.termKey ?? ''));
+        if (!offer) throw new Error('Choose a valid mine rental term.');
         const { result: mine, findingEvents } = store.mutatePlayer(
           player.id,
-          (current) => rentMine(current, catalog, mineTypeId, rentedAt, random),
+          (current) => rentMine(current, catalog, mineTypeId, rentedAt, random,
+            { termKey: offer.key }),
           (createdMine, current) => ({
             source: 'new-mine',
             findings: current.discoveries.filter(
@@ -9921,8 +10068,7 @@ export function createApp(options = {}) {
           { source: 'new-mine', cityId: mine.cityId, foundAt: rentedAt }
         );
         store.awardStone(player.id, 'Invested', rentedAt);
-        const type = catalog.mineTypes.find((candidate) => candidate.id === mine.mineTypeId);
-        setFlash(`${type.name} Mine rented for ${formatDuration(Number(catalog.settings.mine_rental_duration_ms))} with ${catalog.settings.starter_find_count} discoveries.`);
+        setFlash(`${type.name} Mine rented for ${offer.label} at ${offer.priceCredits} credits with ${catalog.settings.starter_find_count} discoveries.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/market\/mines\/\d+\/rent-with-voucher$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -9941,10 +10087,10 @@ export function createApp(options = {}) {
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/mines\/\d+\/sell$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const { result: refund } = store.mutatePlayer(player.id, (current) =>
-          sellMine(current, catalog, Number(url.pathname.split('/')[2])), null, now());
-        setFlash(`Mine resold for ${refund} credits.`);
-        redirect(response, '/');
+        request.resume();
+        responseHtml(response, 410, layout('Mine selling retired',
+          '<section class="page-title"><div><p class="eyebrow">Mines</p><h1>Mines can no longer be sold</h1></div><a class="button" href="/market">View mine rentals</a></section>',
+          player, flash));
       } else if (request.method === 'POST' && /^\/market\/containers\/\d+\/buy$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const container = store.buyContainer(player.id, Number(url.pathname.split('/')[3]));

@@ -1,106 +1,106 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
-import { createPlayer, sellMine } from '../src/game.js';
+import { createPlayer } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
 import { createApp } from '../src/server.js';
 import { hashPassword, SqliteStore } from '../src/store.js';
 
 const catalog = loadLegacyCatalog();
 
-test('profession kits grant fixed Aso mine collections once and become paid automatically', (context) => {
-  const store = new SqliteStore(':memory:');
-  context.after(() => store.close());
+test('rental-only migration preserves players while retiring kits and mine trading', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-rental-economy-'));
+  const databaseFile = path.join(directory, 'game.sqlite');
+  let store = new SqliteStore(databaseFile);
+  context.after(() => {
+    store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
   store.seedCatalog(catalog);
   store.ensureWorldMaps(1_000);
-  const liveCatalog = store.loadCatalog();
   const player = store.addPlayer(createPlayer(
-    'Kit Tester', '', 'hash', liveCatalog, 1_000, () => 0.5
+    'Lease Migrator', '', 'hash', store.loadCatalog(), 1_000, () => 0.5
   ));
+  store.database.prepare('UPDATE players SET credits = 100, item_limit = 999 WHERE id = ?')
+    .run(player.id);
+  store.database.prepare(`
+    UPDATE mines SET rental_until = 0, source_kind = 'profession-kit' WHERE player_id = ?
+  `).run(player.id);
+  store.database.prepare('UPDATE profession_mine_kits SET enabled = 1').run();
+  store.database.prepare(`
+    INSERT INTO player_crypto_balances (player_id, crypto_type_id, quantity)
+    VALUES (?, 1, 0)
+  `).run(player.id);
+  store.database.prepare(`
+    INSERT INTO mine_market_orders
+      (player_id, city_id, mine_type_id, side, price_units, crypto_type_id,
+       crypto_quantity, crypto_price_units, quantity, created_at)
+    VALUES (?, 1, 4, 'buy', 10000, 1, 2, 5000, 3, 1000)
+  `).run(player.id);
+  store.database.exec(`
+    DROP TABLE player_containers;
+    CREATE TABLE player_containers (
+      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      container_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (player_id, container_id)
+    );
+  `);
+  store.database.prepare(`
+    INSERT INTO player_containers (player_id, container_id, quantity) VALUES (?, 8, 3)
+  `).run(player.id);
+  store.database.prepare('UPDATE catalog_containers SET credits = 9, capacity = 25 WHERE id = 8').run();
+  store.database.prepare(`
+    UPDATE catalog_mine_types SET credit_cost = 425, rent_cost = 28, refundable = 1
+    WHERE id = 4
+  `).run();
+  store.database.prepare(
+    "DELETE FROM schema_migrations WHERE name = 'rental-only-economy-v1'"
+  ).run();
+  store.close();
 
-  const initialKits = store.professionMineKits(player.id, Date.now(), true);
-  assert.deepEqual(initialKits.map((kit) => kit.name), [
-    "Fisher's Kit", "Haulier's Kit", "Oil Worker's Kit", "Route Warden's Kit",
-    "Maker's Kit"
-  ]);
-  assert.ok(initialKits.every((kit) => kit.free && kit.inAso && !kit.claimedAt));
-  assert.deepEqual(initialKits.find((kit) => kit.slug === 'fisher').mines
-    .map((mine) => [mine.name, mine.cityName]), [
-    ['Bait', 'Lahar Rest'], ['Ships', 'Lahar Rest']
-  ]);
-
-  const fisher = initialKits.find((kit) => kit.slug === 'fisher');
-  const creditsBefore = player.credits;
-  const freeClaim = store.claimProfessionMineKit(
-    player.id, fisher.id, liveCatalog, fisher.freeUntil - 1, () => 0.5
-  );
-  assert.equal(freeClaim.priceCredits, 0);
-  assert.equal(freeClaim.mines.length, 2);
-  assert.equal(freeClaim.findingEvents.reduce(
-    (total, finding) => total + Number(finding.quantity), 0
-  ), 10);
-  const afterFreeClaim = store.playerById(player.id, fisher.freeUntil - 1);
-  assert.equal(afterFreeClaim.credits, creditsBefore);
-  const granted = afterFreeClaim.mines.filter((mine) => mine.sourceKind === 'profession-kit');
-  assert.equal(granted.length, 2);
-  const grantForSale = { ...afterFreeClaim, cityId: granted[0].cityId };
-  assert.throws(
-    () => sellMine(grantForSale, liveCatalog, granted[0].id),
-    /Profession Kit mines are permanent grants/
-  );
-  assert.throws(
-    () => store.claimProfessionMineKit(
-      player.id, fisher.id, liveCatalog, fisher.freeUntil - 1, () => 0.5
-    ),
-    /already claimed/
-  );
-
-  const haulier = initialKits.find((kit) => kit.slug === 'haulier');
-  const paidKit = store.adminUpdateProfessionMineKit(player.id, haulier.id, {
-    name: haulier.name, description: haulier.description,
-    priceCredits: 25, freeUntil: 0, enabled: true
-  }, fisher.freeUntil);
-  assert.equal(paidKit.priceCredits, 25);
-  assert.equal(paidKit.free, false);
-  const beforePaid = store.playerById(player.id, fisher.freeUntil).credits;
-  const paidClaim = store.claimProfessionMineKit(
-    player.id, haulier.id, liveCatalog, fisher.freeUntil, () => 0.5
-  );
-  assert.equal(paidClaim.priceCredits, 25);
-  assert.equal(paidClaim.mines.length, 3);
-  assert.equal(store.playerById(player.id, fisher.freeUntil).credits, beforePaid - 25);
-
-  const bromoCity = store.database.prepare(`
-    SELECT catalog_cities.id
-    FROM catalog_cities JOIN world_maps ON world_maps.id = catalog_cities.map_id
-    WHERE world_maps.slug = 'bromo' ORDER BY catalog_cities.id LIMIT 1
+  const beforeMigration = Date.now();
+  store = new SqliteStore(databaseFile);
+  const migrated = store.playerById(player.id, beforeMigration);
+  assert.equal(migrated.credits, 118);
+  assert.ok(migrated.mines.every((mine) => mine.rentalUntil >= beforeMigration
+    + 364 * 24 * 60 * 60 * 1000));
+  assert.ok(migrated.mines.every((mine) => mine.sourceKind === 'ordinary'));
+  assert.equal(migrated.cryptoBalances[1], 6);
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM mine_market_orders').get().count, 0);
+  assert.equal(store.database.prepare(
+    'SELECT COUNT(*) AS count FROM profession_mine_kits WHERE enabled = 1'
+  ).get().count, 0);
+  assert.equal(store.database.prepare(
+    'SELECT quantity FROM player_containers WHERE player_id = ? AND container_id = 8'
+  ).get(player.id).quantity, 1);
+  assert.throws(() => store.database.prepare(`
+    UPDATE player_containers SET quantity = 2 WHERE player_id = ? AND container_id = 8
+  `).run(player.id), /CHECK constraint failed/u);
+  const migratedMineType = store.database.prepare(`
+    SELECT credit_cost, rent_cost, refundable FROM catalog_mine_types WHERE id = 4
   `).get();
-  store.database.prepare('UPDATE players SET city_id = ? WHERE id = ?')
-    .run(bromoCity.id, player.id);
-  const maker = initialKits.find((kit) => kit.slug === 'maker');
-  assert.throws(
-    () => store.claimProfessionMineKit(
-      player.id, maker.id, liveCatalog, fisher.freeUntil, () => 0.5
-    ),
-    /only be claimed while you are in Aso/
-  );
+  assert.deepEqual([...Object.values(migratedMineType)], [0, 9, 0]);
+  const migratedContainer = store.database.prepare(`
+    SELECT credits, capacity FROM catalog_containers WHERE id = 8
+  `).get();
+  assert.deepEqual([...Object.values(migratedContainer)], [3, 45]);
+  assert.equal(store.database.prepare('SELECT item_limit FROM players WHERE id = ?')
+    .get(player.id).item_limit, 545);
 });
 
-test('credits and admin screens publish and operate profession kit offers', async (context) => {
+test('profession kits and mine purchase routes are retired from player and admin UI', async (context) => {
   const store = new SqliteStore(':memory:');
   store.seedCatalog(catalog);
   store.ensureWorldMaps(1_000);
   const liveCatalog = store.loadCatalog();
-  const firstOffer = store.professionMineKits(null, Date.now(), true)[0];
-  const requestTime = firstOffer.freeUntil - 1_000;
-  const password = 'profession kit password';
+  const password = 'rental only password';
   const player = store.addPlayer(createPlayer(
-    'Kit Operator', '', hashPassword(password), liveCatalog,
-    requestTime - 1_000, () => 0.5
+    'Rental Operator', '', hashPassword(password), liveCatalog, 1_000, () => 0.5
   ));
-  const server = createApp({
-    store, catalog: liveCatalog, now: () => requestTime,
-    adminNames: player.name
-  });
+  const server = createApp({ store, catalog: liveCatalog, adminNames: player.name });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   context.after(async () => {
     await new Promise((resolve, reject) => server.close(
@@ -114,44 +114,24 @@ test('credits and admin screens publish and operate profession kit offers', asyn
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ name: player.name, password })
   });
-  assert.equal(login.status, 303);
   const cookie = login.headers.get('set-cookie').split(';')[0];
 
   const shop = await (await fetch(`${base}/credits`, { headers: { cookie } })).text();
-  assert.match(shop, /Profession Kits/u);
-  assert.match(shop, /Fisher&#39;s Kit/u);
-  assert.match(shop, /Oil Worker&#39;s Kit/u);
-  assert.match(shop, /Free now/u);
-  assert.match(shop, /permanent, non-refundable mines/u);
-  assert.match(shop, /Lahar Rest/u);
-
-  const fisher = store.professionMineKits(player.id, requestTime, true)
-    .find((kit) => kit.slug === 'fisher');
-  const claim = await fetch(`${base}/credits/profession-kits/${fisher.id}/claim`, {
-    method: 'POST', redirect: 'manual', headers: { cookie }
-  });
-  assert.equal(claim.status, 303);
-  assert.equal(claim.headers.get('location'), '/credits');
-  assert.equal(store.professionMineKits(player.id, requestTime, true)
-    .find((kit) => kit.id === fisher.id).pricePaid, 0);
-
+  assert.doesNotMatch(shop, /Profession Kits|profession-kits/u);
   const adminPage = await (await fetch(`${base}/admin/payments`, {
     headers: { cookie }
   })).text();
-  assert.match(adminPage, /A future free-until date makes a kit free/u);
-  assert.match(adminPage, /type="datetime-local"/u);
-  const haulier = store.professionMineKits(player.id, requestTime, false)
-    .find((kit) => kit.slug === 'haulier');
-  const update = await fetch(`${base}/admin/profession-mine-kits/${haulier.id}`, {
-    method: 'POST', redirect: 'manual', headers: {
-      cookie, 'content-type': 'application/x-www-form-urlencoded'
-    }, body: new URLSearchParams({
-      name: haulier.name, description: haulier.description,
-      priceCredits: '31', freeUntil: '', enabled: '1'
-    })
-  });
-  assert.equal(update.status, 303);
-  assert.equal(update.headers.get('location'), '/admin/payments');
-  const paidShop = await (await fetch(`${base}/credits`, { headers: { cookie } })).text();
-  assert.match(paidShop, /Buy for 31 credits/u);
+  assert.doesNotMatch(adminPage, /Profession Kits|profession-mine-kits/u);
+
+  for (const route of [
+    '/credits/profession-kits/1/claim',
+    '/admin/profession-mine-kits/1',
+    '/market/mines/4/buy',
+    `/mines/${player.mines[0].id}/sell`
+  ]) {
+    const response = await fetch(`${base}${route}`, {
+      method: 'POST', redirect: 'manual', headers: { cookie }
+    });
+    assert.equal(response.status, 410, route);
+  }
 });

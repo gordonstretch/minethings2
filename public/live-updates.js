@@ -320,6 +320,10 @@
   if (chatPage) {
     bindChatPane();
     requestAnimationFrame(scrollChatToLatest);
+    document.addEventListener('minethings:chat-sent', () => {
+      chatFollowingLatest = true;
+      scheduleUpdate();
+    });
     window.addEventListener('load', () => {
       if (chatFollowingLatest) scrollChatToLatest();
     }, { once: true });

@@ -16,7 +16,7 @@ import {
   BOLT_BOX_CATALOG, MAGNET_CATALOG, SAFE_TRAVEL_KIT_CATALOG,
   PRESTIGE_SPECIALISATIONS, FACTORY_WORKER_BOT_TIERS, ASO_DISCOVERY_STONE,
   CITY_COMPLETION_STONE, HOME_DISPLAY_STONE, HOME_STONE, STARTER_BOT_STONE,
-  INVENTORY_CAPACITY_RULES,
+  INVENTORY_CAPACITY_RULES, MINE_RENTAL_BASE_CREDITS, MINE_RENTAL_TERMS,
   ELECTRONICS_CATALOG, RELICS_CATALOG, SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG,
   WORLD_CREATURE_HP_REBALANCE_FACTOR, WORLD_CREATURE_TYPES
 } from './legacy-catalog.js';
@@ -82,7 +82,7 @@ import {
 } from './city-exploration.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 138;
+const CURRENT_SCHEMA_VERSION = 139;
 const CHAT_HISTORY_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const SHILL_NETWORK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
@@ -106,6 +106,10 @@ const MAX_BUSY_TIMEOUT_MS = 1000;
 const DEFAULT_OIL_FIELD_READ_SETTLEMENT_INTERVAL_MS = 1000;
 const MAX_OIL_FIELD_READ_SETTLEMENT_INTERVAL_MS = 60000;
 const SHUTTLE_RETRY_INTERVAL_MS = 5 * 60 * 1000;
+export const VEHICLE_CONVOY_MIN_SIZE = 2;
+export const VEHICLE_CONVOY_MAX_SIZE = 8;
+export const VEHICLE_CONVOY_MAX_STAGGER_MS = 60 * 60 * 1000;
+const VEHICLE_CONVOY_RETRY_INTERVAL_MS = 60 * 1000;
 // Oil historically belongs to the Machines mine type. A reserved negative category
 // keeps existing mine-type selections intact while allowing Oil to be selected alone.
 export const SHUTTLE_OIL_CATEGORY_ID = -1;
@@ -458,6 +462,7 @@ export class SqliteStore {
       this.#migrateMachineItemDescriptions();
       this.#migrateEventThreats();
       this.#migrateWorldCreatureHealth();
+      this.#enforceWorldCreatureRouteScope();
       this.#migrateChatHistoryWindow();
       this.#migrateFrequentDwarfAndCreatureRolls();
       this.#migrateRegionalCreatureRollsAndFasterDwarves();
@@ -471,6 +476,8 @@ export class SqliteStore {
         'SELECT revision FROM catalog_cache_revision WHERE id = 1'
       );
       this.#migrateManufacturingMinimumPrices();
+      this.#migrateRentalOnlyEconomy();
+      this.#enforceRetiredAssetMarkets();
     } catch (error) {
       // A failed startup or migration must not leave an unreachable connection
       // holding file handles or a transaction until the garbage collector runs.
@@ -1719,6 +1726,51 @@ export class SqliteStore {
       CREATE INDEX IF NOT EXISTS player_vehicles_owner
         ON player_vehicles (player_id, status, arrives_at);
 
+      CREATE TABLE IF NOT EXISTS player_vehicle_convoys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        route_id INTEGER NOT NULL REFERENCES catalog_routes(id) ON DELETE RESTRICT,
+        origin_city_id INTEGER NOT NULL REFERENCES catalog_cities(id) ON DELETE RESTRICT,
+        destination_city_id INTEGER NOT NULL REFERENCES catalog_cities(id) ON DELETE RESTRICT,
+        vehicle_type_id INTEGER NOT NULL,
+        stagger_ms INTEGER NOT NULL CHECK (stagger_ms BETWEEN 0 AND 3600000),
+        status TEXT NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active', 'completed', 'cancelled')),
+        created_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        cancelled_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS player_vehicle_convoys_owner
+        ON player_vehicle_convoys (player_id, status, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS player_vehicle_convoy_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        convoy_id INTEGER NOT NULL REFERENCES player_vehicle_convoys(id) ON DELETE CASCADE,
+        vehicle_id INTEGER REFERENCES player_vehicles(id) ON DELETE SET NULL,
+        position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 8),
+        scheduled_departure_at INTEGER NOT NULL,
+        travel_order TEXT NOT NULL
+          CHECK (travel_order IN ('peaceful', 'pillage', 'patrol')),
+        aggressive_vs_sentry INTEGER NOT NULL DEFAULT 0
+          CHECK (aggressive_vs_sentry IN (0, 1)),
+        status TEXT NOT NULL DEFAULT 'queued'
+          CHECK (status IN ('queued', 'traveling', 'arrived', 'lost', 'cancelled')),
+        departed_at INTEGER,
+        arrived_at INTEGER,
+        blocked_reason TEXT NOT NULL DEFAULT '',
+        last_attempt_at INTEGER,
+        vehicle_name TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        UNIQUE (convoy_id, position)
+      );
+
+      CREATE INDEX IF NOT EXISTS player_vehicle_convoy_members_due
+        ON player_vehicle_convoy_members (status, scheduled_departure_at, last_attempt_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS player_vehicle_convoy_members_active_vehicle
+        ON player_vehicle_convoy_members (vehicle_id)
+        WHERE vehicle_id IS NOT NULL AND status IN ('queued', 'traveling');
+
       CREATE TABLE IF NOT EXISTS player_vehicle_journey_legs (
         vehicle_id INTEGER NOT NULL REFERENCES player_vehicles(id) ON DELETE CASCADE,
         position INTEGER NOT NULL CHECK (position > 0),
@@ -1847,7 +1899,7 @@ export class SqliteStore {
       CREATE TABLE IF NOT EXISTS player_containers (
         player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
         container_id INTEGER NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 1,
+        quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity = 1),
         PRIMARY KEY (player_id, container_id)
       );
     `);
@@ -2130,6 +2182,10 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 138) {
+      this.#migrateTo139();
+      return;
+    }
     if (schemaVersion === 137) {
       this.#migrateTo138();
       return;
@@ -7102,6 +7158,91 @@ export class SqliteStore {
         PRAGMA user_version = 138;
       `);
     });
+    this.#migrateTo139();
+  }
+
+  #migrateTo139() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 139) return;
+      if (currentVersion !== 138) {
+        throw new Error(`Cannot add vehicle convoys to v${currentVersion} directly.`);
+      }
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS player_vehicle_convoys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+          route_id INTEGER NOT NULL REFERENCES catalog_routes(id) ON DELETE RESTRICT,
+          origin_city_id INTEGER NOT NULL REFERENCES catalog_cities(id) ON DELETE RESTRICT,
+          destination_city_id INTEGER NOT NULL REFERENCES catalog_cities(id) ON DELETE RESTRICT,
+          vehicle_type_id INTEGER NOT NULL,
+          stagger_ms INTEGER NOT NULL CHECK (stagger_ms BETWEEN 0 AND 3600000),
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK (status IN ('active', 'completed', 'cancelled')),
+          created_at INTEGER NOT NULL,
+          completed_at INTEGER,
+          cancelled_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS player_vehicle_convoys_owner
+          ON player_vehicle_convoys (player_id, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS player_vehicle_convoy_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          convoy_id INTEGER NOT NULL REFERENCES player_vehicle_convoys(id) ON DELETE CASCADE,
+          vehicle_id INTEGER REFERENCES player_vehicles(id) ON DELETE SET NULL,
+          position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 8),
+          scheduled_departure_at INTEGER NOT NULL,
+          travel_order TEXT NOT NULL
+            CHECK (travel_order IN ('peaceful', 'pillage', 'patrol')),
+          aggressive_vs_sentry INTEGER NOT NULL DEFAULT 0
+            CHECK (aggressive_vs_sentry IN (0, 1)),
+          status TEXT NOT NULL DEFAULT 'queued'
+            CHECK (status IN ('queued', 'traveling', 'arrived', 'lost', 'cancelled')),
+          departed_at INTEGER,
+          arrived_at INTEGER,
+          blocked_reason TEXT NOT NULL DEFAULT '',
+          last_attempt_at INTEGER,
+          vehicle_name TEXT NOT NULL,
+          item_id INTEGER NOT NULL,
+          UNIQUE (convoy_id, position)
+        );
+        CREATE INDEX IF NOT EXISTS player_vehicle_convoy_members_due
+          ON player_vehicle_convoy_members (status, scheduled_departure_at, last_attempt_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS player_vehicle_convoy_members_active_vehicle
+          ON player_vehicle_convoy_members (vehicle_id)
+          WHERE vehicle_id IS NOT NULL AND status IN ('queued', 'traveling');
+      `);
+      if (this.database.prepare(`
+        SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'live_update_events'
+      `).get()) {
+        for (const operation of ['insert', 'update', 'delete']) {
+          const row = operation === 'delete' ? 'OLD' : 'NEW';
+          this.database.exec(`
+            DROP TRIGGER IF EXISTS live_update_player_vehicle_convoys_${operation};
+            CREATE TRIGGER live_update_player_vehicle_convoys_${operation}
+            AFTER ${operation.toUpperCase()} ON player_vehicle_convoys
+            BEGIN
+              INSERT INTO live_update_events (scope, changed_at)
+              VALUES ('player:' || ${row}.player_id,
+                CAST(unixepoch('subsec') * 1000 AS INTEGER));
+              INSERT INTO live_update_events (scope, changed_at)
+              VALUES ('topic:vehicles', CAST(unixepoch('subsec') * 1000 AS INTEGER));
+            END;
+            DROP TRIGGER IF EXISTS live_update_player_vehicle_convoy_members_${operation};
+            CREATE TRIGGER live_update_player_vehicle_convoy_members_${operation}
+            AFTER ${operation.toUpperCase()} ON player_vehicle_convoy_members
+            BEGIN
+              INSERT INTO live_update_events (scope, changed_at)
+              SELECT 'player:' || player_id, CAST(unixepoch('subsec') * 1000 AS INTEGER)
+              FROM player_vehicle_convoys WHERE id = ${row}.convoy_id;
+              INSERT INTO live_update_events (scope, changed_at)
+              VALUES ('topic:vehicles', CAST(unixepoch('subsec') * 1000 AS INTEGER));
+            END;
+          `);
+        }
+      }
+      this.database.exec('PRAGMA user_version = 139');
+    });
   }
 
   #insertPrestigeSpecialisations() {
@@ -9583,6 +9724,201 @@ export class SqliteStore {
     });
   }
 
+  #migrateRentalOnlyEconomy(now = Date.now()) {
+    const migrationName = 'rental-only-economy-v1';
+    if (!this.hasCatalog() || this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return false;
+    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+    this.#transaction(() => {
+      const bidRefunds = this.database.prepare(`
+        SELECT player_id, crypto_type_id,
+          SUM(crypto_quantity * quantity) AS quantity
+        FROM mine_market_orders
+        WHERE side = 'buy' AND crypto_type_id IS NOT NULL AND crypto_quantity IS NOT NULL
+        GROUP BY player_id, crypto_type_id
+      `).all();
+      const refundCrypto = this.database.prepare(`
+        INSERT INTO player_crypto_balances (player_id, crypto_type_id, quantity)
+        VALUES (?, ?, ?)
+        ON CONFLICT (player_id, crypto_type_id)
+        DO UPDATE SET quantity = quantity + excluded.quantity
+      `);
+      for (const refund of bidRefunds) {
+        refundCrypto.run(refund.player_id, refund.crypto_type_id, refund.quantity);
+      }
+      const removedMineOrders = Number(this.database.prepare(
+        'DELETE FROM mine_market_orders'
+      ).run().changes);
+
+      const retiredKits = Number(this.database.prepare(
+        'UPDATE profession_mine_kits SET enabled = 0, updated_at = ? WHERE enabled = 1'
+      ).run(now).changes);
+      const convertedMines = Number(this.database.prepare(`
+        UPDATE mines SET rental_until = ?, source_kind = 'ordinary'
+        WHERE rental_until = 0
+      `).run(now + oneYearMs).changes);
+
+      const containerRefunds = this.database.prepare(`
+        SELECT player_containers.player_id,
+          SUM((player_containers.quantity - 1) * catalog_containers.credits) AS credits
+        FROM player_containers
+        JOIN catalog_containers ON catalog_containers.id = player_containers.container_id
+        WHERE player_containers.quantity > 1
+        GROUP BY player_containers.player_id
+      `).all();
+      const refundCredits = this.database.prepare(
+        'UPDATE players SET credits = credits + ? WHERE id = ?'
+      );
+      for (const refund of containerRefunds) refundCredits.run(refund.credits, refund.player_id);
+
+      this.database.exec(`
+        ALTER TABLE player_containers RENAME TO player_containers_before_unique;
+        CREATE TABLE player_containers (
+          player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+          container_id INTEGER NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity = 1),
+          PRIMARY KEY (player_id, container_id)
+        );
+        INSERT INTO player_containers (player_id, container_id, quantity)
+          SELECT player_id, container_id, 1 FROM player_containers_before_unique;
+        DROP TABLE player_containers_before_unique;
+      `);
+
+      this.database.prepare(`
+        UPDATE catalog_mine_types
+        SET credit_cost = 0, refundable = 0, rent_cost = 0
+      `).run();
+      const updateMine = this.database.prepare(
+        'UPDATE catalog_mine_types SET rent_cost = ? WHERE id = ?'
+      );
+      for (const [mineTypeId, credits] of Object.entries(MINE_RENTAL_BASE_CREDITS)) {
+        updateMine.run(credits, Number(mineTypeId));
+      }
+      this.database.prepare(`
+        INSERT INTO catalog_settings (key, value_json) VALUES ('mine_rental_terms', ?)
+        ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+      `).run(JSON.stringify(MINE_RENTAL_TERMS));
+
+      const updateContainer = this.database.prepare(
+        'UPDATE catalog_containers SET credits = ?, capacity = ? WHERE id = ?'
+      );
+      for (const [containerId, credits] of Object.entries(
+        INVENTORY_CAPACITY_RULES.containerCredits
+      )) {
+        updateContainer.run(credits,
+          INVENTORY_CAPACITY_RULES.containerCapacities[containerId], Number(containerId));
+      }
+      this.database.prepare(`
+        UPDATE players SET item_limit = MIN(?, ? + COALESCE((
+          SELECT SUM(catalog_containers.capacity)
+          FROM player_containers
+          JOIN catalog_containers
+            ON catalog_containers.id = player_containers.container_id
+          WHERE player_containers.player_id = players.id
+        ), 0))
+      `).run(MAXIMUM_ITEM_LIMIT, STARTER_ITEM_LIMIT);
+
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json)
+        VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        convertedMines,
+        legacyMineOrdersRemoved: removedMineOrders,
+        bidCryptoRefunded: bidRefunds.reduce((total, refund) => total + refund.quantity, 0),
+        retiredProfessionKits: retiredKits,
+        duplicateContainerCreditsRefunded: containerRefunds.reduce(
+          (total, refund) => total + refund.credits, 0
+        )
+      }));
+    });
+    return true;
+  }
+
+  #enforceRetiredAssetMarkets(now = Date.now()) {
+    if (!this.hasCatalog()) return false;
+    const migrationName = 'retired-asset-markets-v1';
+    let migrated = false;
+    this.#transaction(() => {
+      if (!this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) {
+        const mineBidRefunds = this.database.prepare(`
+          SELECT player_id, crypto_type_id,
+            SUM(crypto_quantity * quantity) AS quantity
+          FROM mine_market_orders
+          WHERE side = 'buy' AND crypto_type_id IS NOT NULL
+            AND crypto_quantity IS NOT NULL
+          GROUP BY player_id, crypto_type_id
+        `).all();
+        const refundCrypto = this.database.prepare(`
+          INSERT INTO player_crypto_balances (player_id, crypto_type_id, quantity)
+          VALUES (?, ?, ?)
+          ON CONFLICT (player_id, crypto_type_id)
+          DO UPDATE SET quantity = quantity + excluded.quantity
+        `);
+        for (const refund of mineBidRefunds) {
+          refundCrypto.run(refund.player_id, refund.crypto_type_id, refund.quantity);
+        }
+        const removedMineOrders = Number(this.database.prepare(
+          'DELETE FROM mine_market_orders'
+        ).run().changes);
+        const removedContainerOrders = Number(this.database.prepare(`
+          DELETE FROM market_orders
+          WHERE item_id IN (
+            SELECT catalog_items.id
+            FROM catalog_items
+            JOIN catalog_containers
+              ON catalog_containers.marketable_id = catalog_items.marketable_id
+          )
+        `).run().changes);
+        this.database.prepare(`
+          INSERT INTO schema_migrations (name, applied_at, details_json)
+          VALUES (?, ?, ?)
+        `).run(migrationName, now, JSON.stringify({
+          removedMineOrders,
+          refundedMineBidCrypto: mineBidRefunds.reduce(
+            (total, refund) => total + Number(refund.quantity), 0
+          ),
+          removedContainerOrders,
+          containersAreAccountBound: true,
+          minesAreRentalOnly: true
+        }));
+        migrated = true;
+      }
+      this.database.exec(`
+        CREATE TRIGGER IF NOT EXISTS market_orders_reject_containers_insert
+        BEFORE INSERT ON market_orders
+        WHEN EXISTS (
+          SELECT 1
+          FROM catalog_items
+          JOIN catalog_containers
+            ON catalog_containers.marketable_id = catalog_items.marketable_id
+          WHERE catalog_items.id = NEW.item_id
+        )
+        BEGIN
+          SELECT RAISE(ABORT,
+            'Inventory containers are account-bound and cannot be traded between players.');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS market_orders_reject_containers_update
+        BEFORE UPDATE OF item_id ON market_orders
+        WHEN EXISTS (
+          SELECT 1
+          FROM catalog_items
+          JOIN catalog_containers
+            ON catalog_containers.marketable_id = catalog_items.marketable_id
+          WHERE catalog_items.id = NEW.item_id
+        )
+        BEGIN
+          SELECT RAISE(ABORT,
+            'Inventory containers are account-bound and cannot be traded between players.');
+        END;
+      `);
+    });
+    return migrated;
+  }
+
   #migrateEventThreats(now = Date.now()) {
     const migrationName = 'event-threats-v2';
     this.database.exec(`
@@ -9712,6 +10048,51 @@ export class SqliteStore {
       migrated = true;
     });
     return migrated;
+  }
+
+  #enforceWorldCreatureRouteScope(now = Date.now()) {
+    // Event creatures belong to one region. Retire any legacy gateway sightings
+    // before installing persistence guards that reject future inter-region ones.
+    this.#transaction(() => {
+      this.database.prepare(`
+        UPDATE world_creature_pursuits
+        SET status = 'cancelled', resolved_at = COALESCE(resolved_at, ?)
+        WHERE status = 'pursuing' AND creature_id IN (
+          SELECT world_creatures.id
+          FROM world_creatures
+          JOIN catalog_routes ON catalog_routes.id = world_creatures.route_id
+          WHERE world_creatures.status = 'active'
+            AND catalog_routes.is_inter_map = 1
+        )
+      `).run(now);
+      this.database.prepare(`
+        UPDATE world_creatures
+        SET status = 'escaped', resolved_at = COALESCE(resolved_at, ?)
+        WHERE status = 'active' AND route_id IN (
+          SELECT id FROM catalog_routes WHERE is_inter_map = 1
+        )
+      `).run(now);
+      this.database.exec(`
+        CREATE TRIGGER IF NOT EXISTS world_creatures_require_regional_route_insert
+        BEFORE INSERT ON world_creatures
+        WHEN NEW.status = 'active' AND EXISTS (
+          SELECT 1 FROM catalog_routes
+          WHERE id = NEW.route_id AND is_inter_map = 1
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'World creatures cannot use inter-region routes.');
+        END;
+        CREATE TRIGGER IF NOT EXISTS world_creatures_require_regional_route_update
+        BEFORE UPDATE OF route_id, status ON world_creatures
+        WHEN NEW.status = 'active' AND EXISTS (
+          SELECT 1 FROM catalog_routes
+          WHERE id = NEW.route_id AND is_inter_map = 1
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'World creatures cannot use inter-region routes.');
+        END;
+      `);
+    });
   }
 
   #migrateChatHistoryWindow(now = Date.now()) {
@@ -12002,6 +12383,7 @@ export class SqliteStore {
       JOIN world_maps AS map1 ON map1.id = city1.map_id
       JOIN world_maps AS map2 ON map2.id = city2.map_id
       WHERE catalog_routes.is_open = 1 AND catalog_routes.length > 0
+        AND catalog_routes.is_inter_map = 0
         AND catalog_routes.type IN (?, ?)
       ORDER BY map1.name COLLATE NOCASE, city1.name COLLATE NOCASE,
         map2.name COLLATE NOCASE, city2.name COLLATE NOCASE, catalog_routes.id
@@ -12190,6 +12572,7 @@ export class SqliteStore {
         JOIN catalog_cities AS city1 ON city1.id = catalog_routes.city1_id
         JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
         WHERE catalog_routes.id = ? AND catalog_routes.is_open = 1
+          AND catalog_routes.is_inter_map = 0
           AND catalog_routes.type = ? AND catalog_routes.length > 0
       `).get(cleanRouteId, requiredRouteType);
       if (!route || ![route.map1_id, route.map2_id].includes(map.id)) {
@@ -12864,6 +13247,8 @@ export class SqliteStore {
         `).run();
       }
     });
+    this.#migrateRentalOnlyEconomy();
+    this.#enforceRetiredAssetMarkets();
   }
 
   loadCatalog() {
@@ -15281,6 +15666,10 @@ Compliance is compulsory. Enjoy your new life.
         JOIN catalog_mine_types ON catalog_mine_types.id = catalog_items.mine_type_id
         WHERE inventory.player_id = ? AND inventory.quantity > 0
           AND catalog_items.marketable_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM catalog_containers
+            WHERE catalog_containers.marketable_id = catalog_items.marketable_id
+          )
         GROUP BY catalog_mine_types.id, catalog_mine_types.name, inventory.city_id
         ORDER BY catalog_mine_types.name, inventory.city_id
       `).all(playerId);
@@ -15417,6 +15806,10 @@ Compliance is compulsory. Enjoy your new life.
           JOIN catalog_items ON catalog_items.id = inventory.item_id
           WHERE inventory.player_id = ? AND inventory.city_id = ?
             AND inventory.quantity > 0 AND catalog_items.marketable_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM catalog_containers
+              WHERE catalog_containers.marketable_id = catalog_items.marketable_id
+            )
             AND catalog_items.mine_type_id = catalog_mine_types.id
         )
       `).get(mineTypeId, playerId, city.id);
@@ -15680,6 +16073,10 @@ Compliance is compulsory. Enjoy your new life.
       JOIN catalog_items ON catalog_items.id = inventory.item_id
       WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
         AND catalog_items.mine_type_id = ? AND catalog_items.marketable_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM catalog_containers
+          WHERE catalog_containers.marketable_id = catalog_items.marketable_id
+        )
       ORDER BY catalog_items.rarity DESC, catalog_items.name, catalog_items.id
     `).all(automation.player_id, automation.city_id, mineType.id);
     if (!items.length) {
@@ -16506,7 +16903,7 @@ Compliance is compulsory. Enjoy your new life.
       }
       const savedColor = /^[0-9a-f]{6}$/.test(String(member.chat_color ?? '').toLowerCase())
         ? String(member.chat_color).toLowerCase() : tierColor;
-      const color = melds >= 140 ? savedColor
+      const color = melds >= this.#customChatColorMinimumMelds() ? savedColor
         : Number(member.authority) > 0 ? '000000' : tierColor;
       const result = this.database.prepare(`
         INSERT INTO guild_chats (guild_id, player_id, body, color, created_at)
@@ -16843,6 +17240,18 @@ Compliance is compulsory. Enjoy your new life.
     `).run(playerId, token).changes) === 1;
   }
 
+  #customChatColorMinimumMelds() {
+    const count = Number(this.database.prepare(
+      'SELECT COUNT(*) AS count FROM catalog_melds WHERE is_public = 1'
+    ).get().count);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error('The live database has an invalid public Meld count.');
+    }
+    // Player persistence is also used during bootstrap before a catalog is loaded.
+    // Keep that state readable; a seeded store immediately uses its live public total.
+    return Math.max(1, count);
+  }
+
   #chatAppearanceFor(player, meldCount) {
     const rules = this.#setting('chat_color_thresholds')
       .map((entry) => ({
@@ -16850,7 +17259,7 @@ Compliance is compulsory. Enjoy your new life.
         color: String(entry.color).replace(/^#/, '').toLowerCase()
       }))
       .sort((first, second) => second.minimumMelds - first.minimumMelds);
-    const customMinimumMelds = 140;
+    const customMinimumMelds = this.#customChatColorMinimumMelds();
     const customColor = /^[0-9a-f]{6}$/.test(String(player.chat_color ?? '').toLowerCase())
       ? String(player.chat_color).toLowerCase() : (rules[0]?.color ?? 'ff033e');
     const tierColor = rules.find((entry) => meldCount >= entry.minimumMelds)?.color;
@@ -16908,7 +17317,7 @@ Compliance is compulsory. Enjoy your new life.
           color: String(entry.color).replace(/^#/, '').toLowerCase()
         }))
         .sort((first, second) => second.minimumMelds - first.minimumMelds);
-      const customMinimumMelds = 140;
+      const customMinimumMelds = this.#customChatColorMinimumMelds();
       const submitted = requestedColor === null || requestedColor === undefined
         ? '' : String(requestedColor).trim().replace(/^#/, '').toLowerCase();
       if (submitted && melds < customMinimumMelds) {
@@ -17353,6 +17762,14 @@ Compliance is compulsory. Enjoy your new life.
           SELECT 1 FROM player_vehicle_shuttles
           WHERE player_vehicle_shuttles.vehicle_id = player_vehicles.id
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM player_vehicle_convoy_members
+          JOIN player_vehicle_convoys
+            ON player_vehicle_convoys.id = player_vehicle_convoy_members.convoy_id
+          WHERE player_vehicle_convoy_members.vehicle_id = player_vehicles.id
+            AND player_vehicle_convoy_members.status = 'queued'
+            AND player_vehicle_convoys.status = 'active'
+        )
       ORDER BY player_vehicles.id
     `).all(playerId, location.city_id, ...routeTypes)
       .map((entry) => this.#publicVehicle(this.#vehicleRecord(entry.id, playerId)));
@@ -17448,6 +17865,9 @@ Compliance is compulsory. Enjoy your new life.
       }
       if (this.#vehicleShuttleRecord(vehicle.id, playerId)) {
         throw new Error('Cancel that vehicle\'s shuttle route before reinforcing it.');
+      }
+      if (this.#queuedVehicleConvoyMember(vehicle.id)) {
+        throw new Error('Cancel that vehicle\'s queued convoy departure before reinforcing it.');
       }
       const shipState = vehicle.route_type === this.#routeTypeId('sea')
         ? this.database.prepare('SELECT sunk FROM player_ship_state WHERE vehicle_id = ?')
@@ -18937,6 +19357,22 @@ Compliance is compulsory. Enjoy your new life.
     return city;
   }
 
+  #assertItemPlayerTradable(itemId) {
+    const item = this.database.prepare(`
+      SELECT catalog_items.id, catalog_containers.id AS container_id
+      FROM catalog_items
+      LEFT JOIN catalog_containers
+        ON catalog_containers.marketable_id = catalog_items.marketable_id
+      WHERE catalog_items.id = ?
+    `).get(Number(itemId));
+    if (!item) throw new Error('Item not found.');
+    if (item.container_id !== null) {
+      throw new Error(
+        'Inventory containers are account-bound and cannot be traded between players.'
+      );
+    }
+  }
+
   #trimItemListings(playerId, cityId, itemId) {
     const owned = this.database.prepare(`
       SELECT quantity FROM inventory WHERE player_id = ? AND city_id = ? AND item_id = ?
@@ -19005,6 +19441,7 @@ Compliance is compulsory. Enjoy your new life.
     const count = orderQuantity(quantityValue);
     const priceUnits = limitOrderPriceUnits(priceValue);
     return this.#transaction(() => {
+      this.#assertItemPlayerTradable(itemId);
       const player = this.#marketPlayer(playerId);
       this.#assertLocalMarket(player);
       const minimumUnits = this.#itemGoldPrice(itemId, player.city_id).priceUnits;
@@ -19033,6 +19470,7 @@ Compliance is compulsory. Enjoy your new life.
     const totalUnits = priceUnits * count;
     if (!Number.isSafeInteger(totalUnits)) throw new Error('That bid is too large.');
     return this.#transaction(() => {
+      this.#assertItemPlayerTradable(itemId);
       const player = this.#marketPlayer(playerId);
       this.#assertLocalMarket(player);
       const minimumUnits = this.#itemGoldPrice(itemId, player.city_id).priceUnits;
@@ -19077,6 +19515,7 @@ Compliance is compulsory. Enjoy your new life.
     const count = orderQuantity(quantityValue);
     const expectedPriceUnits = goldToUnits(expectedPriceValue);
     const outcome = this.#transaction(() => {
+      this.#assertItemPlayerTradable(itemId);
       const buyer = this.#marketPlayer(buyerId);
       this.#assertLocalMarket(buyer);
       const sellers = this.database.prepare(`
@@ -19131,6 +19570,7 @@ Compliance is compulsory. Enjoy your new life.
     const count = orderQuantity(quantityValue);
     const expectedPriceUnits = goldToUnits(expectedPriceValue);
     const outcome = this.#transaction(() => {
+      this.#assertItemPlayerTradable(itemId);
       const seller = this.#marketPlayer(sellerId);
       this.#assertLocalMarket(seller);
       const owned = this.database.prepare(`
@@ -19250,6 +19690,7 @@ Compliance is compulsory. Enjoy your new life.
   }
 
   marketForItem(itemId, cityId, viewerId = null) {
+    this.#assertItemPlayerTradable(itemId);
     const marketCity = this.database.prepare(
       'SELECT name, has_market FROM catalog_cities WHERE id = ?'
     ).get(Number(cityId));
@@ -19348,6 +19789,13 @@ Compliance is compulsory. Enjoy your new life.
       SELECT DISTINCT item_id
       FROM market_orders
       WHERE city_id = ? AND side = 'sell' AND quantity > 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM catalog_items
+          JOIN catalog_containers
+            ON catalog_containers.marketable_id = catalog_items.marketable_id
+          WHERE catalog_items.id = market_orders.item_id
+        )
       ORDER BY item_id
     `).all(Number(cityId)).map((row) => row.item_id);
   }
@@ -19358,6 +19806,13 @@ Compliance is compulsory. Enjoy your new life.
       SELECT city_id, item_id, SUM(quantity) AS quantity
       FROM market_orders
       WHERE player_id = ? AND side = 'sell' AND quantity > 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM catalog_items
+          JOIN catalog_containers
+            ON catalog_containers.marketable_id = catalog_items.marketable_id
+          WHERE catalog_items.id = market_orders.item_id
+        )
       GROUP BY city_id, item_id
       ORDER BY city_id, item_id
     `).all(Number(playerId));
@@ -19392,6 +19847,13 @@ Compliance is compulsory. Enjoy your new life.
       FROM market_orders JOIN players ON players.id = market_orders.player_id
       WHERE market_orders.city_id = ? AND market_orders.side = 'sell'
         AND market_orders.quantity > 0 AND market_orders.player_id <> ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM catalog_items
+          JOIN catalog_containers
+            ON catalog_containers.marketable_id = catalog_items.marketable_id
+          WHERE catalog_items.id = market_orders.item_id
+        )
       ORDER BY market_orders.item_id, market_orders.price_units,
         market_orders.created_at, market_orders.id
     `).all(Number(cityId), Number(buyerId));
@@ -19426,28 +19888,15 @@ Compliance is compulsory. Enjoy your new life.
         catalog_items.rarity, catalog_items.icon
       FROM market_orders JOIN catalog_items ON catalog_items.id = market_orders.item_id
       WHERE market_orders.player_id = ? AND market_orders.city_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM catalog_containers
+          WHERE catalog_containers.marketable_id = catalog_items.marketable_id
+        )
     `).all(owner.id, cityId).map((order) => ({
       id: order.id, side: order.side, price: order.price_units / GOLD_SCALE,
       quantity: order.quantity, name: order.name, rarity: order.rarity, icon: order.icon,
       itemId: order.subject_id, href: `/market/items/${order.subject_id}`
     }));
-    const mines = this.database.prepare(`
-      SELECT mine_market_orders.id, mine_market_orders.side, mine_market_orders.price_units,
-        mine_market_orders.crypto_type_id, mine_market_orders.crypto_quantity,
-        mine_market_orders.quantity, catalog_mine_types.id AS subject_id,
-        catalog_mine_types.name, catalog_mine_types.icon
-      FROM mine_market_orders
-      JOIN catalog_mine_types ON catalog_mine_types.id = mine_market_orders.mine_type_id
-      WHERE mine_market_orders.player_id = ? AND mine_market_orders.city_id = ?
-    `).all(owner.id, cityId).map((order) => {
-      const currency = cryptoType(order.crypto_type_id);
-      return {
-        id: order.id, side: order.side, price: order.price_units / GOLD_SCALE,
-        cryptoQuantity: order.crypto_quantity, cryptoSymbol: currency?.symbol ?? 'crypto',
-        quantity: order.quantity, name: `${order.name} Mine`, rarity: order.subject_id,
-        icon: order.icon, href: `/market/mines/${order.subject_id}`
-      };
-    });
     const factoryNames = this.#setting('factory_market_names');
     const factoryIcon = this.#setting('factory_market_icon');
     if (!factoryNames || typeof factoryNames !== 'object' || Array.isArray(factoryNames)
@@ -19465,7 +19914,8 @@ Compliance is compulsory. Enjoy your new life.
       name: factoryNames[order.market_type], rarity: 0,
       icon: factoryIcon, href: `/market/factories/${order.market_type}`
     }));
-    return { ownerId: owner.id, ownerName: owner.name, cityId, orders: [...items, ...mines, ...factories] };
+    return { ownerId: owner.id, ownerName: owner.name, cityId,
+      orders: [...items, ...factories] };
   }
 
   cryptoExchange(playerId, rangeValue = 'day', now = Date.now()) {
@@ -20355,6 +20805,7 @@ Compliance is compulsory. Enjoy your new life.
 
   placeMineSellOrder(playerId, mineTypeId, cryptoTypeId, cryptoQuantity, quantity,
     now = Date.now()) {
+    throw new Error('The mine market has been retired; mines are rental-only.');
     const count = orderQuantity(quantity);
     return this.#transaction(() => {
       const player = this.#marketPlayer(playerId);
@@ -20391,6 +20842,7 @@ Compliance is compulsory. Enjoy your new life.
 
   placeMineBuyOrder(playerId, mineTypeId, cryptoTypeId, cryptoQuantity, quantity,
     now = Date.now()) {
+    throw new Error('The mine market has been retired; mines are rental-only.');
     const count = orderQuantity(quantity);
     return this.#transaction(() => {
       const player = this.#marketPlayer(playerId);
@@ -20411,6 +20863,7 @@ Compliance is compulsory. Enjoy your new life.
   }
 
   cancelMineMarketOrder(playerId, orderId) {
+    throw new Error('The mine market has been retired; mines are rental-only.');
     return this.#transaction(() => {
       const order = this.database.prepare(
         'SELECT * FROM mine_market_orders WHERE id = ? AND player_id = ?'
@@ -20426,6 +20879,7 @@ Compliance is compulsory. Enjoy your new life.
   }
 
   buyMineListing(buyerId, orderId, quantity, now = Date.now()) {
+    throw new Error('The mine market has been retired; mines are rental-only.');
     const count = orderQuantity(quantity);
     return this.#transaction(() => {
       const buyer = this.#marketPlayer(buyerId);
@@ -20467,6 +20921,7 @@ Compliance is compulsory. Enjoy your new life.
   }
 
   sellMineToBid(sellerId, orderId, quantity, now = Date.now()) {
+    throw new Error('The mine market has been retired; mines are rental-only.');
     const count = orderQuantity(quantity);
     return this.#transaction(() => {
       const seller = this.#marketPlayer(sellerId);
@@ -20557,6 +21012,7 @@ Compliance is compulsory. Enjoy your new life.
   }
 
   mineMarket(mineTypeId, cityId, playerId, now = Date.now()) {
+    throw new Error('The mine market has been retired; mines are rental-only.');
     const mineType = this.#mineMarketType(mineTypeId);
     this.#trimMineListings(playerId);
     const player = this.database.prepare(`
@@ -21987,6 +22443,9 @@ Compliance is compulsory. Enjoy your new life.
     if (this.#vehicleShuttleRecord(vehicleId)) {
       throw new Error(`Cancel this vehicle's shuttle route before you ${action}.`);
     }
+    if (this.#queuedVehicleConvoyMember(vehicleId)) {
+      throw new Error(`Cancel this vehicle's queued convoy departure before you ${action}.`);
+    }
   }
 
   #vehicleDepartureWeatherProblem(vehicle) {
@@ -22966,6 +23425,7 @@ Compliance is compulsory. Enjoy your new life.
       UPDATE world_creatures SET defeated_by_vehicle_id = NULL
       WHERE defeated_by_vehicle_id = ?
     `).run(liveVehicle.id);
+    this.#finishVehicleConvoyMember(liveVehicle.id, 'lost', now);
     this.database.prepare('DELETE FROM player_vehicles WHERE id = ?').run(liveVehicle.id);
     return losses;
   }
@@ -23744,6 +24204,7 @@ Compliance is compulsory. Enjoy your new life.
   #vehicleReadyForThreatHunt(playerId, vehicle) {
     if (this.#vehicleDepartureWeatherProblem(vehicle)
       || this.#vehicleShuttleRecord(vehicle.id, playerId)
+      || this.#queuedVehicleConvoyMember(vehicle.id)
       || this.database.prepare(`
         SELECT 1 FROM factories WHERE facility_kind = 'mill' AND target_vehicle_id = ?
         UNION ALL
@@ -24522,6 +24983,7 @@ Compliance is compulsory. Enjoy your new life.
       JOIN catalog_cities AS city1 ON city1.id = catalog_routes.city1_id
       JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
       WHERE catalog_routes.is_open = 1 AND catalog_routes.type = ?
+        AND catalog_routes.is_inter_map = 0
         AND catalog_routes.length > 0 AND (city1.map_id = ? OR city2.map_id = ?)
       LIMIT 1
     `).get(routeType, mapId, mapId));
@@ -24750,6 +25212,7 @@ Compliance is compulsory. Enjoy your new life.
       JOIN catalog_cities AS city1 ON city1.id = catalog_routes.city1_id
       JOIN catalog_cities AS city2 ON city2.id = catalog_routes.city2_id
       WHERE catalog_routes.is_open = 1 AND catalog_routes.type = ?
+        AND catalog_routes.is_inter_map = 0
         AND catalog_routes.length > 0 AND (city1.map_id = ? OR city2.map_id = ?)
         AND (? IS NULL OR catalog_routes.id = ?)
       ORDER BY catalog_routes.id
@@ -25730,6 +26193,7 @@ Compliance is compulsory. Enjoy your new life.
           UPDATE world_creatures SET defeated_by_vehicle_id = NULL
           WHERE defeated_by_vehicle_id = ?
         `).run(traveling.id);
+        this.#finishVehicleConvoyMember(traveling.id, 'lost', now);
         this.database.prepare('DELETE FROM player_vehicles WHERE id = ?').run(traveling.id);
       }
      return {
@@ -26070,6 +26534,7 @@ Compliance is compulsory. Enjoy your new life.
       sunk: 0
     };
     this.#transaction(() => this.#resumeIdleVehicleShuttles(playerId, now));
+    this.#transaction(() => this.#dispatchDueVehicleConvoys(playerId, now));
     const hasArrivals = this.database.prepare(`
       SELECT 1 FROM player_vehicles
       WHERE player_id = ? AND status = 'traveling' AND arrives_at <= ? LIMIT 1
@@ -26465,6 +26930,7 @@ Compliance is compulsory. Enjoy your new life.
           const nextLeg = this.#advanceVehicleShuttle(vehicle.id, settledAt);
           if (nextLeg && !nextLeg.paused) continuedVehicleJourney = true;
         }
+        this.#finishVehicleConvoyMember(vehicle.id, 'arrived', settledAt);
         result.arrived += 1;
       }
       this.#reopenDrainedRoutes(now);
@@ -26501,6 +26967,16 @@ Compliance is compulsory. Enjoy your new life.
         AND (player_vehicle_shuttles.paused_reason = ''
           OR player_vehicle_shuttles.updated_at <= ?)
       UNION
+      SELECT player_vehicle_convoys.player_id
+      FROM player_vehicle_convoy_members
+      JOIN player_vehicle_convoys
+        ON player_vehicle_convoys.id = player_vehicle_convoy_members.convoy_id
+      WHERE player_vehicle_convoys.status = 'active'
+        AND player_vehicle_convoy_members.status = 'queued'
+        AND player_vehicle_convoy_members.scheduled_departure_at <= ?
+        AND (player_vehicle_convoy_members.last_attempt_at IS NULL
+          OR player_vehicle_convoy_members.last_attempt_at <= ?)
+      UNION
       SELECT player_vehicles.player_id
       FROM player_vehicles
       JOIN players ON players.id = player_vehicles.player_id
@@ -26527,6 +27003,7 @@ Compliance is compulsory. Enjoy your new life.
         )
       ORDER BY player_id
     `).all(now, now, now - SHUTTLE_RETRY_INTERVAL_MS,
+      now, now - VEHICLE_CONVOY_RETRY_INTERVAL_MS,
       now - CITY_VEHICLE_REPAIR_DURATION_MS).map((row) => row.player_id);
     const summary = {
       playersProcessed: players.length,
@@ -26544,6 +27021,182 @@ Compliance is compulsory. Enjoy your new life.
     }
     this.#transaction(() => this.#reopenDrainedRoutes(now));
     return summary;
+  }
+
+  #queuedVehicleConvoyMember(vehicleId) {
+    return this.database.prepare(`
+      SELECT player_vehicle_convoy_members.*, player_vehicle_convoys.player_id,
+        player_vehicle_convoys.route_id
+      FROM player_vehicle_convoy_members
+      JOIN player_vehicle_convoys
+        ON player_vehicle_convoys.id = player_vehicle_convoy_members.convoy_id
+      WHERE player_vehicle_convoy_members.vehicle_id = ?
+        AND player_vehicle_convoys.status = 'active'
+        AND player_vehicle_convoy_members.status = 'queued'
+      LIMIT 1
+    `).get(vehicleId);
+  }
+
+  #publicVehicleConvoy(vehicle) {
+    const convoy = this.database.prepare(`
+      SELECT player_vehicle_convoy_members.id AS member_id,
+        player_vehicle_convoy_members.position,
+        player_vehicle_convoy_members.scheduled_departure_at,
+        player_vehicle_convoy_members.travel_order,
+        player_vehicle_convoy_members.aggressive_vs_sentry,
+        player_vehicle_convoy_members.status AS member_status,
+        player_vehicle_convoy_members.departed_at,
+        player_vehicle_convoy_members.arrived_at,
+        player_vehicle_convoy_members.blocked_reason,
+        player_vehicle_convoys.*, origin.name AS origin_city_name,
+        destination.name AS destination_city_name,
+        catalog_routes.length AS route_length
+      FROM player_vehicle_convoy_members
+      JOIN player_vehicle_convoys
+        ON player_vehicle_convoys.id = player_vehicle_convoy_members.convoy_id
+      JOIN catalog_cities AS origin ON origin.id = player_vehicle_convoys.origin_city_id
+      JOIN catalog_cities AS destination
+        ON destination.id = player_vehicle_convoys.destination_city_id
+      JOIN catalog_routes ON catalog_routes.id = player_vehicle_convoys.route_id
+      WHERE player_vehicle_convoy_members.vehicle_id = ?
+        AND (player_vehicle_convoys.status = 'active'
+          OR player_vehicle_convoy_members.status = 'traveling')
+      ORDER BY player_vehicle_convoy_members.id DESC LIMIT 1
+    `).get(vehicle.id);
+    if (!convoy) return null;
+    if (convoy.member_status === 'arrived' && vehicle.status !== 'idle') return null;
+    const members = this.database.prepare(`
+      SELECT player_vehicle_convoy_members.id,
+        player_vehicle_convoy_members.vehicle_id,
+        player_vehicle_convoy_members.position,
+        player_vehicle_convoy_members.scheduled_departure_at,
+        player_vehicle_convoy_members.travel_order,
+        player_vehicle_convoy_members.aggressive_vs_sentry,
+        player_vehicle_convoy_members.status,
+        player_vehicle_convoy_members.departed_at,
+        player_vehicle_convoy_members.arrived_at,
+        player_vehicle_convoy_members.blocked_reason,
+        player_vehicle_convoy_members.vehicle_name,
+        player_vehicle_convoy_members.item_id
+      FROM player_vehicle_convoy_members
+      WHERE convoy_id = ? ORDER BY position
+    `).all(convoy.id).map((member) => ({
+      id: member.id,
+      vehicleId: member.vehicle_id,
+      position: member.position,
+      scheduledDepartureAt: member.scheduled_departure_at,
+      travelOrder: member.travel_order,
+      aggressiveVsSentry: Boolean(member.aggressive_vs_sentry),
+      status: member.status,
+      departedAt: member.departed_at,
+      arrivedAt: member.arrived_at,
+      blockedReason: member.blocked_reason,
+      vehicleName: member.vehicle_name,
+      itemId: member.item_id
+    }));
+    return {
+      id: convoy.id,
+      status: convoy.status,
+      routeId: convoy.route_id,
+      routeLength: convoy.route_length,
+      originCityId: convoy.origin_city_id,
+      originCityName: convoy.origin_city_name,
+      destinationCityId: convoy.destination_city_id,
+      destinationCityName: convoy.destination_city_name,
+      vehicleTypeId: convoy.vehicle_type_id,
+      staggerMs: convoy.stagger_ms,
+      createdAt: convoy.created_at,
+      completedAt: convoy.completed_at,
+      cancelledAt: convoy.cancelled_at,
+      memberId: convoy.member_id,
+      position: convoy.position,
+      size: members.length,
+      scheduledDepartureAt: convoy.scheduled_departure_at,
+      travelOrder: convoy.travel_order,
+      aggressiveVsSentry: Boolean(convoy.aggressive_vs_sentry),
+      memberStatus: convoy.member_status,
+      departedAt: convoy.departed_at,
+      arrivedAt: convoy.arrived_at,
+      blockedReason: convoy.blocked_reason,
+      members
+    };
+  }
+
+  #finishVehicleConvoyMember(vehicleId, status, at) {
+    const member = this.database.prepare(`
+      SELECT id, convoy_id FROM player_vehicle_convoy_members
+      WHERE vehicle_id = ? AND status = 'traveling' LIMIT 1
+    `).get(vehicleId);
+    if (!member) return false;
+    this.database.prepare(`
+      UPDATE player_vehicle_convoy_members
+      SET status = ?, arrived_at = ?, blocked_reason = '' WHERE id = ?
+    `).run(status, at, member.id);
+    this.#completeVehicleConvoyIfFinished(member.convoy_id, at);
+    return true;
+  }
+
+  #completeVehicleConvoyIfFinished(convoyId, at) {
+    this.database.prepare(`
+      UPDATE player_vehicle_convoys SET status = 'completed', completed_at = ?
+      WHERE id = ? AND status = 'active' AND NOT EXISTS (
+        SELECT 1 FROM player_vehicle_convoy_members
+        WHERE convoy_id = ? AND status IN ('queued', 'traveling')
+      )
+    `).run(at, convoyId, convoyId);
+  }
+
+  #dispatchDueVehicleConvoys(playerId, now) {
+    const due = this.database.prepare(`
+      SELECT player_vehicle_convoy_members.*,
+        player_vehicle_convoys.route_id
+      FROM player_vehicle_convoy_members
+      JOIN player_vehicle_convoys
+        ON player_vehicle_convoys.id = player_vehicle_convoy_members.convoy_id
+      WHERE player_vehicle_convoys.player_id = ?
+        AND player_vehicle_convoys.status = 'active'
+        AND player_vehicle_convoy_members.status = 'queued'
+        AND player_vehicle_convoy_members.scheduled_departure_at <= ?
+        AND (player_vehicle_convoy_members.last_attempt_at IS NULL
+          OR player_vehicle_convoy_members.last_attempt_at <= ?)
+      ORDER BY player_vehicle_convoy_members.scheduled_departure_at,
+        player_vehicle_convoy_members.position
+    `).all(playerId, now, now - VEHICLE_CONVOY_RETRY_INTERVAL_MS);
+    let departed = 0;
+    for (const member of due) {
+      if (!member.vehicle_id || !this.#vehicleRecord(member.vehicle_id, playerId)) {
+        this.database.prepare(`
+          UPDATE player_vehicle_convoy_members
+          SET status = 'lost', arrived_at = ?, blocked_reason = '' WHERE id = ?
+        `).run(now, member.id);
+        this.#completeVehicleConvoyIfFinished(member.convoy_id, now);
+        continue;
+      }
+      this.database.exec('SAVEPOINT vehicle_convoy_departure');
+      try {
+        const departedAt = Number(member.scheduled_departure_at);
+        this.#beginVehicleJourney(playerId, member.vehicle_id, member.route_id, departedAt, {
+          travelOrder: member.travel_order,
+          aggressiveVsSentry: Boolean(member.aggressive_vs_sentry),
+          convoyMemberId: member.id
+        });
+        this.database.prepare(`
+          UPDATE player_vehicle_convoy_members
+          SET status = 'traveling', departed_at = ?, blocked_reason = '', last_attempt_at = ?
+          WHERE id = ?
+        `).run(departedAt, now, member.id);
+        this.database.exec('RELEASE vehicle_convoy_departure');
+        departed += 1;
+      } catch (error) {
+        this.database.exec('ROLLBACK TO vehicle_convoy_departure');
+        this.database.exec('RELEASE vehicle_convoy_departure');
+        this.database.prepare(`
+          UPDATE player_vehicle_convoy_members
+          SET blocked_reason = ?, last_attempt_at = ? WHERE id = ?
+        `).run(String(error?.message ?? error), now, member.id);
+      }
+    }
+    return departed;
   }
 
   #queuedVehicleJourneyLegs(vehicleId) {
@@ -26935,6 +27588,7 @@ Compliance is compulsory. Enjoy your new life.
       aircraftEventResolved: Boolean(vehicle.aircraft_event_resolved),
       aircraftDestroyed: Boolean(vehicle.aircraft_destroyed),
       shuttle: this.#publicVehicleShuttle(vehicle),
+      convoy: this.#publicVehicleConvoy(vehicle),
       queuedJourneyLegs: this.#queuedVehicleJourneyLegs(vehicle.id),
       creaturePursuit: pursuit ? {
         id: pursuit.id, creatureId: pursuit.creature_id,
@@ -28271,6 +28925,9 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       if (this.#vehicleShuttleRecord(vehicleId, playerId)) {
         throw new Error('That vehicle already has a shuttle route.');
       }
+      if (this.#queuedVehicleConvoyMember(vehicleId)) {
+        throw new Error('Cancel that vehicle\'s queued convoy departure first.');
+      }
       const loadout = this.#vehicleLoadout(vehicle);
       if (loadout.cargoSize) {
         throw new Error('Unload the vehicle completely before starting a shuttle route.');
@@ -28384,6 +29041,152 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
     };
   }
 
+  startVehicleConvoy(playerId, vehicleIds, routeId, staggerMs, now = Date.now()) {
+    this.#settleVehicles(playerId, now);
+    const ids = (vehicleIds ?? []).map(Number);
+    if (ids.some((id) => !Number.isSafeInteger(id) || id < 1)
+      || new Set(ids).size !== ids.length) {
+      throw new Error('Choose each convoy transport once.');
+    }
+    if (ids.length < VEHICLE_CONVOY_MIN_SIZE || ids.length > VEHICLE_CONVOY_MAX_SIZE) {
+      throw new Error(`A convoy must contain ${VEHICLE_CONVOY_MIN_SIZE} to ${VEHICLE_CONVOY_MAX_SIZE} transports.`);
+    }
+    const interval = Number(staggerMs);
+    if (!Number.isSafeInteger(interval) || interval < 0
+      || interval > VEHICLE_CONVOY_MAX_STAGGER_MS) {
+      throw new Error('The convoy stagger interval must be between 0 and 60 minutes.');
+    }
+    const numericRouteId = Number(routeId);
+    if (!Number.isSafeInteger(numericRouteId) || numericRouteId < 1) {
+      throw new Error('Choose a convoy route.');
+    }
+    return this.#transaction(() => {
+      const player = this.#marketPlayer(playerId);
+      const route = this.database.prepare(
+        'SELECT * FROM catalog_routes WHERE id = ? AND is_open = 1'
+      ).get(numericRouteId);
+      if (!route || !route.length || Number(route.city1_id) === Number(route.city2_id)) {
+        throw new Error('Choose a direct open route for this convoy.');
+      }
+      const vehicles = ids.map((id) => this.#vehicleRecord(id, playerId));
+      if (vehicles.some((vehicle) => !vehicle)) throw new Error('One convoy transport was not found.');
+      const vehicleTypeId = Number(vehicles[0].vehicle_type_id);
+      const routeType = Number(vehicles[0].route_type);
+      if (![this.#routeTypeId('land'), this.#routeTypeId('sea')].includes(routeType)) {
+        throw new Error('Convoys can contain land vehicles or ships.');
+      }
+      if (vehicles.some((vehicle) => Number(vehicle.vehicle_type_id) !== vehicleTypeId)) {
+        throw new Error('Every transport in a convoy must be the same type.');
+      }
+      if (vehicles.some((vehicle) => vehicle.status !== 'idle'
+        || Number(vehicle.city_id) !== Number(player.city_id))) {
+        throw new Error('Every convoy transport must be idle in your selected city.');
+      }
+      if (Number(route.type) !== routeType
+        || (Number(route.city1_id) !== Number(player.city_id)
+          && Number(route.city2_id) !== Number(player.city_id))) {
+        throw new Error('That route is not compatible with this convoy.');
+      }
+      for (const vehicle of vehicles) {
+        if (vehicle.damaged || vehicle.aircraft_destroyed) {
+          throw new Error('Damaged transports cannot join a convoy.');
+        }
+        if (this.#vehicleShuttleRecord(vehicle.id, playerId)) {
+          throw new Error('Cancel every shuttle route before building the convoy.');
+        }
+        if (this.#queuedVehicleConvoyMember(vehicle.id)) {
+          throw new Error('One transport already has a queued convoy departure.');
+        }
+        if (this.database.prepare(`
+          SELECT 1 FROM factories WHERE facility_kind = 'mill' AND target_vehicle_id = ?
+          UNION ALL
+          SELECT 1 FROM factory_queue
+          JOIN factories ON factories.id = factory_queue.factory_id
+          WHERE factories.facility_kind = 'mill' AND factory_queue.target_vehicle_id = ?
+          LIMIT 1
+        `).get(vehicle.id, vehicle.id)) {
+          throw new Error('A transport reserved for mill work cannot join a convoy.');
+        }
+        this.#assertVehicleDepartureWeather(vehicle);
+        this.#assertVehicleRouteAllowed(vehicle, route);
+        const loadout = this.#vehicleLoadout(vehicle);
+        if (loadout.cargoSize > loadout.capacity) throw new Error('A convoy transport is over capacity.');
+        if (loadout.combatStats
+          && Object.values(loadout.combatStats).some((value) => value < 0)) {
+          throw new Error('A convoy transport has a negative combat stat.');
+        }
+        if (!['peaceful', 'pillage', 'patrol'].includes(vehicle.travel_order)) {
+          throw new Error('A convoy transport has an invalid saved travel order.');
+        }
+      }
+      const destinationCityId = Number(route.city1_id) === Number(player.city_id)
+        ? Number(route.city2_id) : Number(route.city1_id);
+      const inserted = this.database.prepare(`
+        INSERT INTO player_vehicle_convoys
+          (player_id, route_id, origin_city_id, destination_city_id,
+           vehicle_type_id, stagger_ms, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(playerId, route.id, player.city_id, destinationCityId,
+        vehicleTypeId, interval, now);
+      const convoyId = Number(inserted.lastInsertRowid);
+      const insertMember = this.database.prepare(`
+        INSERT INTO player_vehicle_convoy_members
+          (convoy_id, vehicle_id, position, scheduled_departure_at, travel_order,
+           aggressive_vs_sentry, vehicle_name, item_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const members = vehicles.map((vehicle, index) => {
+        const scheduledDepartureAt = now + index * interval;
+        const member = insertMember.run(convoyId, vehicle.id, index + 1,
+          scheduledDepartureAt, vehicle.travel_order, vehicle.aggressive_vs_sentry ? 1 : 0,
+          this.#vehicleName(vehicle), vehicle.item_id);
+        return { id: Number(member.lastInsertRowid), vehicle, scheduledDepartureAt };
+      });
+      for (const member of members.filter((entry) => entry.scheduledDepartureAt <= now)) {
+        this.#beginVehicleJourney(playerId, member.vehicle.id, route.id,
+          member.scheduledDepartureAt, {
+            travelOrder: member.vehicle.travel_order,
+            aggressiveVsSentry: Boolean(member.vehicle.aggressive_vs_sentry),
+            convoyMemberId: member.id
+          });
+        this.database.prepare(`
+          UPDATE player_vehicle_convoy_members
+          SET status = 'traveling', departed_at = ?, last_attempt_at = ? WHERE id = ?
+        `).run(member.scheduledDepartureAt, now, member.id);
+      }
+      return this.#publicVehicleConvoy(this.#vehicleRecord(vehicles[0].id, playerId));
+    });
+  }
+
+  cancelVehicleConvoy(playerId, convoyId, now = Date.now()) {
+    const numericConvoyId = Number(convoyId);
+    if (!Number.isSafeInteger(numericConvoyId) || numericConvoyId < 1) {
+      throw new Error('Convoy not found.');
+    }
+    return this.#transaction(() => {
+      const convoy = this.database.prepare(`
+        SELECT * FROM player_vehicle_convoys WHERE id = ? AND player_id = ?
+      `).get(numericConvoyId, playerId);
+      if (!convoy) throw new Error('Convoy not found.');
+      if (convoy.status !== 'active') throw new Error('That convoy is no longer active.');
+      const queued = this.database.prepare(`
+        UPDATE player_vehicle_convoy_members
+        SET status = 'cancelled', arrived_at = ?, blocked_reason = ''
+        WHERE convoy_id = ? AND status = 'queued'
+      `).run(now, numericConvoyId).changes;
+      const traveling = this.database.prepare(`
+        SELECT COUNT(*) AS count FROM player_vehicle_convoy_members
+        WHERE convoy_id = ? AND status = 'traveling'
+      `).get(numericConvoyId).count;
+      this.database.prepare(`
+        UPDATE player_vehicle_convoys
+        SET status = 'cancelled', cancelled_at = ? WHERE id = ?
+      `).run(now, numericConvoyId);
+      return { id: numericConvoyId, queuedCancelled: Number(queued),
+        traveling: Number(traveling) };
+    });
+  }
+
   sendVehicle(playerId, vehicleId, routeId, now = Date.now(), options = {}) {
     this.#settleVehicles(playerId, now);
     return this.#transaction(() => this.#beginVehicleJourney(
@@ -28394,6 +29197,14 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
   #beginVehicleJourney(playerId, vehicleId, routeId, now, options = {}) {
       const vehicle = this.#vehicleRecord(vehicleId, playerId);
       if (!vehicle || vehicle.status !== 'idle') throw new Error('That vehicle is not ready to travel.');
+      const convoyMember = this.#queuedVehicleConvoyMember(vehicleId);
+      if (convoyMember && Number(options.convoyMemberId) !== Number(convoyMember.id)) {
+        throw new Error('Cancel this vehicle\'s queued convoy departure before sending it independently.');
+      }
+      if (options.convoyMemberId && (!convoyMember
+        || Number(options.convoyMemberId) !== Number(convoyMember.id))) {
+        throw new Error('That convoy departure is no longer queued.');
+      }
       if (!options.shuttle && this.#vehicleShuttleRecord(vehicleId, playerId)) {
         throw new Error('Cancel this vehicle\'s shuttle route before sending it manually.');
       }
@@ -28593,7 +29404,9 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       `).run(vehicle.id, playerId, route.id,
         JSON.stringify({
           cityId: vehicle.city_id, destinationCityId, mission,
-          itineraryLeg: 1, itineraryLegCount: itinerary.length
+          itineraryLeg: 1, itineraryLegCount: itinerary.length,
+          convoyId: convoyMember?.convoy_id ?? null,
+          convoyPosition: convoyMember?.position ?? null
         }), now);
       const stowawayId = options.skipStowaway
         ? null : this.#attachDwarfStowaway(vehicle, loadout, now);
@@ -29190,6 +30003,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         UPDATE world_creatures SET defeated_by_vehicle_id = NULL
         WHERE defeated_by_vehicle_id = ?
       `).run(entry.id);
+      this.#finishVehicleConvoyMember(entry.id, 'lost', now);
       this.database.prepare('DELETE FROM player_vehicles WHERE id = ?').run(entry.id);
     }
     for (const pending of pendingSinks) {
@@ -29318,7 +30132,8 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
   #routesForVehicles(playerId, vehicles, now) {
     const routesByVehicleId = new Map(vehicles.map((vehicle) => [vehicle.id, []]));
     const eligible = vehicles.filter((vehicle) => vehicle.status === 'idle'
-      && !vehicle.aircraftDestroyed && vehicle.cityId !== null);
+      && !vehicle.aircraftDestroyed && vehicle.cityId !== null
+      && !this.#queuedVehicleConvoyMember(vehicle.id));
     if (!eligible.length) return routesByVehicleId;
 
     const routeCache = new Map();
@@ -29903,20 +30718,18 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       const owned = this.database.prepare(
         'SELECT quantity FROM player_containers WHERE player_id = ? AND container_id = ?'
       ).get(playerId, container.id);
+      if (owned) throw new Error('You already own that container. Each container type can be bought once.');
       this.database.prepare('UPDATE players SET credits = credits - ? WHERE id = ?').run(container.credits, playerId);
       this.database.prepare(`
         INSERT INTO player_containers (player_id, container_id, quantity) VALUES (?, ?, 1)
-        ON CONFLICT(player_id, container_id) DO UPDATE SET quantity = quantity + 1
       `).run(playerId, container.id);
-      if (!owned) {
-        this.database.prepare(
-          'UPDATE players SET item_limit = MIN(?, item_limit + ?) WHERE id = ?'
-        ).run(MAXIMUM_ITEM_LIMIT, container.capacity, playerId);
-      }
+      this.database.prepare(
+        'UPDATE players SET item_limit = MIN(?, item_limit + ?) WHERE id = ?'
+      ).run(MAXIMUM_ITEM_LIMIT, container.capacity, playerId);
       this.awardStone(playerId, 'Contained', now);
       const capacity = this.inventoryCapacity(playerId);
       return { id: container.id, name: container.name, capacity: container.capacity,
-        credits: container.credits, quantity: (owned?.quantity ?? 0) + 1,
+        credits: container.credits, quantity: 1,
         itemLimit: capacity.baseItemLimit };
     });
   }
@@ -31175,6 +31988,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
   }
 
   professionMineKits(playerId = null, now = Date.now(), enabledOnly = true) {
+    return [];
     const kits = this.database.prepare(`
       SELECT id, slug, name, description, price_credits, free_until, enabled,
         sort_order, created_at, updated_at
@@ -31235,6 +32049,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
   }
 
   claimProfessionMineKit(playerId, kitId, catalog, now = Date.now(), random = Math.random) {
+    throw new Error('Profession Kits have been retired; mines are rental-only.');
     return this.#transaction(() => {
       this.#settleBumGold(playerId, now);
       const row = this.database.prepare(`
@@ -31545,6 +32360,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
   }
 
   adminUpdateProfessionMineKit(administratorId, kitId, values, now = Date.now()) {
+    throw new Error('Profession Kits have been retired; mines are rental-only.');
     const name = String(values.name ?? '').trim();
     const description = String(values.description ?? '').trim();
     const priceCredits = Number(values.priceCredits);
@@ -32371,10 +33187,18 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
     return () => this.liveUpdateWakeListeners.delete(listener);
   }
 
-  latestLiveUpdateId() {
-    return Number(this.database.prepare(
-      'SELECT COALESCE(MAX(id), 0) AS id FROM live_update_events'
-    ).get().id);
+  latestLiveUpdateId(scopes = null) {
+    const selectedScopes = scopes === null || scopes === undefined
+      ? [] : [...new Set([...scopes].map(String).filter(Boolean))];
+    if (!selectedScopes.length) {
+      return Number(this.database.prepare(
+        'SELECT COALESCE(MAX(id), 0) AS id FROM live_update_events'
+      ).get().id);
+    }
+    return Number(this.database.prepare(`
+      SELECT COALESCE(MAX(id), 0) AS id FROM live_update_events
+      WHERE scope IN (${selectedScopes.map(() => '?').join(', ')})
+    `).get(...selectedScopes).id);
   }
 
   liveUpdatesAfter(lastId, limit = 2000, scopes = null) {

@@ -717,19 +717,16 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await expect(page.getByRole('button', { name: /Build factory/ })).toBeVisible();
   await page.goto(`${base}/market`);
   await expect(page.getByRole('heading', { name: 'Inventory containers' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Rent a mine in/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /2 weeks/ }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /3 months/ }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /1 year/ }).first()).toBeVisible();
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-shop.png'), fullPage: true });
-  const mineMarketPath = await page.getByRole('link', { name: 'Buy with Crypto' }).first().getAttribute('href');
-  await page.goto(`${base}${mineMarketPath}`);
-  for (const heading of ['List mines', 'Place bid', 'Listings', 'Bids', 'Recent sales']) {
-    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
-  }
-  const selectedMineTypeId = Number(mineMarketPath.split('/').at(-1));
-  await expect(page.locator(
-    `img[src="${catalog.mineTypes.find((entry) => entry.id === selectedMineTypeId).icon}"]`
-  )).toBeVisible();
+  await page.goto(`${base}/market/mines/4`);
+  await expect(page.getByRole('heading', { name: 'Mine purchasing has ended' })).toBeVisible();
   await assertHealthyRender(page);
-  await page.screenshot({ path: path.resolve('migration-audit-mine-market.png'), fullPage: true });
+  await page.screenshot({ path: path.resolve('migration-audit-retired-mine-market.png'), fullPage: true });
 
   await page.goto(`${base}/miners/VisualAudit`);
   await expect(page.locator('.avatar-stack img')).toHaveCount(3);
@@ -921,7 +918,7 @@ test('renders shop, profiles, stats, inbox controls, vehicle management, ratings
   await page.locator('form[action="/logout"] button').click();
   await login(page, 'RenderRobber');
   await page.goto(`${base}/battles/${battleId}`);
-  await expect(page.locator('.battle-summary').getByText('Rating', { exact: false })).toBeVisible();
+  await expect(page.locator('.battle-summary').getByText('Rating', { exact: false })).toHaveCount(0);
   await assertHealthyRender(page);
   await page.screenshot({ path: path.resolve('migration-audit-battle.png'), fullPage: true });
 

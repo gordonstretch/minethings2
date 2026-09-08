@@ -81,7 +81,8 @@ test('registers immutable machine definitions and adapts the Thing-O-Matic engin
   assert.equal(result.multiplier, 16);
   assert.equal(result.replayKind, 'bonus-spin');
   assert.equal(result.frames[0].label, 'Paid spin');
-  assert.equal(result.frames[0].holdMs, 3000);
+  assert.equal(result.holdMs, 700);
+  assert.equal(result.frames[0].holdMs, 700);
 });
 
 test('gives every region one immutable machine with its own cabinet geometry', () => {

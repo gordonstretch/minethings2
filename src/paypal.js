@@ -77,12 +77,27 @@ export class PayPalClient {
       }, body: 'grant_type=client_credentials'
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.access_token) throw new Error('PayPal authentication failed.');
+    if (!response.ok || !payload.access_token) {
+      const credentialsRejected = response.status === 401 || payload.error === 'invalid_client';
+      const error = new Error(credentialsRejected
+        ? 'PayPal checkout is temporarily unavailable because its server credentials were rejected. No payment was attempted.'
+        : 'PayPal authentication is temporarily unavailable. No payment was attempted.');
+      error.code = credentialsRejected
+        ? 'PAYPAL_CREDENTIALS_REJECTED' : 'PAYPAL_AUTHENTICATION_UNAVAILABLE';
+      error.statusCode = Number(response.status) || 502;
+      error.paypalDebugId = response.headers?.get?.('paypal-debug-id') ?? '';
+      throw error;
+    }
     this.cachedToken = {
       value: payload.access_token,
       expiresAt: Date.now() + Math.max(60, Number(payload.expires_in) || 300) * 1000
     };
     return this.cachedToken.value;
+  }
+
+  async authenticate() {
+    await this.#accessToken();
+    return true;
   }
 
   async #request(path, { method = 'GET', body, requestId } = {}) {

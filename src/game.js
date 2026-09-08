@@ -134,7 +134,8 @@ export function createPlayer(name, email, passwordHash, catalog, now = Date.now(
   const mine = {
     id: 1, mineTypeId: Number(setting(catalog, 'starter_mine_type_id')), cityId,
     active: true, mineThings: true,
-    priority: 1, oilExpiresAt: 0, rentalUntil: 0, nextFindAt: now,
+    priority: 1, oilExpiresAt: 0,
+    rentalUntil: now + Number(setting(catalog, 'mine_rental_duration_ms')), nextFindAt: now,
     cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };
   const player = {
@@ -351,6 +352,29 @@ export function buyMine(player, catalog, mineTypeId, now = Date.now(), random = 
   return mine;
 }
 
+export function mineRentalOffers(catalog, mineType) {
+  const basePrice = Number(mineType?.rentCost);
+  if (!Number.isSafeInteger(basePrice) || basePrice < 1) return [];
+  const terms = setting(catalog, 'mine_rental_terms');
+  if (!Array.isArray(terms) || !terms.length) throw new Error('Mine rental terms are unavailable.');
+  const seenKeys = new Set();
+  return terms.map((term) => {
+    const key = String(term?.key ?? '').trim();
+    const label = String(term?.label ?? '').trim();
+    const durationMs = Number(term?.durationMs);
+    const priceMultiplier = Number(term?.priceMultiplier);
+    if (!key || seenKeys.has(key) || !label || !Number.isSafeInteger(durationMs) || durationMs < 1
+      || !Number.isFinite(priceMultiplier) || priceMultiplier <= 0) {
+      throw new Error('Mine rental terms are invalid.');
+    }
+    seenKeys.add(key);
+    return {
+      key, label, durationMs, priceMultiplier,
+      priceCredits: Math.max(1, Math.round(basePrice * priceMultiplier))
+    };
+  });
+}
+
 export function rentMine(player, catalog, mineTypeId, now = Date.now(), random = Math.random,
   options = {}) {
   const mineType = catalog.mineTypes.find((candidate) => candidate.id === mineTypeId);
@@ -358,17 +382,21 @@ export function rentMine(player, catalog, mineTypeId, now = Date.now(), random =
   if (!mineTypeAvailableInCity(catalog, mineTypeId, player.cityId)) {
     throw new Error('That mine is not available in this city.');
   }
+  const offers = mineRentalOffers(catalog, mineType);
+  const offer = options?.termKey
+    ? offers.find((candidate) => candidate.key === String(options.termKey)) : offers[0];
+  if (!offer) throw new Error('Choose a valid mine rental term.');
   const waiveCost = options?.waiveCost === true;
-  if (!waiveCost && player.credits < mineType.rentCost) {
+  if (!waiveCost && player.credits < offer.priceCredits) {
     throw new Error('You do not have enough credits.');
   }
-  if (!waiveCost) player.credits -= mineType.rentCost;
+  if (!waiveCost) player.credits -= offer.priceCredits;
   const mine = {
     id: player.nextMineId++, mineTypeId, cityId: player.cityId,
     active: player.mines.filter((candidate) => candidate.active).length
       < activeMineLimit(player, catalog, now),
     mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0,
-    rentalUntil: now + Number(setting(catalog, 'mine_rental_duration_ms')),
+    rentalUntil: now + offer.durationMs,
     nextFindAt: now, cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };
   player.mines.push(mine);

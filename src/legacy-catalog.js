@@ -47,17 +47,57 @@ const EQUIPMENT_RARITY_ADJECTIVES = ['', 'Flimsy', 'Standard', 'Hardy', 'Crafted
 export const INVENTORY_CAPACITY_RULES = Object.freeze({
   base: 500,
   maximum: 1000,
+  containerCredits: Object.freeze({
+    8: 3,
+    9: 13,
+    10: 23,
+    11: 33,
+    12: 43,
+    13: 53,
+    14: 63,
+    15: 73
+  }),
   containerCapacities: Object.freeze({
-    8: 25,
+    8: 45,
     9: 50,
-    10: 50,
-    11: 50,
-    12: 75,
-    13: 75,
+    10: 55,
+    11: 60,
+    12: 65,
+    13: 70,
     14: 75,
-    15: 100
+    15: 80
   })
 });
+export const MINE_RENTAL_BASE_CREDITS = Object.freeze({
+  1: 1,
+  4: 9,
+  5: 9,
+  6: 15,
+  7: 4,
+  8: 4,
+  9: 2,
+  10: 7,
+  11: 10,
+  12: 10,
+  13: 6,
+  14: 6,
+  21: 2,
+  24: 5,
+  25: 5,
+  26: 7,
+  27: 8,
+  28: 9,
+  29: 11,
+  30: 12
+});
+export const MINE_RENTAL_TERMS = Object.freeze([
+  Object.freeze({ key: 'fortnight', label: '2 weeks', durationMs: 14 * 24 * 60 * 60 * 1000,
+    priceMultiplier: 1 }),
+  Object.freeze({ key: 'quarter', label: '3 months', durationMs: 90 * 24 * 60 * 60 * 1000,
+    priceMultiplier: 5 }),
+  Object.freeze({ key: 'year', label: '1 year', durationMs: 365 * 24 * 60 * 60 * 1000,
+    priceMultiplier: 18 })
+]);
 export const SAFE_TRAVEL_KIT_ITEM_ID = 1598;
 export const LEGACY_STARTER_WELCOME_PACK = Object.freeze({
   vehicleItemId: 154,
@@ -1520,16 +1560,23 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     if (row[4]) approvedImages.set(Number(row[2]), String(row[3]));
   }
   const mineTypes = tableRows(sql, 'mine_types').map((row) => ({
-    id: row[0], name: row[1], creditCost: row[3], rentCost: row[4],
-    hasOre: Boolean(row[5]), refundable: Boolean(row[6]),
+    id: row[0], name: row[1], creditCost: 0,
+    rentCost: MINE_RENTAL_BASE_CREDITS[row[0]] ?? 0,
+    hasOre: Boolean(row[5]), refundable: false,
     icon: mineShopIconPath(row[0]) ?? `/legacy/img/icons/M${row[0]}L6.png`
   }));
   mineTypes.push(
-    { ...SHROOM_CATALOG.mineType },
-    { ...WOOD_CATALOG.mineType },
-    { ...WISDOM_CATALOG.mineType },
-    { ...ELECTRONICS_CATALOG.mineType },
-    { ...RELICS_CATALOG.mineType }
+    { ...SHROOM_CATALOG.mineType, creditCost: 0, refundable: false,
+      rentCost: MINE_RENTAL_BASE_CREDITS[SHROOM_CATALOG.mineType.id] },
+    { ...WOOD_CATALOG.mineType, creditCost: 0, refundable: false,
+      rentCost: MINE_RENTAL_BASE_CREDITS[WOOD_CATALOG.mineType.id] },
+    { ...WISDOM_CATALOG.mineType, creditCost: 0, refundable: false,
+      rentCost: MINE_RENTAL_BASE_CREDITS[WISDOM_CATALOG.mineType.id] },
+    { ...ELECTRONICS_CATALOG.mineType,
+      creditCost: 0, refundable: false,
+      rentCost: MINE_RENTAL_BASE_CREDITS[ELECTRONICS_CATALOG.mineType.id] },
+    { ...RELICS_CATALOG.mineType, creditCost: 0, refundable: false,
+      rentCost: MINE_RENTAL_BASE_CREDITS[RELICS_CATALOG.mineType.id] }
   );
   const cities = tableRows(sql, 'cities').map((row) => ({ id: row[0], name: row[1], hasMarket: Boolean(row[2]) }));
   const cityMineTypes = tableRows(sql, 'cities_mine_types').map((row) => ({
@@ -1586,7 +1633,8 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     id: row[0], itemId: row[1], type: row[2]
   }));
   const containers = tableRows(sql, 'containers').map((row) => ({
-    id: row[0], marketableId: row[1], name: row[2], credits: row[3],
+    id: row[0], marketableId: row[1], name: row[2],
+    credits: INVENTORY_CAPACITY_RULES.containerCredits[row[0]] ?? row[3],
     capacity: INVENTORY_CAPACITY_RULES.containerCapacities[row[0]] ?? row[4]
   }));
   const tiers = tableRows(sql, 'tiers').map((row) => ({
@@ -1937,6 +1985,7 @@ export function loadLegacyCatalog(sqlPath = DEFAULT_SQL) {
     hammer_equipment_multiplier: 1.25,
     mine_oil_duration_ms: 5 * 24 * 60 * 60 * 1000,
     mine_rental_duration_ms: 14 * 24 * 60 * 60 * 1000,
+    mine_rental_terms: MINE_RENTAL_TERMS,
     mine_credit_refund_ratio: 0.75,
     mine_gold_per_bucket: 0.034,
     battery_base_recharge_ms: 20 * 60 * 60 * 1000,

@@ -113,6 +113,63 @@
     saveState(root, state);
     applyFilters();
   });
+  document.addEventListener('submit', async (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)
+      || !form.matches('#chat-compose-form[action="/chat"]')) return;
+    event.preventDefault();
+    if (form.dataset.chatSending === 'true') return;
+
+    const message = form.querySelector('[name="body"]');
+    const button = form.querySelector('.chat-send');
+    const buttonLabel = button?.querySelector('span');
+    const status = form.querySelector('[data-chat-compose-status]');
+    const setStatus = (text, state) => {
+      if (!status) return;
+      status.textContent = text;
+      status.dataset.state = state;
+      status.hidden = !text;
+    };
+
+    form.dataset.chatSending = 'true';
+    if (button) button.disabled = true;
+    if (buttonLabel) buttonLabel.textContent = 'Sending';
+    setStatus('Transmitting…', 'sending');
+    try {
+      const response = await fetch(form.action, {
+        method: 'POST', credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-MineThings-Chat': '1'
+        },
+        body: new URLSearchParams(new FormData(form))
+      });
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        window.location.assign(response.url || '/chat');
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || `Chat send failed (${response.status}).`);
+      }
+      if (message) message.value = '';
+      delete form.dataset.liveDirty;
+      setStatus('Sent.', 'sent');
+      message?.focus();
+      document.dispatchEvent(new CustomEvent('minethings:chat-sent', {
+        detail: { chatId: Number(result.chatId) }
+      }));
+    } catch (error) {
+      setStatus(error.message || 'Could not send that message.', 'error');
+      message?.focus();
+    } finally {
+      delete form.dataset.chatSending;
+      if (button) button.disabled = false;
+      if (buttonLabel) buttonLabel.textContent = 'Send';
+    }
+  });
   document.addEventListener('minethings:content-updated', restoreAndApply);
 
   if (document.readyState === 'loading') {

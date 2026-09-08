@@ -158,14 +158,13 @@ test('preserves an exact loadout preview across SSE and invalidates it on edit',
   await page.evaluate(() => { window.__loadoutPreviewDocument = 'same-document'; });
 
   let external = new DatabaseSync(databaseFile);
-  const firstRating = Number(external.prepare(
-    'SELECT rating FROM player_vehicles WHERE id = ?'
-  ).get(loadoutVehicleId).rating);
-  external.prepare('UPDATE player_vehicles SET rating = rating + 1 WHERE id = ?')
-    .run(loadoutVehicleId);
+  const firstLiveName = 'Preview live one';
+  external.prepare('UPDATE player_vehicles SET name = ? WHERE id = ?')
+    .run(firstLiveName, loadoutVehicleId);
   external.close();
 
-  await expect(page.locator('.vehicle-hero')).toContainText(`rating ${Math.round(firstRating + 1)}`);
+  await expect(page.locator('.vehicle-hero')).toContainText(firstLiveName);
+  await expect(page.locator('.vehicle-hero')).not.toContainText(/rating\s+[\d,.]+/i);
   await expect(token).toHaveValue(tokenValue);
   await expect(page.locator('[data-preview-commit]')).toBeVisible();
   expect(await page.evaluate(() => window.__loadoutPreviewDocument)).toBe('same-document');
@@ -178,14 +177,13 @@ test('preserves an exact loadout preview across SSE and invalidates it on edit',
   await expect(page.locator('[data-live-preview-panel]')).toContainText('Preview stale');
 
   external = new DatabaseSync(databaseFile);
-  const staleRating = Number(external.prepare(
-    'SELECT rating FROM player_vehicles WHERE id = ?'
-  ).get(loadoutVehicleId).rating);
-  external.prepare('UPDATE player_vehicles SET rating = rating + 1 WHERE id = ?')
-    .run(loadoutVehicleId);
+  const staleLiveName = 'Preview live two';
+  external.prepare('UPDATE player_vehicles SET name = ? WHERE id = ?')
+    .run(staleLiveName, loadoutVehicleId);
   external.close();
 
-  await expect(page.locator('.vehicle-hero')).toContainText(`rating ${Math.round(staleRating + 1)}`);
+  await expect(page.locator('.vehicle-hero')).toContainText(staleLiveName);
+  await expect(page.locator('.vehicle-hero')).not.toContainText(/rating\s+[\d,.]+/i);
   await expect(proposedWeapon).toHaveValue('0');
   await expect(page.locator('[data-preview-binding][name="previewToken"]')).toHaveCount(0);
   await expect(page.locator('[data-preview-commit]')).toHaveCount(0);
@@ -210,14 +208,13 @@ test('keeps an edited invalid preview stale through a later live update', async 
   await expect(page.locator('[data-live-preview-panel]')).toContainText('Preview stale');
 
   const external = new DatabaseSync(databaseFile);
-  const invalidRating = Number(external.prepare(
-    'SELECT rating FROM player_vehicles WHERE id = ?'
-  ).get(loadoutVehicleId).rating);
-  external.prepare('UPDATE player_vehicles SET rating = rating + 1 WHERE id = ?')
-    .run(loadoutVehicleId);
+  const invalidLiveName = 'Invalid live preview';
+  external.prepare('UPDATE player_vehicles SET name = ? WHERE id = ?')
+    .run(invalidLiveName, loadoutVehicleId);
   external.close();
 
-  await expect(page.locator('.vehicle-hero')).toContainText(`rating ${Math.round(invalidRating + 1)}`);
+  await expect(page.locator('.vehicle-hero')).toContainText(invalidLiveName);
+  await expect(page.locator('.vehicle-hero')).not.toContainText(/rating\s+[\d,.]+/i);
   await expect(invalidWeapon).toHaveValue('998');
   await expect(page.locator('[data-preview-binding][name="previewToken"]')).toHaveCount(0);
   await expect(page.locator('[data-preview-commit]')).toHaveCount(0);
@@ -385,6 +382,14 @@ test('follows live chat at the bottom without yanking a reader who scrolled up',
   const liveDwarf = page.locator('.chat-row-dwarf');
   await expect(liveDwarf).toContainText('LivePageAudit captured a Yellow Dwarf');
   await expect(liveDwarf.locator('.chat-dwarf-item img')).toBeVisible();
+  await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1);
+
+  await draft.fill('Sent without replacing the page');
+  await page.locator('#chat-compose-form').evaluate((form) => form.requestSubmit());
+  await expect(page.getByText('Sent without replacing the page', { exact: true })).toBeVisible();
+  await expect(draft).toHaveValue('');
+  await expect(draft).toBeFocused();
+  expect(await page.evaluate(() => window.__liveDocumentIdentity)).toBe('chat-document');
   await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1);
 });
 

@@ -672,6 +672,7 @@ test('streams scoped database changes to live pages without reload code', async 
   assert.match(client, /window\.location\.assign\(destination\)/u);
   assert.match(client, /addEventListener\('maintenance'/u);
   assert.match(client, /addEventListener\('presence'/u);
+  assert.match(client, /addEventListener\('minethings:chat-sent'/u);
 });
 
 test('server listening does not synchronously advance gameplay state', async (context) => {
@@ -881,6 +882,147 @@ test('keeps every open gateway destination hidden until its route is completed',
   }
 });
 
+test('builds and cancels convoys without changing member stances', async (context) => {
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(loadLegacyCatalog());
+  const catalog = store.loadCatalog();
+  const password = 'convoy status password';
+  const draft = createPlayer(
+    'Convoy Dispatcher', '', hashPassword(password), catalog, 1000, () => 0.5
+  );
+  const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType !== 2
+    && catalog.routes.some((route) => route.open && route.type === vehicle.routeType
+      && route.city1Id !== route.city2Id
+      && (route.city1Id === draft.cityId || route.city2Id === draft.cityId)));
+  assert.ok(vehicleType);
+  draft.inventory[vehicleType.itemId] = 10;
+  const player = store.addPlayer(draft);
+  const vehicleIds = Array.from({ length: 10 }, () =>
+    store.activateVehicle(player.id, vehicleType.itemId));
+  for (const [vehicleId, stance] of vehicleIds.map((id, index) =>
+    [id, ['patrol', 'peaceful', 'pillage'][index % 3]])) {
+    store.database.prepare(
+      'UPDATE player_vehicles SET travel_order = ? WHERE id = ?'
+    ).run(stance, vehicleId);
+  }
+  const cargoItem = catalog.items.find((item) => item.canFind
+    && !catalog.vehicleByItemId.has(item.id));
+  assert.ok(cargoItem);
+  store.database.prepare(`
+    INSERT INTO player_vehicle_cargo (vehicle_id, item_id, quantity) VALUES (?, ?, 2)
+  `).run(vehicleIds[2], cargoItem.id);
+  const route = store.routesForVehicle(player.id, vehicleIds[0], 2000)[0];
+  assert.ok(route);
+  let clock = 2000;
+  const server = createApp({ store, catalog, now: () => clock });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) => server.close(
+      (error) => error ? reject(error) : resolve()
+    ));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/login`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: player.name, password })
+  });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+
+  const setup = await fetch(`${base}/vehicles/${vehicleIds[0]}/convoy`, {
+    headers: { cookie }
+  });
+  assert.equal(setup.status, 200);
+  const setupHtml = await setup.text();
+  assert.match(setupHtml, /Build a convoy/);
+  assert.match(setupHtml, /Stances are read-only here/);
+  assert.match(setupHtml, /Patrol stance/);
+  assert.match(setupHtml, /max="60"/);
+  assert.match(setupHtml, /data-min-size="2" data-max-size="8"/);
+  assert.match(setupHtml, /sending order/i);
+  assert.match(setupHtml, /1 of 8 transports selected/);
+  assert.match(setupHtml, /LOADED &middot; 2 things/);
+  assert.match(setupHtml, /data-convoy-move="earlier"/);
+  assert.match(setupHtml, /data-convoy-move="later"/);
+  assert.match(setupHtml,
+    /<script src="\/node\/vehicle-convoy\.js\?v=20260907b" defer><\/script>/);
+  assert.match(setupHtml, new RegExp(`name="vehicle_${vehicleIds[1]}"`));
+  const convoyClient = await fetch(`${base}/node/vehicle-convoy.js?v=20260907b`);
+  assert.equal(convoyClient.status, 200);
+  const convoyClientText = await convoyClient.text();
+  assert.match(convoyClientText, /selectedCompanions >= maximumCompanions/);
+  assert.match(convoyClientText, /orderField\.value = orderedRows/);
+
+  const overfullBody = new URLSearchParams({
+    routeId: String(route.id), staggerMinutes: '10'
+  });
+  for (const companionId of vehicleIds.slice(1, 9)) {
+    overfullBody.set(`vehicle_${companionId}`, '1');
+  }
+  const overfull = await fetch(`${base}/vehicles/${vehicleIds[0]}/convoy`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded',
+      referer: `${base}/vehicles/${vehicleIds[0]}/convoy`
+    }, body: overfullBody
+  });
+  assert.equal(overfull.status, 303);
+  assert.equal(overfull.headers.get('location'), `/vehicles/${vehicleIds[0]}/convoy`);
+  const overfullPage = await fetch(`${base}${overfull.headers.get('location')}`, {
+    headers: { cookie }
+  });
+  assert.match(await overfullPage.text(),
+    /lead transport is already included[^<]*no more than 7/i);
+  assert.equal(store.database.prepare(
+    'SELECT COUNT(*) AS count FROM player_vehicle_convoys WHERE player_id = ?'
+  ).get(player.id).count, 0);
+
+  const launch = await fetch(`${base}/vehicles/${vehicleIds[0]}/convoy`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      routeId: String(route.id), staggerMinutes: '10',
+      memberOrder: `${vehicleIds[2]},${vehicleIds[0]},${vehicleIds[1]}`,
+      [`vehicle_${vehicleIds[1]}`]: '1', [`vehicle_${vehicleIds[2]}`]: '1'
+    })
+  });
+  assert.equal(launch.status, 303);
+  assert.equal(launch.headers.get('location'), `/vehicles/${vehicleIds[0]}`);
+  const convoy = store.database.prepare(
+    'SELECT id FROM player_vehicle_convoys WHERE player_id = ?'
+  ).get(player.id);
+  assert.ok(convoy);
+  assert.deepEqual(store.database.prepare(`
+    SELECT vehicle_id FROM player_vehicle_convoy_members
+    WHERE convoy_id = ? ORDER BY position
+  `).all(convoy.id).map((member) => member.vehicle_id),
+  [vehicleIds[2], vehicleIds[0], vehicleIds[1]]);
+
+  const leaderStatus = await (await fetch(`${base}/vehicles/${vehicleIds[0]}`, {
+    headers: { cookie }
+  })).text();
+  assert.match(leaderStatus, /CONVOY 2\/3/);
+  assert.match(leaderStatus, /Patrol/);
+  assert.match(leaderStatus, /Peaceful/);
+  assert.match(leaderStatus, /Pillage/);
+  const waitingStatus = await (await fetch(`${base}/vehicles/${vehicleIds[1]}`, {
+    headers: { cookie }
+  })).text();
+  assert.match(waitingStatus, /Reserved for convoy/);
+  assert.match(waitingStatus, /keeps its recorded <strong>Peaceful<\/strong> stance/);
+  assert.doesNotMatch(waitingStatus, /Manage cargo/);
+
+  clock = 3000;
+  const cancellation = await fetch(`${base}/vehicle-convoys/${convoy.id}/cancel`, {
+    method: 'POST', redirect: 'manual', headers: { cookie }
+  });
+  assert.equal(cancellation.status, 303);
+  assert.equal(cancellation.headers.get('location'), '/vehicles');
+  assert.equal(store.vehicleDetails(player.id, vehicleIds[1], clock).convoy, null);
+  assert.equal(store.vehicleDetails(player.id, vehicleIds[1], clock).travelOrder, 'peaceful');
+});
+
 test('renders a static operations snapshot with hover details and management links',
   async (context) => {
     const store = new SqliteStore(':memory:');
@@ -931,6 +1073,12 @@ test('renders a static operations snapshot with hover details and management lin
       markupPercent: 25, intervalMinutes: 5
     }, 2100);
 
+    const originalMapOperationsSnapshot = store.mapOperationsSnapshot.bind(store);
+    let mapOperationsSnapshotCalls = 0;
+    store.mapOperationsSnapshot = (...arguments_) => {
+      mapOperationsSnapshotCalls += 1;
+      return originalMapOperationsSnapshot(...arguments_);
+    };
     const server = createApp({ store, catalog, now: () => 2500 });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     context.after(async () => {
@@ -946,7 +1094,40 @@ test('renders a static operations snapshot with hover details and management lin
       body: new URLSearchParams({ name: player.name, password })
     });
     const cookie = login.headers.get('set-cookie').split(';')[0];
-    const html = await (await fetch(`${base}/map`, { headers: { cookie } })).text();
+    const firstMap = await fetch(`${base}/map`, { headers: { cookie } });
+    const firstMapEtag = firstMap.headers.get('etag');
+    assert.equal(firstMap.headers.get('cache-control'), 'private, no-cache');
+    assert.equal(firstMap.headers.get('vary'), 'Cookie');
+    assert.equal(firstMap.headers.get('x-minethings-map-cache'), 'MISS');
+    assert.match(firstMapEtag, /^"[A-Za-z0-9_-]+"$/u);
+    const html = await firstMap.text();
+    const revalidatedMap = await fetch(`${base}/map`, {
+      headers: { cookie, 'if-none-match': firstMapEtag }
+    });
+    assert.equal(revalidatedMap.status, 304);
+    assert.equal(revalidatedMap.headers.get('x-minethings-map-cache'), 'HIT');
+    assert.equal(mapOperationsSnapshotCalls, 1,
+      'an unchanged personalized map is revalidated without regenerating its fragment');
+    store.database.prepare(`
+      INSERT INTO live_update_events (scope, changed_at)
+      VALUES ('player:999999', 2500)
+    `).run();
+    const cachedMap = await fetch(`${base}/map`, {
+      headers: { cookie, 'if-none-match': firstMapEtag }
+    });
+    assert.equal(cachedMap.status, 200,
+      'the live-update cursor advances even when another player changes');
+    assert.equal(cachedMap.headers.get('x-minethings-map-cache'), 'HIT');
+    assert.equal(mapOperationsSnapshotCalls, 1,
+      'unrelated player activity does not invalidate the personalized map cache');
+    store.database.prepare(`
+      INSERT INTO live_update_events (scope, changed_at)
+      VALUES (?, 2500)
+    `).run(`player:${player.id}`);
+    const changedMap = await fetch(`${base}/map`, { headers: { cookie } });
+    assert.equal(changedMap.headers.get('x-minethings-map-cache'), 'MISS');
+    assert.equal(mapOperationsSnapshotCalls, 2,
+      'relevant player activity invalidates the personalized map cache');
 
     assert.match(html, /data-map-snapshot-at="2500"/u);
     assert.match(html, /1 automation task · 1 shuttle/u);
@@ -1355,7 +1536,7 @@ test('signs in and registers miners through the local Google OAuth flow', async 
       created.discoveries.filter((finding) => finding.itemId === gadgetItemId).length + 1);
   }
   assert.deepEqual(created.mines.filter((mine) => mine.rentalUntil > 0)
-    .map((mine) => mine.mineTypeId), [4, 5]);
+    .map((mine) => mine.mineTypeId), [1, 4, 5]);
   assert.equal(created.cryptoBalances[1], 5);
   assert.equal(store.casinoState(created.id).currencies.find((currency) =>
     currency.id === 1).voucherQuantity, 100);
@@ -2505,6 +2686,7 @@ test('lists inter-region vehicle routes last and cycles unaltered transports thr
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const fleetHtml = await (await fetch(`${base}/vehicles`, { headers: { cookie } })).text();
   assert.match(fleetHtml, /class="[^"]*idle-vehicle-card[^"]*"/);
+  assert.doesNotMatch(fleetHtml, /rating\s+[\d,.]+/iu);
   assert.match(fleetHtml, /href="\/vehicles\/compare">Compare ready vehicles \(1\)<\/a>/);
   assert.match(fleetHtml, new RegExp(
     `class="idle-vehicle-send" method="post" action="/vehicles/${vehicleId}/send"`
@@ -2535,6 +2717,7 @@ test('lists inter-region vehicle routes last and cycles unaltered transports thr
   assert.match(comparisonHtml, /src="\/node\/vehicle-comparison-sort\.js\?v=20260907a" defer/);
   const comparisonSortScript = await fetch(`${base}/node/vehicle-comparison-sort.js`);
   assert.equal(comparisonSortScript.status, 200);
+  assert.match(comparisonSortScript.headers.get('content-type'), /^text\/javascript\b/u);
   assert.match(await comparisonSortScript.text(), /header\.setAttribute\('aria-sort', direction\)/);
   assert.doesNotMatch(comparisonHtml,
     /<th scope="col">(?:Class|Rating|Condition|Loadout)<\/th>/u);
@@ -2612,6 +2795,7 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   const statusResponse = await fetch(`${base}/vehicles/${vehicleId}`, { headers: { cookie } });
   const statusHtml = await statusResponse.text();
   assert.equal(statusResponse.status, 200);
+  assert.doesNotMatch(statusHtml, /rating\s+[\d,.]+/iu);
   const descriptionPosition = statusHtml.indexOf('class="vehicle-hero"');
   const sendPosition = statusHtml.indexOf('class="vehicle-send-panel"');
   const loadoutPosition = statusHtml.indexOf('id="vehicle-loadout-heading"');
@@ -3457,7 +3641,7 @@ test('opens the original local order book from Your Things and preserves listed 
       liveStarter.discoveries.filter((finding) => finding.itemId === gadgetItemId).length + 1);
   }
   assert.deepEqual(liveStarter.mines.filter((mine) => mine.rentalUntil > 0)
-    .map((mine) => mine.mineTypeId), [4, 5]);
+    .map((mine) => mine.mineTypeId), [1, 4, 5]);
   assert.equal(liveStarter.cryptoBalances[1], 5);
   assert.equal(store.casinoState(liveStarter.id).currencies.find((currency) =>
     currency.id === 1).voucherQuantity, 100);
@@ -4132,13 +4316,15 @@ test('retires finding polls, acknowledgements, reports, and manual collection', 
     /finding-dialog|finding-occasion-card|finding-queue\.js|data-poll-|Collect findings/);
   assert.match(home, /<aside id="flash-dialog" class="flash-notice"/);
   assert.match(home, /<ul id="flash-dialog-items" class="flash-item-list"/);
-  assert.match(home, /\/node\/flash-modal\.js/);
+  assert.match(home, /\/node\/flash-modal\.js\?v=20260908a/);
   assert.match(home, /\/node\/live-updates\.js/);
 
   const flashModal = await (await fetch(`${base}/node/flash-modal.js`)).text();
   assert.ok(flashModal.includes('\\u2694\\uFE0F'));
-  assert.ok(flashModal.includes('\\u2192'));
   assert.ok(flashModal.includes('\\u00d7'));
+  assert.doesNotMatch(flashModal, /battle\.rating(?:Before|After)/u);
+  assert.match(flashModal, /form\.hasAttribute\('data-native-navigation'\)/u,
+    'one-time notices can opt out of the fetch redirect interceptor');
   assert.match(flashModal, /nextDocument\.querySelector\('#left'\)/u,
     'same-page actions refresh contextual sidebar counts');
   assert.match(flashModal, /minethings:content-updated/u,
@@ -4655,7 +4841,7 @@ test('provides a typed inbox and safe full views for system messages', async (co
   assert.match(detailHtml, /<h3>Captive Dwarf resistance<\/h3>/);
   assert.match(detailHtml, /Blue Dwarf \(3 damage\)/);
   assert.match(detailHtml, /1 Dwarf escaped when the NPC was defeated\./);
-  assert.match(detailHtml, /Rating 1,600 → 1,612/);
+  assert.doesNotMatch(detailHtml, /Rating\s+[\d,.]+/iu);
   assert.doesNotMatch(detailHtml, /href="\/\/example\.test/);
   assert.doesNotMatch(detailHtml, /href="https:\/\/example\.test/);
   assert.match(detailHtml, /Messages \(2\)/);
@@ -4678,8 +4864,7 @@ test('provides a typed inbox and safe full views for system messages', async (co
   assert.match(krakenHtml, /<dt>Cannonball ammunition<\/dt><dd>6 shots/u);
   assert.match(krakenHtml, /<dt>Cannonball ammunition<\/dt><dd>5 shots/u);
   assert.doesNotMatch(krakenHtml, /massives/u);
-  assert.match(krakenHtml, /<dt>Rating<\/dt><dd>1,600<\/dd>/u);
-  assert.match(krakenHtml, /<dt>Rating<\/dt><dd>1,605<\/dd>/u);
+  assert.doesNotMatch(krakenHtml, /<dt>Rating<\/dt>/u);
   assert.match(krakenHtml, /<h3>Cannon round 1<\/h3>/);
   assert.match(krakenHtml, /Thunder/);
   assert.match(krakenHtml, /Critical hit for 244 damage/);
@@ -4882,12 +5067,32 @@ test('supports registration and authenticated play pages', async (context) => {
     const response = await fetch(`${base}${asset}`);
     assert.equal(response.status, 200, asset);
     assert.ok(Number(response.headers.get('content-length')) > 0, asset);
-    if (asset === '/app.css') assert.equal(response.headers.get('cache-control'), 'no-cache');
+    if (/\.(?:css|js)$/u.test(asset)) {
+      assert.equal(response.headers.get('cache-control'), 'public, max-age=3600', asset);
+    }
     if (/\.(?:jpg|png|svg)$/u.test(asset)) {
       assert.match(response.headers.get('content-type'), /^image\//u, asset);
       assert.equal(response.headers.get('cache-control'),
         'public, max-age=604800, stale-while-revalidate=86400', asset);
     }
+  }
+  for (const asset of [
+    '/app.css?v=20260907a',
+    '/node/navigation.js?v=20260823a',
+    '/node/chat-filters.js?v=20260908a',
+    '/node/vehicle-comparison-sort.js?v=20260907a',
+    '/node/maps/aso.png?v=20260908a'
+  ]) {
+    const response = await fetch(`${base}${asset}`);
+    assert.equal(response.status, 200, asset);
+    assert.equal(response.headers.get('cache-control'),
+      'public, max-age=31536000, immutable', asset);
+    const notModifiedAsset = await fetch(`${base}${asset}`, {
+      headers: { 'if-none-match': response.headers.get('etag') }
+    });
+    assert.equal(notModifiedAsset.status, 304, asset);
+    assert.equal(notModifiedAsset.headers.get('cache-control'),
+      'public, max-age=31536000, immutable', asset);
   }
   const visualContractCss = await (await fetch(`${base}/app.css`)).text();
   assert.match(visualContractCss, /\.text-link:any-link \{[^}]*text-decoration-line: underline/u);
@@ -5352,7 +5557,7 @@ test('supports registration and authenticated play pages', async (context) => {
   const factoryRentalMarket = await fetch(`${base}/market/factories/rental`, { headers: { cookie } });
   assert.equal(factoryRentalMarket.status, 200);
   const factoryRentalHtml = await factoryRentalMarket.text();
-  assert.match(factoryRentalHtml, /240h 0m/);
+  assert.match(factoryRentalHtml, /10d 0h 0m/);
   assert.match(factoryRentalHtml, /src="\/legacy\/img\/icons\/I2\.png"/);
   const factorySaleMarket = await fetch(`${base}/market/factories/sale`, { headers: { cookie } });
   assert.equal(factorySaleMarket.status, 200);
@@ -5469,6 +5674,24 @@ test('supports registration and authenticated play pages', async (context) => {
     }, body: new URLSearchParams({ body: '<b>Hello miners</b>' })
   });
   assert.equal(chatPost.status, 303);
+  const smoothChatPost = await fetch(`${base}/chat`, {
+    method: 'POST', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded',
+      accept: 'application/json', 'x-minethings-chat': '1'
+    }, body: new URLSearchParams({ body: 'Smooth transmission' })
+  });
+  assert.equal(smoothChatPost.status, 201);
+  const smoothChatResult = await smoothChatPost.json();
+  assert.equal(smoothChatResult.ok, true);
+  assert.ok(Number.isSafeInteger(smoothChatResult.chatId));
+  const rejectedSmoothChat = await fetch(`${base}/chat`, {
+    method: 'POST', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded',
+      accept: 'application/json', 'x-minethings-chat': '1'
+    }, body: new URLSearchParams({ body: '' })
+  });
+  assert.equal(rejectedSmoothChat.status, 409);
+  assert.match((await rejectedSmoothChat.json()).error, /must contain/u);
   const liveDatabase = new DatabaseSync(databaseFile);
   liveDatabase.prepare(
     "UPDATE catalog_settings SET value_json = '37' WHERE key = 'chat_message_max_length'"
@@ -5500,6 +5723,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.equal(chat.status, 200);
   const chatHtml = await chat.text();
   assert.match(chatHtml, /&lt;b&gt;Hello miners&lt;\/b&gt;/);
+  assert.match(chatHtml, /Smooth transmission/);
   assert.doesNotMatch(chatHtml, /<b>Hello miners<\/b>/);
   assert.match(chatHtml, /maxlength="37"/);
   assert.match(chatHtml, /Showing the latest 72 hours/);
@@ -5510,6 +5734,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(chatHtml, /class="chat-workspace"/);
   assert.match(chatHtml, /class="chat-console" aria-labelledby="chat-console-title"/);
   assert.match(chatHtml, /id="chat-compose-form" class="chat-compose"/);
+  assert.match(chatHtml, /data-chat-compose-status role="status" aria-live="polite" hidden/);
   assert.match(chatHtml, /id="chat-log" class="chat-list" role="log"/);
   assert.match(chatHtml, /id="chat-filters" class="chat-filter-card" data-chat-filters/);
   assert.equal(chatHtml.match(/<input[^>]+data-chat-rating-tier/g)?.length, 6);
@@ -5520,6 +5745,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(chatHtml, /data-chat-hidden-region/);
   assert.match(chatHtml, /Hide regions/);
   assert.match(chatHtml, /src="\/node\/chat-filters\.js/);
+  assert.match(chatHtml, /Meld tier colour · 0\/216 melds/u);
   assert.match(chatHtml, /class="chat-row chat-row-player" style="--chat-color:#abcdef"/);
   assert.match(chatHtml, /data-chat-row data-chat-kind="player" data-chat-map-ids="\d+"/);
   assert.match(chatHtml, /class="chat-speaker"/);
@@ -5560,6 +5786,9 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(chatFiltersSource, /hideWorldEvents: true/);
   assert.match(chatFiltersSource, /data-chat-hide-world-events/);
   assert.match(chatFiltersSource, /data-chat-hidden-region/);
+  assert.match(chatFiltersSource, /event\.preventDefault\(\)/);
+  assert.match(chatFiltersSource, /'X-MineThings-Chat': '1'/);
+  assert.match(chatFiltersSource, /minethings:chat-sent/);
 
   const moderationDatabase = new DatabaseSync(databaseFile);
   moderationDatabase.prepare("UPDATE players SET chat_banned = 1 WHERE name = 'Ada'").run();
@@ -5579,9 +5808,18 @@ test('supports registration and authenticated play pages', async (context) => {
 
   const creditShop = await fetch(`${base}/market`, { headers: { cookie } });
   const creditShopHtml = await creditShop.text();
-  assert.match(creditShopHtml, /Buy with Crypto/);
+  assert.doesNotMatch(creditShopHtml, /Buy with Crypto|\/market\/mines\/\d+\/buy/u);
   assert.doesNotMatch(creditShopHtml, />Gold market<\/a>/u);
-  assert.match(creditShopHtml, /Buy a new mine in Cinderwake/);
+  assert.match(creditShopHtml, /Rent a mine in Cinderwake/);
+  assert.match(creditShopHtml, /mines are rented and cannot be bought, sold, or traded between players/i);
+  assert.match(creditShopHtml, /Containers are account-bound and cannot be sold or traded between players/);
+  assert.match(creditShopHtml, /name="termKey" value="fortnight"/);
+  assert.match(creditShopHtml,
+    /<form method="post" action="\/market\/mines\/4\/rent" data-native-navigation>/,
+    'mine rentals use one native redirect so their one-time finding notice is rendered');
+  assert.match(creditShopHtml, /2 weeks · 9 credits/);
+  assert.match(creditShopHtml, /3 months · 45 credits · 22% cheaper per day/);
+  assert.match(creditShopHtml, /1 year · 162 credits · 31% cheaper per day/);
   const creditShopMineIcons = [...creditShopHtml.matchAll(
     /<article class="shop-card"><img src="([^"]+)" alt="">/gu
   )].map((match) => match[1]);
@@ -5595,7 +5833,7 @@ test('supports registration and authenticated play pages', async (context) => {
       `mine shop card still uses legacy artwork: ${icon}`);
   }
   assert.match(creditShopHtml, /src="\/live-database-mine-icon\.svg"/);
-  assert.match(creditShopHtml, /\+240h 0m · 9 credits/);
+  assert.match(creditShopHtml, /\+10d 0h 0m · 9 credits/);
   const batteryExtension = await fetch(`${base}/market/battery-extension`, {
     method: 'POST', redirect: 'manual', headers: { cookie }
   });
@@ -5603,15 +5841,33 @@ test('supports registration and authenticated play pages', async (context) => {
   const extendedState = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
   assert.equal(extendedState.player.credits, 91);
   assert.equal(extendedState.player.batteryExpiresAt, 1000 + 20 * 60 * 60 * 1000 + 10 * 24 * 60 * 60 * 1000);
-  const mineMarketPath = creditShopHtml.match(/href="(\/market\/mines\/\d+)"/)[1];
-  const mineMarket = await fetch(`${base}${mineMarketPath}`, { headers: { cookie } });
+  const mineMarket = await fetch(`${base}/market/mines/4`, { headers: { cookie } });
   const mineMarketHtml = await mineMarket.text();
-  assert.equal(mineMarket.status, 200);
-  assert.match(mineMarketHtml, /Buy or sell an entire mine for one cryptocurrency/);
-  assert.match(mineMarketHtml, /worth at least 10000g per mine/);
-  const mineMarketTypeId = Number(mineMarketPath.split('/').pop());
-  const mineMarketIcon = catalog.mineTypes.find((entry) => entry.id === mineMarketTypeId).icon;
-  assert.match(mineMarketHtml, new RegExp(`src="${mineMarketIcon.replace(/[.*+?^$()|[\]\\]/g, '\\$&')}"`));
+  assert.equal(mineMarket.status, 410);
+  assert.match(mineMarketHtml, /Mine purchasing has ended/);
+  assert.match(mineMarketHtml, /cannot be traded between players/);
+  const longRental = await fetch(`${base}/market/mines/4/rent`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    }, body: new URLSearchParams({ termKey: 'quarter' })
+  });
+  assert.equal(longRental.status, 303);
+  const rentalHome = await fetch(base, { headers: { cookie } });
+  assert.equal(rentalHome.status, 200);
+  const rentalHomeHtml = await rentalHome.text();
+  const rentalNotice = rentalHomeHtml.match(
+    /<aside id="flash-dialog" class="flash-notice"[\s\S]*?<\/aside>/u
+  )?.[0] ?? '';
+  assert.match(rentalNotice, /<strong id="flash-dialog-title">Things found<\/strong>/);
+  assert.match(rentalNotice,
+    /<p id="flash-dialog-message"[^>]*>5 things found and processed\.<\/p>/);
+  assert.equal([...rentalNotice.matchAll(/data-quantity="(\d+)"/gu)]
+    .reduce((sum, match) => sum + Number(match[1]), 0), 5,
+  'all five rental discoveries are included in the flash popup');
+  const rentalState = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
+  assert.equal(rentalState.player.credits, 46);
+  assert.ok(rentalState.player.mines.some((mine) =>
+    mine.mineTypeId === 4 && mine.rentalUntil === 1000 + 90 * 24 * 60 * 60 * 1000));
 
   for (const asset of ['/img/equipment/src/Bot.png', '/img/equipment/src/FlimsyBoots.png',
     '/img/equipment/src/MR3.png', '/img/explosives/explosion.png', '/img/explosives/explosive1.png']) {
@@ -5773,13 +6029,21 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(seasonPrizesHtml, /Chopper/);
   const containers = await fetch(`${base}/containers`, { headers: { cookie } });
   assert.equal(containers.status, 200);
-  assert.match(await containers.text(), /Inventory containers/);
+  const containersHtml = await containers.text();
+  assert.match(containersHtml, /Inventory containers/);
+  assert.match(containersHtml, /Containers are account-bound and cannot be sold or traded between players/);
+  assert.match(containersHtml, /Each container type can be bought once/);
+  assert.match(containersHtml, /<td>\+45<\/td><td>Available<\/td><td>3 credits<\/td>/u);
   const rankImage = await fetch(`${base}/img/rankings/R6C1.png`);
   assert.equal(rankImage.status, 200);
   assert.ok(Number(rankImage.headers.get('content-length')) > 0);
 
   const map = await fetch(`${base}/map`, { headers: { cookie } });
   assert.equal(map.status, 200);
+  assert.equal(map.headers.get('cache-control'), 'private, no-cache');
+  assert.equal(map.headers.get('vary'), 'Cookie');
+  assert.equal(map.headers.get('x-minethings-map-cache'), 'MISS');
+  assert.match(map.headers.get('etag'), /^"[A-Za-z0-9_-]+"$/u);
   const mapHtml = await map.text();
   const expectedCatalog = loadLegacyCatalog();
   assert.match(mapHtml, /<svg[^>]+aria-labelledby="route-map-title route-map-description"/);
@@ -5788,13 +6052,16 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.equal([...mapHtml.matchAll(/class="[^"]*\bmap-mine-icon\b[^"]*"/g)].length,
     expectedCatalog.cityMineTypes.length);
   assert.equal([...mapHtml.matchAll(/<ul class="city-mines">/g)].length, expectedCatalog.cities.length);
-  assert.match(mapHtml, /class="map-background"[^>]+href="\/node\/maps\/aso\.png"/);
+  assert.match(mapHtml,
+    /class="map-background"[^>]+href="\/node\/maps\/aso\.png\?v=20260908a"/);
   assert.match(mapHtml, /map-city-current/);
   assert.match(mapHtml, /<script src="\/node\/map\.js\?v=20260821a" defer><\/script>/);
   const mapScript = await fetch(`${base}/node/map.js`);
   assert.equal(mapScript.status, 200);
-  const mapBackground = await fetch(`${base}/node/maps/aso.png`);
+  const mapBackground = await fetch(`${base}/node/maps/aso.png?v=20260908a`);
   assert.equal(mapBackground.status, 200);
+  assert.equal(mapBackground.headers.get('cache-control'),
+    'public, max-age=31536000, immutable');
 
   const passwordChange = await fetch(`${base}/account/password`, {
     method: 'POST', redirect: 'manual', headers: {
@@ -6087,6 +6354,7 @@ test('activates capital-local gadget stock only while the miner is in that capit
 
   const after = await (await fetch(`${base}/gadgets`, { headers: { cookie } })).text();
   assert.match(after, /active globally for/u);
+  assert.match(after, /Active for 3d 12h 0m/u);
   assert.match(after, /<h2>Active globally \(1\)<\/h2>/u);
   assert.match(after, new RegExp(
     `The navigation count is 1 active plus 0 activator items stored in ${capital.name}`
@@ -6361,6 +6629,7 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   ));
   const startingCredits = player.credits;
   const paypalClient = {
+    async authenticate() { return true; },
     async createOrder(purchase) {
       return {
         order: { id: `ORDER-${purchase.id}` },
@@ -6447,7 +6716,7 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(history, /Wraith Riders or Ghost Ships may rise/u);
   assert.match(history, /permanently unique docket number/u);
   assert.match(history, /distinct casino cabinet for every region/u);
-  assert.match(history, /<section id="sources" class="source-notes"><h2><time datetime="2026-09-02">2 September 2026<\/time>/u);
+  assert.match(history, /<section id="sources" class="source-notes"><h2><time datetime="2026-09-07">7 September 2026<\/time>/u);
   assert.match(history, /<time datetime="2026-08-22">By 22 August 2026<\/time>: months of reconstruction/u);
   assert.match(history, /current Git record begins on 23 August with one large restoration snapshot/u);
   assert.match(history, /both preservation and continuation/u);
@@ -6465,6 +6734,14 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(history, /arstechnica\.com/);
   assert.match(history, /bitcointalk\.org/);
   assert.match(history, /openuserjs\.org/);
+  assert.match(history, /href="#newrpg">2015–2017 · Player testimony<\/a>/u);
+  assert.match(history, /<section id="newrpg">/u);
+  assert.match(history, /newrpg\.com\/browser-games\/minethings\//u);
+  assert.match(history, /one reported playing since 2009/u);
+  assert.match(history, /scottlarock, NewRPG player comment · 7 July 2015/u);
+  assert.match(history, /one of the most immersive and compulsive games I've ever played … curiously addictive/u);
+  assert.match(history, /After ten years playing <em>EVE Online<\/em>, the commenter said MineThings mattered more/u);
+  assert.match(history, /self-reported experiences, not an independent audit/u);
   assert.match(history, /operator-supplied population claim/);
   assert.match(history, /not verified unique-player totals/);
   assert.doesNotMatch(history, /styles10\.css|home_h\.gif|button_logout\.jpg|id="preloader"/u);
@@ -6565,4 +6842,62 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   const admin = await (await fetch(`${base}/admin/payments`, { headers: { cookie } })).text();
   assert.match(admin, /Credits and PayPal/);
   assert.match(admin, /refunded/);
+});
+
+test('rejects invalid PayPal credentials before creating a purchase receipt', async (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(catalog);
+  const password = 'rejected payment credentials password';
+  const player = store.addPlayer(createPlayer(
+    'Rejected PayPal Miner', '', hashPassword(password), catalog, 1000, () => 0.5
+  ));
+  const paypalClient = {
+    async authenticate() {
+      const error = new Error(
+        'PayPal checkout is temporarily unavailable because its server credentials were rejected. No payment was attempted.'
+      );
+      error.code = 'PAYPAL_CREDENTIALS_REJECTED';
+      throw error;
+    },
+    async createOrder() { assert.fail('An order must not be created after authentication fails.'); },
+    async verifyWebhook() { return false; }
+  };
+  const server = createApp({
+    store, catalog, now: () => 5000, paypalClient,
+    paypal: {
+      enabled: true, environment: 'sandbox', clientId: 'rejected-id',
+      clientSecret: 'rejected-secret', publicOrigin: 'http://127.0.0.1'
+    }
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) =>
+      server.close((error) => error ? reject(error) : resolve()));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/login`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: player.name, password })
+  });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const checkout = await fetch(`${base}/credits/paypal/orders`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, referer: `${base}/credits`, 'content-type': 'application/x-www-form-urlencoded'
+    }, body: new URLSearchParams({
+      bundleId: String(store.creditBundles()[0].id),
+      acceptPaymentTerms: '1', immediateDelivery: '1'
+    })
+  });
+  assert.equal(checkout.status, 303);
+  assert.equal(checkout.headers.get('location'), '/credits');
+  assert.deepEqual(store.playerCreditPurchases(player.id), []);
+
+  const shop = await (await fetch(`${base}/credits`, { headers: { cookie } })).text();
+  assert.match(shop, /No payment was attempted/u);
+  assert.match(shop, /Checkout unavailable.*PayPal server credentials were rejected/su);
+  assert.equal((shop.match(/<button disabled>Continue to PayPal<\/button>/gu) ?? []).length,
+    store.creditBundles().length);
 });

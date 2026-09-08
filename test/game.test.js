@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  activeMineLimit, assignRobot, buyMine, claimMine, createPlayer, detonateExplosive, equipMine,
+  activeMineLimit, assignRobot, claimMine, createPlayer, detonateExplosive, equipMine,
   expireRentalMines, findItem, mineBucketsPerHour, mineIntervalMs, oilMineBot, prioritizeMine, rentMine,
-  sellItem, sellMine, setMineMode, synchronizeMineSchedules,
+  mineRentalOffers, sellItem, setMineMode, synchronizeMineSchedules,
   unassignRobot, unequipMine
 } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
@@ -114,38 +114,37 @@ test('switches any mine to crypto production without using inventory capacity', 
   assert.equal(result.finds.length, 0);
 });
 
-test('sells discoveries and buys affordable mines', () => {
+test('sells discoveries and rents affordable mines', () => {
   const player = createPlayer('Ada', '', 'hash', catalog, 1000, predictableRandom);
   const itemId = Number(Object.keys(player.inventory)[0]);
   const oldCredits = player.credits;
   const value = sellItem(player, catalog, itemId);
   assert.equal(player.credits, oldCredits + value);
   player.credits = 1000;
-  const mine = buyMine(player, catalog, 4, 1000, predictableRandom);
+  const mine = rentMine(player, catalog, 4, 1000, predictableRandom);
   assert.equal(mine.mineTypeId, 4);
   assert.equal(player.mines.length, 2);
-  assert.equal(player.credits, 575);
+  assert.equal(player.credits, 991);
 });
 
-test('only buys or rents mine types offered by the current city', () => {
+test('only rents mine types offered by the current city', () => {
   const player = createPlayer('City Shopper', '', 'hash', catalog, 1000, predictableRandom);
   player.credits = 10000;
-  assert.throws(() => buyMine(player, catalog, 5, 1000, predictableRandom), /not available in this city/);
   assert.throws(() => rentMine(player, catalog, 5, 1000, predictableRandom), /not available in this city/);
 
   player.cityId = 3;
-  const mine = buyMine(player, catalog, 5, 2000, predictableRandom);
+  const mine = rentMine(player, catalog, 5, 2000, predictableRandom);
   assert.equal(mine.cityId, 3);
   assert.equal(mine.mineTypeId, 5);
 });
 
 test('prioritizes the active mine set and oils a bot for five days', () => {
   const player = createPlayer('Ada', '', 'hash', catalog, 1000, predictableRandom);
-  const mineType = catalog.mineTypes.find((entry) => entry.creditCost > 0 && catalog.byMineType.has(entry.id));
-  player.credits = mineType.creditCost * 4;
-  buyMine(player, catalog, mineType.id, 2000, predictableRandom);
-  buyMine(player, catalog, mineType.id, 3000, predictableRandom);
-  const fourth = buyMine(player, catalog, mineType.id, 4000, predictableRandom);
+  const mineType = catalog.mineTypes.find((entry) => entry.rentCost > 0 && catalog.byMineType.has(entry.id));
+  player.credits = mineType.rentCost * 4;
+  rentMine(player, catalog, mineType.id, 2000, predictableRandom);
+  rentMine(player, catalog, mineType.id, 3000, predictableRandom);
+  const fourth = rentMine(player, catalog, mineType.id, 4000, predictableRandom);
   assert.equal(fourth.active, false);
 
   prioritizeMine(player, catalog, fourth.id, 5000);
@@ -170,14 +169,14 @@ test('allows three active mines per discovered region and four with Remote Contr
     'Regional Miner', '', 'hash', regionalCatalog, 1000, predictableRandom
   );
   const mineType = regionalCatalog.mineTypes.find(
-    (entry) => entry.creditCost > 0 && regionalCatalog.byMineType.has(entry.id)
+    (entry) => entry.rentCost > 0 && regionalCatalog.byMineType.has(entry.id)
   );
   assert.ok(mineType);
   player.knownCityIds = [player.cityId, remoteCity.id];
-  player.credits = mineType.creditCost * 10;
+  player.credits = mineType.rentCost * 10;
 
   for (let index = 0; index < 6; index += 1) {
-    buyMine(player, regionalCatalog, mineType.id, 2000 + index, predictableRandom);
+    rentMine(player, regionalCatalog, mineType.id, 2000 + index, predictableRandom);
   }
   assert.equal(activeMineLimit(player, regionalCatalog, 3000), 6);
   assert.equal(player.mines.filter((mine) => mine.active).length, 6);
@@ -186,8 +185,8 @@ test('allows three active mines per discovered region and four with Remote Contr
   prioritizeMine(player, regionalCatalog, player.mines.at(-1).id, 3000);
   assert.equal(activeMineLimit(player, regionalCatalog, 3000), 8);
   assert.equal(player.mines.filter((mine) => mine.active).length, 7);
-  buyMine(player, regionalCatalog, mineType.id, 3001, predictableRandom);
-  const ninth = buyMine(player, regionalCatalog, mineType.id, 3002, predictableRandom);
+  rentMine(player, regionalCatalog, mineType.id, 3001, predictableRandom);
+  const ninth = rentMine(player, regionalCatalog, mineType.id, 3002, predictableRandom);
   assert.equal(player.mines.filter((mine) => mine.active).length, 8);
   assert.equal(ninth.active, false);
 });
@@ -243,16 +242,27 @@ test('adds each cleared-stone bonus to the top mine in every regional home city'
     'the obsolete single-home field cannot remove a regional-capital bonus');
 });
 
-test('rents mines for fourteen days and resells refundable permanent mines', () => {
+test('offers progressively cheaper mine rentals and expires them', () => {
   const player = createPlayer('Ada', '', 'hash', catalog, 1000, predictableRandom);
-  const type = catalog.mineTypes.find((entry) => entry.refundable && entry.rentCost > 0 && catalog.byMineType.has(entry.id));
-  player.credits = type.creditCost + type.rentCost;
-  const permanent = buyMine(player, catalog, type.id, 2000, predictableRandom);
-  const rental = rentMine(player, catalog, type.id, 3000, predictableRandom);
-  assert.equal(rental.rentalUntil, 3000 + 14 * 24 * 60 * 60 * 1000);
-  assert.equal(sellMine(player, catalog, permanent.id), Math.floor(type.creditCost * 0.75));
-  assert.equal(expireRentalMines(player, rental.rentalUntil), 1);
-  assert.equal(player.mines.length, 1);
+  const type = catalog.mineTypes.find((entry) => entry.rentCost > 0
+    && catalog.byMineType.has(entry.id));
+  const offers = mineRentalOffers(catalog, type);
+  assert.deepEqual(offers.map(({ key, label, priceCredits }) => ({ key, label, priceCredits })), [
+    { key: 'fortnight', label: '2 weeks', priceCredits: type.rentCost },
+    { key: 'quarter', label: '3 months', priceCredits: type.rentCost * 5 },
+    { key: 'year', label: '1 year', priceCredits: type.rentCost * 18 }
+  ]);
+  assert.ok(offers[0].priceCredits / offers[0].durationMs
+    > offers[1].priceCredits / offers[1].durationMs);
+  assert.ok(offers[1].priceCredits / offers[1].durationMs
+    > offers[2].priceCredits / offers[2].durationMs);
+  player.credits = offers[1].priceCredits;
+  const rental = rentMine(player, catalog, type.id, 3000, predictableRandom,
+    { termKey: 'quarter' });
+  assert.equal(rental.rentalUntil, 3000 + 90 * 24 * 60 * 60 * 1000);
+  assert.equal(player.credits, 0);
+  assert.equal(expireRentalMines(player, rental.rentalUntil), 2);
+  assert.equal(player.mines.length, 0);
 });
 
 test('equips original mining gear and robots from city inventory', () => {
@@ -298,16 +308,16 @@ test('rebases the remaining mine cycle when its production rate changes', () => 
     Math.round((beforeStone - now) * stoneInterval / beforeStoneInterval));
 });
 
-test('starts newly purchased mines on their actual production interval', () => {
+test('starts newly rented mines on their actual production interval', () => {
   const now = 20_000;
   const player = createPlayer('Fast Buyer', '', 'hash', catalog, 1000, predictableRandom);
   player.botPartIds = catalog.botParts.slice(0, 4).map((part) => part.id);
   player.credits = 10_000;
   const mineType = catalog.mineTypes.find((entry) =>
-    entry.creditCost > 0 && catalog.byMineType.has(entry.id)
+    entry.rentCost > 0 && catalog.byMineType.has(entry.id)
       && catalog.mineTypesByCity.get(player.cityId).some((offered) => offered.id === entry.id));
 
-  const mine = buyMine(player, catalog, mineType.id, now, predictableRandom);
+  const mine = rentMine(player, catalog, mineType.id, now, predictableRandom);
   const interval = mineIntervalMs(catalog, mine, player, now);
 
   assert.equal(mine.cycleIntervalMs, interval);

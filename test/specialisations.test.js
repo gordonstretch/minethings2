@@ -63,7 +63,7 @@ test('migrates the prestige ladder into an existing catalog exactly once', (cont
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 138);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 139);
   assert.deepEqual(store.loadCatalog().specialisations.slice(11).map((entry) => [
     entry.name, entry.melds
   ]), [

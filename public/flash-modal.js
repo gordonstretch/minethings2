@@ -318,7 +318,6 @@
       lines.push(`Finished with ${Number(summary.endingHull)} hull, ${Number(summary.endingSpeed).toFixed(1)} speed, and ${Number(summary.endingCrew)} crew`);
       lines.push(`${Number(summary.crewLost)} crew lost${summary.opponentSunk ? '; opponent sunk' : ''}${summary.chainEscape ? '; chain-shot escape' : ''}`);
     }
-    lines.push(`Rating ${Math.round(Number(battle.ratingBefore))} \u2192 ${Math.round(Number(battle.ratingAfter))}`);
     if (battle.pillage) {
       const loot = battle.pillage.kind === 'oil'
         ? `${Number(battle.pillage.trips)} oil-boosted trips`
@@ -403,7 +402,8 @@
     const excludedAction = ['/login', '/register', '/logout'].includes(action.pathname);
     const hasPageScripts = Boolean(document.querySelector('#content script'));
     const isDialogForm = method === 'dialog' || form.closest('dialog');
-    const requiresPageNavigation = form.classList.contains('inventory-meld-form')
+    const requiresPageNavigation = form.hasAttribute('data-native-navigation')
+      || form.classList.contains('inventory-meld-form')
       || form.classList.contains('meld-create-form');
     const target = form.getAttribute('target') || '';
     const hasDifferentTarget = Boolean(target && target !== '_self');

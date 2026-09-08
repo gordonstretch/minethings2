@@ -45,7 +45,7 @@ test('mine shop path helpers expose the exact supported mine-type allowlists', (
     assert.equal(catalog.mineTypes.find((mineType) => mineType.id === mineTypeId)?.icon,
       mineShopIconPath(mineTypeId));
   }
-  for (const mineType of catalog.mineTypes.filter((candidate) => candidate.creditCost > 0)) {
+  for (const mineType of catalog.mineTypes.filter((candidate) => candidate.rentCost > 0)) {
     assert.doesNotMatch(mineType.icon,
       /^\/legacy\/img\/icons\/M\d+L\d+\.(?:gif|png)$/u, mineType.name);
   }

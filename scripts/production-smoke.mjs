@@ -36,6 +36,12 @@ try {
     assert.equal((await health.json()).status, 'ok');
     assert.equal((await fetch(`${base}/app.css`)).status, 200);
     assert.equal((await fetch(`${base}/node/navigation.js`)).status, 200);
+    assert.equal((await fetch(`${base}/node/vehicle-convoy.js?v=20260907b`)).status, 200);
+    const comparisonSortScript = await fetch(
+      `${base}/node/vehicle-comparison-sort.js?v=20260907a`
+    );
+    assert.equal(comparisonSortScript.status, 200);
+    assert.match(comparisonSortScript.headers.get('content-type'), /^text\/javascript\b/u);
     assert.equal((await fetch(`${base}/node/favicon.svg`)).status, 200);
     assert.equal((await fetch(`${base}/node/weapons/weapon-157.svg`)).status, 200);
     assert.equal((await fetch(`${base}/node/vehicles/vehicle-5.svg`)).status, 200);

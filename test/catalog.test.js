@@ -3,7 +3,8 @@ import test from 'node:test';
 import { randomDwarfTier } from '../src/dwarves.js';
 import {
   BOLT_BOX_CATALOG, ELECTRONICS_CATALOG, INVENTORY_CAPACITY_RULES, loadLegacyCatalog,
-  MAGNET_CATALOG, parseValues, SAFE_TRAVEL_KIT_CATALOG,
+  MAGNET_CATALOG, MINE_RENTAL_BASE_CREDITS, MINE_RENTAL_TERMS, parseValues,
+  SAFE_TRAVEL_KIT_CATALOG,
   RELICS_CATALOG, SHROOM_CATALOG,
   WISDOM_CATALOG, WOOD_CATALOG
 } from '../src/legacy-catalog.js';
@@ -210,6 +211,16 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.deepEqual(catalog.containers.map(({ id, capacity }) => ({ id, capacity })),
     Object.entries(INVENTORY_CAPACITY_RULES.containerCapacities)
       .map(([id, capacity]) => ({ id: Number(id), capacity })));
+  assert.deepEqual(catalog.containers.map(({ id, credits }) => ({ id, credits })),
+    Object.entries(INVENTORY_CAPACITY_RULES.containerCredits)
+      .map(([id, credits]) => ({ id: Number(id), credits })));
+  assert.ok(catalog.mineTypes.every((mineType) =>
+    mineType.creditCost === 0 && mineType.refundable === false));
+  assert.deepEqual(catalog.mineTypes.filter((mineType) => mineType.rentCost > 0)
+    .map(({ id, rentCost }) => [id, rentCost]),
+  Object.entries(MINE_RENTAL_BASE_CREDITS)
+    .map(([id, rentCost]) => [Number(id), rentCost]));
+  assert.deepEqual(catalog.settings.mine_rental_terms, MINE_RENTAL_TERMS);
 
   const shrooms = catalog.items.filter((item) =>
     item.mineTypeId === SHROOM_CATALOG.mineType.id);
