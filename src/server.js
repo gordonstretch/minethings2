@@ -82,6 +82,8 @@ const MIME_TYPES = new Map([
 const STATIC_ASSET_CACHE_CONTROL = 'public, max-age=3600';
 const VERSIONED_STATIC_ASSET_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const IMAGE_CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400';
+const PAYPAL_CHECKOUT_TOKEN_TTL_MS = 15 * 60 * 1000;
+const PAYPAL_CHECKOUT_TOKEN_LIMIT = 48;
 const MAP_ASSET_VERSION = '20260908a';
 const MAP_PAGE_CACHE_TTL_MS = 30_000;
 const MAP_PAGE_CACHE_LIMIT = 256;
@@ -6308,9 +6310,9 @@ function formatMoneyMinor(amountMinor, currency = 'GBP') {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(Number(amountMinor) / 100);
 }
 
-function creditsPage(player, bundles, purchases, readiness, paymentConfig) {
+function creditsPage(player, bundles, purchases, readiness, paymentConfig, checkoutTokens) {
   const unavailable = readiness.ready ? '' : `<p class="legal-notice"><strong>Checkout unavailable.</strong> ${escapeHtml(readiness.missing.join(', '))}.</p>`;
-  const bundleCards = bundles.map((bundle) => `<article class="credit-bundle"><p class="eyebrow">${escapeHtml(bundle.name)}</p><strong>${bundle.credits.toLocaleString('en-GB')} credits</strong><span>${escapeHtml(formatMoneyMinor(bundle.amountMinor, bundle.currency))}</span><form method="post" action="/credits/paypal/orders"><input type="hidden" name="bundleId" value="${bundle.id}"><label class="check-row"><input type="checkbox" name="acceptPaymentTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">payment terms</a> (version ${LEGAL_VERSION}).</span></label><label class="check-row"><input type="checkbox" name="immediateDelivery" value="1" required><span>Supply my credits immediately; I understand this affects my 14-day cancellation right.</span></label><button${readiness.ready ? '' : ' disabled'}>Continue to PayPal</button></form></article>`).join('');
+  const bundleCards = bundles.map((bundle) => `<article class="credit-bundle"><p class="eyebrow">${escapeHtml(bundle.name)}</p><strong>${bundle.credits.toLocaleString('en-GB')} credits</strong><span>${escapeHtml(formatMoneyMinor(bundle.amountMinor, bundle.currency))}</span><form method="post" action="/credits/paypal/orders" data-native-navigation><input type="hidden" name="bundleId" value="${bundle.id}"><input type="hidden" name="checkoutToken" value="${escapeHtml(checkoutTokens.get(bundle.id) ?? '')}"><label class="check-row"><input type="checkbox" name="acceptPaymentTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">payment terms</a> (version ${LEGAL_VERSION}).</span></label><label class="check-row"><input type="checkbox" name="immediateDelivery" value="1" required><span>Supply my credits immediately; I understand this affects my 14-day cancellation right.</span></label><button${readiness.ready ? '' : ' disabled'}>Continue to PayPal</button></form></article>`).join('');
   const history = purchases.map((purchase) => `<tr><td><a class="text-link" href="/credits/receipts/${purchase.id}">MT-${purchase.id}</a></td><td>${new Date(purchase.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td><span class="payment-status payment-${escapeHtml(purchase.status)}">${escapeHtml(purchase.status)}</span></td></tr>`).join('');
   return `<section class="page-title"><div><p class="eyebrow">Optional support</p><h1>Buy credits</h1></div><p>Balance: <strong>${player.credits.toLocaleString('en-GB')} credits</strong> · ${escapeHtml(paymentConfig.environment)} checkout</p></section>${unavailable}<section><h2>Credit bundles</h2><p>PayPal hosts the approval step. MineThings never sees your card details.</p><div class="credit-bundles">${bundleCards}</div></section><section><h2>Purchase history</h2><div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Created</th><th>Bundle</th><th>Paid</th><th>Status</th></tr></thead><tbody>${history || '<tr><td colspan="5">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
@@ -6853,6 +6855,33 @@ export function createApp(options = {}) {
   const previewBindings = new PreviewBindingRegistry({ now });
   store.expireMessages(now());
   const sessions = new Map();
+  const paypalCheckoutStates = (loginSession, currentTime = now()) => {
+    if (!(loginSession.paypalCheckoutStates instanceof Map)) {
+      loginSession.paypalCheckoutStates = new Map();
+    }
+    for (const [token, state] of loginSession.paypalCheckoutStates) {
+      if (Number(state.createdAt) + PAYPAL_CHECKOUT_TOKEN_TTL_MS < currentTime) {
+        loginSession.paypalCheckoutStates.delete(token);
+      }
+    }
+    while (loginSession.paypalCheckoutStates.size > PAYPAL_CHECKOUT_TOKEN_LIMIT) {
+      loginSession.paypalCheckoutStates.delete(loginSession.paypalCheckoutStates.keys().next().value);
+    }
+    return loginSession.paypalCheckoutStates;
+  };
+  const issuePaypalCheckoutTokens = (loginSession, bundles, currentTime = now()) => {
+    const states = paypalCheckoutStates(loginSession, currentTime);
+    const tokens = new Map();
+    for (const bundle of bundles) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      states.set(token, { bundleId: Number(bundle.id), createdAt: currentTime });
+      tokens.set(Number(bundle.id), token);
+    }
+    while (states.size > PAYPAL_CHECKOUT_TOKEN_LIMIT) {
+      states.delete(states.keys().next().value);
+    }
+    return tokens;
+  };
   const activeUserWindowMs = Math.max(60000, Math.min(60 * 60 * 1000,
     Math.round(Number(options.activeUserWindowMs ?? 5 * 60 * 1000)) || 5 * 60 * 1000));
   const sessionRecord = (playerId, details = {}, seenAt = now()) => ({
@@ -9126,9 +9155,11 @@ export function createApp(options = {}) {
         redirect(response, requestDestination(request, '/'));
       } else if (request.method === 'GET' && url.pathname === '/credits') {
         if (requirePlayer()) {
+          const bundles = store.creditBundles(true);
           responseHtml(response, 200, layout('Buy credits', creditsPage(
-            player, store.creditBundles(true),
-            store.playerCreditPurchases(player.id), currentPaymentReadiness(), paymentConfig
+            player, bundles, store.playerCreditPurchases(player.id),
+            currentPaymentReadiness(), paymentConfig,
+            issuePaypalCheckoutTokens(session, bundles, now())
           ), player, flash));
         }
       } else if (request.method === 'POST'
@@ -9148,28 +9179,48 @@ export function createApp(options = {}) {
         if (form.acceptPaymentTerms !== '1' || form.immediateDelivery !== '1') {
           throw new Error('Accept the payment terms and immediate delivery statement to continue.');
         }
-        try {
-          await paypalClient.authenticate();
-        } catch (error) {
-          if (error.code === 'PAYPAL_CREDENTIALS_REJECTED') {
-            paymentRuntimeFailure = 'PayPal server credentials were rejected';
-          }
-          throw error;
+        const checkoutToken = String(form.checkoutToken ?? '');
+        const checkoutStates = paypalCheckoutStates(session, now());
+        const checkoutState = checkoutStates.get(checkoutToken);
+        const bundleId = Number(form.bundleId);
+        if (!checkoutState || checkoutState.bundleId !== bundleId) {
+          throw new Error('This checkout page has expired. Reload it before trying again.');
         }
-        const purchase = store.createCreditPurchase(player.id, Number(form.bundleId), {
-          termsVersion: LEGAL_VERSION,
-          sellerName: seller.legalName,
-          sellerAddress: seller.legalAddress,
-          sellerEmail: seller.legalEmail
-        }, now());
+        if (!checkoutState.promise) {
+          checkoutState.promise = (async () => {
+            try {
+              await paypalClient.authenticate();
+            } catch (error) {
+              if (error.code === 'PAYPAL_CREDENTIALS_REJECTED') {
+                paymentRuntimeFailure = 'PayPal server credentials were rejected';
+              }
+              throw error;
+            }
+            const purchase = store.createCreditPurchase(player.id, bundleId, {
+              termsVersion: LEGAL_VERSION,
+              sellerName: seller.legalName,
+              sellerAddress: seller.legalAddress,
+              sellerEmail: seller.legalEmail
+            }, now());
+            try {
+              const created = await paypalClient.createOrder(purchase);
+              const approval = new URL(created.approveUrl);
+              if (approval.protocol !== 'https:') {
+                throw new Error('PayPal returned an unsafe approval address.');
+              }
+              store.setCreditPurchaseOrder(purchase.id, player.id, created.order.id, now());
+              return approval.href;
+            } catch (error) {
+              store.setCreditPurchaseStatus(purchase.id, 'failed', now(), error.message);
+              throw error;
+            }
+          })();
+        }
         try {
-          const created = await paypalClient.createOrder(purchase);
-          const approval = new URL(created.approveUrl);
-          if (approval.protocol !== 'https:') throw new Error('PayPal returned an unsafe approval address.');
-          store.setCreditPurchaseOrder(purchase.id, player.id, created.order.id, now());
-          redirect(response, approval.href);
+          const approvalUrl = await checkoutState.promise;
+          redirect(response, approvalUrl);
         } catch (error) {
-          store.setCreditPurchaseStatus(purchase.id, 'failed', now(), error.message);
+          checkoutStates.delete(checkoutToken);
           throw error;
         }
       } else if (request.method === 'GET' && url.pathname === '/credits/paypal/return') {

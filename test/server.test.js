@@ -6628,9 +6628,11 @@ test('publishes the history and legal record and completes an idempotent PayPal 
     'PayPal Miner', '', hashPassword(password), catalog, 1000, () => 0.5
   ));
   const startingCredits = player.credits;
+  let ordersCreated = 0;
   const paypalClient = {
     async authenticate() { return true; },
     async createOrder(purchase) {
+      ordersCreated += 1;
       return {
         order: { id: `ORDER-${purchase.id}` },
         approveUrl: `https://paypal.example.test/approve?token=ORDER-${purchase.id}`
@@ -6796,16 +6798,29 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   const shop = await (await fetch(`${base}/credits`, { headers: { cookie } })).text();
   assert.match(shop, /100 credits/);
   assert.match(shop, /£1\.99/);
+  assert.match(shop, /action="\/credits\/paypal\/orders" data-native-navigation/u);
   const bundleId = store.creditBundles()[0].id;
-  const create = await fetch(`${base}/credits/paypal/orders`, {
+  const checkoutToken = shop.match(new RegExp(
+    `name="bundleId" value="${bundleId}"><input type="hidden" name="checkoutToken" value="([^"]+)"`,
+    'u'
+  ))?.[1];
+  assert.ok(checkoutToken);
+  const startCheckout = () => fetch(`${base}/credits/paypal/orders`, {
     method: 'POST', redirect: 'manual', headers: {
       cookie, 'content-type': 'application/x-www-form-urlencoded'
     }, body: new URLSearchParams({
-      bundleId: String(bundleId), acceptPaymentTerms: '1', immediateDelivery: '1'
+      bundleId: String(bundleId), checkoutToken,
+      acceptPaymentTerms: '1', immediateDelivery: '1'
     })
   });
+  const create = await startCheckout();
   assert.equal(create.status, 303);
   assert.match(create.headers.get('location'), /^https:\/\/paypal\.example\.test\/approve/);
+  const duplicateCreate = await startCheckout();
+  assert.equal(duplicateCreate.status, 303);
+  assert.equal(duplicateCreate.headers.get('location'), create.headers.get('location'));
+  assert.equal(ordersCreated, 1);
+  assert.equal(store.playerCreditPurchases(player.id).length, 1);
   const purchase = store.playerCreditPurchases(player.id)[0];
   const returned = await fetch(`${base}/credits/paypal/return?token=${purchase.providerOrderId}`, {
     headers: { cookie }, redirect: 'manual'
@@ -6883,11 +6898,18 @@ test('rejects invalid PayPal credentials before creating a purchase receipt', as
     body: new URLSearchParams({ name: player.name, password })
   });
   const cookie = login.headers.get('set-cookie').split(';')[0];
+  const initialShop = await (await fetch(`${base}/credits`, { headers: { cookie } })).text();
+  const bundleId = store.creditBundles()[0].id;
+  const checkoutToken = initialShop.match(new RegExp(
+    `name="bundleId" value="${bundleId}"><input type="hidden" name="checkoutToken" value="([^"]+)"`,
+    'u'
+  ))?.[1];
+  assert.ok(checkoutToken);
   const checkout = await fetch(`${base}/credits/paypal/orders`, {
     method: 'POST', redirect: 'manual', headers: {
       cookie, referer: `${base}/credits`, 'content-type': 'application/x-www-form-urlencoded'
     }, body: new URLSearchParams({
-      bundleId: String(store.creditBundles()[0].id),
+      bundleId: String(bundleId), checkoutToken,
       acceptPaymentTerms: '1', immediateDelivery: '1'
     })
   });
