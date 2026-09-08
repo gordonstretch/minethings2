@@ -39,15 +39,16 @@ existing miner when Google returns the same verified email address. A new Google
 miner name, accepts the game terms, and creates a backup local password. Credentials stay in the
 environment and must not be committed. Production Google login requires an HTTPS public origin.
 
-### Mandatory email verification
+### Email verification (temporarily paused)
 
-Every new miner must supply and verify an email address before any game page, API state,
-finding poll, or live-update stream is available. Changing the verified address locks the
-account until the replacement address is confirmed. Links are single-use, expire after 24
-hours, and can be resent after one minute. Only a SHA-256 token hash is stored.
+Direct registration currently does not collect an email address, and existing unverified miners
+can enter the game normally. Verification pages and account email changes are hidden while email
+delivery is unavailable. Stored addresses and verification state are preserved so the flow can be
+restored later without a data migration.
 
-Local development shows the verification link on the locked account page. Production refuses
-to start until SMTP delivery and an HTTPS public origin are configured:
+Set `MINETHINGS_EMAIL_VERIFICATION_ENABLED=1` to restore mandatory verification. When enabled,
+links are single-use, expire after 24 hours, and can be resent after one minute. Only a SHA-256
+token hash is stored. Production then requires SMTP delivery and an HTTPS public origin:
 
 ```powershell
 $env:SMTP_HOST = 'smtp.example.com'
@@ -55,8 +56,9 @@ $env:SMTP_PORT = '587'
 $env:SMTP_SECURE = '0'
 $env:SMTP_USER = 'smtp-user'
 $env:SMTP_PASSWORD = 'smtp-password'
-$env:MINETHINGS_EMAIL_FROM = 'MineThings <mail@example.com>'
-$env:MINETHINGS_PUBLIC_ORIGIN = 'https://game.example.com'
+  $env:MINETHINGS_EMAIL_FROM = 'MineThings <mail@example.com>'
+  $env:MINETHINGS_PUBLIC_ORIGIN = 'https://game.example.com'
+  $env:MINETHINGS_EMAIL_VERIFICATION_ENABLED = '1'
 $env:NODE_ENV = 'production'
 npm start
 ```

@@ -1405,14 +1405,93 @@ test('enables secure sessions and bounded connections in production', async (con
   assert.equal(oversized.status, 400);
 });
 
-test('refuses production startup without mandatory email delivery configuration', (context) => {
+test('requires production email delivery when verification is enabled', (context) => {
   const store = new SqliteStore(':memory:');
   context.after(() => store.close());
   store.seedCatalog(loadLegacyCatalog());
   assert.throws(() => createApp({
-    store, production: true,
+    store, production: true, emailVerificationEnabled: true,
     email: { host: '', from: '', publicOrigin: '' }
   }), /Mandatory email verification is not configured: SMTP host, sender address, public origin/);
+});
+
+test('keeps email verification hidden and non-blocking while it is paused', async (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  store.seedCatalog(catalog);
+  const password = 'paused verification password';
+  const administrator = store.addPlayer(createPlayer(
+    'Pending Admin', 'gordonstrddddetch@gmail.com', hashPassword(password),
+    catalog, 1000, () => 0.5
+  ));
+  const server = createApp({
+    store, catalog, production: true, secureCookies: false,
+    now: () => 2000, adminNames: administrator.name
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(async () => {
+    await new Promise((resolve, reject) => server.close(
+      (error) => error ? reject(error) : resolve()
+    ));
+    store.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const landingHtml = await (await fetch(base)).text();
+  assert.match(landingHtml, /Choose a name and start digging\./u);
+  assert.doesNotMatch(landingHtml, /name="email"|verify your email|verification is mandatory/iu);
+
+  const registration = await fetch(`${base}/register`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      name: 'No Email Miner', password, acceptTerms: '1'
+    })
+  });
+  assert.equal(registration.status, 303);
+  assert.equal(registration.headers.get('location'), '/');
+  const newCookie = registration.headers.get('set-cookie').split(';')[0];
+  const newPlayer = store.findPlayer('No Email Miner', 2000);
+  assert.equal(newPlayer.email, '');
+  const home = await fetch(base, { headers: { cookie: newCookie }, redirect: 'manual' });
+  assert.equal(home.status, 200);
+  assert.doesNotMatch(await home.text(), /Verify your email|game locked/iu);
+  const accountHtml = await (await fetch(`${base}/account`, {
+    headers: { cookie: newCookie }
+  })).text();
+  assert.doesNotMatch(accountHtml, /action="\/account\/email"|Verified email/u);
+  const ignoredEmailChange = await fetch(`${base}/account/email`, {
+    method: 'POST', redirect: 'manual',
+    headers: { cookie: newCookie, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ email: 'replacement@example.com', password })
+  });
+  assert.equal(ignoredEmailChange.status, 303);
+  assert.equal(ignoredEmailChange.headers.get('location'), '/account');
+  assert.equal(store.findPlayer('No Email Miner', 2000).email, '');
+  const retiredVerificationPage = await fetch(`${base}/verify-email`, {
+    headers: { cookie: newCookie }, redirect: 'manual'
+  });
+  assert.equal(retiredVerificationPage.status, 303);
+  assert.equal(retiredVerificationPage.headers.get('location'), '/');
+
+  const login = await fetch(`${base}/login`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ name: administrator.name, password })
+  });
+  assert.equal(login.status, 303);
+  assert.equal(login.headers.get('location'), '/');
+  const adminCookie = login.headers.get('set-cookie').split(';')[0];
+  const adminListHtml = await (await fetch(`${base}/admin/players`, {
+    headers: { cookie: adminCookie }
+  })).text();
+  assert.match(adminListHtml, /gordonstrddddetch@gmail\.com/u);
+  assert.doesNotMatch(adminListHtml, /Verification pending|Email locked|game locked/u);
+  const adminDetailHtml = await (await fetch(`${base}/admin/players/${administrator.id}`, {
+    headers: { cookie: adminCookie }
+  })).text();
+  assert.match(adminDetailHtml, /<h2>Email<\/h2>/u);
+  assert.doesNotMatch(adminDetailHtml, /Email access|Verification pending|game locked/u);
 });
 
 test('signs in and registers miners through the local Google OAuth flow', async (context) => {
@@ -1469,7 +1548,7 @@ test('signs in and registers miners through the local Google OAuth flow', async 
   assert.equal((landing.match(/href="\/auth\/google"/gu) ?? []).length, 2);
   assert.equal((landing.match(/src="\/node\/google-sign-in\.png"/gu) ?? []).length, 2);
   assert.equal((landing.match(/alt="Sign in with Google"/gu) ?? []).length, 2);
-  assert.match(landing, /Google verifies your email first, then you choose your unique miner name\./u);
+  assert.match(landing, /New here\? Continue with Google, then choose your unique miner name\./u);
   assert.match(landing, /Green Dwarf/);
   const googleButtonAsset = await fetch(`${base}/node/google-sign-in.png`);
   assert.equal(googleButtonAsset.status, 200);
@@ -3404,7 +3483,7 @@ test('opens the original local order book from Your Things and preserves listed 
   const buyerState = createPlayer('Inline Buyer', '', hashPassword(password), catalog, 1000, () => 0.5);
   buyerState.gold = 2000;
   const buyer = store.addPlayer(buyerState);
-  const server = createApp({ store, now: () => 2000 });
+  const server = createApp({ store, now: () => 2000, emailVerificationEnabled: true });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   context.after(async () => {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -5034,7 +5113,10 @@ test('supports registration and authenticated play pages', async (context) => {
   const catalog = loadLegacyCatalog();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-'));
   const databaseFile = path.join(directory, 'minethings.sqlite');
-  const server = createApp({ databaseFile, legacyJsonFile: null, random: () => 0.5, now: () => 1000 });
+  const server = createApp({
+    databaseFile, legacyJsonFile: null, random: () => 0.5, now: () => 1000,
+    emailVerificationEnabled: true
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   context.after(async () => {
     await new Promise((resolve, reject) => {

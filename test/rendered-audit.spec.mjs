@@ -363,7 +363,9 @@ test.beforeAll(async () => {
   `).run(visualMapId, visualWeather.startsAt);
   store.close();
 
-  server = createApp({ databaseFile, legacyJsonFile: null });
+  server = createApp({
+    databaseFile, legacyJsonFile: null, emailVerificationEnabled: true
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });

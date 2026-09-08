@@ -1154,7 +1154,7 @@ function avatarStack(layers, label = 'Profile avatar') {
     .map((layer) => `<img src="/img/avatars/src/${encodeURIComponent(layer.filename)}" alt="" aria-hidden="true">`).join('')}</div>`;
 }
 
-function landingPage(catalog, googleLoginEnabled = false) {
+function landingPage(catalog, googleLoginEnabled = false, emailVerificationEnabled = false) {
   const nameMinimum = Number(catalog.settings.miner_name_min_length);
   const nameMaximum = Number(catalog.settings.miner_name_max_length);
   const passwordMinimum = Number(catalog.settings.password_min_length);
@@ -1206,13 +1206,13 @@ function landingPage(catalog, googleLoginEnabled = false) {
     </section>
 
     <section id="join" class="landing-join" aria-labelledby="landing-join-title">
-      <header class="landing-join-intro"><p class="landing-section-label">The next chapter needs miners</p><h2 id="landing-join-title">Stake a claim in internet history.</h2><p>Choose a name, verify your email and start digging. Your welcome pack includes a ${escapeHtml(welcomePack.color)} ${escapeHtml(welcomePack.vehicle.name)}, a ${escapeHtml(welcomePack.dwarf.name)}, ${welcomePack.gadgets.map((gadget) => escapeHtml(gadget.name)).join(', ')}, complimentary ${welcomePack.rentalMineTypes.map((mineType) => `${escapeHtml(mineType.name)} Mine`).join(' and ')} rentals, ${welcomePack.cryptoQuantity} ${escapeHtml(welcomePack.currency.symbol)} and a ${welcomePack.casinoVoucherQuantity} ${escapeHtml(welcomePack.voucherCurrency.symbol)} casino voucher.</p><ul><li>Persistent mining</li><li>Player-run markets</li><li>Connected worlds</li><li>Live events</li></ul></header>
+      <header class="landing-join-intro"><p class="landing-section-label">The next chapter needs miners</p><h2 id="landing-join-title">Stake a claim in internet history.</h2><p>Choose a name and start digging. Your welcome pack includes a ${escapeHtml(welcomePack.color)} ${escapeHtml(welcomePack.vehicle.name)}, a ${escapeHtml(welcomePack.dwarf.name)}, ${welcomePack.gadgets.map((gadget) => escapeHtml(gadget.name)).join(', ')}, complimentary ${welcomePack.rentalMineTypes.map((mineType) => `${escapeHtml(mineType.name)} Mine`).join(' and ')} rentals, ${welcomePack.cryptoQuantity} ${escapeHtml(welcomePack.currency.symbol)} and a ${welcomePack.casinoVoucherQuantity} ${escapeHtml(welcomePack.voucherCurrency.symbol)} casino voucher.</p><ul><li>Persistent mining</li><li>Player-run markets</li><li>Connected worlds</li><li>Live events</li></ul></header>
       <div class="landing-auth-grid">
         <form class="landing-auth-card landing-register-card" method="post" action="/register" aria-labelledby="landing-register-title">
           <p class="landing-card-label"><span>01</span> New miner</p><h3 id="landing-register-title">Enter the world</h3><p>Your name will be part of the economy—and perhaps its history.</p>
-          ${googleLoginEnabled ? `${googleSignInButton}<p class="landing-google-note">New here? Google verifies your email first, then you choose your unique miner name.</p><div class="landing-auth-divider"><span>or register with email</span></div>` : ''}
+          ${googleLoginEnabled ? `${googleSignInButton}<p class="landing-google-note">New here? Continue with Google, then choose your unique miner name.</p><div class="landing-auth-divider"><span>or register directly</span></div>` : ''}
           <label><span>Miner name</span><input name="name" minlength="${nameMinimum}" maxlength="${nameMaximum}" pattern="[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S} ]+" autocomplete="username" aria-describedby="miner-name-help" required></label><small id="miner-name-help">${nameMinimum}–${nameMaximum} characters. Unicode names are welcome.</small>
-          <label><span>Email</span><input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" autocomplete="email" aria-describedby="miner-email-help" required></label><small id="miner-email-help">Verification is mandatory. Your mine remains locked until you confirm this address.</small>
+          ${emailVerificationEnabled ? `<label><span>Email</span><input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" autocomplete="email" aria-describedby="miner-email-help" required></label><small id="miner-email-help">Verification is mandatory. Your mine remains locked until you confirm this address.</small>` : ''}
           <label><span>Password</span><input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label>
           <label class="check-row"><input type="checkbox" name="acceptTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">Terms and Privacy Notice</a> (version ${LEGAL_VERSION}).</span></label>
           <button class="landing-submit">Create my miner <span aria-hidden="true">→</span></button>
@@ -3055,8 +3055,16 @@ function adminRestartPage(title, message) {
   return `<section class="page-title"><div><p class="eyebrow">Administration</p><h1>${escapeHtml(title)}</h1></div></section><section><p>${escapeHtml(message)}</p><p>The server is restarting gracefully. This page will not update automatically; wait a few seconds, then <a class="text-link" href="/">open MineThings 2</a> and sign in again.</p></section>`;
 }
 
-function adminPlayersPage(players, query = '') {
-  const rows = players.map((subject) => `<tr><td><a class="text-link" href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a>${subject.authority > 0 ? ' <strong>Admin</strong>' : ''}</td><td>${escapeHtml(subject.email || 'Not supplied')}<br><small>${subject.email_verified_at === null ? 'Verification pending' : 'Verified'}</small></td><td>${subject.mine_count}</td><td>${subject.item_count}</td><td>${subject.credits}c / ${formatGold(subject.gold)}g</td><td>${subject.suspended ? 'Suspended' : subject.chatBanned || subject.pmBanned ? 'Restricted' : subject.email_verified_at === null ? 'Email locked' : 'Active'}</td></tr>`).join('');
+function adminPlayersPage(players, query = '', emailVerificationEnabled = false) {
+  const rows = players.map((subject) => {
+    const emailStatus = emailVerificationEnabled
+      ? `<br><small>${subject.email_verified_at === null ? 'Verification pending' : 'Verified'}</small>`
+      : '';
+    const accountStatus = subject.suspended ? 'Suspended'
+      : subject.chatBanned || subject.pmBanned ? 'Restricted'
+        : emailVerificationEnabled && subject.email_verified_at === null ? 'Email locked' : 'Active';
+    return `<tr><td><a class="text-link" href="/admin/players/${subject.id}">${escapeHtml(subject.name)}</a>${subject.authority > 0 ? ' <strong>Admin</strong>' : ''}</td><td>${escapeHtml(subject.email || 'Not supplied')}${emailStatus}</td><td>${subject.mine_count}</td><td>${subject.item_count}</td><td>${subject.credits}c / ${formatGold(subject.gold)}g</td><td>${accountStatus}</td></tr>`;
+  }).join('');
   return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Moderation</p><h1>Miners</h1></div></section><form class="market-search" method="get"><label>Search<input name="q" value="${escapeHtml(query)}" placeholder="Name or email"></label><button>Search</button></form><div class="table-scroll"><table><thead><tr><th>Miner</th><th>Email</th><th>Mines</th><th>Things</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No matching miners.</td></tr>'}</tbody></table></div>`;
 }
 
@@ -3098,12 +3106,15 @@ function adminShillSignalsPage(state, networkEnabled) {
     <p><small>The score is a review aid based on corroborating signals. Check player histories and context before taking any moderation action.</small></p>`;
 }
 
-function adminPlayerPage(subject, catalog) {
+function adminPlayerPage(subject, catalog, emailVerificationEnabled = false) {
   const moderation = (field, active, label) => `<form method="post" action="/admin/players/${subject.id}/moderation"><input type="hidden" name="field" value="${field}"><input type="hidden" name="enabled" value="${active ? 0 : 1}"><button class="${active ? 'secondary' : ''}">${active ? `Lift ${label}` : label}</button></form>`;
   const itemOptions = [...catalog.items].sort((first, second) =>
     first.name.localeCompare(second.name) || first.id - second.id)
     .map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
-  return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Miner administration</p><h1>${escapeHtml(subject.name)}</h1></div><a class="text-link" href="/miners/${encodeURIComponent(subject.name)}">Public profile</a></section><div class="admin-metrics"><article><strong>${subject.credits}</strong><span>Credits</span></article><article><strong>${formatGold(subject.gold)}g</strong><span>Gold</span></article><article><strong>${subject.mine_count}</strong><span>Mines</span></article><article><strong>${subject.item_count}</strong><span>Things</span></article></div><section><h2>Email access</h2><p>${escapeHtml(subject.email || 'No address supplied')} · <strong>${subject.email_verified_at === null ? 'Verification pending — game locked' : `Verified ${new Date(subject.email_verified_at).toLocaleString('en-GB')}`}</strong></p></section><section><h2>Moderation</h2><div class="admin-actions">${moderation('suspended', Boolean(subject.suspended), 'Suspend account')}${moderation('chat', Boolean(subject.chat_banned), 'Ban public chat')}${moderation('pm', Boolean(subject.pm_banned), 'Ban private messages')}</div></section><section><h2>Grants</h2><div class="trade-forms"><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="credits"><label>Credits<input type="number" name="amount" min="1" required></label><button>Grant credits</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="gold"><label>Gold (whole units)<input type="number" name="amount" min="1" required></label><button>Grant gold</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="item"><label>Thing<select name="itemId">${itemOptions}</select></label><label>Quantity<input type="number" name="amount" min="1" required></label><button>Grant thing</button></form></div></section>`;
+  const emailAccess = emailVerificationEnabled
+    ? `<section><h2>Email access</h2><p>${escapeHtml(subject.email || 'No address supplied')} · <strong>${subject.email_verified_at === null ? 'Verification pending — game locked' : `Verified ${new Date(subject.email_verified_at).toLocaleString('en-GB')}`}</strong></p></section>`
+    : `<section><h2>Email</h2><p>${escapeHtml(subject.email || 'No address supplied')}</p></section>`;
+  return `${adminTabs('players')}<section class="page-title"><div><p class="eyebrow">Miner administration</p><h1>${escapeHtml(subject.name)}</h1></div><a class="text-link" href="/miners/${encodeURIComponent(subject.name)}">Public profile</a></section><div class="admin-metrics"><article><strong>${subject.credits}</strong><span>Credits</span></article><article><strong>${formatGold(subject.gold)}g</strong><span>Gold</span></article><article><strong>${subject.mine_count}</strong><span>Mines</span></article><article><strong>${subject.item_count}</strong><span>Things</span></article></div>${emailAccess}<section><h2>Moderation</h2><div class="admin-actions">${moderation('suspended', Boolean(subject.suspended), 'Suspend account')}${moderation('chat', Boolean(subject.chat_banned), 'Ban public chat')}${moderation('pm', Boolean(subject.pm_banned), 'Ban private messages')}</div></section><section><h2>Grants</h2><div class="trade-forms"><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="credits"><label>Credits<input type="number" name="amount" min="1" required></label><button>Grant credits</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="gold"><label>Gold (whole units)<input type="number" name="amount" min="1" required></label><button>Grant gold</button></form><form method="post" action="/admin/players/${subject.id}/grant"><input type="hidden" name="kind" value="item"><label>Thing<select name="itemId">${itemOptions}</select></label><label>Quantity<input type="number" name="amount" min="1" required></label><button>Grant thing</button></form></div></section>`;
 }
 
 function adminAnnouncementPage() {
@@ -3327,7 +3338,7 @@ function profilePage(subject, catalog, ownProfile, currentTime, filters = {}, kn
     <section><h2>Inventory</h2><p>${filteredCount} matching things · ${globalCount} globally.</p>${inventoryFilters}${armory ? `<p class="muted">An active ${escapeHtml(armoryGadget.displayName)} conceals this miner’s weapons and fittings.</p>` : ''}<div class="item-grid">${things || '<p>No matching things.</p>'}</div>${!filters.loadAll && inventory.length > visibleInventory.length ? `<p><a class="text-link" href="?function=${encodeURIComponent(selectedFunction)}&mineType=${selectedMineTypeId ?? ''}&city=${selectedCityId ?? ''}&all=1">Show ${inventory.length - visibleInventory.length} more item types</a></p>` : ''}</section>`;
 }
 
-function accountPage(player, catalog, googleLogin = null) {
+function accountPage(player, catalog, googleLogin = null, emailVerificationEnabled = false) {
   const passwordMinimum = Number(catalog.settings.password_min_length);
   const googleCard = googleLogin?.enabled
     ? `<section class="account-auth-card"><h2>Google login</h2>${googleLogin.identity
@@ -3337,7 +3348,7 @@ function accountPage(player, catalog, googleLogin = null) {
   return `<section class="page-title"><div><p class="eyebrow">Miner settings</p><h1>Account</h1></div><a class="text-link" href="/miners/${encodeURIComponent(player.name)}">View profile</a></section>
     <section class="account-grid">
       <form method="post" action="/account/password"><h2>Change password</h2><label>Old password<input type="password" name="oldPassword" autocomplete="current-password" required></label><label>New password<input type="password" name="password" minlength="${passwordMinimum}" autocomplete="new-password" required></label><label>Confirm new password<input type="password" name="confirmPassword" minlength="${passwordMinimum}" autocomplete="new-password" required></label><button>Change password</button></form>
-      <form method="post" action="/account/email"><h2>Verified email</h2><p><strong class="verified-state">Verified</strong> ${escapeHtml(player.email)}</p><p>Changing this address locks the account until the replacement address is verified.</p><label>New email<input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" value="${escapeHtml(player.email)}" autocomplete="email" required></label><label>Current password<input type="password" name="password" autocomplete="current-password" required></label><button>Change and verify email</button></form>
+      ${emailVerificationEnabled ? `<form method="post" action="/account/email"><h2>Verified email</h2><p><strong class="verified-state">Verified</strong> ${escapeHtml(player.email)}</p><p>Changing this address locks the account until the replacement address is verified.</p><label>New email<input type="email" name="email" maxlength="${Number(catalog.settings.email_max_length)}" value="${escapeHtml(player.email)}" autocomplete="email" required></label><label>Current password<input type="password" name="password" autocomplete="current-password" required></label><button>Change and verify email</button></form>` : ''}
       <form method="post" action="/account/privacy"><h2>Privacy</h2><label class="checkbox-line"><input type="checkbox" name="showMines"${player.showMines ? ' checked' : ''}> Show mines in profile</label><button>Save privacy settings</button></form>
       ${googleCard}
     </section>`;
@@ -6283,8 +6294,14 @@ function historyPage() {
   </article>`;
 }
 
-function legalPage(seller, paymentConfig) {
+function legalPage(seller, paymentConfig, emailVerificationEnabled = false) {
   const version = LEGAL_VERSIONS[LEGAL_VERSION];
+  const emailPolicy = emailVerificationEnabled
+    ? 'A verified email is required to hold an account.'
+    : 'Email verification and email collection during direct registration are temporarily disabled.';
+  const accountEmailData = emailVerificationEnabled
+    ? 'mandatory verified email'
+    : 'an email address if you later provide one';
   const sellerDetails = seller.legalName && seller.legalAddress && seller.legalEmail
     ? `<dl class="legal-identity"><dt>Legal seller</dt><dd>${escapeHtml(seller.legalName)}</dd><dt>Geographic address</dt><dd>${escapeHtml(seller.legalAddress)}</dd><dt>Contact</dt><dd><a class="text-link" href="mailto:${escapeHtml(seller.legalEmail)}">${escapeHtml(seller.legalEmail)}</a></dd></dl>`
     : `<p class="legal-notice"><strong>Real-money checkout is not available.</strong> The operator's legal name, geographic address and contact email have not been configured for publication.</p>`;
@@ -6297,7 +6314,7 @@ function legalPage(seller, paymentConfig) {
     <section id="accounts"><h2>2. Accounts and acceptable use</h2><p>You must provide accurate registration information, protect your password and use only accounts you are authorised to control. Do not exploit vulnerabilities, automate abusive traffic, interfere with other miners, launder value, harass people, or transmit unlawful material. Accounts may be restricted or closed where reasonably necessary for security, abuse prevention or operation of the service.</p></section>
     <section id="service"><h2>3. Experimental service</h2><p>The restoration is provided on an experimental, as-available basis. Game rules, balancing and availability may change. No promise is made that the service will be uninterrupted, error-free, permanently available, or that game data can always be preserved.</p></section>
     <section id="payments"><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Contact the seller before initiating a dispute where practical.</p></section>
-    <section id="privacy"><h2>5. Privacy</h2><p><strong>Controller, purposes and bases.</strong> The operator identified above controls the personal data used by MineThings. Account and gameplay data are processed to create and perform your account and provide features you request; payment records are processed to perform purchases and meet legal, accounting and dispute obligations; and security, moderation, fraud prevention and service-integrity records are processed for the operator's legitimate interests in running a safe, reliable game. A verified email is required to hold an account. MineThings does not use account data for advertising or automated decisions with legal or similarly significant effects.</p><p><strong>Data collected.</strong> MineThings stores your miner name, mandatory verified email, a one-way password hash, verification-token hashes and delivery audit data; game possessions, actions, settings and communications; and essential security and session information. An essential HttpOnly session cookie keeps you signed in. To identify possible multi-account market abuse, a successful sign-in can create a keyed pseudonymous token derived from the network address, together with the sign-in method and first, latest and total sign-in observations. The raw network address is not stored in the game database or displayed to administrators. If Google sign-in is enabled, MineThings stores the Google account identifier and email returned during sign-in. If payments are enabled, it stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries, but not card numbers.</p><p><strong>Who can see it.</strong> Miner names, profile details you choose to show, market activity, guild membership, public chat and public world or battle records can be visible to other miners. Private messages are addressed to their participants and guild chat to current guild members. The operator may access records where necessary to administer, secure or moderate the service. Administrators can see whether two accounts have a recent pseudonymous network match and a scored summary of relevant market activity, but not the network address or token. The score only prioritises human review and never automatically suspends, restricts or otherwise penalises an account.</p><p><strong>Sharing and retention.</strong> Data is shared only with service infrastructure and, when you choose them, Google for sign-in and PayPal for payment. Those providers process data under their own notices and may process it internationally. Account and gameplay records are kept while the account remains active or the persistent world requires them. Pseudonymous network observations are retained for no more than 30 days. Other security, moderation and payment records are kept for as long as reasonably needed to prevent abuse, resolve disputes and meet legal or accounting duties, then deleted or anonymised where practical.</p><p><strong>Your rights.</strong> Depending on the processing and its legal basis, you may ask for access, correction, deletion, restriction or portability. <strong>You may object at any time to processing based on legitimate interests.</strong> Contact the published seller address above. You may also complain to the <a class="text-link" href="https://ico.org.uk/make-a-complaint/data-protection-complaints/data-protection-complaints/" rel="external noreferrer">Information Commissioner's Office</a>. Some requests may be limited by other people's rights or legal, security and fraud-prevention retention duties.</p></section>
+    <section id="privacy"><h2>5. Privacy</h2><p><strong>Controller, purposes and bases.</strong> The operator identified above controls the personal data used by MineThings. Account and gameplay data are processed to create and perform your account and provide features you request; payment records are processed to perform purchases and meet legal, accounting and dispute obligations; and security, moderation, fraud prevention and service-integrity records are processed for the operator's legitimate interests in running a safe, reliable game. ${emailPolicy} MineThings does not use account data for advertising or automated decisions with legal or similarly significant effects.</p><p><strong>Data collected.</strong> MineThings stores your miner name, ${accountEmailData}, a one-way password hash, verification-token hashes and delivery audit data; game possessions, actions, settings and communications; and essential security and session information. An essential HttpOnly session cookie keeps you signed in. To identify possible multi-account market abuse, a successful sign-in can create a keyed pseudonymous token derived from the network address, together with the sign-in method and first, latest and total sign-in observations. The raw network address is not stored in the game database or displayed to administrators. If Google sign-in is enabled, MineThings stores the Google account identifier and email returned during sign-in. If payments are enabled, it stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries, but not card numbers.</p><p><strong>Who can see it.</strong> Miner names, profile details you choose to show, market activity, guild membership, public chat and public world or battle records can be visible to other miners. Private messages are addressed to their participants and guild chat to current guild members. The operator may access records where necessary to administer, secure or moderate the service. Administrators can see whether two accounts have a recent pseudonymous network match and a scored summary of relevant market activity, but not the network address or token. The score only prioritises human review and never automatically suspends, restricts or otherwise penalises an account.</p><p><strong>Sharing and retention.</strong> Data is shared only with service infrastructure and, when you choose them, Google for sign-in and PayPal for payment. Those providers process data under their own notices and may process it internationally. Account and gameplay records are kept while the account remains active or the persistent world requires them. Pseudonymous network observations are retained for no more than 30 days. Other security, moderation and payment records are kept for as long as reasonably needed to prevent abuse, resolve disputes and meet legal or accounting duties, then deleted or anonymised where practical.</p><p><strong>Your rights.</strong> Depending on the processing and its legal basis, you may ask for access, correction, deletion, restriction or portability. <strong>You may object at any time to processing based on legitimate interests.</strong> Contact the published seller address above. You may also complain to the <a class="text-link" href="https://ico.org.uk/make-a-complaint/data-protection-complaints/data-protection-complaints/" rel="external noreferrer">Information Commissioner's Office</a>. Some requests may be limited by other people's rights or legal, security and fraud-prevention retention duties.</p></section>
     <section id="rights"><h2>6. Rights and submitted content</h2><p>Names, code, artwork and other historical MineThings material remain the property of their respective rights holders. Identification of Japhet Stevens as the original creator is attribution, not a claim of endorsement or ownership by him of this restoration.</p><p>You retain any rights you hold in content you submit. You grant the operator a worldwide, non-exclusive, royalty-free licence to store, reproduce, transmit, display and moderate that content only as reasonably necessary to operate, secure and preserve MineThings. You must not submit content you have no right to use.</p></section>
     <section id="liability"><h2>7. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
     <section id="changes"><h2>8. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
@@ -6785,6 +6802,10 @@ export function createApp(options = {}) {
   if (!initialCatalog) throw new Error('The live database does not contain a game catalog.');
   const production = options.production ?? process.env.NODE_ENV === 'production';
   const secureCookies = options.secureCookies ?? production;
+  const emailVerificationSetting = options.emailVerificationEnabled
+    ?? process.env.MINETHINGS_EMAIL_VERIFICATION_ENABLED;
+  const emailVerificationEnabled = emailVerificationSetting === true
+    || ['1', 'true', 'yes', 'on'].includes(String(emailVerificationSetting ?? '').toLowerCase());
   const paymentConfig = paypalConfiguration(options.paypal ?? {});
   const seller = sellerConfiguration(options.seller ?? {});
   const paymentReadiness = paypalReadiness(paymentConfig, seller);
@@ -6794,10 +6815,12 @@ export function createApp(options = {}) {
   const paypalClient = options.paypalClient ?? new PayPalClient(paymentConfig);
   const emailConfig = emailConfiguration(options.email ?? {});
   const emailStatus = emailReadiness(emailConfig, production);
-  if (production && !options.emailClient && !emailStatus.ready) {
+  if (emailVerificationEnabled && production && !options.emailClient && !emailStatus.ready) {
     throw new Error(`Mandatory email verification is not configured: ${emailStatus.missing.join(', ')}.`);
   }
-  const emailClient = options.emailClient ?? (emailStatus.ready ? new EmailClient(emailConfig) : null);
+  const emailClient = emailVerificationEnabled
+    ? options.emailClient ?? (emailStatus.ready ? new EmailClient(emailConfig) : null)
+    : null;
   const googleConfig = googleAuthConfiguration(options.googleAuth ?? {});
   const googleStatus = googleAuthReadiness(googleConfig, production);
   if (googleConfig.enabled && !googleStatus.ready) {
@@ -7227,7 +7250,7 @@ export function createApp(options = {}) {
       endSession('/', true);
       return;
     }
-    if (!store.isEmailVerified(session.playerId)) {
+    if (emailVerificationEnabled && !store.isEmailVerified(session.playerId)) {
       endSession('/verify-email');
       return;
     }
@@ -7689,7 +7712,7 @@ export function createApp(options = {}) {
     }
     if (url.pathname === '/api/bar' || url.pathname === '/api/bar/messages') {
       if (!session || !store.hasPlayer(session.playerId)
-        || !store.isEmailVerified(session.playerId)) {
+        || (emailVerificationEnabled && !store.isEmailVerified(session.playerId))) {
         responseJson(response, 401, { ok: false, error: 'Log in to enter a city bar.' });
         return;
       }
@@ -7737,7 +7760,7 @@ export function createApp(options = {}) {
       return;
     }
 
-    if (session && store.isEmailVerified(session.playerId)
+    if (session && (!emailVerificationEnabled || store.isEmailVerified(session.playerId))
       && request.method === 'POST' && /^\/mines\/\d+\/detonate$/.test(url.pathname)) {
       const mineId = Number(url.pathname.split('/')[2]);
       try {
@@ -7809,7 +7832,7 @@ export function createApp(options = {}) {
         player.weather = store.currentWeatherForMap(activeMap.id, now());
         player.batteryRemaining = Math.max(0, player.batteryExpiresAt - now());
         player.liveUpdateRevision = () => store.latestLiveUpdateId();
-        if (player.emailVerified && !liveFragment) {
+        if ((!emailVerificationEnabled || player.emailVerified) && !liveFragment) {
           player.registrationWelcomeMail = store.registrationWelcomePrompt(player.id);
         }
         const barRequest = /^\/explore\/bar(?:\/|$)/.test(url.pathname);
@@ -7827,12 +7850,16 @@ export function createApp(options = {}) {
           player.quietNotice = session.quietNotice;
           player.meldReveal = session.meldReveal;
           player.botBuildNotice = session.botBuildNotice;
-          if (player.emailVerified) player.findingNotice = session.findingNotice;
+          if (!emailVerificationEnabled || player.emailVerified) {
+            player.findingNotice = session.findingNotice;
+          }
         }
         delete session.quietNotice;
         delete session.meldReveal;
         delete session.botBuildNotice;
-        if (!player || player.emailVerified) delete session.findingNotice;
+        if (!player || !emailVerificationEnabled || player.emailVerified) {
+          delete session.findingNotice;
+        }
       }
     } catch (error) {
       const destination = requestDestination(request);
@@ -7851,7 +7878,8 @@ export function createApp(options = {}) {
       '/verify-email/confirm', '/logout', '/legal', '/history', '/guide', '/help', '/health',
       '/auth/google', '/auth/google/callback', '/auth/google/register'
     ]);
-    if (player && !player.emailVerified && !verificationPaths.has(url.pathname)) {
+    if (emailVerificationEnabled && player && !player.emailVerified
+      && !verificationPaths.has(url.pathname)) {
       redirect(response, '/verify-email');
       return;
     }
@@ -7906,7 +7934,8 @@ export function createApp(options = {}) {
       } else if (request.method === 'GET' && url.pathname === '/history') {
         responseHtml(response, 200, layout('History', historyPage(), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/legal') {
-        responseHtml(response, 200, layout('Legal', legalPage(seller, paymentConfig), player, flash));
+        responseHtml(response, 200, layout('Legal',
+          legalPage(seller, paymentConfig, emailVerificationEnabled), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/auth/google') {
         if (!googleLoginEnabled) throw new Error('Google login is not configured on this server.');
         const attemptedAt = now();
@@ -8062,6 +8091,9 @@ export function createApp(options = {}) {
         redirect(response, '/', [
           sessionCookie(id, catalog, secureCookies), clearGoogleSignupCookie(secureCookies)
         ]);
+      } else if (!emailVerificationEnabled && /^\/verify-email(?:\/|$)/.test(url.pathname)) {
+        request.resume();
+        redirect(response, '/');
       } else if (request.method === 'GET' && url.pathname === '/verify-email') {
         const token = String(url.searchParams.get('token') ?? '');
         if (token) {
@@ -8167,12 +8199,14 @@ export function createApp(options = {}) {
           player.liveUpdateRevision = () => store.latestLiveUpdateId();
         }
         responseHtml(response, 200, layout('Home', player
-          ? dashboardPage(player, catalog, now()) : landingPage(catalog, googleLoginEnabled), player, flash));
+          ? dashboardPage(player, catalog, now())
+          : landingPage(catalog, googleLoginEnabled, emailVerificationEnabled), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/register') {
         const form = await readForm(request);
         if (form.acceptTerms !== '1') throw new Error('You must accept the Terms and Privacy Notice to register.');
         const name = normalizeMinerName(form.name);
-        const email = String(form.email ?? '').trim().toLowerCase();
+        const email = emailVerificationEnabled
+          ? String(form.email ?? '').trim().toLowerCase() : '';
         const nameMinimum = Number(catalog.settings.miner_name_min_length);
         const nameMaximum = Number(catalog.settings.miner_name_max_length);
         const nameLength = [...name].length;
@@ -8185,14 +8219,16 @@ export function createApp(options = {}) {
           throw new Error(`Passwords must contain at least ${passwordMinimum} characters.`);
         }
         if (store.findPlayer(name, now())) throw new Error('That miner name is already taken.');
-        if (store.emailInUse(email)) throw new Error('That email address is already used by another miner.');
+        if (emailVerificationEnabled && store.emailInUse(email)) {
+          throw new Error('That email address is already used by another miner.');
+        }
         const registeredAt = now();
         const saved = store.addPlayer(createPlayer(
           name, email, await hashPasswordAsync(form.password), catalog, registeredAt, random
         ), { version: LEGAL_VERSION, acceptedAt: registeredAt });
         const id = crypto.randomBytes(32).toString('base64url');
-        const newSession = sessionRecord(saved.id,
-          { flash: 'Check your email to unlock this miner.' }, registeredAt);
+        const newSession = sessionRecord(saved.id, emailVerificationEnabled
+          ? { flash: 'Check your email to unlock this miner.' } : {}, registeredAt);
         const starterItems = findingNoticeItems(saved.discoveries, catalog, {
           source: 'new-mine', cityId: saved.cityId, foundAt: registeredAt
         });
@@ -8204,12 +8240,15 @@ export function createApp(options = {}) {
         }
         sessions.set(id, newSession);
         recordAuthenticatedNetwork(saved.id, request, 'local', registeredAt);
-        try {
-          await sendEmailVerification(saved.id, request, newSession, registeredAt);
-        } catch (error) {
-          newSession.flash = error.message;
+        if (emailVerificationEnabled) {
+          try {
+            await sendEmailVerification(saved.id, request, newSession, registeredAt);
+          } catch (error) {
+            newSession.flash = error.message;
+          }
         }
-        redirect(response, '/verify-email', sessionCookie(id, catalog, secureCookies));
+        redirect(response, emailVerificationEnabled ? '/verify-email' : '/',
+          sessionCookie(id, catalog, secureCookies));
       } else if (request.method === 'POST' && url.pathname === '/login') {
         const form = await readForm(request);
         const attemptedAt = now();
@@ -8228,7 +8267,7 @@ export function createApp(options = {}) {
         const id = crypto.randomBytes(32).toString('base64url');
         sessions.set(id, createLoginSession(found.id));
         recordAuthenticatedNetwork(found.id, request, 'local', attemptedAt);
-        redirect(response, found.emailVerified ? '/' : '/verify-email',
+        redirect(response, !emailVerificationEnabled || found.emailVerified ? '/' : '/verify-email',
           sessionCookie(id, catalog, secureCookies));
       } else if (request.method === 'POST' && url.pathname === '/logout') {
         if (sessionId) previewBindings.revokeSubject(sessionId);
@@ -9383,7 +9422,7 @@ export function createApp(options = {}) {
           player, catalog, {
             enabled: googleLoginEnabled,
             identity: store.externalIdentityForPlayer(player.id, 'google')
-          }
+          }, emailVerificationEnabled
         ), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/account') {
         if (!requirePlayer()) return;
@@ -9403,6 +9442,11 @@ export function createApp(options = {}) {
         redirect(response, '/account');
       } else if (request.method === 'POST' && url.pathname === '/account/email') {
         if (!requirePlayer()) return;
+        if (!emailVerificationEnabled) {
+          request.resume();
+          redirect(response, '/account');
+          return;
+        }
         const form = await readForm(request);
         if (!await verifyPasswordAsync(form.password, player.passwordHash)) {
           throw new Error('The current password is incorrect.');
@@ -9655,7 +9699,8 @@ export function createApp(options = {}) {
       } else if (request.method === 'GET' && url.pathname === '/admin/players') {
         if (!requireAdmin()) return;
         const query = url.searchParams.get('q') ?? '';
-        responseHtml(response, 200, layout('Admin · Miners', adminPlayersPage(store.adminPlayers(query), query), player, flash));
+        responseHtml(response, 200, layout('Admin · Miners',
+          adminPlayersPage(store.adminPlayers(query), query, emailVerificationEnabled), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/admin/routes') {
         if (!requireAdmin()) return;
         const routeTime = now();
@@ -9730,7 +9775,8 @@ export function createApp(options = {}) {
         if (!requireAdmin()) return;
         const subject = store.adminPlayer(Number(url.pathname.split('/').pop()));
         if (!subject) throw new Error('Miner not found.');
-        responseHtml(response, 200, layout(`Admin · ${subject.name}`, adminPlayerPage(subject, catalog), player, flash));
+        responseHtml(response, 200, layout(`Admin · ${subject.name}`,
+          adminPlayerPage(subject, catalog, emailVerificationEnabled), player, flash));
       } else if (request.method === 'POST' && /^\/admin\/players\/\d+\/moderation$/.test(url.pathname)) {
         if (!requireAdmin()) return;
         const subjectId = Number(url.pathname.split('/')[3]);
