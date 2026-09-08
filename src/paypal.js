@@ -59,6 +59,12 @@ export function paypalOrderSummary(order) {
   };
 }
 
+export function paypalApprovalUrl(order) {
+  return order?.links?.find((link) =>
+    ['payer-action', 'approve'].includes(link?.rel)
+      && (!link.method || String(link.method).toUpperCase() === 'GET'))?.href ?? '';
+}
+
 export class PayPalClient {
   constructor(config, fetchImplementation = globalThis.fetch) {
     this.config = config;
@@ -135,7 +141,7 @@ export class PayPalClient {
         } } }
       }
     });
-    const approveUrl = order.links?.find((link) => link.rel === 'payer-action' || link.rel === 'approve')?.href;
+    const approveUrl = paypalApprovalUrl(order);
     if (!order.id || !approveUrl) throw new Error('PayPal did not provide an approval link.');
     return { order, approveUrl };
   }

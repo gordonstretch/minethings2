@@ -32,7 +32,7 @@ import {
 } from './google-auth.js';
 import { PreviewBindingRegistry } from './preview-bindings.js';
 import {
-  PayPalClient, paypalConfiguration, paypalOrderSummary, paypalReadiness
+  PayPalClient, paypalApprovalUrl, paypalConfiguration, paypalOrderSummary, paypalReadiness
 } from './paypal.js';
 import {
   applyPendingDatabaseRestore, createDatabaseBackup, defaultBackupDirectory,
@@ -88,7 +88,7 @@ const MAP_ASSET_VERSION = '20260908a';
 const MAP_PAGE_CACHE_TTL_MS = 30_000;
 const MAP_PAGE_CACHE_LIMIT = 256;
 const SECURITY_HEADERS = Object.freeze({
-  'Content-Security-Policy': "default-src 'self'; base-uri 'none'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'self'; base-uri 'none'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self' https://www.paypal.com https://www.sandbox.paypal.com; frame-ancestors 'none'",
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Resource-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), geolocation=(), microphone=()',
@@ -6314,15 +6314,22 @@ function creditsPage(player, bundles, purchases, readiness, paymentConfig, check
   const unavailable = readiness.ready ? '' : `<p class="legal-notice"><strong>Checkout unavailable.</strong> ${escapeHtml(readiness.missing.join(', '))}.</p>`;
   const bundleCards = bundles.map((bundle) => `<article class="credit-bundle"><p class="eyebrow">${escapeHtml(bundle.name)}</p><strong>${bundle.credits.toLocaleString('en-GB')} credits</strong><span>${escapeHtml(formatMoneyMinor(bundle.amountMinor, bundle.currency))}</span><form method="post" action="/credits/paypal/orders" data-native-navigation><input type="hidden" name="bundleId" value="${bundle.id}"><input type="hidden" name="checkoutToken" value="${escapeHtml(checkoutTokens.get(bundle.id) ?? '')}"><label class="check-row"><input type="checkbox" name="acceptPaymentTerms" value="1" required><span>I accept the <a class="text-link" href="/legal" target="_blank" rel="noopener">payment terms</a> (version ${LEGAL_VERSION}).</span></label><label class="check-row"><input type="checkbox" name="immediateDelivery" value="1" required><span>Supply my credits immediately; I understand this affects my 14-day cancellation right.</span></label><button${readiness.ready ? '' : ' disabled'}>Continue to PayPal</button></form></article>`).join('');
   const history = purchases.map((purchase) => `<tr><td><a class="text-link" href="/credits/receipts/${purchase.id}">MT-${purchase.id}</a></td><td>${new Date(purchase.createdAt).toLocaleString('en-GB')}</td><td>${escapeHtml(purchase.bundleName)}</td><td>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</td><td><span class="payment-status payment-${escapeHtml(purchase.status)}">${escapeHtml(purchase.status)}</span></td></tr>`).join('');
-  return `<section class="page-title"><div><p class="eyebrow">Optional support</p><h1>Buy credits</h1></div><p>Balance: <strong>${player.credits.toLocaleString('en-GB')} credits</strong> · ${escapeHtml(paymentConfig.environment)} checkout</p></section>${unavailable}<section><h2>Credit bundles</h2><p>PayPal hosts the approval step. MineThings never sees your card details.</p><div class="credit-bundles">${bundleCards}</div></section><section><h2>Purchase history</h2><div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Created</th><th>Bundle</th><th>Paid</th><th>Status</th></tr></thead><tbody>${history || '<tr><td colspan="5">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
+  return `<section class="page-title"><div><p class="eyebrow">Optional support</p><h1>Buy credits</h1></div><p>Balance: <strong>${player.credits.toLocaleString('en-GB')} credits</strong> · ${escapeHtml(paymentConfig.environment)} checkout</p></section>${unavailable}<section><h2>Credit bundles</h2><p>PayPal hosts the approval step. MineThings never sees your card details.</p><div class="credit-bundles">${bundleCards}</div></section><section><h2>Purchase history</h2><div class="table-scroll"><table><thead><tr><th>Record</th><th>Created</th><th>Bundle</th><th>Amount</th><th>Status</th></tr></thead><tbody>${history || '<tr><td colspan="5">No purchases yet.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function receiptPage(purchase) {
-  return `<article class="receipt"><header class="page-title"><div><p class="eyebrow">Permanent purchase record</p><h1>Receipt MT-${purchase.id}</h1></div><a class="button secondary" href="/credits/receipts/${purchase.id}.txt">Download receipt</a></header><dl class="receipt-grid"><dt>Miner</dt><dd>${escapeHtml(purchase.playerName)}</dd><dt>Created</dt><dd>${new Date(purchase.createdAt).toLocaleString('en-GB')}</dd><dt>Status</dt><dd>${escapeHtml(purchase.status)}</dd><dt>Bundle</dt><dd>${escapeHtml(purchase.bundleName)}</dd><dt>Credits</dt><dd>${purchase.credits.toLocaleString('en-GB')}</dd><dt>Amount</dt><dd>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</dd><dt>PayPal order</dt><dd>${escapeHtml(purchase.providerOrderId || 'Not assigned')}</dd><dt>PayPal capture</dt><dd>${escapeHtml(purchase.providerCaptureId || 'Not captured')}</dd><dt>Terms accepted</dt><dd>Version ${escapeHtml(purchase.termsVersion)} at ${new Date(purchase.consentedAt).toLocaleString('en-GB')}</dd><dt>Seller</dt><dd>${escapeHtml(purchase.sellerName || 'Not configured')}<br>${escapeHtml(purchase.sellerAddress)}<br>${escapeHtml(purchase.sellerEmail)}</dd></dl><p><a class="text-link" href="/legal">Read the current Legal page</a> · <a class="text-link" href="/credits">Back to credit purchases</a></p></article>`;
+  const completed = ['completed', 'refunded', 'reversed'].includes(purchase.status);
+  const recordName = completed ? 'Receipt' : 'Checkout attempt';
+  const incomplete = purchase.status === 'created' && purchase.providerOrderId
+    ? `<aside class="legal-notice"><p><strong>No payment has been captured.</strong> PayPal created the order, but checkout has not been approved. You can continue this order while PayPal still makes it available.</p><form method="post" action="/credits/receipts/${purchase.id}/continue" data-native-navigation><button>Continue with PayPal</button></form></aside>`
+    : '';
+  return `<article class="receipt"><header class="page-title"><div><p class="eyebrow">${completed ? 'Permanent purchase record' : 'Incomplete checkout record'}</p><h1>${recordName} MT-${purchase.id}</h1></div><a class="button secondary" href="/credits/receipts/${purchase.id}.txt">Download ${completed ? 'receipt' : 'record'}</a></header>${incomplete}<dl class="receipt-grid"><dt>Miner</dt><dd>${escapeHtml(purchase.playerName)}</dd><dt>Created</dt><dd>${new Date(purchase.createdAt).toLocaleString('en-GB')}</dd><dt>Status</dt><dd>${escapeHtml(purchase.status)}</dd><dt>Bundle</dt><dd>${escapeHtml(purchase.bundleName)}</dd><dt>Credits</dt><dd>${purchase.credits.toLocaleString('en-GB')}</dd><dt>Amount</dt><dd>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</dd><dt>PayPal order</dt><dd>${escapeHtml(purchase.providerOrderId || 'Not assigned')}</dd><dt>PayPal capture</dt><dd>${escapeHtml(purchase.providerCaptureId || 'Not captured')}</dd><dt>Terms accepted</dt><dd>Version ${escapeHtml(purchase.termsVersion)} at ${new Date(purchase.consentedAt).toLocaleString('en-GB')}</dd><dt>Seller</dt><dd>${escapeHtml(purchase.sellerName || 'Not configured')}<br>${escapeHtml(purchase.sellerAddress)}<br>${escapeHtml(purchase.sellerEmail)}</dd></dl><p><a class="text-link" href="/legal">Read the current Legal page</a> · <a class="text-link" href="/credits">Back to credit purchases</a></p></article>`;
 }
 
 function receiptText(purchase) {
-  return `MineThings receipt MT-${purchase.id}\n\nMiner: ${purchase.playerName}\nCreated: ${new Date(purchase.createdAt).toISOString()}\nStatus: ${purchase.status}\nBundle: ${purchase.bundleName}\nCredits: ${purchase.credits}\nAmount: ${(purchase.amountMinor / 100).toFixed(2)} ${purchase.currency}\nPayPal order: ${purchase.providerOrderId || 'Not assigned'}\nPayPal capture: ${purchase.providerCaptureId || 'Not captured'}\nTerms version: ${purchase.termsVersion}\nImmediate delivery consent: ${new Date(purchase.consentedAt).toISOString()}\nSeller: ${purchase.sellerName}\nAddress: ${purchase.sellerAddress}\nContact: ${purchase.sellerEmail}\n`;
+  const recordName = ['completed', 'refunded', 'reversed'].includes(purchase.status)
+    ? 'receipt' : 'checkout record';
+  return `MineThings ${recordName} MT-${purchase.id}\n\nMiner: ${purchase.playerName}\nCreated: ${new Date(purchase.createdAt).toISOString()}\nStatus: ${purchase.status}\nBundle: ${purchase.bundleName}\nCredits: ${purchase.credits}\nAmount: ${(purchase.amountMinor / 100).toFixed(2)} ${purchase.currency}\nPayPal order: ${purchase.providerOrderId || 'Not assigned'}\nPayPal capture: ${purchase.providerCaptureId || 'Not captured'}\nTerms version: ${purchase.termsVersion}\nImmediate delivery consent: ${new Date(purchase.consentedAt).toISOString()}\nSeller: ${purchase.sellerName}\nAddress: ${purchase.sellerAddress}\nContact: ${purchase.sellerEmail}\n`;
 }
 
 function verifyCapturedOrder(order, purchase) {
@@ -9249,6 +9256,29 @@ export function createApp(options = {}) {
         }
         setFlash('PayPal checkout was cancelled. No credits were added.');
         redirect(response, '/credits');
+      } else if (request.method === 'POST'
+        && /^\/credits\/receipts\/\d+\/continue$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        request.resume();
+        const purchaseId = Number(url.pathname.split('/')[3]);
+        const purchase = store.creditPurchase(purchaseId, player.id);
+        if (!purchase) throw new Error('Checkout record not found.');
+        if (purchase.status !== 'created' || !purchase.providerOrderId) {
+          throw new Error('This checkout can no longer be continued.');
+        }
+        const order = await paypalClient.getOrder(purchase.providerOrderId);
+        if (order.id !== purchase.providerOrderId) {
+          throw new Error('PayPal returned the wrong checkout order.');
+        }
+        const approvalUrl = paypalApprovalUrl(order);
+        if (!approvalUrl) {
+          throw new Error('PayPal no longer makes this order available for approval. Start a new checkout.');
+        }
+        const approval = new URL(approvalUrl);
+        if (approval.protocol !== 'https:') {
+          throw new Error('PayPal returned an unsafe approval address.');
+        }
+        redirect(response, approval.href);
       } else if (request.method === 'GET' && /^\/credits\/receipts\/\d+\.txt$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const purchaseId = Number(url.pathname.match(/\d+/)[0]);
@@ -9259,7 +9289,10 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const purchase = store.creditPurchase(Number(url.pathname.split('/').pop()), player.id);
         if (!purchase) throw new Error('Receipt not found.');
-        responseHtml(response, 200, layout(`Receipt MT-${purchase.id}`, receiptPage(purchase), player, flash));
+        const recordName = ['completed', 'refunded', 'reversed'].includes(purchase.status)
+          ? 'Receipt' : 'Checkout attempt';
+        responseHtml(response, 200,
+          layout(`${recordName} MT-${purchase.id}`, receiptPage(purchase), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/help') {
         redirect(response, '/guide');
       } else if (request.method === 'GET' && url.pathname === '/guide') {

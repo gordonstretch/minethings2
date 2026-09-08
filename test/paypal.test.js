@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PayPalClient, paypalConfiguration, paypalOrderSummary, paypalReadiness
+  PayPalClient, paypalApprovalUrl, paypalConfiguration, paypalOrderSummary, paypalReadiness
 } from '../src/paypal.js';
 
 test('hard-gates live PayPal checkout on HTTPS, webhook and published seller identity', () => {
@@ -35,6 +35,17 @@ test('summarises PayPal orders without trusting browser-provided purchase values
     invoiceId: 'MT-7', customId: '7', amountMinor: 499, currency: 'GBP',
     captureId: 'CAPTURE-1', captureStatus: 'COMPLETED'
   });
+});
+
+test('selects only a GET payer approval link from a PayPal order', () => {
+  assert.equal(paypalApprovalUrl({ links: [
+    { rel: 'approve', method: 'POST', href: 'https://wrong.example.test' },
+    {
+      rel: 'payer-action', method: 'GET',
+      href: 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-1'
+    }
+  ] }), 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-1');
+  assert.equal(paypalApprovalUrl({ links: [{ rel: 'capture', method: 'POST', href: 'capture' }] }), '');
 });
 
 test('reports rejected credentials without exposing them and caches valid authentication', async () => {

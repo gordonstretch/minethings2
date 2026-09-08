@@ -6638,6 +6638,14 @@ test('publishes the history and legal record and completes an idempotent PayPal 
         approveUrl: `https://paypal.example.test/approve?token=ORDER-${purchase.id}`
       };
     },
+    async getOrder(orderId) {
+      return {
+        id: orderId, status: 'PAYER_ACTION_REQUIRED', links: [{
+          rel: 'payer-action', method: 'GET',
+          href: `https://paypal.example.test/approve?token=${orderId}`
+        }]
+      };
+    },
     async captureOrder(orderId, purchaseId) {
       return {
         id: orderId, status: 'COMPLETED',
@@ -6799,6 +6807,9 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(shop, /100 credits/);
   assert.match(shop, /£1\.99/);
   assert.match(shop, /action="\/credits\/paypal\/orders" data-native-navigation/u);
+  const shopResponse = await fetch(`${base}/credits`, { headers: { cookie } });
+  assert.match(shopResponse.headers.get('content-security-policy'),
+    /form-action 'self' https:\/\/www\.paypal\.com https:\/\/www\.sandbox\.paypal\.com/u);
   const bundleId = store.creditBundles()[0].id;
   const checkoutToken = shop.match(new RegExp(
     `name="bundleId" value="${bundleId}"><input type="hidden" name="checkoutToken" value="([^"]+)"`,
@@ -6822,6 +6833,22 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.equal(ordersCreated, 1);
   assert.equal(store.playerCreditPurchases(player.id).length, 1);
   const purchase = store.playerCreditPurchases(player.id)[0];
+  const incompleteRecord = await (await fetch(`${base}/credits/receipts/${purchase.id}`, {
+    headers: { cookie }
+  })).text();
+  assert.match(incompleteRecord, new RegExp(`Checkout attempt MT-${purchase.id}`));
+  assert.match(incompleteRecord, /No payment has been captured/u);
+  assert.match(incompleteRecord,
+    new RegExp(`action="/credits/receipts/${purchase.id}/continue" data-native-navigation`, 'u'));
+  const resume = await fetch(`${base}/credits/receipts/${purchase.id}/continue`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, referer: `${base}/credits/receipts/${purchase.id}`
+    }
+  });
+  assert.equal(resume.status, 303);
+  assert.equal(resume.headers.get('location'), create.headers.get('location'));
+  assert.equal(ordersCreated, 1);
+  assert.equal(store.playerCreditPurchases(player.id).length, 1);
   const returned = await fetch(`${base}/credits/paypal/return?token=${purchase.providerOrderId}`, {
     headers: { cookie }, redirect: 'manual'
   });
@@ -6832,6 +6859,7 @@ test('publishes the history and legal record and completes an idempotent PayPal 
     headers: { cookie }
   })).text();
   assert.match(receipt, new RegExp(`Receipt MT-${purchase.id}`));
+  assert.doesNotMatch(receipt, /Continue with PayPal/u);
   assert.match(receipt, /CAPTURE-/);
   const download = await fetch(`${base}/credits/receipts/${purchase.id}.txt`, { headers: { cookie } });
   assert.match(download.headers.get('content-disposition'), /attachment/);
