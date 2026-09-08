@@ -6651,8 +6651,6 @@ test('publishes the history and legal record and completes an idempotent PayPal 
         id: orderId, status: 'COMPLETED',
         purchase_units: [{
           reference_id: `purchase-${purchaseId}`,
-          invoice_id: `MT-${purchaseId}`,
-          custom_id: String(purchaseId),
           amount: { value: '1.99', currency_code: 'GBP' },
           payments: { captures: [{
             id: `CAPTURE-${purchaseId}`, status: 'COMPLETED',

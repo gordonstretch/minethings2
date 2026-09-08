@@ -6335,8 +6335,10 @@ function receiptText(purchase) {
 function verifyCapturedOrder(order, purchase) {
   const summary = paypalOrderSummary(order);
   if (summary.orderId !== purchase.providerOrderId
-    || summary.customId !== String(purchase.id)
-    || summary.invoiceId !== `MT-${purchase.id}`
+    || summary.orderStatus !== 'COMPLETED'
+    || summary.referenceId !== `purchase-${purchase.id}`
+    || (summary.customId && summary.customId !== String(purchase.id))
+    || (summary.invoiceId && summary.invoiceId !== `MT-${purchase.id}`)
     || summary.amountMinor !== purchase.amountMinor
     || summary.currency !== purchase.currency
     || summary.captureStatus !== 'COMPLETED'

@@ -26,9 +26,11 @@ test('hard-gates live PayPal checkout on HTTPS, webhook and published seller ide
 test('summarises PayPal orders without trusting browser-provided purchase values', () => {
   assert.deepEqual(paypalOrderSummary({
     id: 'ORDER-1', status: 'COMPLETED', purchase_units: [{
-      reference_id: 'purchase-7', invoice_id: 'MT-7', custom_id: '7',
+      reference_id: 'purchase-7',
       amount: { value: '4.99', currency_code: 'GBP' },
-      payments: { captures: [{ id: 'CAPTURE-1', status: 'COMPLETED' }] }
+      payments: { captures: [{
+        id: 'CAPTURE-1', status: 'COMPLETED', invoice_id: 'MT-7', custom_id: '7'
+      }] }
     }]
   }), {
     orderId: 'ORDER-1', orderStatus: 'COMPLETED', referenceId: 'purchase-7',
