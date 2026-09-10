@@ -222,6 +222,23 @@ const ROUTE_REOPENED_TEMPLATES = freeze([
   ({ mode, route }) => `The gates are open again on the ${mode} route ${route}.`
 ]);
 
+const FRONTIER_EXPEDITION_TEMPLATES = freeze([
+  ({ player, place, map, reward }) => `${player} claimed ${place} place in the race to ${map}, earning ${reward}.`,
+  ({ player, place, map, reward }) => `Frontier report: ${player} became the ${place} rewarded expedition into ${map} and received ${reward}.`,
+  ({ player, place, map, reward }) => `${map} has its ${place} pioneer. ${player} crossed the gateway and secured ${reward}.`,
+  ({ player, place, map, reward }) => `The ${place} expedition reward for ${map} belongs to ${player}: ${reward}.`,
+  ({ player, place, map, reward }) => `${player} reached ${map} in ${place} place. The frontier purse paid ${reward}.`,
+  ({ player, place, map, reward }) => `Gateway records name ${player} as ${place} into ${map}, with an expedition award of ${reward}.`
+]);
+
+function ordinal(value) {
+  const number = Number(value);
+  const finalTwo = number % 100;
+  const suffix = finalTwo >= 11 && finalTwo <= 13
+    ? 'th' : number % 10 === 1 ? 'st' : number % 10 === 2 ? 'nd' : number % 10 === 3 ? 'rd' : 'th';
+  return `${number}${suffix}`;
+}
+
 const REWARD_SENTENCES = freeze([
   (reward) => `${capitalise(reward)}.`,
   (reward) => `The crew ${reward}.`,
@@ -234,7 +251,7 @@ export const WORLD_CHAT_ANNOUNCEMENT_FAMILIES = freeze([
   'ghost-risen', 'ghost-defeated',
   'weather-observation', 'storm-warning', 'snow-warning', 'hurricane-warning',
   'creature-sighting', 'creature-escaped', 'moon-phase', 'creature-defeated',
-  'route-closed', 'route-reopened'
+  'route-closed', 'route-reopened', 'frontier-expedition'
 ]);
 
 const FAMILY_SET = new Set(WORLD_CHAT_ANNOUNCEMENT_FAMILIES);
@@ -359,6 +376,23 @@ export function generateWorldChatAnnouncement(familyValue, seedValue, context = 
     return renderTemplate(seed, family, ROUTE_REOPENED_TEMPLATES, {
       mode: requiredText(context, 'routeMode'),
       route: requiredText(context, 'routeName')
+    });
+  }
+  if (family === 'frontier-expedition') {
+    const position = requiredNumber(context, 'position');
+    const credits = requiredNumber(context, 'credits');
+    if (!Number.isSafeInteger(position) || position < 1 || position > 5) {
+      throw new Error('World chat announcement requires an expedition position from 1 to 5.');
+    }
+    if (!Number.isSafeInteger(credits) || credits < 1) {
+      throw new Error('World chat announcement requires a positive credit award.');
+    }
+    const item = String(context.itemName ?? '').trim();
+    return renderTemplate(seed, family, FRONTIER_EXPEDITION_TEMPLATES, {
+      player: requiredText(context, 'playerName'),
+      map: requiredText(context, 'mapName'),
+      place: ordinal(position),
+      reward: `${credits.toLocaleString('en-GB')} credits${item ? ` and ${item}` : ''}`
     });
   }
   const values = {

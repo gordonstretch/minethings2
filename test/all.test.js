@@ -8,6 +8,7 @@ import './casino-machine-server.test.js';
 import './casino-machine-store.test.js';
 import './chat-regions.test.js';
 import './council-sentencing.test.js';
+import './council-missions.test.js';
 import './city-exploration.test.js';
 import './city-landmark-art.test.js';
 import './dwarf-park-art.test.js';

@@ -1073,11 +1073,39 @@ test('renders a static operations snapshot with hover details and management lin
       markupPercent: 25, intervalMinutes: 5
     }, 2100);
 
+    const localMapId = catalog.cities.find((city) => city.id === route.city1Id).mapId;
+    const localMap = catalog.maps.find((map) => map.id === localMapId);
+    const remoteMap = catalog.maps.find((map) => map.id !== localMapId);
+    const remoteCities = catalog.cities.filter((city) => city.mapId === remoteMap.id);
+    assert.ok(localMap && remoteCities.length >= 2);
+    store.database.prepare(
+      'INSERT OR IGNORE INTO known_cities (player_id, city_id) VALUES (?, ?)'
+    ).run(player.id, remoteCities[0].id);
+
     const originalMapOperationsSnapshot = store.mapOperationsSnapshot.bind(store);
     let mapOperationsSnapshotCalls = 0;
     store.mapOperationsSnapshot = (...arguments_) => {
       mapOperationsSnapshotCalls += 1;
-      return originalMapOperationsSnapshot(...arguments_);
+      const snapshot = originalMapOperationsSnapshot(...arguments_);
+      return {
+        ...snapshot,
+        shuttles: [...snapshot.shuttles, {
+          vehicleId: 900001, vehicleName: 'Remote shuttle', itemName: 'Remote shuttle',
+          rank: 1, status: 'traveling', originCityId: remoteCities[0].id,
+          originCityName: remoteCities[0].name, destinationCityId: remoteCities[1].id,
+          destinationCityName: remoteCities[1].name, phase: 'outbound',
+          pausedReason: null, deliveries: 0, deliveredThings: 0
+        }],
+        automations: [...snapshot.automations, {
+          behaviorKey: 'autolister', displayName: 'Autolister',
+          activeUntil: 9999999999, intervalMinutes: 5, nextRunAt: 5000,
+          lastRunAt: null, lastStatus: null,
+          tasks: [{
+            cityId: remoteCities[0].id, mineTypeId: stock.mineTypeId,
+            markupPercent: 99, index: 0
+          }]
+        }]
+      };
     };
     const server = createApp({ store, catalog, now: () => 2500 });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -1130,7 +1158,10 @@ test('renders a static operations snapshot with hover details and management lin
       'relevant player activity invalidates the personalized map cache');
 
     assert.match(html, /data-map-snapshot-at="2500"/u);
+    assert.ok(html.includes(`${localMap.name} operations · Snapshot`));
     assert.match(html, /1 automation task · 1 shuttle/u);
+    assert.doesNotMatch(html, /99% markup|href="\/vehicles\/900001"/u,
+      'operations from another region stay out of this snapshot');
     assert.match(html, /Refresh this page for a new snapshot/u);
     assert.doesNotMatch(html, /map-transit|Vehicles in transit|vehicle in transit/u);
     assert.doesNotMatch(html, new RegExp(`href="/vehicles/${transitVehicleId}"`));
@@ -1145,6 +1176,17 @@ test('renders a static operations snapshot with hover details and management lin
       `id="city-${route.city1Id}"[\\s\\S]*?city-map-operation-shuttle[\\s\\S]*?href="/vehicles/${shuttleVehicleId}"`
     ));
     assert.doesNotMatch(html, /<animate\b/u, 'the operations map must remain a still snapshot');
+
+    const remoteHtml = await (await fetch(
+      `${base}/map?world=${remoteMap.slug}`, { headers: { cookie } }
+    )).text();
+    assert.ok(remoteHtml.includes(`${remoteMap.name} operations · Snapshot`));
+    assert.match(remoteHtml, /1 automation task · 1 shuttle/u);
+    assert.match(remoteHtml, /99% markup/u);
+    assert.match(remoteHtml, /href="\/vehicles\/900001"/u);
+    assert.doesNotMatch(remoteHtml,
+      new RegExp(`25% markup|href="/vehicles/${shuttleVehicleId}"`),
+      'the selected remote region excludes local operations');
   });
 
 test('renders fixed regional capitals and retires the regional-home chooser', async (context) => {
@@ -2127,7 +2169,7 @@ test('publishes live maintenance warnings and counts recently active signed-in m
       ['maintenance-warning-removed', 'maintenance-warning-published']);
   });
 
-test('renders moving creatures and sends vehicles to future interception points', async (context) => {
+test('renders moving creatures without direct hunt shortcuts', async (context) => {
   const catalog = loadLegacyCatalog();
   const store = new SqliteStore(':memory:');
   store.seedCatalog(catalog);
@@ -2219,27 +2261,14 @@ test('renders moving creatures and sends vehicles to future interception points'
       catalog.rarities.find((rarity) => rarity.id === catalog.byId.get(vehicleType.itemId).rarity).name
     } Land Whale</a>`
   ));
-  assert.match(html, new RegExp(`/events/creatures/${creatureId}/attack`));
+  assert.doesNotMatch(html,
+    /Launch hunt|class="threat-action"|\/events\/creatures\/\d+\/(?:attack|hunt)/u);
+  assert.match(html, /Encounters occur only when their journeys physically meet/u);
   assert.match(html, new RegExp(`id="creature-${remoteCreatureId}"`),
     'a threat announced within a known region must not be hidden by unknown route endpoints');
   assert.match(html, new RegExp(
     `class="creature-record-link" href="/events/creatures/${remoteCreatureId}"`
   ));
-  const originCityName = store.database.prepare(
-    'SELECT name FROM catalog_cities WHERE id = ?'
-  ).get(saved.cityId).name;
-  for (const [id, definition] of [
-    [vehicleId, vehicleType], [sameClassVehicleId, sameClassVehicleType]
-  ]) {
-    const item = catalog.byId.get(definition.itemId);
-    const rarityName = catalog.rarities.find((rarity) => rarity.id === item.rarity).name;
-    const renderedCityName = originCityName.replaceAll("'", '&#39;');
-    const expectedOption = `<option value="${id}">${item.name} · ${rarityName} · ${renderedCityName} · #${id}</option>`;
-    assert.ok(html.includes(
-      expectedOption
-    ), `missing ${expectedOption}; rendered ${html.match(/<option[^>]*>[^<]*<\/option>/gu)?.join(' ')}`);
-  }
-  assert.doesNotMatch(html, new RegExp(`<option value="${otherVehicleId}">`));
   assert.doesNotMatch(html, /12\.0 km\/h toward|bounty slots|combat class|Drops up to/i);
   const creatureArt = await fetch(`${base}/node/creatures/land-whale.svg`);
   assert.equal(creatureArt.status, 200);
@@ -2258,10 +2287,12 @@ test('renders moving creatures and sends vehicles to future interception points'
   assert.match(detailsHtml, /Living-threat record/);
   assert.match(detailsHtml, /Terrestrial leviathan/);
   assert.match(detailsHtml, /Observed behaviour/);
-  assert.match(detailsHtml, /Reported recovery/);
+  assert.match(detailsHtml, /Possible recovery/);
   assert.match(detailsHtml, /<dt>Health<\/dt><dd>140 \/ 140<\/dd>/);
-  assert.match(detailsHtml, /Eligible vehicle tiers:/);
-  assert.match(detailsHtml, new RegExp(`/events/creatures/${creatureId}/attack`));
+  assert.match(detailsHtml, /Compatible vehicle tiers:/);
+  assert.match(detailsHtml, /must physically meet the threat while travelling on this route/u);
+  assert.doesNotMatch(detailsHtml,
+    /Launch hunt|class="threat-action"|\/events\/creatures\/\d+\/(?:attack|hunt)/u);
 
   const remoteDetails = await fetch(`${base}/events/creatures/${remoteCreatureId}`, {
     headers: { cookie }
@@ -2279,44 +2310,32 @@ test('renders moving creatures and sends vehicles to future interception points'
   assert.match(seriouslyWoundedHtml,
     /threat-condition-seriously-wounded">Seriously wounded</);
 
-  const rejectedAttack = await fetch(`${base}/events/creatures/${creatureId}/attack`, {
-    method: 'POST', redirect: 'manual', headers: {
-      cookie, 'content-type': 'application/x-www-form-urlencoded'
-    }, body: new URLSearchParams({ vehicleId: String(otherVehicleId) })
-  });
-  assert.equal(rejectedAttack.status, 303);
-  assert.equal(store.database.prepare(`
-    SELECT COUNT(*) AS count FROM world_creature_pursuits
-    WHERE creature_id = ? AND vehicle_id = ?
-  `).get(creatureId, otherVehicleId).count, 0);
-  const attack = await fetch(`${base}/events/creatures/${creatureId}/attack`, {
+  const retiredAttack = await fetch(`${base}/events/creatures/${creatureId}/attack`, {
     method: 'POST', redirect: 'manual', headers: {
       cookie, 'content-type': 'application/x-www-form-urlencoded'
     }, body: new URLSearchParams({ vehicleId: String(sameClassVehicleId) })
   });
-  assert.equal(attack.status, 303);
-  assert.equal(attack.headers.get('location'), '/events');
+  assert.equal(retiredAttack.status, 410);
+  assert.match(await retiredAttack.text(), /Direct hunts have ended/u);
+  const retiredHuntAlias = await fetch(`${base}/events/creatures/${creatureId}/hunt`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    }, body: new URLSearchParams({ vehicleId: String(sameClassVehicleId) })
+  });
+  assert.equal(retiredHuntAlias.status, 410);
   assert.equal(store.database.prepare(`
     SELECT COUNT(*) AS count FROM world_creature_pursuits
     WHERE creature_id = ? AND vehicle_id = ? AND status = 'pursuing'
-  `).get(creatureId, sameClassVehicleId).count, 1);
+  `).get(creatureId, sameClassVehicleId).count, 0);
   assert.equal(store.database.prepare(
     'SELECT COUNT(*) AS count FROM world_creature_attacks WHERE creature_id = ?'
   ).get(creatureId).count, 0);
-  const vehicles = await fetch(`${base}/vehicles`, { headers: { cookie } });
-  assert.equal(vehicles.status, 200);
-  const vehiclesHtml = await vehicles.text();
-  assert.match(vehiclesHtml, new RegExp(`Pursuing ${
-    catalog.rarities.find((rarity) =>
-      rarity.id === catalog.byId.get(vehicleType.itemId).rarity).name
-  } Land Whale`));
-  assert.match(vehiclesHtml, /Intercepts in/);
-  const vehicle = await fetch(`${base}/vehicles/${sameClassVehicleId}`, { headers: { cookie } });
-  assert.equal(vehicle.status, 200);
-  assert.match(await vehicle.text(), /Interception in/);
+  assert.equal(store.database.prepare(
+    'SELECT status FROM player_vehicles WHERE id = ?'
+  ).get(sameClassVehicleId).status, 'idle');
 });
 
-test('offers every tier-compatible endpoint transport on restless-dead cards', async (context) => {
+test('renders restless-dead records without direct hunt shortcuts', async (context) => {
   const catalog = loadLegacyCatalog();
   const store = new SqliteStore(':memory:');
   store.seedCatalog(catalog);
@@ -2391,7 +2410,8 @@ test('offers every tier-compatible endpoint transport on restless-dead cards', a
   const events = await fetch(`${base}/events`, { headers: { cookie } });
   assert.equal(events.status, 200);
   const html = await events.text();
-  assert.match(html, new RegExp(`/events/ghosts/${ghost.id}/attack`));
+  assert.doesNotMatch(html,
+    /Launch hunt|class="threat-action"|\/events\/ghosts\/\d+\/(?:attack|hunt)/u);
   assert.match(html, new RegExp(`href="/events/ghosts/${ghost.id}"`));
   assert.doesNotMatch(html, /Recently banished|Recent creature outcomes|Your attacks/u);
   assert.match(html, new RegExp(
@@ -2406,15 +2426,6 @@ test('offers every tier-compatible endpoint transport on restless-dead cards', a
     WHERE catalog_cities.id = ?
   `).get(route.city1Id);
   assert.match(html, new RegExp(`<dt>Region</dt><dd>${routeRegion.name}</dd>`));
-  assert.match(html, new RegExp(`<option value="${vehicleId}">`));
-  assert.match(html, new RegExp(`<option value="${sameClassVehicleId}">`));
-  assert.doesNotMatch(html, new RegExp(`<option value="${otherVehicleId}">`));
-  const endpointName = store.database.prepare(
-    'SELECT name FROM catalog_cities WHERE id = ?'
-  ).get(ghostVehicle.destination_city_id).name;
-  assert.ok(html.includes(`${endpointName} · #${vehicleId}</option>`));
-  assert.ok(html.includes(`${endpointName} · #${sameClassVehicleId}</option>`));
-
   const details = await fetch(`${base}/events/ghosts/${ghost.id}`, { headers: { cookie } });
   assert.equal(details.status, 200);
   const detailsHtml = await details.text();
@@ -2423,7 +2434,9 @@ test('offers every tier-compatible endpoint transport on restless-dead cards', a
   assert.match(detailsHtml, /Unhurt and patrolling/);
   assert.match(detailsHtml, /What came back/);
   assert.match(detailsHtml, /Reported bounty/);
-  assert.match(detailsHtml, new RegExp(`/events/ghosts/${ghost.id}/attack`));
+  assert.match(detailsHtml, /must physically meet this apparition while travelling on its route/u);
+  assert.doesNotMatch(detailsHtml,
+    /Launch hunt|class="threat-action"|\/events\/ghosts\/\d+\/(?:attack|hunt)/u);
   assert.match(detailsHtml, new RegExp(
     `class="ghost-record-spectre spectral-transport spectral-rider"><img src="${ghostSourceIcon}`
   ));
@@ -2454,8 +2467,8 @@ test('offers every tier-compatible endpoint transport on restless-dead cards', a
       cookie, referer: `${base}/events`, 'content-type': 'application/x-www-form-urlencoded'
     }, body: new URLSearchParams({ vehicleId: String(sameClassVehicleId) })
   });
-  assert.equal(attack.status, 303);
-  assert.equal(attack.headers.get('location'), '/events');
+  assert.equal(attack.status, 410);
+  assert.match(await attack.text(), /Direct hunts have ended/u);
   const plannedEncounter = store.database.prepare(`
     SELECT 1 FROM vehicle_encounters
     WHERE status = 'planned'
@@ -2465,9 +2478,9 @@ test('offers every tier-compatible endpoint transport on restless-dead cards', a
   const hunter = store.database.prepare(
     'SELECT status, route_id, travel_order FROM player_vehicles WHERE id = ?'
   ).get(sameClassVehicleId);
-  assert.ok(plannedEncounter);
-  assert.equal(hunter.status, 'traveling');
-  assert.equal(hunter.route_id, route.id);
+  assert.equal(plannedEncounter, undefined);
+  assert.equal(hunter.status, 'idle');
+  assert.equal(hunter.route_id, null);
   assert.equal(hunter.travel_order, 'peaceful');
 });
 

@@ -694,6 +694,7 @@ function layout(title, content, player, flash) {
     ['explore', '/explore', 'Explore', ['/explore'], false],
     ['fleet', '/vehicles', 'Fleet', ['/vehicles', '/ratings', '/battles', '/ammo-boxes'], false],
     ['events', '/events', 'World events', ['/events'], false],
+    ['council', '/council', `Council (${Number(player?.council?.availableMissions ?? 0).toLocaleString('en-GB')})`, ['/council'], false],
     ['chat', '/chat', unseenLabel('Chat', player?.unseenChatMessages), ['/chat'], false],
     ['casino', '/casino', 'Casino', ['/casino'], false],
     ['guilds', '/guilds', unseenLabel('Guilds', player?.unseenGuildChatMessages), ['/guilds'], false],
@@ -730,7 +731,7 @@ function layout(title, content, player, flash) {
   const sideNavigation = player ? `<aside id="left" aria-label="Player navigation"><button id="player-nav-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="player-nav-panel"><span>Game menu</span><strong>All operations</strong><b aria-hidden="true">+</b></button><div id="player-nav-panel"><div class="sidebar-context"><p class="sidebar-location-heading">You are here:</p><div class="sidebar-location-value"><span>Region</span> <a class="text-link" href="/map?world=${encodeURIComponent(player.mapSlug)}">${escapeHtml(player.mapName)}</a></div><div class="sidebar-location-value"><span>City</span> <a class="text-link" href="/map?world=${encodeURIComponent(player.mapSlug)}#city-${player.cityId}">${sidebarCapitalIcon}${escapeHtml(player.cityName)}</a></div>${sidebarWeather}<a class="sidebar-map-link" href="/map">Open world map <span aria-hidden="true">→</span></a></div><nav id="navlist" aria-label="Game sections">
     ${sideGroup('Extraction', [sideLink('/', countedSideLabel('Mines', 'mines'), ['/'], true), sideLink('/inventory', countedSideLabel('Things', 'things'), ['/inventory', '/items']), sideLink('/dwarves', countedSideLabel('Dwarves', 'dwarves')), sideLink('/gadgets', countedSideLabel('Gadgets', 'gadgets')), sideLink('/melds', countedSideLabel('Melds', 'melds'))])}
     ${sideGroup('Industry', [sideLink('/vehicles', countedSideLabel('Fleet', 'fleet')), sideLink('/factories', countedSideLabel('Factories', 'factories')), sideLink('/mills', countedSideLabel('Mills', 'mills')), sideLink('/oil-field', countedSideLabel('Oil Field', 'oilFields')), sideLink('/containers', 'Containers'), sideLink('/market', 'Mine shop', ['/market'], true)])}
-    ${sideGroup('World', [sideLink('/explore', 'Explore city'), sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events')])}
+    ${sideGroup('World', [sideLink('/explore', 'Explore city'), sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events'), sideLink('/council', `Council orders (${Number(player.council?.availableMissions ?? 0).toLocaleString('en-GB')})`)])}
     ${sideGroup('Network', [sideLink('/chat', unseenLabel('Chat', player.unseenChatMessages)), sideLink('/casino', 'Casino'), sideLink('/guilds', unseenLabel('Guilds', player.unseenGuildChatMessages)), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', `Miners (${Number(player.minerCount).toLocaleString('en-GB')})`, ['/miners'], true), sideLink('/ratings', 'Ratings')])}
     ${sideGroup('Miner', [sideLink('/professions', 'Specialisation'), sideLink(`/miners/${encodeURIComponent(player.name)}`, 'Profile', [`/miners/${encodeURIComponent(player.name)}`], true), sideLink('/account', 'Account'), sideLink('/stats', 'Server stats'), sideLink('/guide', 'Field guide'), sideLink('/credits', 'Buy credits')])}
     ${player.authority > 0 ? sideGroup('Command', [sideLink('/admin', 'Administration')]) : ''}
@@ -1365,6 +1366,57 @@ function stonesPage(player, catalog) {
     return `<article class="stone-card${cleared ? ' earned' : ''}"><img src="/img/icons/stone${stone.rarity}.png" alt=""><div><h3>${escapeHtml(stone.name)}</h3><p>${escapeHtml(stone.description)}</p><small>Rank ${stone.rank} · ${status} · ${production}</small></div></article>`;
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">Mine achievements</p><h1>Stones</h1></div><a class="text-link" href="/">Back to mines</a></section><p>Each cleared stone permanently adds ${formatGold(stoneBph)} bucket per hour to the top mine in every regional home city, across all regions.</p><div class="stone-grid">${rows}</div>`;
+}
+
+function councilBadge(standing, compact = false) {
+  if (!standing?.enrolled) return '';
+  const badge = standing.badge;
+  return `<span class="council-badge council-badge-${escapeHtml(badge.key)}${compact ? ' council-badge-compact' : ''}" title="${escapeHtml(`${badge.name}: ${badge.description}`)}"><span class="council-badge-ribbon" aria-hidden="true"></span><span class="council-badge-face"><b aria-hidden="true">§</b><small>${escapeHtml(badge.mark)}</small></span><span class="visually-hidden">Council badge: ${escapeHtml(badge.name)}</span></span>`;
+}
+
+function councilMissionCard(mission, mode, currentTime) {
+  const progress = Math.min(100, Math.round(mission.progress / mission.targetQuantity * 100));
+  const rewards = `<ul class="council-reward-list"><li><strong>${mission.rewardScraps.toLocaleString('en-GB')}</strong> Ore scraps</li><li><strong>${formatGold(mission.rewardGold)}g</strong></li><li><strong>+${mission.rewardReputation}</strong> reputation</li><li><strong>0</strong> Credits</li></ul>`;
+  const timer = mission.status === 'completed'
+    ? `Completed ${new Date(mission.completedAt).toLocaleString('en-GB')}`
+    : mission.status === 'expired'
+      ? `Expired ${new Date(mission.expiresAt).toLocaleString('en-GB')}`
+      : mission.status === 'abandoned'
+        ? `Abandoned ${new Date(mission.expiresAt).toLocaleString('en-GB')}`
+        : `${mission.status === 'offered' ? 'Offer withdrawn' : 'Order expires'} in ${formatDuration(mission.expiresAt - currentTime)}`;
+  const progressBlock = mode === 'active'
+    ? `<div class="council-progress"><span style="width:${progress}%"></span></div><p><strong>${mission.progress.toLocaleString('en-GB')} / ${mission.targetQuantity.toLocaleString('en-GB')}</strong> recorded</p>` : '';
+  const accept = mode === 'offered'
+    ? `<form method="post" action="/council/missions/${mission.id}/accept"><button>Accept order</button></form>` : '';
+  const activeActions = mode === 'active'
+    ? `<div class="button-row">${mission.objectiveKey === 'delivery'
+      ? `<form method="post" action="/council/missions/${mission.id}/deliver"><button>Submit delivery</button></form>`
+      : `<a class="button" href="${escapeHtml(mission.details.actionPath ?? '/council')}">Do the work</a>`}<form method="post" action="/council/missions/${mission.id}/abandon"><button class="secondary">Abandon</button></form></div>` : '';
+  const historyStatus = mode === 'history'
+    ? `<strong class="council-history-status council-history-${escapeHtml(mission.status)}">${escapeHtml(mission.status)}</strong>` : '';
+  const administrativeError = mission.status === 'completed' && mission.accidentalItemName
+    ? `<p class="council-accidental-reward"><strong>Administrative error:</strong> one ${escapeHtml(mission.accidentalItemName)} was enclosed and retained.</p>` : '';
+  return `<article class="council-mission-card council-mission-${escapeHtml(mission.difficulty)}"><header><div><p class="eyebrow">${escapeHtml(mission.department)}</p><h3>${escapeHtml(mission.title)}</h3></div><span class="council-difficulty">${escapeHtml(mission.difficulty)}</span></header><p>${escapeHtml(mission.briefing)}</p>${progressBlock}${rewards}${administrativeError}<footer><small>${escapeHtml(timer)}</small>${historyStatus}${accept}${activeActions}</footer></article>`;
+}
+
+function councilPage(player, board, currentTime) {
+  const standing = board.standing;
+  const rankProgress = standing.nextReputation === null ? 100
+    : Math.min(100, Math.max(0, Math.round(
+      (standing.reputation - standing.grade ** 2)
+      / (standing.nextReputation - standing.grade ** 2) * 100
+    )));
+  const standingCopy = standing.enrolled
+    ? `<div class="council-standing-copy"><p class="eyebrow">Council reputation · grade ${standing.grade} of 64</p><h2>${escapeHtml(standing.title)}</h2><p><strong>${standing.reputation.toLocaleString('en-GB')} reputation</strong> · ${standing.completedMissions.toLocaleString('en-GB')} completed order${standing.completedMissions === 1 ? '' : 's'}.</p>${standing.nextReputation === null
+      ? '<p>Further advancement is awaiting establishment of a sufficiently senior committee.</p>'
+      : `<div class="council-rank-progress"><span style="width:${rankProgress}%"></span></div><p>${(standing.nextReputation - standing.reputation).toLocaleString('en-GB')} reputation until your next undisclosed administrative reclassification.</p>`}</div>${councilBadge(standing)}`
+    : '<div class="council-standing-copy"><p class="eyebrow">No standing recorded</p><h2>Unprocessed Individual</h2><p>Accepting an order permanently enrols you in the Council reputation scheme and makes its first compulsory badge public.</p></div>';
+  return `<section class="page-title council-title"><div><p class="eyebrow">Docket ${escapeHtml(player.docketNumber)}</p><h1>Council service orders</h1></div><p>Perform useful work. Receive industrial residue. Wear the consequences.</p></section>
+    <section class="council-standing">${standingCopy}</section>
+    <section><div class="section-heading"><div><p class="eyebrow">Accepted paperwork</p><h2>Active orders</h2></div><p>${board.active.length} of ${board.activeLimit} active</p></div><div class="council-mission-grid">${board.active.map((mission) => councilMissionCard(mission, 'active', currentTime)).join('') || '<p>No active orders. The Council has noticed.</p>'}</div></section>
+    <section><div class="section-heading"><div><p class="eyebrow">Current circulation</p><h2>Available orders</h2></div><p>New combinations are filed daily.</p></div><div class="council-mission-grid">${board.offered.map((mission) => councilMissionCard(mission, 'offered', currentTime)).join('') || '<p>No orders remain in circulation today.</p>'}</div></section>
+    <section class="council-error-policy"><p class="eyebrow">Disbursement accuracy</p><h2>Administrative errors are neither expected nor reversible</h2><p>All lawful orders pay Ore scraps, fractional Gold, reputation, and no Credits. Property enclosed accidentally is governed by Form 61-B and may therefore be retained without implying competence.</p></section>
+    <section><h2>Recent case history</h2><div class="council-mission-grid council-history-grid">${board.history.map((mission) => councilMissionCard(mission, 'history', currentTime)).join('') || '<p>No orders have yet reached a bureaucratically recognised conclusion.</p>'}</div></section>`;
 }
 
 function mineToolNavigation(mineId, currentPage) {
@@ -3334,6 +3386,7 @@ function profilePage(subject, catalog, ownProfile, currentTime, filters = {}, kn
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">Miner profile</p><h1>${escapeHtml(subject.name)}</h1></div>${editor}</section>
     <section class="profile-about">${avatarStack(subject.avatarLayers, `${subject.name} avatar`)}<div><h2>About</h2><p><strong>${escapeHtml(subject.professionTitle)} ${escapeHtml(profession.name)}</strong> · ${subject.meldIds.length} melds · <a class="text-link" href="/melds/compare/${encodeURIComponent(subject.name)}">Compare melds</a></p>${description}${ownProfile ? '<p><a class="button secondary" href="/avatar">Edit avatar</a></p>' : ''}</div></section>
+    ${subject.council?.enrolled ? `<section class="profile-council"><div>${councilBadge(subject.council)}<div><p class="eyebrow">Compulsory Council standing</p><h2>${escapeHtml(subject.council.title)}</h2><p>${subject.council.reputation.toLocaleString('en-GB')} reputation · grade ${subject.council.grade} of 64 · ${subject.council.completedMissions.toLocaleString('en-GB')} completed order${subject.council.completedMissions === 1 ? '' : 's'}.</p><small>${escapeHtml(subject.council.badge.description)}</small></div></div></section>` : ''}
     ${subject.showMines === false ? '' : `<section><h2>Mines</h2><ul>${mines || '<li>No mines.</li>'}</ul></section>`}
     <section><h2>Inventory</h2><p>${filteredCount} matching things · ${globalCount} globally.</p>${inventoryFilters}${armory ? `<p class="muted">An active ${escapeHtml(armoryGadget.displayName)} conceals this miner’s weapons and fittings.</p>` : ''}<div class="item-grid">${things || '<p>No matching things.</p>'}</div>${!filters.loadAll && inventory.length > visibleInventory.length ? `<p><a class="text-link" href="?function=${encodeURIComponent(selectedFunction)}&mineType=${selectedMineTypeId ?? ''}&city=${selectedCityId ?? ''}&all=1">Show ${inventory.length - visibleInventory.length} more item types</a></p>` : ''}</section>`;
 }
@@ -3388,7 +3441,7 @@ function meldComparisonPage(player, other, catalog) {
 const MESSAGE_TYPE_FILTERS = [
   ['all', 'All'], ['PM', 'PM'], ['Findings', 'Findings'], ['Market', 'Market'], ['Vehicle', 'Vehicle'],
   ['City', 'City'], ['Factory', 'Factory'], ['Transfer', 'Transfer'],
-  ['Stone', 'Stone'], ['Machine', 'Machine'], ['Admin', 'Admin']
+  ['Stone', 'Stone'], ['Machine', 'Machine'], ['Council', 'Council'], ['Admin', 'Admin']
 ];
 
 function normalizedMessageTypeFilter(value) {
@@ -3592,6 +3645,9 @@ function messageItemGroups(message, catalog) {
     addGroup('Granted item', [{ itemId: details.itemId, quantity: details.quantity }]);
   }
   if (details.event === 'factory-action-completed') addGroup('Factory output', details.items);
+  if (details.event === 'council-mission-completed' && details.administrativeError) {
+    addGroup('Issued in error', details.items);
+  }
   if (details.event === 'machine-bombed' && details.itemId) {
     addGroup('Damaged machine', [{ itemId: details.itemId, quantity: 1 }]);
   }
@@ -5849,9 +5905,14 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
   }));
   const snapshotAt = Number(operationsSnapshot.generatedAt);
   const snapshotShuttles = Array.isArray(operationsSnapshot.shuttles)
-    ? operationsSnapshot.shuttles : [];
+    ? operationsSnapshot.shuttles.filter((shuttle) =>
+      mapCityIds.has(Number(shuttle.originCityId))) : [];
   const snapshotAutomations = Array.isArray(operationsSnapshot.automations)
-    ? operationsSnapshot.automations : [];
+    ? operationsSnapshot.automations.map((automation) => ({
+      ...automation,
+      tasks: Array.isArray(automation.tasks)
+        ? automation.tasks.filter((task) => mapCityIds.has(Number(task.cityId))) : []
+    })).filter((automation) => automation.tasks.length > 0) : [];
   const taskSummary = (automation, task) => {
     if (automation.behaviorKey === 'autoloader') {
       const vehicleName = operationsSnapshot.vehicleNamesById?.[task.vehicleId]
@@ -6052,24 +6113,11 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
   const snapshotDate = new Date(snapshotAt);
   const snapshotIso = snapshotDate.toISOString();
   const snapshotLabel = snapshotDate.toLocaleString('en-GB');
-  const operationsSummary = `<section class="map-operations-snapshot" data-map-snapshot-at="${snapshotAt}" aria-labelledby="map-operations-heading"><div><p class="eyebrow">Your operations · Snapshot</p><h2 id="map-operations-heading">${automationTaskCount.toLocaleString('en-GB')} automation task${automationTaskCount === 1 ? '' : 's'} · ${snapshotShuttles.length.toLocaleString('en-GB')} shuttle${snapshotShuttles.length === 1 ? '' : 's'}</h2></div><p>Captured <time datetime="${snapshotIso}">${escapeHtml(snapshotLabel)}</time>. Hover or focus a marker for details; select it to manage that operation. Refresh this page for a new snapshot.</p></section>`;
+  const operationsSummary = `<section class="map-operations-snapshot" data-map-snapshot-at="${snapshotAt}" aria-labelledby="map-operations-heading"><div><p class="eyebrow">${escapeHtml(currentMap.name)} operations · Snapshot</p><h2 id="map-operations-heading">${automationTaskCount.toLocaleString('en-GB')} automation task${automationTaskCount === 1 ? '' : 's'} · ${snapshotShuttles.length.toLocaleString('en-GB')} shuttle${snapshotShuttles.length === 1 ? '' : 's'}</h2></div><p>Captured <time datetime="${snapshotIso}">${escapeHtml(snapshotLabel)}</time>. Hover or focus a marker for details; select it to manage that operation. Refresh this page for a new snapshot.</p></section>`;
   return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} region</p><h1>Cities</h1></div><p>Vehicles reveal cities and regions when they complete a route.</p></section><section class="map-opportunities" aria-labelledby="regional-capital-heading"><p class="eyebrow">${escapeHtml(currentMap.name)} opportunities · Shared regional base</p><h2 id="regional-capital-heading"><span class="city-capital-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>${escapeHtml(capitalCity.name)} · Regional capital</h2><p>Every miner in ${escapeHtml(currentMap.name)} shares ${escapeHtml(capitalCity.name)} as their capital and home city in this region. Bring things here to Meld, build factories, hire workers, and trade with other miners gathering in the region’s central market. Other cities remain independent outposts with their own mines, routes, and local markets.</p><p class="map-region-facts"><strong>${mapCities.length} cities</strong> · <strong>${mapMineTypes.size} mine types</strong> · ${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}${oilFieldFact}</p></section>
     ${operationsSummary}<figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital, gateways and your operations</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types${currentMapOilField ? `, the Oil Field at ${escapeHtml(currentMapOilField.name)}` : ''}, gateway cities, live gadget automation and shuttle origins. This is a snapshot captured at ${escapeHtml(snapshotLabel)}. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g><g class="city-operation-layer" aria-label="City operations">${operationMarkers}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="oil-field-key"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt="">Oil Field</span><span class="gateway-key">Gateway to another region</span><span class="automation-key"><i aria-hidden="true">A</i>Live automation</span><span class="shuttle-key"><i aria-hidden="true">S</i>Shuttle origin</span></figcaption></figure>
     <section><h2>Local route network</h2><ul class="route-list">${routeRows || '<li>No routes are currently available.</li>'}</ul></section>${exitsSection}
     <section><h2>City operations</h2><div class="city-grid">${cities}</div></section><script src="/node/map.js?v=20260821a" defer></script>`;
-}
-
-function threatVehicleOptionLabel(option) {
-  const rarity = option.vehicleRarityName ? ` · ${option.vehicleRarityName}` : '';
-  const city = option.originCityName ? ` · ${option.originCityName}` : '';
-  return `${option.vehicleName}${rarity}${city} · #${option.vehicleId}`;
-}
-
-function creatureHuntForm(creature) {
-  const attackOptions = creature.attackOptions ?? [];
-  return attackOptions.length
-    ? `<form class="threat-action" method="post" action="/events/creatures/${creature.id}/attack"><label>Vehicle<select name="vehicleId" required>${attackOptions.map((option) => `<option value="${option.vehicleId}">${escapeHtml(threatVehicleOptionLabel(option))}</option>`).join('')}</select></label><button>Launch hunt</button></form>`
-    : '';
 }
 
 function worldCreatureProfile(type) {
@@ -6154,23 +6202,15 @@ function worldCreatureEventDetailPage(creature, catalog, currentTime) {
   const outcome = active ? ''
     : `<p class="ghost-record-outcome"><strong>Final disposition:</strong> ${creature.status === 'defeated' ? `Defeated after ${Number(creature.attackCount).toLocaleString('en-GB')} recorded attack${Number(creature.attackCount) === 1 ? '' : 's'}` : `Entered ${escapeHtml(creature.destinationCityName)}`}.</p>`;
   const pursuit = active && creature.pursuers.length
-    ? `${creature.pursuers.length} vehicle${creature.pursuers.length === 1 ? ' is' : 's are'} moving to intercept`
-    : active ? 'No vehicle is currently moving to intercept' : 'Hunt closed';
+    ? `${creature.pursuers.length} vehicle${creature.pursuers.length === 1 ? ' is' : 's are'} projected to meet this threat`
+    : active ? 'No vehicle encounter is currently projected' : 'Threat no longer active';
   return `<section class="page-title"><div><p class="eyebrow">Living-threat record #${creature.id}</p><h1>${escapeHtml(creature.name)}</h1></div><a class="text-link" href="/events">Back to world events</a></section>
     <article class="ghost-record creature-record rarity-${creature.rarity}">
       <div class="ghost-record-hero creature-record-hero"><img src="${escapeHtml(creature.icon)}" alt="${escapeHtml(baseName)}"><div><p class="eyebrow">${escapeHtml(creature.rarityName)} living threat &middot; ${escapeHtml(creature.mapName)} region</p><h2>${escapeHtml(profile.classification)}</h2><p>${escapeHtml(profile.description)}</p>${outcome}</div></div>
-      <dl class="ghost-record-facts"><div><dt>Rarity</dt><dd>${escapeHtml(creature.rarityName)}</dd></div><div><dt>Region</dt><dd>${escapeHtml(creature.mapName)}</dd></div><div><dt>State</dt><dd>${escapeHtml(state)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(creature.routeName)} &middot; ${escapeHtml(routeType)} &middot; ${Number(creature.length).toLocaleString('en-GB')} km</dd></div><div><dt>Heading</dt><dd>${active ? escapeHtml(creature.destinationCityName) : 'Journey ended'}</dd></div><div><dt>Position</dt><dd>${position}</dd></div><div><dt>Health</dt><dd>${Number(creature.hp).toLocaleString('en-GB')} / ${Number(creature.maxHp).toLocaleString('en-GB')}</dd></div><div><dt>Speed</dt><dd>${active ? `${Number(creature.speed).toFixed(1)} km/h` : 'No longer moving'}</dd></div><div><dt>Timing</dt><dd>${timing}</dd></div><div><dt>Awakened</dt><dd>${new Date(creature.awakenedAt).toLocaleString('en-GB')}</dd></div><div><dt>Hunt activity</dt><dd>${escapeHtml(pursuit)}</dd></div><div><dt>Damage recorded</dt><dd>${Number(creature.totalDamage).toLocaleString('en-GB')}</dd></div></dl>
-      ${creatureHuntForm(creature)}
+      <dl class="ghost-record-facts"><div><dt>Rarity</dt><dd>${escapeHtml(creature.rarityName)}</dd></div><div><dt>Region</dt><dd>${escapeHtml(creature.mapName)}</dd></div><div><dt>State</dt><dd>${escapeHtml(state)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(creature.routeName)} &middot; ${escapeHtml(routeType)} &middot; ${Number(creature.length).toLocaleString('en-GB')} km</dd></div><div><dt>Heading</dt><dd>${active ? escapeHtml(creature.destinationCityName) : 'Journey ended'}</dd></div><div><dt>Position</dt><dd>${position}</dd></div><div><dt>Health</dt><dd>${Number(creature.hp).toLocaleString('en-GB')} / ${Number(creature.maxHp).toLocaleString('en-GB')}</dd></div><div><dt>Speed</dt><dd>${active ? `${Number(creature.speed).toFixed(1)} km/h` : 'No longer moving'}</dd></div><div><dt>Timing</dt><dd>${timing}</dd></div><div><dt>Awakened</dt><dd>${new Date(creature.awakenedAt).toLocaleString('en-GB')}</dd></div><div><dt>Route activity</dt><dd>${escapeHtml(pursuit)}</dd></div><div><dt>Damage recorded</dt><dd>${Number(creature.totalDamage).toLocaleString('en-GB')}</dd></div></dl>
       <section class="ghost-origin creature-observations"><div><p class="eyebrow">Field observations</p><h2>Observed behaviour</h2><p>${escapeHtml(profile.behaviour)}</p><p>Its recorded counterattack is <strong>${escapeHtml(attackName)}</strong>. The species has a base counter-force factor of ${Math.round(counterRatio * 100)}%; this ${escapeHtml(creature.rarityName)} specimen applies a ${damageMultiplier.toFixed(2).replace(/\.00$/u, '')}&times; tier multiplier.</p></div><img src="${escapeHtml(creature.icon)}" alt=""></section>
-      <section class="ghost-bounty creature-bounty"><p class="eyebrow">Hunter's record</p><h2>Reported recovery</h2><p>${reward}</p><p><strong>Eligible vehicle tiers:</strong> ${escapeHtml(eligibleTiers)}. The vehicle must also match the route type and be ready at either endpoint.</p></section>
+      <section class="ghost-bounty creature-bounty"><p class="eyebrow">Encounter record</p><h2>Possible recovery</h2><p>${reward}</p><p><strong>Compatible vehicle tiers:</strong> ${escapeHtml(eligibleTiers)}. A matching land vehicle or ship must physically meet the threat while travelling on this route.</p></section>
     </article>`;
-}
-
-function ghostHuntForm(ghost) {
-  const attackOptions = ghost.attackOptions ?? [];
-  return attackOptions.length
-    ? `<form class="threat-action" method="post" action="/events/ghosts/${ghost.id}/attack"><label>Vehicle<select name="vehicleId" required>${attackOptions.map((option) => `<option value="${option.vehicleId}">${escapeHtml(threatVehicleOptionLabel(option))}</option>`).join('')}</select></label><button>Launch hunt</button></form>`
-    : '';
 }
 
 function ghostEventDetailPage(ghost, catalog, currentTime) {
@@ -6214,13 +6254,12 @@ function ghostEventDetailPage(ghost, catalog, currentTime) {
     <article class="ghost-record rarity-${ghost.rarity}">
       <div class="ghost-record-hero"><div class="ghost-record-spectre spectral-transport spectral-${ghost.kind}"><img src="${escapeHtml(ghost.icon)}" alt="${escapeHtml(kindName)}"></div><div><p class="eyebrow">${escapeHtml(ghost.rarityName)} ${escapeHtml(kindName)} &middot; ${escapeHtml(ghost.regionName)} region</p><h2>${escapeHtml(ghost.baseName)}</h2><p>${escapeHtml(description)}</p>${outcome}</div></div>
       <dl class="ghost-record-facts"><div><dt>Rarity</dt><dd>${escapeHtml(ghost.rarityName)}</dd></div><div><dt>Region</dt><dd>${escapeHtml(ghost.regionName)}</dd></div><div><dt>State</dt><dd>${escapeHtml(state)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)} &middot; ${escapeHtml(routeType)} &middot; ${Number(ghost.length).toLocaleString('en-GB')} km</dd></div><div><dt>Heading</dt><dd>${heading}</dd></div><div><dt>Position</dt><dd>${position}</dd></div><div><dt>Speed</dt><dd>${ghost.speed === null || ghost.speed === undefined ? 'No longer moving' : `${Number(ghost.speed).toFixed(1)} km/h`}</dd></div><div><dt>Timing</dt><dd>${escapeHtml(timing)}</dd></div><div><dt>Risen</dt><dd>${new Date(ghost.risenAt).toLocaleString('en-GB')}</dd></div></dl>
-      ${ghostHuntForm(ghost)}
       <section class="ghost-origin"><div><p class="eyebrow">${creatureOrigin ? 'Remains record' : 'Wreck record'}</p><h2>What came back</h2><p>${sourceRecord}</p>${sourceDescription}</div><img src="${escapeHtml(ghost.sourceIcon)}" alt="${escapeHtml(sourceAlt)}">${origin ? `<dl>${origin}</dl>` : ''}</section>
-      <section class="ghost-bounty"><p class="eyebrow">Spectral manifest</p><h2>${ghost.defeatedAt ? 'Recovered bounty' : 'Reported bounty'}</h2><ul>${bounty || '<li>No recoverable cargo is recorded.</li>'}</ul></section>
+      <section class="ghost-bounty"><p class="eyebrow">Spectral manifest</p><h2>${ghost.defeatedAt ? 'Recovered bounty' : 'Reported bounty'}</h2><p>A compatible vehicle must physically meet this apparition while travelling on its route.</p><ul>${bounty || '<li>No recoverable cargo is recorded.</li>'}</ul></section>
     </article>`;
 }
 
-function worldEventsPage(player, catalog, status, vehicles, currentTime) {
+function worldEventsPage(catalog, status, currentTime) {
   const weather = status.weather.map((entry) => {
     const [icon, label] = weatherPresentation(entry.condition);
     return `<article id="weather-${entry.mapId}" class="weather-card weather-${entry.condition}"><span class="weather-icon">${icon}</span><div><h3>${escapeHtml(entry.mapName)}</h3><p><strong>${escapeHtml(label)}</strong> | ${entry.temperatureC.toFixed(1)}&deg;C | ${entry.windKph} km/h wind${entry.rainfallMm ? ` | ${entry.rainfallMm} mm precipitation` : ''}</p></div></article>`;
@@ -6229,18 +6268,18 @@ function worldEventsPage(player, catalog, status, vehicles, currentTime) {
   const creatureCards = active.map((creature) => {
     const condition = threatCondition(creature.hp, creature.maxHp);
     const detailsPath = `/events/creatures/${creature.id}`;
-    return `<article id="creature-${creature.id}" class="threat-card creature-card threat-creature creature-${creature.type} rarity-${creature.rarity}"><a class="threat-mark" href="${detailsPath}" aria-label="Open the full record for ${escapeHtml(creature.name)}"><img src="${escapeHtml(creature.icon)}" alt=""></a><div class="threat-card-body"><header><div><p class="eyebrow">${escapeHtml(creature.mapName)} | ${escapeHtml(creature.rarityName)}</p><h3><a class="creature-record-link" href="${detailsPath}">${escapeHtml(creature.name)}</a></h3></div><span class="threat-condition threat-condition-${condition.className}">${condition.label}</span></header><dl class="threat-facts"><div><dt>Route</dt><dd>${escapeHtml(creature.routeName)}</dd></div><div><dt>Heading</dt><dd>${escapeHtml(creature.destinationCityName)}</dd></div></dl>${creatureHuntForm(creature)}</div></article>`;
+    return `<article id="creature-${creature.id}" class="threat-card creature-card threat-creature creature-${creature.type} rarity-${creature.rarity}"><a class="threat-mark" href="${detailsPath}" aria-label="Open the full record for ${escapeHtml(creature.name)}"><img src="${escapeHtml(creature.icon)}" alt=""></a><div class="threat-card-body"><header><div><p class="eyebrow">${escapeHtml(creature.mapName)} | ${escapeHtml(creature.rarityName)}</p><h3><a class="creature-record-link" href="${detailsPath}">${escapeHtml(creature.name)}</a></h3></div><span class="threat-condition threat-condition-${condition.className}">${condition.label}</span></header><dl class="threat-facts"><div><dt>Route</dt><dd>${escapeHtml(creature.routeName)}</dd></div><div><dt>Heading</dt><dd>${escapeHtml(creature.destinationCityName)}</dd></div></dl></div></article>`;
   }).join('');
   const activeGhosts = (status.ghosts ?? []).filter((ghost) => !ghost.defeatedAt);
   const ghostCards = activeGhosts.map((ghost) => {
     const condition = threatCondition(ghost.hull, ghost.maxHull, ghost.damaged);
     const detailsPath = `/events/ghosts/${ghost.id}`;
-    return `<article class="threat-card ghost-card threat-ghost ghost-${ghost.kind} rarity-${ghost.rarity}"><a class="threat-mark" href="${detailsPath}" aria-label="Open the full record for ${escapeHtml(ghost.name)}"><span class="spectral-transport spectral-${ghost.kind}" aria-hidden="true"><img src="${escapeHtml(ghost.icon)}" alt=""></span></a><div class="threat-card-body"><header><div><p class="eyebrow">${ghost.kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'} | ${escapeHtml(ghost.rarityName)}</p><h3><a class="ghost-record-link" href="${detailsPath}">${escapeHtml(ghost.name)}</a></h3></div><span class="threat-condition threat-condition-${condition.className}">${condition.label}</span></header><dl class="threat-facts"><div><dt>Region</dt><dd>${escapeHtml(ghost.regionName)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)}</dd></div><div><dt>Heading</dt><dd>${ghost.destinationCityName ? escapeHtml(ghost.destinationCityName) : 'Patrolling'}</dd></div></dl>${ghostHuntForm(ghost)}</div></article>`;
+    return `<article class="threat-card ghost-card threat-ghost ghost-${ghost.kind} rarity-${ghost.rarity}"><a class="threat-mark" href="${detailsPath}" aria-label="Open the full record for ${escapeHtml(ghost.name)}"><span class="spectral-transport spectral-${ghost.kind}" aria-hidden="true"><img src="${escapeHtml(ghost.icon)}" alt=""></span></a><div class="threat-card-body"><header><div><p class="eyebrow">${ghost.kind === 'ship' ? 'Ghost Ship' : 'Ghost Rider'} | ${escapeHtml(ghost.rarityName)}</p><h3><a class="ghost-record-link" href="${detailsPath}">${escapeHtml(ghost.name)}</a></h3></div><span class="threat-condition threat-condition-${condition.className}">${condition.label}</span></header><dl class="threat-facts"><div><dt>Region</dt><dd>${escapeHtml(ghost.regionName)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)}</dd></div><div><dt>Heading</dt><dd>${ghost.destinationCityName ? escapeHtml(ghost.destinationCityName) : 'Patrolling'}</dd></div></dl></div></article>`;
   }).join('');
   return `<section class="page-title"><div><p class="eyebrow">Living world</p><h1>World Events</h1></div><p>The sky shifts. The routes answer. Watch what moves through the regions you know.</p></section>
     <section id="moon" class="moon-card"><span class="moon-icon">${status.moon.icon}</span><div><p class="eyebrow">Lunar influence</p><h2>${escapeHtml(status.moon.name)}</h2><p>The light changes. So does the world.</p><small>About ${status.moon.ageDays.toFixed(1)} lunar days old | next phase in ${formatDuration(status.moon.nextPhaseAt - currentTime)}</small></div></section>
     <section><div class="section-heading"><div><p class="eyebrow">Current conditions</p><h2>Weather</h2></div></div><div class="weather-grid">${weather || '<p>Discover a region to read its weather.</p>'}</div><p class="muted">Read the sky before you send anything beyond the city.</p></section>
-    <section class="threat-board"><div class="section-heading"><div><p class="eyebrow">Known routes</p><h2>Route threats</h2></div><p>Keep watch beyond the city lights.</p></div><div class="threat-group"><h3>Living threats</h3><div class="threat-grid">${creatureCards || '<p class="threat-empty">For now, the living routes are quiet.</p>'}</div></div><div class="threat-group"><h3>The restless dead</h3><div class="threat-grid">${ghostCards || '<p class="threat-empty">Nothing dead is moving on the routes you know.</p>'}</div></div></section>`;
+    <section class="threat-board"><div class="section-heading"><div><p class="eyebrow">Known routes</p><h2>Route threats</h2></div><p>Send compatible vehicles along these routes. Encounters occur only when their journeys physically meet.</p></div><div class="threat-group"><h3>Living threats</h3><div class="threat-grid">${creatureCards || '<p class="threat-empty">For now, the living routes are quiet.</p>'}</div></div><div class="threat-group"><h3>The restless dead</h3><div class="threat-grid">${ghostCards || '<p class="threat-empty">Nothing dead is moving on the routes you know.</p>'}</div></div></section>`;
 }
 
 function historyPage() {
@@ -7768,6 +7807,9 @@ export function createApp(options = {}) {
         const result = store.detonateMine(
           session.playerId, mineId, Number(form.itemId), Number(form.count), catalog, now(), random
         );
+        store.advanceCouncilMissions(session.playerId, 'mine_detonate', {
+          cityId: result.cityId, quantity: result.quantityUsed
+        }, result.foundAt);
         const recordedFindings = result.findingEvents?.length
           ? result.findingEvents : result.finds;
         const items = findingNoticeItems(recordedFindings, catalog, {
@@ -7815,6 +7857,9 @@ export function createApp(options = {}) {
         player = null;
       }
       if (player) {
+        if (!liveFragment) {
+          player.council.availableMissions = store.refreshCouncilMissionOffers(player.id, now());
+        }
         player.currentPath = url.pathname;
         player.maintenanceNotice = maintenanceSnapshot();
         const activeCity = catalogCityForId(catalog, player.cityId);
@@ -8283,6 +8328,31 @@ export function createApp(options = {}) {
           layout('Dwarves', dwarvesPage(store.dwarfStatus(player.id), catalog, now()), player, flash));
       } else if (request.method === 'GET' && url.pathname === '/stones') {
         if (requirePlayer()) responseHtml(response, 200, layout('Stones', stonesPage(player, catalog), player, flash));
+      } else if (request.method === 'GET' && url.pathname === '/council') {
+        if (!requirePlayer()) return;
+        const councilTime = now();
+        responseHtml(response, 200, layout('Council orders',
+          councilPage(player, store.councilMissionBoard(player.id, councilTime), councilTime),
+          player, flash));
+      } else if (request.method === 'POST'
+        && /^\/council\/missions\/\d+\/(accept|abandon|deliver)$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const parts = url.pathname.split('/');
+        const missionId = Number(parts[3]);
+        const action = parts[4];
+        if (action === 'accept') {
+          const mission = store.acceptCouncilMission(player.id, missionId, now());
+          setFlash(mission.status === 'completed'
+            ? `Council order accepted and retrospectively approved: ${mission.title}. Its recorded work qualified.`
+            : `Council order accepted: ${mission.title}. Its badge is now compulsory.`);
+        } else if (action === 'deliver') {
+          const result = store.completeCouncilDelivery(player.id, missionId, now());
+          setFlash(`Council order completed. ${result.mission.rewardScraps.toLocaleString('en-GB')} Ore scraps and ${formatGold(result.mission.rewardGold)}g issued; no Credits.`);
+        } else {
+          store.abandonCouncilMission(player.id, missionId, now());
+          setFlash('Council order abandoned. No reputation was removed; several forms were generated.');
+        }
+        redirect(response, '/council');
       } else if (request.method === 'GET' && url.pathname === '/mines/auto-recycle') {
         if (requirePlayer()) responseHtml(response, 200, layout('Auto-Recycle', autoRecyclePage(store.autoRecycleCandidates(player.id, now()), catalog), player, flash));
       } else if (request.method === 'POST' && url.pathname === '/mines/auto-recycle') {
@@ -8293,6 +8363,9 @@ export function createApp(options = {}) {
           return { cityId, itemId, quantity: form[`quantity_${cityId}_${itemId}`] };
         });
         const result = store.autoRecycle(player.id, selections, now());
+        for (const [cityId, quantity] of Object.entries(result.itemsByCity)) {
+          store.advanceCouncilMissions(player.id, 'recycle', { cityId, quantity }, now());
+        }
         setFlash(`${result.items} ${result.items === 1 ? 'thing' : 'things'} recycled into ${result.scraps.toLocaleString('en-GB')} Ore scraps.`);
         redirect(response, '/inventory');
       } else if (request.method === 'GET' && url.pathname === '/gadgets') {
@@ -8301,6 +8374,9 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const itemId = Number(url.pathname.split('/')[2]);
         const gadget = store.activateGadget(player.id, itemId, now());
+        store.advanceCouncilMissions(player.id, 'gadget_activate', {
+          cityId: player.cityId
+        }, now());
         store.awardStone(player.id, 'Hacked', now());
         if (gadget.expiresAt >= now() + Number(catalog.settings.cracked_gadget_duration_ms)) {
           store.awardStone(player.id, 'Cracked', now());
@@ -8481,6 +8557,9 @@ export function createApp(options = {}) {
         const form = await readForm(request);
         const factory = store.startFactoryAction(player.id, factoryId, Number(form.actionId),
           form.itemId ? Number(form.itemId) : null, now());
+        store.advanceCouncilMissions(player.id, 'factory_start', {
+          cityId: player.cityId
+        }, now());
         setFlash(factory.enqueued
           ? `${factory.queuedJob.actionName} added to factory ${factory.id}'s queue.`
           : `${factory.actionName} started.`);
@@ -8527,6 +8606,9 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/workers\/\d+\/hire$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const worker = store.hireWorker(player.id, Number(url.pathname.split('/')[2]), now());
+        store.advanceCouncilMissions(player.id, 'worker_hire', {
+          cityId: player.cityId
+        }, now());
         store.awardStone(worker.playerId, 'Worked', now());
         setFlash(`${worker.name} hired for ${formatDuration(worker.expiresAt - now())} at ${worker.cph} cph.`);
         redirect(response, '/factories');
@@ -8544,10 +8626,11 @@ export function createApp(options = {}) {
       } else if (request.method === 'GET' && url.pathname === '/events') {
         if (!requirePlayer()) return;
         const eventTime = now();
-        const vehicles = store.vehiclesForPlayer(player.id, eventTime);
-        const status = store.worldEventStatus(player.id, eventTime, { includeHistory: false });
+        const status = store.worldEventStatus(player.id, eventTime, {
+          includeHistory: false, includeAttackOptions: false
+        });
         responseHtml(response, 200, layout('World Events',
-          worldEventsPage(player, catalog, status, vehicles, eventTime), player, flash));
+          worldEventsPage(catalog, status, eventTime), player, flash));
       } else if (request.method === 'GET' && /^\/events\/creatures\/\d+$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const eventTime = now();
@@ -8565,25 +8648,12 @@ export function createApp(options = {}) {
         responseHtml(response, 200, layout(ghost.name,
           ghostEventDetailPage(ghost, catalog, eventTime), player, flash));
       } else if (request.method === 'POST'
-        && /^\/events\/creatures\/\d+\/(?:attack|hunt)$/.test(url.pathname)) {
+        && /^\/events\/(?:creatures|ghosts)\/\d+\/(?:attack|hunt)$/.test(url.pathname)) {
         if (!requirePlayer()) return;
-        const creatureId = Number(url.pathname.split('/')[3]);
-        const form = await readForm(request);
-        const result = store.attackWorldCreature(
-          player.id, creatureId, Number(form.vehicleId), now()
-        );
-        setFlash(`${result.vehicleName} is underway to attack the ${result.creatureName}. Expected interception in ${formatDuration(result.duration)} at ${Math.round(result.encounterLocation).toLocaleString('en-GB')} km along the route.`);
-        redirect(response, '/events');
-      } else if (request.method === 'POST'
-        && /^\/events\/ghosts\/\d+\/(?:attack|hunt)$/.test(url.pathname)) {
-        if (!requirePlayer()) return;
-        const ghostId = Number(url.pathname.split('/')[3]);
-        const form = await readForm(request);
-        const result = store.attackGhost(
-          player.id, ghostId, Number(form.vehicleId), now()
-        );
-        setFlash(`${result.vehicleName} is underway to intercept ${result.ghostName}. Expected contact in ${formatDuration(result.duration)} at ${Math.round(result.encounterLocation).toLocaleString('en-GB')} km along the route.`);
-        redirect(response, '/events');
+        request.resume();
+        responseHtml(response, 410, layout('Direct hunts retired',
+          '<section class="page-title"><div><p class="eyebrow">Route encounters</p><h1>Direct hunts have ended</h1></div><a class="text-link" href="/events">Back to world events</a></section><section><h2>Meet threats on the road or sea</h2><p>Send a compatible vehicle along the threat\'s route. Combat begins only if their journeys physically meet.</p></section>',
+          player, flash));
       } else if (request.method === 'GET' && url.pathname === '/vehicles') {
         if (!requirePlayer()) return;
         const vehicleTime = now();
@@ -8813,6 +8883,11 @@ export function createApp(options = {}) {
           travelOrder: form.travelOrder,
           aggressiveVsSentry: form.attackSentry === 'on', additionalRouteIds
         });
+        const councilTravelOrder = String(form.travelOrder ?? 'peaceful');
+        store.advanceCouncilMissions(player.id,
+          councilTravelOrder === 'patrol' ? 'vehicle_patrol' : 'vehicle_send', {
+            cityId: player.cityId, travelOrder: councilTravelOrder
+          }, departureTime);
         store.awardStone(player.id, 'Travelled', departureTime);
         const destinationName = journey.mission
           ? oreThiefAircraftMissionCopy(departureVehicle, catalog).dispatch
@@ -9080,6 +9155,9 @@ export function createApp(options = {}) {
           player.id, form.slot, form.itemId, now()
         );
         const slot = home.slots.find((entry) => entry.slot === Number(form.slot));
+        if (slot?.item) store.advanceCouncilMissions(player.id, 'home_display', {
+          cityId: player.cityId
+        }, now());
         setFlash(slot?.item
           ? `${slot.item.name} is now on display at home.${home.stone
             ? ` The ${home.stone.name} Stone is cleared.` : ''}`
@@ -9102,12 +9180,23 @@ export function createApp(options = {}) {
         } else {
           try {
             const { value } = await readJson(request);
-            responseJson(response, 200, {
-              ok: true, ...store.moveInCity(
-                player.id, value.x, value.y, now(), random,
-                value.destinationX, value.destinationY
-              )
-            });
+            const movedAt = now();
+            const movement = store.moveInCity(
+              player.id, value.x, value.y, movedAt, random,
+              value.destinationX, value.destinationY
+            );
+            store.advanceCouncilMissions(player.id, 'explore_step', {
+              cityId: player.cityId
+            }, movedAt);
+            if (movement.pickup) store.advanceCouncilMissions(player.id, 'explore_scrap', {
+              cityId: player.cityId, quantity: movement.pickup.quantity
+            }, movedAt);
+            if (movement.visitedLocation) {
+              store.advanceCouncilMissions(player.id, 'explore_location', {
+                cityId: player.cityId
+              }, movedAt);
+            }
+            responseJson(response, 200, { ok: true, ...movement });
           } catch (error) {
             responseJson(response, error instanceof SyntaxError ? 400 : 409,
               { ok: false, error: error.message });
@@ -9119,9 +9208,12 @@ export function createApp(options = {}) {
         } else {
           try {
             const { value } = await readJson(request);
-            responseJson(response, 200, {
-              ok: true, ...store.readCityExplorationSign(player.id, value.signKey, now())
-            });
+            const readAt = now();
+            const reading = store.readCityExplorationSign(player.id, value.signKey, readAt);
+            if (reading.firstRead) store.advanceCouncilMissions(player.id, 'explore_sign', {
+              cityId: player.cityId
+            }, readAt);
+            responseJson(response, 200, { ok: true, ...reading });
           } catch (error) {
             responseJson(response, error instanceof SyntaxError ? 400 : 409,
               { ok: false, error: error.message });
@@ -9156,7 +9248,11 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && url.pathname === '/oil-field/deploy') {
         if (!requirePlayer()) return;
         const form = await readForm(request);
-        store.deployOilMachine(player.id, Number(form.hexId), Number(form.machineId), Number(form.point), now());
+        const deployedAt = now();
+        store.deployOilMachine(player.id, Number(form.hexId), Number(form.machineId), Number(form.point), deployedAt);
+        store.advanceCouncilMissions(player.id, 'oil_deploy', {
+          cityId: player.cityId
+        }, deployedAt);
         setFlash('Machine deployed in the Oil Field.');
         redirect(response, '/oil-field');
       } else if (request.method === 'POST' && url.pathname === '/oil-field/queue') {
@@ -9174,9 +9270,13 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && /^\/oil-field\/\d+\/claim$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const form = await readForm(request);
+        const claimedAt = now();
         const result = store.claimOilBarrel(
-          player.id, Number(url.pathname.split('/')[2]), now(), form.quantity === 'all', true
+          player.id, Number(url.pathname.split('/')[2]), claimedAt, form.quantity === 'all', true
         );
+        store.advanceCouncilMissions(player.id, 'oil_claim', {
+          cityId: player.cityId, quantity: result.claimedBarrels
+        }, claimedAt);
         setFlash(`${result.claimedBarrels} ${catalogItemForSetting(catalog, 'oil_item_id').name} ${result.claimedBarrels === 1 ? 'barrel' : 'barrels'} moved to your city inventory.`);
         redirect(response, '/oil-field');
       } else if (request.method === 'GET' && url.pathname === '/map') {
@@ -10052,6 +10152,9 @@ export function createApp(options = {}) {
         const { result } = store.mutatePlayer(player.id, (current) =>
           equipMine(current, catalog, Number(parts[2]), Number(parts[4]), changedAt),
         null, changedAt);
+        store.advanceCouncilMissions(player.id, 'mine_equip', {
+          cityId: player.cityId
+        }, changedAt);
         const item = catalog.byId.get(Number(parts[4]));
         setFlash(`${item.name} equipped${result.replacedItemId ? '; the previous item returned to local inventory' : ''}.`);
         redirect(response, `/mines/${parts[2]}/equipment`);
@@ -10083,9 +10186,13 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const mineId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
-        store.detonateMine(
-          player.id, mineId, Number(form.itemId), Number(form.count), catalog, now(), random
+        const detonatedAt = now();
+        const detonation = store.detonateMine(
+          player.id, mineId, Number(form.itemId), Number(form.count), catalog, detonatedAt, random
         );
+        store.advanceCouncilMissions(player.id, 'mine_detonate', {
+          cityId: detonation.cityId, quantity: detonation.quantityUsed
+        }, detonatedAt);
         redirect(response, `/mines/${mineId}/explosives?detonated=1`);
       } else if (request.method === 'POST' && /^\/mines\/\d+\/prioritize$/.test(url.pathname)) {
         if (!requirePlayer()) return;
@@ -10093,6 +10200,9 @@ export function createApp(options = {}) {
         const { result: mine } = store.mutatePlayer(player.id, (current) =>
           prioritizeMine(current, catalog, Number(url.pathname.split('/')[2]), changedAt),
         null, changedAt);
+        store.advanceCouncilMissions(player.id, 'mine_priority', {
+          cityId: player.cityId
+        }, changedAt);
         const type = catalogMineTypeForId(catalog, mine.mineTypeId);
         setFlash(`${type.name} is now top priority.`);
         redirect(response, '/');
@@ -10101,6 +10211,9 @@ export function createApp(options = {}) {
         const changedAt = now();
         const { result: mine } = store.mutatePlayer(player.id, (current) =>
           oilMineBot(current, catalog, Number(url.pathname.split('/')[2]), changedAt), null, changedAt);
+        store.advanceCouncilMissions(player.id, 'mine_oil', {
+          cityId: player.cityId
+        }, changedAt);
         setFlash(`Bot oiled for ${formatDuration(Number(catalog.settings.mine_oil_duration_ms))}. It now mines ${formatGold(Number(catalog.settings.mine_oil_buckets_per_hour))} extra buckets per hour.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/bot-parts\/\d+\/buy$/.test(url.pathname)) {
@@ -10241,7 +10354,11 @@ export function createApp(options = {}) {
         if (!item) throw new Error('Item not found.');
         const form = await readForm(request);
         if (parts[4] === 'listings') {
-          store.placeSellOrder(player.id, item.id, form.price, form.quantity, now());
+          const listedAt = now();
+          store.placeSellOrder(player.id, item.id, form.price, form.quantity, listedAt);
+          store.advanceCouncilMissions(player.id, 'market_listing', {
+            cityId: player.cityId
+          }, listedAt);
           setFlash('Your listing is now on the local market.');
         } else {
           store.placeBuyOrder(player.id, item.id, form.price, form.quantity, now());
@@ -10310,7 +10427,11 @@ export function createApp(options = {}) {
       } else if (request.method === 'POST' && url.pathname === '/inventory/refine-ore') {
         if (!requirePlayer()) return;
         const form = await readForm(request);
-        const result = store.refineOreScraps(player.id, form.quantity);
+        const refinedAt = now();
+        const result = store.refineOreScraps(player.id, form.quantity, refinedAt);
+        store.advanceCouncilMissions(player.id, 'refine_ore', {
+          cityId: player.cityId, quantity: result.ore
+        }, refinedAt);
         setFlash(`${result.scraps.toLocaleString('en-GB')} Ore scraps refined into ${result.ore.toLocaleString('en-GB')} Ore.`);
         redirect(response, '/inventory');
       } else if (request.method === 'POST' && /^\/inventory\/\d+\/break-down$/.test(url.pathname)) {
@@ -10336,7 +10457,13 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const itemId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
-        const result = store.recycleInventory(player.id, player.cityId, itemId, form.quantity, now());
+        const recycledAt = now();
+        const result = store.recycleInventory(
+          player.id, player.cityId, itemId, form.quantity, recycledAt
+        );
+        store.advanceCouncilMissions(player.id, 'recycle', {
+          cityId: player.cityId, quantity: result.quantity
+        }, recycledAt);
         setFlash(`${result.quantity} ${result.quantity === 1 ? 'thing' : 'things'} recycled into ${result.scraps.toLocaleString('en-GB')} Ore scraps.`);
         redirect(response, '/inventory');
       } else if (request.method === 'GET' && url.pathname === '/api/state') {

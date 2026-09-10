@@ -176,3 +176,98 @@ test('starts new miners in Aso and reveals Bromo only after gateway arrival', as
   assert.match(discoveredMap, /Ashfall/);
   assert.doesNotMatch(discoveredMap, /href="\/map\?world=calbuco"/);
 });
+
+test('decays regional expedition rewards across the first five pioneers and announces them',
+  (context) => {
+    const store = new SqliteStore(':memory:');
+    context.after(() => store.close());
+    store.seedCatalog(loadLegacyCatalog());
+    store.ensureWorldMaps(1000);
+    const catalog = store.loadCatalog();
+    const landType = Number(catalog.settings.route_type_ids.land);
+    const gateway = store.adminInterMapRoutes().find((route) =>
+      route.map1_name === 'Aso' && route.map2_name === 'Bromo'
+      && route.type === landType);
+    assert.ok(gateway);
+    store.database.prepare('UPDATE catalog_routes SET is_open = 1 WHERE id = ?')
+      .run(gateway.id);
+    const vehicleType = catalog.vehicles.find((vehicle) =>
+      vehicle.routeType === landType && catalog.byId.has(vehicle.itemId));
+    assert.ok(vehicleType);
+
+    const racers = [];
+    for (let index = 0; index < 6; index += 1) {
+      const player = store.addPlayer(createPlayer(
+        `Bromo Pioneer ${index + 1}`, '', 'hash', catalog, 1000 + index, () => 0.5
+      ));
+      store.database.prepare(`
+        INSERT INTO inventory (player_id, city_id, item_id, quantity)
+        VALUES (?, ?, ?, 1)
+        ON CONFLICT (player_id, city_id, item_id)
+        DO UPDATE SET quantity = quantity + 1
+      `).run(player.id, player.cityId, vehicleType.itemId);
+      const vehicleId = store.activateVehicle(player.id, vehicleType.itemId);
+      const creditsBefore = store.playerById(player.id).credits;
+      racers.push({ player, vehicleId, creditsBefore, journey: null });
+    }
+    [...racers].reverse().forEach((racer, index) => {
+      racer.journey = store.sendVehicle(
+        racer.player.id, racer.vehicleId, gateway.id, 2000 + index,
+        { travelOrder: 'peaceful' }
+      );
+    });
+    store.settleVehicles(Math.max(...racers.map((racer) => racer.journey.arrivesAt)));
+
+    const rewards = store.database.prepare(`
+      SELECT regional_expedition_rewards.*, world_maps.name AS map_name
+      FROM regional_expedition_rewards
+      JOIN world_maps ON world_maps.id = regional_expedition_rewards.map_id
+      WHERE world_maps.name = 'Bromo' ORDER BY position
+    `).all();
+    assert.deepEqual(rewards.map((reward) => ({
+      position: reward.position, playerName: reward.player_name, credits: reward.credits
+    })), [500, 400, 300, 200, 100].map((credits, index) => ({
+      position: index + 1, playerName: `Bromo Pioneer ${6 - index}`, credits
+    })));
+
+    racers.forEach((racer, index) => {
+      const expectedCredits = index * 100;
+      assert.equal(store.playerById(racer.player.id).credits,
+        racer.creditsBefore + expectedCredits);
+      const rewardMail = store.recentMessages(racer.player.id, 'all', 'City')
+        .find((message) => message.details.event === 'map-discovered');
+      if (index > 0) {
+        const expectedPosition = 6 - index;
+        assert.equal(rewardMail.details.position, expectedPosition);
+        assert.equal(rewardMail.details.rewardPlaces, 5);
+        assert.equal(rewardMail.details.credits, expectedCredits);
+        assert.ok(rewardMail.details.itemId);
+        assert.match(rewardMail.body,
+          new RegExp(`expedition ${expectedPosition} of 5.*${expectedCredits} credits`, 'u'));
+        assert.ok(rewardMail.actionLinks.some((action) => action.label === 'Rent a mine'
+          && action.href === '/market'));
+      } else {
+        assert.equal(rewardMail, undefined);
+        assert.equal(store.database.prepare(`
+          SELECT COUNT(*) AS count FROM finding_events
+          WHERE player_id = ? AND source = 'expedition'
+        `).get(racer.player.id).count, 0);
+      }
+    });
+
+    const observer = store.addPlayer(createPlayer(
+      'Aso Race Observer', '', 'hash', catalog, 3000, () => 0.5
+    ));
+    const announcements = store.recentChats(null, observer.id, 0)
+      .filter((chat) => chat.eventKey?.startsWith('frontier-expedition:'));
+    assert.equal(announcements.length, 5);
+    assert.deepEqual(announcements.map((announcement) => announcement.mapIds),
+      [[], [], [], [], []], 'the regional race is announced globally');
+    announcements.forEach((announcement, index) => {
+      assert.equal(announcement.kind, 'world');
+      assert.match(announcement.body, new RegExp(`Bromo Pioneer ${6 - index}`, 'u'));
+      assert.match(announcement.body, /Bromo/u);
+      assert.match(announcement.body, new RegExp(`${500 - index * 100} credits`, 'u'));
+      assert.equal(announcement.path, '/map?world=bromo');
+    });
+  });

@@ -70,6 +70,13 @@ const CASES = Object.freeze({
     context: { routeName: 'Cinderwake ↔ Blackglass', routeMode: 'land' },
     required: ['Cinderwake', 'Blackglass', 'land']
   },
+  'frontier-expedition': {
+    context: {
+      playerName: 'Ada', mapName: 'Bromo', position: 1,
+      credits: 500, itemName: 'Legendary Saffron'
+    },
+    required: ['Ada', 'Bromo', '1st', '500', 'Legendary Saffron']
+  },
   'creature-defeated': {
     context: {
       playerName: 'Ada', vehicleName: 'Patrol Boat', creatureName: 'Common Orca Pod',
@@ -109,6 +116,9 @@ test('generates stable context-safe copy for every world-chat announcement famil
   assert.match(generateWorldChatAnnouncement('route-closed', 'route-closed-one', {
     ...CASES['route-closed'].context, activeJourneys: 0
   }), /No journeys are underway/u);
+  assert.throws(() => generateWorldChatAnnouncement('frontier-expedition', 'bad-place', {
+    ...CASES['frontier-expedition'].context, position: 6
+  }), /position from 1 to 5/u);
 });
 
 test('mixes announcement phrasing broadly while event seeds remain deterministic', () => {

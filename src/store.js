@@ -63,6 +63,13 @@ import { EQUIPMENT_ICON_ITEM_IDS, equipmentIconPath } from './equipment-icons.js
 import { AVATAR_ICON_ITEM_IDS, avatarIconPath } from './avatar-icons.js';
 import { mineShopIconPath, SHOP_MINE_TYPE_IDS } from './mine-icons.js';
 import { generateCouncilDocket } from './council-sentencing.js';
+import {
+  COUNCIL_MISSION_ACTIVE_LIMIT, COUNCIL_MISSION_DIFFICULTIES,
+  COUNCIL_MISSION_OFFER_COUNT, COUNCIL_MISSION_OFFER_LIFETIME_MS,
+  COUNCIL_MISSION_RECENT_TEMPLATE_WINDOW,
+  COUNCIL_MISSION_TEMPLATES, councilOfferCycle, councilRankFor,
+  prepareCouncilMission, stableCouncilNumber
+} from './council-missions.js';
 import { generateWorldChatAnnouncement } from './world-chat-announcements.js';
 import {
   GADGET_AUTOMATION_INTERVAL_MINUTES,
@@ -82,7 +89,7 @@ import {
 } from './city-exploration.js';
 
 const GOLD_SCALE = 10000;
-const CURRENT_SCHEMA_VERSION = 139;
+const CURRENT_SCHEMA_VERSION = 141;
 const CHAT_HISTORY_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const SHILL_NETWORK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_MINE_CRYPTO_VALUE_UNITS = 10000 * GOLD_SCALE;
@@ -1612,6 +1619,19 @@ export class SqliteStore {
         PRIMARY KEY (player_id, city_id)
       );
 
+      CREATE TABLE IF NOT EXISTS regional_expedition_rewards (
+        map_id INTEGER NOT NULL REFERENCES world_maps(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 5),
+        player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+        player_name TEXT NOT NULL,
+        credits INTEGER NOT NULL CHECK (credits > 0),
+        item_id INTEGER REFERENCES catalog_items(id) ON DELETE SET NULL,
+        item_name TEXT,
+        awarded_at INTEGER NOT NULL,
+        PRIMARY KEY (map_id, position),
+        UNIQUE (map_id, player_id)
+      );
+
       CREATE TABLE IF NOT EXISTS mine_rental_vouchers (
         player_id INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
         granted_city_id INTEGER NOT NULL REFERENCES catalog_cities(id) ON DELETE RESTRICT,
@@ -2182,6 +2202,14 @@ export class SqliteStore {
     // A current database is authoritative. Historical migrations must never
     // repopulate a deliberately edited or removed live catalog row.
     if (schemaVersion === CURRENT_SCHEMA_VERSION) return;
+    if (schemaVersion === 140) {
+      this.#migrateTo141();
+      return;
+    }
+    if (schemaVersion === 139) {
+      this.#migrateTo140();
+      return;
+    }
     if (schemaVersion === 138) {
       this.#migrateTo139();
       return;
@@ -7243,6 +7271,156 @@ export class SqliteStore {
       }
       this.database.exec('PRAGMA user_version = 139');
     });
+    this.#migrateTo140();
+  }
+
+  #migrateTo140() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 140) return;
+      if (currentVersion !== 139) {
+        throw new Error(`Cannot add regional expedition rankings to v${currentVersion} directly.`);
+      }
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS regional_expedition_rewards (
+          map_id INTEGER NOT NULL REFERENCES world_maps(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 5),
+          player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+          player_name TEXT NOT NULL,
+          credits INTEGER NOT NULL CHECK (credits > 0),
+          item_id INTEGER REFERENCES catalog_items(id) ON DELETE SET NULL,
+          item_name TEXT,
+          awarded_at INTEGER NOT NULL,
+          PRIMARY KEY (map_id, position),
+          UNIQUE (map_id, player_id)
+        );
+      `);
+      const baseCreditsRow = this.database.prepare(`
+        SELECT value_json FROM catalog_settings
+        WHERE key = 'inter_map_first_arrival_credits'
+      `).get();
+      if (baseCreditsRow) {
+        const baseCredits = Number(JSON.parse(baseCreditsRow.value_json));
+        if (!Number.isSafeInteger(baseCredits) || baseCredits < 1) {
+          throw new Error('Cannot migrate an invalid inter-region expedition credit award.');
+        }
+        const awards = Array.from({ length: 5 }, (_, index) =>
+          Math.max(1, Math.round(baseCredits * (5 - index) / 5)));
+        this.database.prepare(`
+          INSERT OR IGNORE INTO catalog_settings (key, value_json) VALUES (?, ?)
+        `).run('inter_map_expedition_credit_awards', JSON.stringify(awards));
+      }
+      this.database.exec(`
+        WITH historical AS (
+          SELECT
+            CAST(json_extract(messages.details_json, '$.mapId') AS INTEGER) AS map_id,
+            messages.recipient_id AS player_id,
+            players.name AS player_name,
+            CAST(json_extract(messages.details_json, '$.credits') AS INTEGER) AS credits,
+            catalog_items.id AS item_id,
+            catalog_items.name AS item_name,
+            messages.created_at AS awarded_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY CAST(json_extract(messages.details_json, '$.mapId') AS INTEGER)
+              ORDER BY messages.created_at, messages.id
+            ) AS position
+          FROM messages
+          JOIN players ON players.id = messages.recipient_id
+          JOIN world_maps
+            ON world_maps.id = CAST(json_extract(messages.details_json, '$.mapId') AS INTEGER)
+          LEFT JOIN catalog_items
+            ON catalog_items.id = CAST(json_extract(messages.details_json, '$.itemId') AS INTEGER)
+          WHERE json_extract(messages.details_json, '$.event') = 'map-discovered'
+            AND CAST(json_extract(messages.details_json, '$.credits') AS INTEGER) > 0
+        )
+        INSERT OR IGNORE INTO regional_expedition_rewards
+          (map_id, position, player_id, player_name, credits,
+           item_id, item_name, awarded_at)
+        SELECT map_id, position, player_id, player_name, credits,
+          item_id, item_name, awarded_at
+        FROM historical WHERE position BETWEEN 1 AND 5;
+      `);
+      const historicalRewards = this.database.prepare(`
+        SELECT regional_expedition_rewards.*, world_maps.name AS map_name,
+          world_maps.slug AS map_slug, catalog_rarities.name AS rarity_name
+        FROM regional_expedition_rewards
+        JOIN world_maps ON world_maps.id = regional_expedition_rewards.map_id
+        LEFT JOIN catalog_items ON catalog_items.id = regional_expedition_rewards.item_id
+        LEFT JOIN catalog_rarities ON catalog_rarities.id = catalog_items.rarity
+        ORDER BY regional_expedition_rewards.map_id, regional_expedition_rewards.position
+      `).all();
+      for (const reward of historicalRewards) {
+        this.#announceWorldChat(
+          `frontier-expedition:${reward.map_id}:${reward.position}`,
+          'frontier-expedition', {
+            playerName: reward.player_name, mapName: reward.map_name,
+            position: reward.position, credits: reward.credits,
+            itemName: reward.item_name
+              ? `${reward.rarity_name ? `${reward.rarity_name} ` : ''}${reward.item_name}` : ''
+          }, reward.awarded_at, `/map?world=${encodeURIComponent(reward.map_slug)}`
+        );
+      }
+      this.database.exec('PRAGMA user_version = 140');
+    });
+    this.#migrateTo141();
+  }
+
+  #migrateTo141() {
+    this.#transaction(() => {
+      const currentVersion = this.database.prepare('PRAGMA user_version').get().user_version;
+      if (currentVersion >= 141) return;
+      if (currentVersion !== 140) {
+        throw new Error(`Cannot add Council missions to v${currentVersion} directly.`);
+      }
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS council_reputation (
+          player_id INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+          reputation INTEGER NOT NULL DEFAULT 0 CHECK (reputation >= 0),
+          completed_missions INTEGER NOT NULL DEFAULT 0 CHECK (completed_missions >= 0),
+          last_error_completed_mission INTEGER
+            CHECK (last_error_completed_mission IS NULL OR last_error_completed_mission > 0),
+          enrolled_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS council_missions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+          cycle_key TEXT NOT NULL,
+          slot INTEGER NOT NULL CHECK (slot BETWEEN 1 AND 4),
+          template_key TEXT NOT NULL,
+          family TEXT NOT NULL,
+          department TEXT NOT NULL,
+          title TEXT NOT NULL,
+          briefing TEXT NOT NULL,
+          objective_key TEXT NOT NULL,
+          difficulty TEXT NOT NULL
+            CHECK (difficulty IN ('petty', 'routine', 'serious', 'hazard', 'directive')),
+          target_quantity INTEGER NOT NULL CHECK (target_quantity > 0),
+          progress INTEGER NOT NULL DEFAULT 0 CHECK (progress >= 0),
+          details_json TEXT NOT NULL DEFAULT '{}',
+          reward_scraps INTEGER NOT NULL CHECK (reward_scraps > 0),
+          reward_gold_units INTEGER NOT NULL CHECK (reward_gold_units > 0),
+          reward_reputation INTEGER NOT NULL CHECK (reward_reputation > 0),
+          status TEXT NOT NULL DEFAULT 'offered'
+            CHECK (status IN ('offered', 'active', 'completed', 'expired', 'abandoned')),
+          offered_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          accepted_at INTEGER,
+          completed_at INTEGER,
+          reward_city_id INTEGER REFERENCES catalog_cities(id) ON DELETE SET NULL,
+          accidental_item_id INTEGER REFERENCES catalog_items(id) ON DELETE SET NULL,
+          accidental_item_name TEXT,
+          UNIQUE (player_id, cycle_key, slot)
+        );
+        CREATE INDEX IF NOT EXISTS council_missions_player_status
+          ON council_missions (player_id, status, expires_at, id);
+        CREATE INDEX IF NOT EXISTS council_missions_recent_templates
+          ON council_missions (player_id, completed_at DESC, template_key);
+
+        PRAGMA user_version = 141;
+      `);
+    });
   }
 
   #insertPrestigeSpecialisations() {
@@ -11394,6 +11572,7 @@ export class SqliteStore {
       id: row.id,
       name: row.name,
       docketNumber: row.docket_number,
+      council: this.#councilStanding(row.id),
       email: row.email,
       emailVerifiedAt: row.email_verified_at ?? null,
       emailVerified: row.email_verified_at !== null,
@@ -11603,10 +11782,12 @@ export class SqliteStore {
         'INSERT OR IGNORE INTO world_maps (id, name, slug, sort_order) VALUES (?, ?, ?, ?)'
       );
       for (const [id, name, slug] of definitions) addMap.run(id, name, slug, id);
-      this.database.prepare(`
-        INSERT OR IGNORE INTO catalog_settings (key, value_json)
-        VALUES ('inter_map_first_arrival_credits', '500')
-      `).run();
+      const insertWorldSetting = this.database.prepare(`
+        INSERT OR IGNORE INTO catalog_settings (key, value_json) VALUES (?, ?)
+      `);
+      insertWorldSetting.run('inter_map_first_arrival_credits', '500');
+      insertWorldSetting.run('inter_map_expedition_credit_awards',
+        JSON.stringify([500, 400, 300, 200, 100]));
       const existing = this.database.prepare('SELECT COUNT(*) AS count FROM catalog_cities WHERE map_id <> 7').get().count;
       if (!existing) {
         let nextCityId = this.database.prepare('SELECT COALESCE(MAX(id), 0) + 1 AS id FROM catalog_cities').get().id;
@@ -15301,6 +15482,9 @@ Compliance is compulsory. Enjoy your new life.
         meld.rarity >= Number(this.#setting('achievement_high_rarity_minimum')))) {
         this.awardStone(playerId, 'Fused', now);
       }
+      this.#advanceCouncilMissionsInTransaction(playerId, 'meld_create', {
+        quantity: created.length
+      }, now);
     }
     return created;
   }
@@ -15379,6 +15563,9 @@ Compliance is compulsory. Enjoy your new life.
       this.database.prepare(
         'INSERT INTO player_melds (player_id, meld_id, created_at) VALUES (?, ?, ?)'
       ).run(playerId, meldId, now);
+      this.#advanceCouncilMissionsInTransaction(playerId, 'meld_create', {
+        cityId: location.cityId
+      }, now);
       return { id: meld.id, name: meld.name, rarity: meld.rarity };
     });
   }
@@ -19286,6 +19473,7 @@ Compliance is compulsory. Enjoy your new life.
     return this.#transaction(() => {
       let items = 0;
       let scraps = 0;
+      const itemsByCity = {};
       for (const selection of normalized) {
         if (selection.quantity > this.#recyclableInventoryQuantity(
           playerId, selection.cityId, selection.itemId
@@ -19297,9 +19485,11 @@ Compliance is compulsory. Enjoy your new life.
         this.#changeScraps(playerId, selection.cityId, gained);
         items += selection.quantity;
         scraps += gained;
+        itemsByCity[selection.cityId] = (itemsByCity[selection.cityId] ?? 0)
+          + selection.quantity;
       }
       this.awardStone(playerId, 'Recycled', now);
-      return { items, scraps };
+      return { items, scraps, itemsByCity };
     });
   }
 
@@ -24875,7 +25065,7 @@ Compliance is compulsory. Enjoy your new life.
     return rewards;
   }
 
-  #ghostsVisibleTo(playerId, now, includeHistory = true) {
+  #ghostsVisibleTo(playerId, now, includeHistory = true, includeAttackOptions = true) {
     const retention = Number(this.#setting('world_event_outcome_retention_days'))
       * 24 * 60 * 60 * 1000;
     return this.database.prepare(`
@@ -24966,7 +25156,7 @@ Compliance is compulsory. Enjoy your new life.
         risenAt: row.risen_at, defeatedAt: row.defeated_at,
         defeatedByName: row.defeated_by_name, defeatedBattleId: row.defeated_battle_id,
         bounty: parsedArray(row.bounty_json),
-        attackOptions: row.defeated_at === null
+        attackOptions: includeAttackOptions && row.defeated_at === null
           ? this.#ghostAttackOptions(playerId, row, now) : []
       };
     });
@@ -25528,6 +25718,7 @@ Compliance is compulsory. Enjoy your new life.
 
   worldEventStatus(playerId, now = Date.now(), options = {}) {
     const includeHistory = options.includeHistory !== false;
+    const includeAttackOptions = options.includeAttackOptions !== false;
     this.settleWorldEvents(now);
     const clock = this.database.prepare(`
       SELECT last_slot_at, next_weather_at FROM world_event_clock WHERE id = 1
@@ -25629,7 +25820,7 @@ Compliance is compulsory. Enjoy your new life.
       defeatedByVehicleId: row.defeated_by_vehicle_id,
       totalDamage: row.total_damage, attackCount: row.attack_count,
       pursuers: pursuitsByCreature.get(row.id) ?? [],
-      attackOptions: row.status === 'active'
+      attackOptions: includeAttackOptions && row.status === 'active'
         ? this.#worldCreatureAttackOptions(playerId, row, now) : []
       };
     }).filter((entry) => knownMapIds.has(entry.mapId));
@@ -25649,7 +25840,9 @@ Compliance is compulsory. Enjoy your new life.
       defeated: Boolean(row.defeated), rewards: parsedArray(row.reward_json), createdAt: row.created_at
     })) : [];
     return { moon: moonPhaseAt(now), weather, creatures,
-      ghosts: this.#ghostsVisibleTo(playerId, now, includeHistory), attacks, climateSource:
+      ghosts: this.#ghostsVisibleTo(
+        playerId, now, includeHistory, includeAttackOptions
+      ), attacks, climateSource:
       String(this.#setting('weather_climate_source_url')) };
   }
 
@@ -25658,7 +25851,7 @@ Compliance is compulsory. Enjoy your new life.
     if (!Number.isSafeInteger(cleanCreatureId) || cleanCreatureId < 1) {
       throw new Error('That living-threat record is unavailable.');
     }
-    const creature = this.worldEventStatus(playerId, now).creatures
+    const creature = this.worldEventStatus(playerId, now, { includeAttackOptions: false }).creatures
       .find((entry) => Number(entry.id) === cleanCreatureId);
     if (!creature) throw new Error('That living-threat record is unavailable.');
     return creature;
@@ -25670,7 +25863,7 @@ Compliance is compulsory. Enjoy your new life.
       throw new Error('That restless-dead record is unavailable.');
     }
     this.settleWorldEvents(now);
-    const ghost = this.#ghostsVisibleTo(playerId, now)
+    const ghost = this.#ghostsVisibleTo(playerId, now, true, false)
       .find((entry) => Number(entry.id) === cleanGhostId);
     if (!ghost) throw new Error('That restless-dead record is unavailable.');
     return ghost;
@@ -26615,7 +26808,7 @@ Compliance is compulsory. Enjoy your new life.
           continue;
         }
         const destinationMap = this.database.prepare(`
-          SELECT world_maps.id, world_maps.name
+          SELECT world_maps.id, world_maps.name, world_maps.slug
           FROM catalog_cities JOIN world_maps ON world_maps.id = catalog_cities.map_id
           WHERE catalog_cities.id = ?
         `).get(vehicle.destination_city_id);
@@ -26756,26 +26949,66 @@ Compliance is compulsory. Enjoy your new life.
         }
         let frontierReward = null;
         if (firstMapArrival) {
-          const credits = this.#positiveIntegerSetting('inter_map_first_arrival_credits');
-          const item = this.database.prepare(`
-            SELECT catalog_items.id, catalog_items.name
-            FROM catalog_city_mine_types
-            JOIN catalog_items ON catalog_items.mine_type_id = catalog_city_mine_types.mine_type_id
-            WHERE catalog_city_mine_types.city_id = ? AND catalog_items.can_find = 1
-              AND catalog_items.repaired_item_id IS NULL
-            ORDER BY catalog_items.rarity DESC, catalog_items.id LIMIT 1
-          `).get(vehicle.destination_city_id);
-          this.database.prepare('UPDATE players SET credits = credits + ? WHERE id = ?')
-            .run(credits, playerId);
-          if (item) {
-            this.#changeInventory(playerId, vehicle.destination_city_id, item.id, 1);
-            this.#recordFindings(playerId, [{
-              itemId: item.id, quantity: 1, cityId: vehicle.destination_city_id,
-              foundAt: settledAt, source: 'expedition', sourceName: 'Expedition reward'
-            }], 'expedition', settledAt);
-          }
-          frontierReward = { mapName: destinationMap.name, credits, item };
           this.awardStone(playerId, 'Gated', settledAt);
+          const creditAwards = this.#setting('inter_map_expedition_credit_awards');
+          if (!Array.isArray(creditAwards) || creditAwards.length !== 5
+            || creditAwards.some((credits) =>
+              !Number.isSafeInteger(Number(credits)) || Number(credits) < 1)) {
+            throw new Error('Inter-region expedition credit awards must contain five positive integers.');
+          }
+          const priorReward = this.database.prepare(`
+            SELECT 1 FROM regional_expedition_rewards
+            WHERE map_id = ? AND player_id = ?
+          `).get(destinationMap.id, playerId);
+          const position = Number(this.database.prepare(`
+            SELECT COALESCE(MAX(position), 0) + 1 AS position
+            FROM regional_expedition_rewards WHERE map_id = ?
+          `).get(destinationMap.id).position);
+          if (!priorReward && position <= creditAwards.length) {
+            const credits = Number(creditAwards[position - 1]);
+            const item = this.database.prepare(`
+              SELECT catalog_items.id, catalog_items.name,
+                catalog_rarities.name AS rarity_name
+              FROM catalog_city_mine_types
+              JOIN catalog_items
+                ON catalog_items.mine_type_id = catalog_city_mine_types.mine_type_id
+              JOIN catalog_rarities ON catalog_rarities.id = catalog_items.rarity
+              WHERE catalog_city_mine_types.city_id = ? AND catalog_items.can_find = 1
+                AND catalog_items.repaired_item_id IS NULL
+              ORDER BY catalog_items.rarity DESC, catalog_items.id LIMIT 1
+            `).get(vehicle.destination_city_id);
+            const playerName = this.database.prepare(
+              'SELECT name FROM players WHERE id = ?'
+            ).get(playerId)?.name;
+            if (!playerName) throw new Error('Expedition reward miner is unavailable.');
+            this.database.prepare(`
+              INSERT INTO regional_expedition_rewards
+                (map_id, position, player_id, player_name, credits,
+                 item_id, item_name, awarded_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(destinationMap.id, position, playerId, playerName, credits,
+              item?.id ?? null, item?.name ?? null, settledAt);
+            this.database.prepare('UPDATE players SET credits = credits + ? WHERE id = ?')
+              .run(credits, playerId);
+            if (item) {
+              this.#changeInventory(playerId, vehicle.destination_city_id, item.id, 1);
+              this.#recordFindings(playerId, [{
+                itemId: item.id, quantity: 1, cityId: vehicle.destination_city_id,
+                foundAt: settledAt, source: 'expedition', sourceName: 'Expedition reward'
+              }], 'expedition', settledAt);
+            }
+            frontierReward = {
+              mapName: destinationMap.name, mapSlug: destinationMap.slug,
+              position, rewardPlaces: creditAwards.length, credits, item
+            };
+            this.#announceWorldChat(
+              `frontier-expedition:${destinationMap.id}:${position}`,
+              'frontier-expedition', {
+                playerName, mapName: destinationMap.name, position, credits,
+                itemName: item ? `${item.rarity_name} ${item.name}` : ''
+              }, settledAt, `/map?world=${encodeURIComponent(destinationMap.slug)}`
+            );
+          }
         }
         if (!continuesJourney && cargo.some((entry) => !entry.is_weapon)) {
           this.awardStone(playerId, 'Transported', settledAt);
@@ -26861,11 +27094,12 @@ Compliance is compulsory. Enjoy your new life.
         }
         if (frontierReward) {
           this.#insertSystemMessage(playerId, 'City', `${frontierReward.mapName} expedition reward`,
-            `You are among the first expeditions to reach ${frontierReward.mapName}. You received ${frontierReward.credits} credits${frontierReward.item ? ' and the expedition item shown below' : ''}. Establish mines and markets here before the corridor economy fills up.`,
+            `You were expedition ${frontierReward.position} of ${frontierReward.rewardPlaces} to reach ${frontierReward.mapName}. You received ${frontierReward.credits} credits${frontierReward.item ? ' and the expedition item shown below' : ''}. Establish mines and markets here before the corridor economy fills up.`,
             settledAt, `map:${destinationMap.id}:first-arrival:${playerId}`, {
               event: 'map-discovered', mapId: destinationMap.id, mapName: destinationMap.name,
+              position: frontierReward.position, rewardPlaces: frontierReward.rewardPlaces,
               credits: frontierReward.credits, itemId: frontierReward.item?.id,
-              actions: [{ label: 'Explore the map', path: '/map' }, { label: 'Buy a mine', path: '/market' }]
+              actions: [{ label: 'Explore the map', path: '/map' }, { label: 'Rent a mine', path: '/market' }]
             });
         }
         const actions = [
@@ -26953,6 +27187,7 @@ Compliance is compulsory. Enjoy your new life.
   settleVehicles(now = Date.now()) {
     this.#transaction(() => this.#settleDueVehicleEncounters(now));
     const players = this.database.prepare(`
+      SELECT player_id FROM (
       SELECT player_id FROM player_vehicles
       WHERE status = 'traveling' AND arrives_at IS NOT NULL AND arrives_at <= ?
       UNION
@@ -27001,10 +27236,19 @@ Compliance is compulsory. Enjoy your new life.
             ORDER BY created_at DESC, id DESC LIMIT 1
           ) <= ?
         )
-      ORDER BY player_id
+      ) AS due_players
+      GROUP BY player_id
+      ORDER BY COALESCE((
+        SELECT MIN(due_vehicles.arrives_at)
+        FROM player_vehicles AS due_vehicles
+        WHERE due_vehicles.player_id = due_players.player_id
+          AND due_vehicles.status = 'traveling'
+          AND due_vehicles.arrives_at IS NOT NULL
+          AND due_vehicles.arrives_at <= ?
+      ), ?), player_id
     `).all(now, now, now - SHUTTLE_RETRY_INTERVAL_MS,
       now, now - VEHICLE_CONVOY_RETRY_INTERVAL_MS,
-      now - CITY_VEHICLE_REPAIR_DURATION_MS).map((row) => row.player_id);
+      now - CITY_VEHICLE_REPAIR_DURATION_MS, now, now).map((row) => row.player_id);
     const summary = {
       playersProcessed: players.length,
       aircraftResolved: 0,
@@ -31930,6 +32174,561 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         insert.run(playerId, element.typeId, element.id, element.itemId, element.filename, element.gender, element.rarity);
       }
       return selected.length;
+    });
+  }
+
+  #councilStanding(playerId) {
+    const row = this.database.prepare(`
+      SELECT reputation, completed_missions, last_error_completed_mission,
+        enrolled_at, updated_at
+      FROM council_reputation WHERE player_id = ?
+    `).get(Number(playerId));
+    const availableMissions = Number(this.database.prepare(`
+      SELECT COUNT(*) AS count FROM council_missions
+      WHERE player_id = ? AND status = 'offered'
+    `).get(Number(playerId)).count);
+    return {
+      ...councilRankFor(row?.reputation ?? 0, Boolean(row)),
+      availableMissions,
+      completedMissions: Number(row?.completed_missions ?? 0),
+      lastErrorCompletedMission: row?.last_error_completed_mission === null
+        || row?.last_error_completed_mission === undefined
+        ? null : Number(row.last_error_completed_mission),
+      enrolledAt: row ? Number(row.enrolled_at) : null,
+      updatedAt: row ? Number(row.updated_at) : null
+    };
+  }
+
+  councilStanding(playerId) {
+    if (!this.hasPlayer(playerId)) throw new Error('Player not found.');
+    return this.#councilStanding(playerId);
+  }
+
+  #councilMissionRow(row) {
+    if (!row) return null;
+    return {
+      id: Number(row.id), playerId: Number(row.player_id), cycleKey: row.cycle_key,
+      slot: Number(row.slot), templateKey: row.template_key, family: row.family,
+      department: row.department, title: row.title, briefing: row.briefing,
+      objectiveKey: row.objective_key, difficulty: row.difficulty,
+      targetQuantity: Number(row.target_quantity), progress: Number(row.progress),
+      details: parsedObject(row.details_json), rewardScraps: Number(row.reward_scraps),
+      rewardGoldUnits: Number(row.reward_gold_units),
+      rewardGold: Number(row.reward_gold_units) / GOLD_SCALE,
+      rewardReputation: Number(row.reward_reputation), status: row.status,
+      offeredAt: Number(row.offered_at), expiresAt: Number(row.expires_at),
+      acceptedAt: row.accepted_at === null ? null : Number(row.accepted_at),
+      completedAt: row.completed_at === null ? null : Number(row.completed_at),
+      rewardCityId: row.reward_city_id === null ? null : Number(row.reward_city_id),
+      accidentalItemId: row.accidental_item_id === null
+        ? null : Number(row.accidental_item_id),
+      accidentalItemName: row.accidental_item_name ?? null
+    };
+  }
+
+  #councilCapabilities(playerId, cityId) {
+    const localInventory = this.database.prepare(`
+      SELECT inventory.item_id, inventory.quantity,
+        MAX(0, inventory.quantity - COALESCE(protected_inventory.quantity, 0)) AS usable,
+        catalog_items.name, catalog_items.rarity
+      FROM inventory
+      JOIN catalog_items ON catalog_items.id = inventory.item_id
+      LEFT JOIN protected_inventory
+        ON protected_inventory.player_id = inventory.player_id
+        AND protected_inventory.city_id = inventory.city_id
+        AND protected_inventory.item_id = inventory.item_id
+      WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
+      GROUP BY inventory.item_id, inventory.quantity, protected_inventory.quantity,
+        catalog_items.name, catalog_items.rarity
+      ORDER BY catalog_items.rarity, catalog_items.name, inventory.item_id
+    `).all(playerId, cityId).map((row) => ({
+      itemId: Number(row.item_id), quantity: Number(row.quantity), usable: Number(row.usable),
+      name: row.name, rarity: Number(row.rarity)
+    }));
+    const exists = (sql, ...values) => Boolean(this.database.prepare(sql).get(...values));
+    const oilItemId = this.#itemIdSetting('oil_item_id');
+    const localMines = exists(
+      'SELECT 1 FROM mines WHERE player_id = ? AND city_id = ? LIMIT 1', playerId, cityId
+    );
+    const scraps = this.database.prepare(`
+      SELECT COALESCE(quantity, 0) AS quantity FROM recycling_scraps
+      WHERE player_id = ? AND city_id = ?
+    `).get(playerId, cityId)?.quantity ?? 0;
+    return {
+      localInventory,
+      flags: new Set([
+        'always',
+        ...(localInventory.some((item) => item.usable > 0)
+          ? ['hasRecyclable', 'hasDisplayCandidate', 'hasListable'] : []),
+        ...(Number(scraps) >= this.#positiveIntegerSetting('recycling_scraps_per_ore')
+          ? ['hasRefinableScraps'] : []),
+        ...(localMines ? ['hasMine'] : []),
+        ...(localMines && localInventory.some((item) => item.itemId === oilItemId)
+          ? ['hasMineOil'] : []),
+        ...(localMines && exists(`
+          SELECT 1 FROM inventory JOIN catalog_equipment
+            ON catalog_equipment.item_id = inventory.item_id
+          WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
+          LIMIT 1
+        `, playerId, cityId) ? ['hasMineEquipment'] : []),
+        ...(localMines && exists(`
+          SELECT 1 FROM inventory JOIN catalog_explosives
+            ON catalog_explosives.item_id = inventory.item_id
+          WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
+          LIMIT 1
+        `, playerId, cityId) ? ['hasExplosives'] : []),
+        ...(exists(`
+          SELECT 1 FROM catalog_melds
+          WHERE is_public = 1 AND NOT EXISTS (
+            SELECT 1 FROM player_melds
+            WHERE player_melds.player_id = ? AND player_melds.meld_id = catalog_melds.id
+          ) LIMIT 1
+        `, playerId) ? ['hasMeldOpportunity'] : []),
+        ...(exists(`
+          SELECT 1 FROM inventory JOIN catalog_gadget_items
+            ON catalog_gadget_items.item_id = inventory.item_id
+          WHERE inventory.player_id = ? AND inventory.quantity > 0 LIMIT 1
+        `, playerId) ? ['hasGadgetActivator'] : []),
+        ...(exists(`
+          SELECT 1 FROM factories
+          WHERE operator_id = ? AND city_id = ? AND built = 1 LIMIT 1
+        `, playerId, cityId) ? ['hasFactory'] : []),
+        ...(exists(`
+          SELECT 1 FROM inventory JOIN catalog_machines
+            ON catalog_machines.item_id = inventory.item_id
+          JOIN oil_hexes ON oil_hexes.city_id = inventory.city_id
+          WHERE inventory.player_id = ? AND inventory.city_id = ?
+            AND inventory.quantity > 0 LIMIT 1
+        `, playerId, cityId) ? ['hasOilMachine'] : []),
+        ...(exists(`
+          SELECT 1 FROM oil_machines JOIN oil_hexes ON oil_hexes.id = oil_machines.hex_id
+          WHERE oil_machines.player_id = ? AND oil_hexes.city_id = ?
+            AND oil_hexes.barrels > 0 LIMIT 1
+        `, playerId, cityId) ? ['hasOilClaim'] : []),
+        ...(exists(`
+          SELECT 1 FROM player_vehicles
+          WHERE player_id = ? AND city_id = ? AND status = 'idle' LIMIT 1
+        `, playerId, cityId) ? ['hasVehicle'] : [])
+      ])
+    };
+  }
+
+  #generateCouncilOffers(playerId, now) {
+    const player = this.database.prepare(`
+      SELECT players.city_id, players.docket_number, catalog_cities.name AS city_name
+      FROM players JOIN catalog_cities ON catalog_cities.id = players.city_id
+      WHERE players.id = ? AND players.is_npc = 0
+    `).get(playerId);
+    if (!player) throw new Error('Player not found.');
+    const cycleKey = councilOfferCycle(now);
+    const existing = this.database.prepare(`
+      SELECT slot FROM council_missions WHERE player_id = ? AND cycle_key = ?
+    `).all(playerId, cycleKey);
+    if (existing.length >= COUNCIL_MISSION_OFFER_COUNT) return;
+
+    const context = { cityId: Number(player.city_id), cityName: player.city_name };
+    const capabilities = this.#councilCapabilities(playerId, context.cityId);
+    const recentKeys = new Set(this.database.prepare(`
+      SELECT template_key FROM council_missions
+      WHERE player_id = ? AND status = 'completed'
+      ORDER BY completed_at DESC, id DESC
+    `).all(playerId).slice(0, COUNCIL_MISSION_RECENT_TEMPLATE_WINDOW)
+      .map((row) => row.template_key));
+    const seed = `${player.docket_number}:${cycleKey}`;
+    const eligibleTemplates = COUNCIL_MISSION_TEMPLATES.filter((template) =>
+      capabilities.flags.has(template.eligibility));
+    const freshTemplates = eligibleTemplates.filter((template) => !recentKeys.has(template.key));
+    const sourceTemplates = freshTemplates.length >= COUNCIL_MISSION_OFFER_COUNT
+      ? freshTemplates : eligibleTemplates;
+    const candidates = sourceTemplates.map((template) => ({
+      template,
+      order: stableCouncilNumber(seed, `template:${template.key}`, 0x7fffffff)
+    })).sort((first, second) => first.order - second.order
+      || first.template.key.localeCompare(second.template.key));
+
+    const deliveryItems = capabilities.localInventory.filter((item) =>
+      item.usable > 0 && item.rarity <= 1);
+    if (deliveryItems.length) {
+      const item = deliveryItems[stableCouncilNumber(seed, 'delivery-item', deliveryItems.length)];
+      const quantity = Math.min(item.usable,
+        1 + stableCouncilNumber(seed, 'delivery-quantity', 3));
+      candidates.push({
+        order: stableCouncilNumber(seed, 'template:deliver-item', 0x7fffffff),
+        template: {
+          key: 'deliver-item', family: 'procurement',
+          department: 'Office of Strategic Clutter', objectiveKey: 'delivery',
+          difficulty: 'routine',
+          prepared: {
+            title: `Transfer of Excess ${item.name}`,
+            briefing: `Surrender ${quantity} ${item.name}${quantity === 1 ? '' : 's'} to the Council office in ${context.cityName}.`,
+            targetQuantity: quantity,
+            details: { actionPath: '/council', filter: { cityId: context.cityId },
+              delivery: { itemId: item.itemId, itemName: item.name, cityId: context.cityId } }
+          }
+        }
+      });
+      candidates.sort((first, second) => first.order - second.order
+        || first.template.key.localeCompare(second.template.key));
+    }
+
+    const occupiedSlots = new Set(existing.map((row) => Number(row.slot)));
+    const selectedFamilies = new Set();
+    const selected = [];
+    for (const candidate of candidates) {
+      if (selectedFamilies.has(candidate.template.family)) continue;
+      selectedFamilies.add(candidate.template.family);
+      selected.push(candidate.template);
+      if (selected.length >= COUNCIL_MISSION_OFFER_COUNT) break;
+    }
+    if (selected.length < COUNCIL_MISSION_OFFER_COUNT) {
+      for (const candidate of candidates) {
+        if (selected.includes(candidate.template)) continue;
+        selected.push(candidate.template);
+        if (selected.length >= COUNCIL_MISSION_OFFER_COUNT) break;
+      }
+    }
+    const insert = this.database.prepare(`
+      INSERT OR IGNORE INTO council_missions
+        (player_id, cycle_key, slot, template_key, family, department, title, briefing,
+         objective_key, difficulty, target_quantity, details_json, reward_scraps,
+         reward_gold_units, reward_reputation, offered_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    let selectedIndex = 0;
+    for (let slot = 1; slot <= COUNCIL_MISSION_OFFER_COUNT; slot += 1) {
+      if (occupiedSlots.has(slot)) continue;
+      const template = selected[selectedIndex++];
+      if (!template) break;
+      const prepared = template.prepared
+        ?? prepareCouncilMission(template, context, `${seed}:${slot}`);
+      const difficulty = COUNCIL_MISSION_DIFFICULTIES[template.difficulty];
+      if (!difficulty) throw new Error(`Invalid Council difficulty: ${template.difficulty}.`);
+      insert.run(playerId, cycleKey, slot, template.key, template.family,
+        template.department, prepared.title, prepared.briefing, template.objectiveKey,
+        difficulty.key, prepared.targetQuantity, JSON.stringify(prepared.details),
+        difficulty.scraps, difficulty.goldUnits, difficulty.reputation,
+        now, now + COUNCIL_MISSION_OFFER_LIFETIME_MS);
+    }
+  }
+
+  #synchronizeCouncilMissionRewards(playerId) {
+    const update = this.database.prepare(`
+      UPDATE council_missions
+      SET reward_scraps = ?, reward_gold_units = ?, reward_reputation = ?
+      WHERE player_id = ? AND status IN ('offered', 'active') AND difficulty = ?
+    `);
+    for (const difficulty of Object.values(COUNCIL_MISSION_DIFFICULTIES)) {
+      update.run(difficulty.scraps, difficulty.goldUnits, difficulty.reputation,
+        playerId, difficulty.key);
+    }
+  }
+
+  #reconcileRecordedCouncilMissions(playerId, now, missionId = null) {
+    const progressTypes = {
+      explore_location: 'location',
+      explore_sign: 'sign'
+    };
+    const rows = this.database.prepare(`
+      SELECT * FROM council_missions
+      WHERE player_id = ? AND status = 'active'
+        AND objective_key IN ('explore_location', 'explore_sign', 'meld_create')
+        AND (? IS NULL OR id = ?)
+      ORDER BY accepted_at, id
+    `).all(playerId, missionId, missionId);
+    for (const row of rows) {
+      if (row.objective_key === 'meld_create') {
+        const recorded = Number(this.database.prepare(`
+          SELECT COUNT(*) AS count FROM player_melds
+          WHERE player_id = ? AND created_at >= ? AND created_at <= ?
+        `).get(playerId, row.accepted_at, now).count);
+        const progress = Math.min(Number(row.target_quantity),
+          Math.max(Number(row.progress), recorded));
+        if (progress === Number(row.progress)) continue;
+        this.database.prepare('UPDATE council_missions SET progress = ? WHERE id = ?')
+          .run(progress, row.id);
+        if (progress >= Number(row.target_quantity)) {
+          this.#completeCouncilMission({ ...row, progress }, null, now);
+        }
+        continue;
+      }
+      const progressType = progressTypes[row.objective_key];
+      const details = parsedObject(row.details_json);
+      const cityId = Number(details.filter?.cityId);
+      if (!progressType || !Number.isSafeInteger(cityId)) continue;
+      const recorded = Number(this.database.prepare(`
+        SELECT COUNT(*) AS count FROM city_exploration_progress
+        WHERE player_id = ? AND city_id = ? AND progress_type = ?
+          AND completed_at >= ? AND completed_at <= ?
+      `).get(playerId, cityId, progressType, row.offered_at, now).count);
+      const progress = Math.min(Number(row.target_quantity),
+        Math.max(Number(row.progress), recorded));
+      if (progress === Number(row.progress)) continue;
+      this.database.prepare('UPDATE council_missions SET progress = ? WHERE id = ?')
+        .run(progress, row.id);
+      if (progress >= Number(row.target_quantity)) {
+        this.#completeCouncilMission({ ...row, progress }, cityId, now);
+      }
+    }
+  }
+
+  councilMissionBoard(playerId, now = Date.now()) {
+    const timestamp = Math.round(Number(now));
+    if (!Number.isFinite(timestamp)) throw new Error('Invalid Council mission time.');
+    return this.#transaction(() => {
+      if (!this.hasPlayer(playerId)) throw new Error('Player not found.');
+      this.database.prepare(`
+        UPDATE council_missions SET status = 'expired'
+        WHERE player_id = ? AND status IN ('offered', 'active') AND expires_at <= ?
+      `).run(playerId, timestamp);
+      this.#generateCouncilOffers(playerId, timestamp);
+      this.#synchronizeCouncilMissionRewards(playerId);
+      this.#reconcileRecordedCouncilMissions(playerId, timestamp);
+      const rows = this.database.prepare(`
+        SELECT * FROM council_missions WHERE player_id = ?
+        ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'offered' THEN 1
+          WHEN 'completed' THEN 2 ELSE 3 END,
+          COALESCE(completed_at, accepted_at, offered_at) DESC, id DESC
+      `).all(playerId).map((row) => this.#councilMissionRow(row));
+      return {
+        standing: this.#councilStanding(playerId),
+        activeLimit: COUNCIL_MISSION_ACTIVE_LIMIT,
+        active: rows.filter((mission) => mission.status === 'active'),
+        offered: rows.filter((mission) => mission.status === 'offered'),
+        history: rows.filter((mission) =>
+          ['completed', 'expired', 'abandoned'].includes(mission.status)).slice(0, 20)
+      };
+    });
+  }
+
+  refreshCouncilMissionOffers(playerId, now = Date.now()) {
+    const timestamp = Math.round(Number(now));
+    if (!Number.isFinite(timestamp)) throw new Error('Invalid Council mission time.');
+    return this.#transaction(() => {
+      if (!this.hasPlayer(playerId)) throw new Error('Player not found.');
+      this.database.prepare(`
+        UPDATE council_missions SET status = 'expired'
+        WHERE player_id = ? AND status IN ('offered', 'active') AND expires_at <= ?
+      `).run(playerId, timestamp);
+      this.#generateCouncilOffers(playerId, timestamp);
+      this.#synchronizeCouncilMissionRewards(playerId);
+      this.#reconcileRecordedCouncilMissions(playerId, timestamp);
+      return Number(this.database.prepare(`
+        SELECT COUNT(*) AS count FROM council_missions
+        WHERE player_id = ? AND status = 'offered'
+      `).get(playerId).count);
+    });
+  }
+
+  acceptCouncilMission(playerId, missionId, now = Date.now()) {
+    return this.#transaction(() => {
+      const mission = this.database.prepare(`
+        SELECT * FROM council_missions WHERE id = ? AND player_id = ?
+      `).get(Number(missionId), Number(playerId));
+      if (!mission || mission.status !== 'offered') {
+        throw new Error('That Council order is no longer available.');
+      }
+      if (Number(mission.expires_at) <= now) {
+        this.database.prepare("UPDATE council_missions SET status = 'expired' WHERE id = ?")
+          .run(mission.id);
+        throw new Error('That Council order has expired.');
+      }
+      const activeCount = this.database.prepare(`
+        SELECT COUNT(*) AS count FROM council_missions
+        WHERE player_id = ? AND status = 'active' AND expires_at > ?
+      `).get(playerId, now).count;
+      if (Number(activeCount) >= COUNCIL_MISSION_ACTIVE_LIMIT) {
+        throw new Error(`Only ${COUNCIL_MISSION_ACTIVE_LIMIT} Council orders may be active.`);
+      }
+      this.database.prepare(`
+        INSERT OR IGNORE INTO council_reputation
+          (player_id, reputation, completed_missions, enrolled_at, updated_at)
+        VALUES (?, 0, 0, ?, ?)
+      `).run(playerId, now, now);
+      const standing = this.#councilStanding(playerId);
+      const completionNumber = standing.completedMissions + 1;
+      const reservedAdministrativeError = Boolean(this.database.prepare(`
+        SELECT 1 FROM council_missions
+        WHERE player_id = ? AND status = 'active' AND accidental_item_id IS NOT NULL
+        LIMIT 1
+      `).get(playerId));
+      const guaranteedError = !reservedAdministrativeError && completionNumber
+        - Number(standing.lastErrorCompletedMission ?? 0) >= 50;
+      const administrativeError = guaranteedError
+        || stableCouncilNumber(`${playerId}:${mission.id}`, 'administrative-error', 100) < 2;
+      let accidentalItem = null;
+      if (administrativeError) {
+        const candidates = this.database.prepare(`
+          SELECT id, name FROM catalog_items
+          WHERE can_find = 1 AND is_damaged = 0 AND rarity BETWEEN 2 AND 4
+          ORDER BY rarity, name COLLATE NOCASE, id
+        `).all();
+        if (candidates.length) {
+          accidentalItem = candidates[
+            stableCouncilNumber(`${playerId}:${mission.id}`, 'accidental-item', candidates.length)
+          ];
+        }
+      }
+      const difficulty = COUNCIL_MISSION_DIFFICULTIES[mission.difficulty];
+      this.database.prepare(`
+        UPDATE council_missions
+        SET status = 'active', accepted_at = ?, expires_at = ?, progress = ?,
+          accidental_item_id = ?, accidental_item_name = ?
+        WHERE id = ?
+      `).run(now, now + difficulty.activeLifetimeMs, Number(mission.progress),
+        accidentalItem?.id ?? null, accidentalItem?.name ?? null, mission.id);
+      this.#reconcileRecordedCouncilMissions(playerId, now, mission.id);
+      return this.#councilMissionRow(this.database.prepare(
+        'SELECT * FROM council_missions WHERE id = ?'
+      ).get(mission.id));
+    });
+  }
+
+  abandonCouncilMission(playerId, missionId, now = Date.now()) {
+    return this.#transaction(() => {
+      const changed = this.database.prepare(`
+        UPDATE council_missions SET status = 'abandoned', expires_at = ?
+        WHERE id = ? AND player_id = ? AND status = 'active'
+      `).run(now, Number(missionId), Number(playerId));
+      if (!changed.changes) throw new Error('That Council order is not active.');
+      return true;
+    });
+  }
+
+  #completeCouncilMission(row, rewardCityId, now) {
+    const mission = this.#councilMissionRow(row);
+    const player = this.database.prepare('SELECT name, city_id FROM players WHERE id = ?')
+      .get(mission.playerId);
+    if (!player) throw new Error('Player not found.');
+    const cityId = Number(rewardCityId ?? player.city_id);
+    const city = this.database.prepare('SELECT name FROM catalog_cities WHERE id = ?').get(cityId);
+    if (!city) throw new Error('Council reward city not found.');
+    const previousStanding = this.#councilStanding(mission.playerId);
+    const completedMissions = previousStanding.completedMissions + 1;
+    this.#changeScraps(mission.playerId, cityId, mission.rewardScraps);
+    this.database.prepare(`
+      UPDATE players SET gold_units = gold_units + ?, gold_updated_at = ? WHERE id = ?
+    `).run(mission.rewardGoldUnits, now, mission.playerId);
+    if (mission.accidentalItemId) {
+      this.#changeInventory(mission.playerId, cityId, mission.accidentalItemId, 1);
+    }
+    this.database.prepare(`
+      UPDATE council_reputation
+      SET reputation = reputation + ?, completed_missions = ?,
+        last_error_completed_mission = CASE WHEN ? IS NULL
+          THEN last_error_completed_mission ELSE ? END,
+        updated_at = ?
+      WHERE player_id = ?
+    `).run(mission.rewardReputation, completedMissions, mission.accidentalItemId,
+      completedMissions, now, mission.playerId);
+    this.database.prepare(`
+      UPDATE council_missions
+      SET status = 'completed', progress = target_quantity, completed_at = ?, reward_city_id = ?
+      WHERE id = ? AND status = 'active'
+    `).run(now, cityId, mission.id);
+    const standing = this.#councilStanding(mission.playerId);
+    const promoted = standing.grade > previousStanding.grade;
+    const badgeChanged = standing.badgeTier > previousStanding.badgeTier;
+    const gold = (mission.rewardGoldUnits / GOLD_SCALE).toFixed(4).replace(/\.?0+$/u, '');
+    const rewardText = `${mission.rewardScraps.toLocaleString('en-GB')} Ore scraps and ${gold}g have been deposited in ${city.name}.`;
+    const errorText = mission.accidentalItemId
+      ? ` An unrelated ${mission.accidentalItemName} was also enclosed. Form 61-B prevents its recovery.` : '';
+    const promotionText = promoted
+      ? ` Your title has been amended to ${standing.title}.${badgeChanged
+        ? ` The compulsory ${standing.badge.name} replaces your previous badge.` : ''} This amendment confers no additional privileges.`
+      : '';
+    this.#insertSystemMessage(mission.playerId, 'Council',
+      `Order completed: ${mission.title}`,
+      `The Council acknowledges adequate completion of ${mission.title}. ${rewardText}${errorText}${promotionText}`,
+      now, `council-mission:${mission.id}:completed`, {
+        event: 'council-mission-completed', systemSenderName: 'The Council',
+        missionId: mission.id, scraps: mission.rewardScraps,
+        goldUnits: mission.rewardGoldUnits, reputation: mission.rewardReputation,
+        cityId, cityName: city.name, title: standing.title,
+        badgeChanged, badgeName: standing.badge.name,
+        ...(mission.accidentalItemId ? {
+          itemId: mission.accidentalItemId, itemName: mission.accidentalItemName,
+          items: [{ itemId: mission.accidentalItemId, quantity: 1 }],
+          administrativeError: true
+        } : {}),
+        actions: [{ label: 'View Council record', path: '/council' }]
+      });
+    return {
+      mission: { ...mission, status: 'completed', progress: mission.targetQuantity,
+        completedAt: now, rewardCityId: cityId },
+      standing, promoted, badgeChanged
+    };
+  }
+
+  #advanceCouncilMissionsInTransaction(playerId, key, context, now) {
+    const quantity = Math.max(1, Math.floor(Number(context.quantity ?? 1) || 1));
+    this.database.prepare(`
+      UPDATE council_missions SET status = 'expired'
+      WHERE player_id = ? AND status = 'active' AND expires_at <= ?
+    `).run(playerId, now);
+    const rows = this.database.prepare(`
+      SELECT * FROM council_missions
+      WHERE player_id = ? AND status = 'active' AND objective_key = ?
+      ORDER BY accepted_at, id
+    `).all(playerId, key);
+    const results = [];
+    for (const row of rows) {
+      const details = parsedObject(row.details_json);
+      const filter = details.filter && typeof details.filter === 'object'
+        && !Array.isArray(details.filter) ? details.filter : {};
+      if (Object.entries(filter).some(([name, value]) =>
+        value !== null && value !== undefined && String(context[name]) !== String(value))) continue;
+      const progress = Math.min(Number(row.target_quantity), Number(row.progress) + quantity);
+      this.database.prepare('UPDATE council_missions SET progress = ? WHERE id = ?')
+        .run(progress, row.id);
+      if (progress >= Number(row.target_quantity)) {
+        results.push(this.#completeCouncilMission({ ...row, progress }, context.cityId, now));
+      } else {
+        results.push({ mission: this.#councilMissionRow({ ...row, progress }) });
+      }
+    }
+    return results;
+  }
+
+  advanceCouncilMissions(playerId, objectiveKey, context = {}, now = Date.now()) {
+    const key = String(objectiveKey ?? '').trim();
+    if (!key) return [];
+    return this.#transaction(() =>
+      this.#advanceCouncilMissionsInTransaction(playerId, key, context, now));
+  }
+
+  completeCouncilDelivery(playerId, missionId, now = Date.now()) {
+    return this.#transaction(() => {
+      const row = this.database.prepare(`
+        SELECT * FROM council_missions
+        WHERE id = ? AND player_id = ? AND status = 'active'
+      `).get(Number(missionId), Number(playerId));
+      if (!row || row.objective_key !== 'delivery') {
+        throw new Error('That Council delivery is not active.');
+      }
+      if (Number(row.expires_at) <= now) {
+        this.database.prepare("UPDATE council_missions SET status = 'expired' WHERE id = ?")
+          .run(row.id);
+        throw new Error('That Council delivery has expired.');
+      }
+      const details = parsedObject(row.details_json);
+      const delivery = details.delivery ?? {};
+      const player = this.database.prepare('SELECT city_id FROM players WHERE id = ?').get(playerId);
+      if (Number(player?.city_id) !== Number(delivery.cityId)) {
+        const cityName = this.database.prepare('SELECT name FROM catalog_cities WHERE id = ?')
+          .get(Number(delivery.cityId))?.name ?? 'the appointed city';
+        throw new Error(`Deliver these Things at the Council office in ${cityName}.`);
+      }
+      const available = this.#recyclableInventoryQuantity(
+        playerId, Number(delivery.cityId), Number(delivery.itemId)
+      );
+      if (available < Number(row.target_quantity)) {
+        throw new Error(`You do not have enough unprotected ${delivery.itemName ?? 'Things'} in this city.`);
+      }
+      this.#changeInventory(playerId, Number(delivery.cityId), Number(delivery.itemId),
+        -Number(row.target_quantity));
+      return this.#completeCouncilMission(
+        { ...row, progress: Number(row.target_quantity) }, Number(delivery.cityId), now
+      );
     });
   }
 

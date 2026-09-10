@@ -66,7 +66,7 @@ test('retires live War Trial fixtures while preserving ordinary craft and histor
   store.close();
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 139);
+  assert.equal(store.database.prepare('PRAGMA user_version').get().user_version, 141);
   assert.equal(store.database.prepare(
     "SELECT COUNT(*) AS count FROM player_vehicles WHERE name LIKE 'War Trial %'"
   ).get().count, 0);
