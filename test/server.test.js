@@ -672,6 +672,7 @@ test('streams scoped database changes to live pages without reload code', async 
   assert.match(client, /window\.location\.assign\(destination\)/u);
   assert.match(client, /addEventListener\('maintenance'/u);
   assert.match(client, /addEventListener\('presence'/u);
+  assert.match(client, /querySelectorAll\('\[data-active-users\]'\)/u);
   assert.match(client, /addEventListener\('minethings:chat-sent'/u);
 });
 
@@ -899,11 +900,11 @@ test('builds and cancels convoys without changing member stances', async (contex
   const player = store.addPlayer(draft);
   const vehicleIds = Array.from({ length: 10 }, () =>
     store.activateVehicle(player.id, vehicleType.itemId));
-  for (const [vehicleId, stance] of vehicleIds.map((id, index) =>
-    [id, ['patrol', 'peaceful', 'pillage'][index % 3]])) {
-    store.database.prepare(
-      'UPDATE player_vehicles SET travel_order = ? WHERE id = ?'
-    ).run(stance, vehicleId);
+  for (const [index, vehicleId] of vehicleIds.entries()) {
+    const stance = ['patrol', 'peaceful', 'pillage'][index % 3];
+    store.setVehicleStance(
+      player.id, vehicleId, stance, stance !== 'peaceful', stance !== 'pillage'
+    );
   }
   const cargoItem = catalog.items.find((item) => item.canFind
     && !catalog.vehicleByItemId.has(item.id));
@@ -937,7 +938,8 @@ test('builds and cancels convoys without changing member stances', async (contex
   const setupHtml = await setup.text();
   assert.match(setupHtml, /Build a convoy/);
   assert.match(setupHtml, /Stances are read-only here/);
-  assert.match(setupHtml, /Patrol stance/);
+  assert.match(setupHtml, /Patrol · PvP on · PvE on stance/);
+  assert.match(setupHtml, /Pillage · PvP on · PvE off/);
   assert.match(setupHtml, /max="60"/);
   assert.match(setupHtml, /data-min-size="2" data-max-size="8"/);
   assert.match(setupHtml, /sending order/i);
@@ -1010,7 +1012,8 @@ test('builds and cancels convoys without changing member stances', async (contex
     headers: { cookie }
   })).text();
   assert.match(waitingStatus, /Reserved for convoy/);
-  assert.match(waitingStatus, /keeps its recorded <strong>Peaceful<\/strong> stance/);
+  assert.match(waitingStatus,
+    /keeps its recorded <strong>Peaceful · PvP off · PvE on<\/strong> stance/);
   assert.doesNotMatch(waitingStatus, /Manage cargo/);
 
   clock = 3000;
@@ -1049,6 +1052,19 @@ test('renders a static operations snapshot with hover details and management lin
     draft.knownCityIds = [...new Set([
       ...(draft.knownCityIds ?? []), route.city1Id, route.city2Id
     ])];
+    const remoteMineType = catalog.mineTypesByCity.get(route.city2Id)[0];
+    const remoteMine = {
+      ...structuredClone(draft.mines[0]),
+      id: Math.max(...draft.mines.map((mine) => mine.id)) + 1,
+      cityId: route.city2Id,
+      mineTypeId: remoteMineType.id,
+      active: false,
+      mineThings: false,
+      cryptoTypeId: null,
+      priority: 2
+    };
+    draft.mines.push(remoteMine);
+    draft.nextMineId = remoteMine.id + 1;
     draft.inventory = { [vehicleType.itemId]: 2, [stock.id]: 20 };
     draft.inventoryByCity = { [route.city1Id]: draft.inventory };
     const player = store.addPlayer(draft);
@@ -1089,6 +1105,8 @@ test('renders a static operations snapshot with hover details and management lin
       const snapshot = originalMapOperationsSnapshot(...arguments_);
       return {
         ...snapshot,
+        mines: snapshot.mines.map((mine) => mine.id === remoteMine.id
+          ? { ...mine, active: false } : mine),
         shuttles: [...snapshot.shuttles, {
           vehicleId: 900001, vehicleName: 'Remote shuttle', itemName: 'Remote shuttle',
           rank: 1, status: 'traveling', originCityId: remoteCities[0].id,
@@ -1159,6 +1177,7 @@ test('renders a static operations snapshot with hover details and management lin
 
     assert.match(html, /data-map-snapshot-at="2500"/u);
     assert.ok(html.includes(`${localMap.name} operations · Snapshot`));
+    assert.match(html, /2 mines · 1 active · 1 not mining/u);
     assert.match(html, /1 automation task · 1 shuttle/u);
     assert.doesNotMatch(html, /99% markup|href="\/vehicles\/900001"/u,
       'operations from another region stay out of this snapshot');
@@ -1168,12 +1187,28 @@ test('renders a static operations snapshot with hover details and management lin
     assert.match(html,
       /class="map-operation-link map-automation-marker" href="\/gadgets\/autolister"[\s\S]*?<title>Autolister:/u);
     assert.match(html,
+      /class="map-operation-link map-mine-active-marker" href="\/"[\s\S]*?<title>Your active mines in [^<]+: 1 mine active/u);
+    assert.match(html,
+      /class="map-operation-link map-mine-inactive-marker" href="#city-[0-9]+"[\s\S]*?<title>Your mines not mining in [^<]+: 1 mine not mining/u);
+    assert.match(html, /active-mine-key[\s\S]*?>✓<\/i>Active mines/u);
+    assert.match(html, /inactive-mine-key[\s\S]*?>×<\/i>Not mining/u);
+    assert.match(html, /mine-count-key[\s\S]*?>3<\/i>Small number = mine count/u);
+    assert.match(html, /automation-key[\s\S]*?>L<\/i>Autoloader/u);
+    assert.match(html, /automation-key[\s\S]*?>\$<\/i>Autolister/u);
+    assert.match(html, /automation-key[\s\S]*?>F<\/i>Automaker/u);
+    assert.match(html, /automation-key[\s\S]*?>M<\/i>Automelder/u);
+    assert.match(html, /class="map-operation-marker-count"[^>]*>1<\/text>/u);
+    assert.match(html,
       /class="city-map-operation city-map-operation-automation"[\s\S]*?href="\/gadgets\/autolister"[\s\S]*?List all/u);
     assert.match(html, new RegExp(
       `List all ${catalog.mineTypes.find((entry) => entry.id === stock.mineTypeId).name} Things at 25% markup`
     ));
     assert.match(html, new RegExp(
       `id="city-${route.city1Id}"[\\s\\S]*?city-map-operation-shuttle[\\s\\S]*?href="/vehicles/${shuttleVehicleId}"`
+    ));
+    const remoteMineName = remoteMineType.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(html, new RegExp(
+      `id="city-${route.city2Id}"[\\s\\S]*?Your mines <span>1</span>[\\s\\S]*?is-paused[\\s\\S]*?${remoteMineName} Mine[\\s\\S]*?Configured for ${remoteMineType.hasOre ? 'Ore' : 'Gold'}`
     ));
     assert.doesNotMatch(html, /<animate\b/u, 'the operations map must remain a still snapshot');
 
@@ -2095,6 +2130,8 @@ test('publishes live maintenance warnings and counts recently active signed-in m
     const initialDashboard = await (await fetch(`${base}/admin`, {
       headers: { cookie: adminCookie }
     })).text();
+    assert.match(initialDashboard,
+      /class="player-online-vital"[^>]*>[\s\S]*?<span data-active-users>2<\/span>/u);
     assert.match(initialDashboard, /<strong data-active-users>2<\/strong>/u);
     assert.match(initialDashboard, /Seen in the last 5 minutes/u);
     assert.match(initialDashboard, /value="30"/u);
@@ -2127,6 +2164,7 @@ test('publishes live maintenance warnings and counts recently active signed-in m
       assert.match(events, pattern);
     };
     await readUntil(/event: maintenance\ndata: \{"active":false\}/u);
+    await readUntil(/event: presence\ndata: \{"activeUsers":2,"windowMinutes":5\}/u);
 
     const message = 'You will be temporarily logged out. Finish <important> work.';
     const warning = await fetch(`${base}/admin/maintenance`, {
@@ -2153,6 +2191,7 @@ test('publishes live maintenance warnings and counts recently active signed-in m
     const laterDashboard = await (await fetch(`${base}/admin`, {
       headers: { cookie: adminCookie }
     })).text();
+    assert.match(laterDashboard, /<span data-active-users>1<\/span>/u);
     assert.match(laterDashboard, /<strong data-active-users>1<\/strong>/u,
       'the viewing administrator remains active while the idle miner expires from presence');
 
@@ -2432,8 +2471,17 @@ test('renders restless-dead records without direct hunt shortcuts', async (conte
   assert.match(detailsHtml, new RegExp(`<h1>${ghost.name}</h1>`));
   assert.match(detailsHtml, new RegExp(`<dt>Region</dt><dd>${routeRegion.name}</dd>`));
   assert.match(detailsHtml, /Unhurt and patrolling/);
+  assert.match(detailsHtml, /<dt>Condition<\/dt><dd>Unhurt<\/dd>/);
+  assert.match(detailsHtml, /<dt>Route activity<\/dt>/);
+  assert.match(detailsHtml, /<dt>Battle record<\/dt><dd>0 \(0 won, 0 lost\)<\/dd>/);
+  assert.match(detailsHtml, /<dt>Combat rating<\/dt>/);
   assert.match(detailsHtml, /What came back/);
+  assert.match(detailsHtml, /Observed behaviour/);
+  assert.match(detailsHtml, /85% of fitted force/);
+  assert.match(detailsHtml, /25% spectral reinforcement/);
+  assert.match(detailsHtml, /Recorded fighting strength:/);
   assert.match(detailsHtml, /Reported bounty/);
+  assert.match(detailsHtml, /Compatible vehicle tiers:/);
   assert.match(detailsHtml, /must physically meet this apparition while travelling on its route/u);
   assert.doesNotMatch(detailsHtml,
     /Launch hunt|class="threat-action"|\/events\/ghosts\/\d+\/(?:attack|hunt)/u);
@@ -2889,17 +2937,25 @@ test('renders cannon controls for an idle ship in port', async (context) => {
   assert.equal(statusResponse.status, 200);
   assert.doesNotMatch(statusHtml, /rating\s+[\d,.]+/iu);
   const descriptionPosition = statusHtml.indexOf('class="vehicle-hero"');
+  const stancePosition = statusHtml.indexOf('class="vehicle-stance-panel"');
   const sendPosition = statusHtml.indexOf('class="vehicle-send-panel"');
   const loadoutPosition = statusHtml.indexOf('id="vehicle-loadout-heading"');
-  assert.ok(descriptionPosition >= 0 && sendPosition > descriptionPosition
+  assert.ok(descriptionPosition >= 0 && stancePosition > descriptionPosition
+    && sendPosition > stancePosition
     && loadoutPosition > sendPosition,
-  'Send appears directly after the vehicle description and before the long loadout');
+  'the saved stance and Send blocks appear before the long loadout');
   assert.match(statusHtml, /data-journey-planner/);
   assert.match(statusHtml, /Add onward leg/);
   assert.match(statusHtml, /data-journey-routes/);
-  assert.match(statusHtml, /Combat targets are limited automatically to this vehicle's tier/);
-  assert.match(statusHtml, /Also engage patrols in this tier/);
+  assert.match(statusHtml, new RegExp(`action="/vehicles/${vehicleId}/stance"`));
+  assert.match(statusHtml, /name="pvp" value="on"/);
+  assert.match(statusHtml, /name="pve" value="on" checked/);
+  assert.match(statusHtml, /This saved stance is used by manual journeys, shuttles, and new convoy departures/);
   assert.doesNotMatch(statusHtml, /Engage vehicles of these rarities|name="attack_\d+"/);
+  const sendForm = /<form class="vehicle-send"[\s\S]*?<\/form>/u.exec(statusHtml)?.[0];
+  assert.ok(sendForm);
+  assert.doesNotMatch(sendForm, /name="travelOrder"|name="pvp"|name="pve"/u);
+  assert.match(sendForm, /<strong>Saved stance:<\/strong> Peaceful · PvP off · PvE on/u);
   assert.match(statusHtml, new RegExp(`/vehicles/${vehicleId}/customize#ammunition`));
   assert.match(statusHtml, /Load ammunition or change cannons/);
   assert.match(statusHtml, /\/node\/vehicle-journey\.js/);
@@ -3262,9 +3318,14 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
     'u'
   ));
   assert.match(setupHtml, /<fieldset><legend>Cargo categories<\/legend>/u);
-  assert.match(setupHtml,
-    /<label>Order<select name="travelOrder"><option value="peaceful" selected>Peaceful<\/option><option value="pillage">Pillage<\/option><option value="patrol">Patrol<\/option><\/select><\/label>/u);
-  assert.match(setupHtml, /chosen order applies on both the loaded outbound leg and the empty return leg/u);
+  assert.match(setupHtml, new RegExp(`action="/vehicles/${vehicleId}/stance"`, 'u'));
+  const shuttleForm = new RegExp(
+    `<form class="vehicle-shuttle-form"[\\s\\S]*?action="/vehicles/${vehicleId}/shuttle"[\\s\\S]*?<\\/form>`,
+    'u'
+  ).exec(setupHtml)?.[0];
+  assert.ok(shuttleForm);
+  assert.doesNotMatch(shuttleForm, /name="travelOrder"|name="pvp"|name="pve"/u);
+  assert.match(shuttleForm, /<strong>Saved stance:<\/strong> Peaceful · PvP off · PvE on/u);
   assert.match(setupHtml,
     /type="button" data-shuttle-deselect-all[^>]*>Deselect all<\/button>/u);
   assert.match(setupHtml, /<script src="\/node\/vehicle-shuttle\.js\?v=20260901a" defer><\/script>/u);
@@ -3295,6 +3356,18 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
     'shuttle setup is unavailable until the manual cargo hold is empty');
   store.database.prepare('DELETE FROM player_vehicle_cargo WHERE vehicle_id = ?').run(vehicleId);
 
+  const saveStance = await fetch(`${base}/vehicles/${vehicleId}/stance`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    }, body: new URLSearchParams({ travelOrder: 'pillage', pve: 'on' })
+  });
+  assert.equal(saveStance.status, 303);
+  assert.equal(saveStance.headers.get('location'), `/vehicles/${vehicleId}`);
+  const savedStance = store.vehicleDetails(saved.id, vehicleId, 2000);
+  assert.equal(savedStance.travelOrder, 'pillage');
+  assert.equal(savedStance.pvpEnabled, false);
+  assert.equal(savedStance.pveEnabled, true);
+
   const missingCategories = await fetch(`${base}/vehicles/${vehicleId}/shuttle`, {
     method: 'POST', redirect: 'manual', headers: {
       cookie, referer: `${base}/vehicles/${vehicleId}`,
@@ -3316,7 +3389,6 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
       cookie, 'content-type': 'application/x-www-form-urlencoded'
     }, body: new URLSearchParams({
       routeId: String(route.id),
-      travelOrder: 'pillage',
       [`category_${WOOD_CATALOG.mineType.id}`]: '1',
       [`category_${WISDOM_CATALOG.mineType.id}`]: '1'
     })
@@ -3327,7 +3399,11 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
   assert.equal(active.status, 'traveling');
   assert.ok(active.shuttle);
   assert.equal(active.travelOrder, 'pillage');
+  assert.equal(active.pvpEnabled, false);
+  assert.equal(active.pveEnabled, true);
   assert.equal(active.shuttle.travelOrder, 'pillage');
+  assert.equal(active.shuttle.pvpEnabled, false);
+  assert.equal(active.shuttle.pveEnabled, true);
   assert.deepEqual(active.shuttle.mineTypeIds,
     [WOOD_CATALOG.mineType.id, WISDOM_CATALOG.mineType.id]);
 
@@ -3337,6 +3413,8 @@ test('starts, presents, and safely cancels a repeating vehicle shuttle', async (
   assert.match(activeHtml,
     /<dt>Cargo categories<\/dt><dd>Wood and Wisdom<\/dd>/u);
   assert.match(activeHtml, /<dt>Order<\/dt><dd>Pillage<\/dd>/u);
+  assert.match(activeHtml, /<dt>PvP<\/dt><dd>Disabled<\/dd>/u);
+  assert.match(activeHtml, /<dt>PvE<\/dt><dd>Enabled<\/dd>/u);
   const loadedCargo = active.cargo.find((entry) => entry.itemId === cargoThing.id);
   assert.ok(loadedCargo);
   assert.match(activeHtml,
@@ -6847,6 +6925,7 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(history, /self-reported experiences, not an independent audit/u);
   assert.match(history, /operator-supplied population claim/);
   assert.match(history, /not verified unique-player totals/);
+  assert.doesNotMatch(history, /Test Seller|1 Test Street|seller@example\.test/u);
   assert.doesNotMatch(history, /styles10\.css|home_h\.gif|button_logout\.jpg|id="preloader"/u);
   assertEditorialIndex(history, 'History');
   assert.ok(
@@ -6880,7 +6959,9 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(legal, /You may object at any time to processing based on legitimate interests/u);
   assert.match(legal, /Information Commissioner.s Office/u);
   assert.match(legal, /class="editorial-document-note"/u);
-  assert.match(legal, /Test Seller/);
+  assert.match(legal, /Anonymous Miner/);
+  assert.doesNotMatch(legal, /Test Seller|1 Test Street|seller@example\.test/u);
+  assert.match(legal, /Seller contact information is delivered privately/u);
   assert.match(legal, /Nothing excludes or limits liability/);
   assertEditorialIndex(legal, 'Legal');
   const rejectedRegistration = await fetch(`${base}/register`, {
@@ -6931,6 +7012,7 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   })).text();
   assert.match(incompleteRecord, new RegExp(`Checkout attempt MT-${purchase.id}`));
   assert.match(incompleteRecord, /No payment has been captured/u);
+  assert.doesNotMatch(incompleteRecord, /Test Seller|1 Test Street|seller@example\.test/u);
   assert.match(incompleteRecord,
     new RegExp(`action="/credits/receipts/${purchase.id}/continue" data-native-navigation`, 'u'));
   const resume = await fetch(`${base}/credits/receipts/${purchase.id}/continue`, {
@@ -6954,9 +7036,12 @@ test('publishes the history and legal record and completes an idempotent PayPal 
   assert.match(receipt, new RegExp(`Receipt MT-${purchase.id}`));
   assert.doesNotMatch(receipt, /Continue with PayPal/u);
   assert.match(receipt, /CAPTURE-/);
+  assert.doesNotMatch(receipt, /Test Seller|1 Test Street|seller@example\.test/u);
   const download = await fetch(`${base}/credits/receipts/${purchase.id}.txt`, { headers: { cookie } });
   assert.match(download.headers.get('content-disposition'), /attachment/);
-  assert.match(await download.text(), new RegExp(`Terms version: ${LEGAL_VERSION}`, 'u'));
+  const receiptText = await download.text();
+  assert.match(receiptText, new RegExp(`Terms version: ${LEGAL_VERSION}`, 'u'));
+  assert.doesNotMatch(receiptText, /Test Seller|1 Test Street|seller@example\.test/u);
 
   const reversalEvent = {
     id: 'WH-REFUND-1', event_type: 'PAYMENT.CAPTURE.REFUNDED',

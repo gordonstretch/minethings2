@@ -18,7 +18,8 @@ import {
   CITY_COMPLETION_STONE, HOME_DISPLAY_STONE, HOME_STONE, STARTER_BOT_STONE,
   INVENTORY_CAPACITY_RULES, MINE_RENTAL_BASE_CREDITS, MINE_RENTAL_TERMS,
   ELECTRONICS_CATALOG, RELICS_CATALOG, SHROOM_CATALOG, WISDOM_CATALOG, WOOD_CATALOG,
-  WORLD_CREATURE_HP_REBALANCE_FACTOR, WORLD_CREATURE_TYPES
+  WORLD_CREATURE_HP_REBALANCE_FACTOR, WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR,
+  WORLD_CREATURE_TYPES
 } from './legacy-catalog.js';
 import { resolveCasinoPull, validateCasinoRules } from './casino.js';
 import {
@@ -469,12 +470,14 @@ export class SqliteStore {
       this.#migrateMachineItemDescriptions();
       this.#migrateEventThreats();
       this.#migrateWorldCreatureHealth();
+      this.#migrateWorldCreatureLandHealth();
       this.#enforceWorldCreatureRouteScope();
       this.#migrateChatHistoryWindow();
       this.#migrateFrequentDwarfAndCreatureRolls();
       this.#migrateRegionalCreatureRollsAndFasterDwarves();
       this.#migrateShipFiringRounds();
       this.#migrateVehicleCombatConsistency();
+      this.#migrateVehicleStanceTargets();
       this.#migrateOpenLimitOrders();
       this.#ensureCryptoMarketLiveUpdates();
       this.#initializeCatalogRevisionTracking();
@@ -1728,6 +1731,8 @@ export class SqliteStore {
         aggressive_vs_sentry INTEGER NOT NULL DEFAULT 0,
         travel_order TEXT NOT NULL DEFAULT 'peaceful'
           CHECK (travel_order IN ('peaceful', 'pillage', 'patrol')),
+        pvp_enabled INTEGER NOT NULL DEFAULT 0 CHECK (pvp_enabled IN (0, 1)),
+        pve_enabled INTEGER NOT NULL DEFAULT 1 CHECK (pve_enabled IN (0, 1)),
         speed REAL,
         profession INTEGER NOT NULL DEFAULT 0,
         damaged INTEGER NOT NULL DEFAULT 0,
@@ -1774,6 +1779,8 @@ export class SqliteStore {
           CHECK (travel_order IN ('peaceful', 'pillage', 'patrol')),
         aggressive_vs_sentry INTEGER NOT NULL DEFAULT 0
           CHECK (aggressive_vs_sentry IN (0, 1)),
+        pvp_enabled INTEGER NOT NULL DEFAULT 0 CHECK (pvp_enabled IN (0, 1)),
+        pve_enabled INTEGER NOT NULL DEFAULT 1 CHECK (pve_enabled IN (0, 1)),
         status TEXT NOT NULL DEFAULT 'queued'
           CHECK (status IN ('queued', 'traveling', 'arrived', 'lost', 'cancelled')),
         departed_at INTEGER,
@@ -10228,6 +10235,72 @@ export class SqliteStore {
     return migrated;
   }
 
+  #migrateWorldCreatureLandHealth(now = Date.now()) {
+    const migrationName = 'world-creature-land-health-v1';
+    if (!this.hasCatalog() || this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return false;
+    let migrated = false;
+    this.#transaction(() => {
+      if (this.database.prepare(
+        'SELECT 1 FROM schema_migrations WHERE name = ?'
+      ).get(migrationName)) return;
+      const settingRow = this.database.prepare(`
+        SELECT value_json FROM catalog_settings WHERE key = 'world_creature_hp'
+      `).get();
+      if (!settingRow) throw new Error('Cannot rebalance land creatures without HP settings.');
+      const previousHp = parsedObject(settingRow.value_json);
+      const targetHp = LEGACY_WORLD_EVENT_SETTINGS.world_creature_hp;
+      const landTypes = WORLD_CREATURE_TYPES.filter((type) =>
+        LEGACY_WORLD_EVENT_SETTINGS.world_creature_route_types[type] === 'land');
+      if (landTypes.some((type) =>
+        !Number.isFinite(Number(previousHp[type])) || Number(previousHp[type]) <= 0)) {
+        throw new Error('Cannot rebalance land creatures with invalid HP settings.');
+      }
+      let settingsUpdated = false;
+      let creaturesScaled = 0;
+      const scaleByType = new Map();
+      const nextHp = { ...previousHp };
+      for (const type of landTypes) {
+        const previous = Number(previousHp[type]);
+        const target = Number(targetHp[type]);
+        if (previous === target) continue;
+        scaleByType.set(type, WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR);
+        nextHp[type] = previous * WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR;
+      }
+      if (scaleByType.size) {
+        this.database.prepare(`
+          UPDATE catalog_settings SET value_json = ? WHERE key = 'world_creature_hp'
+        `).run(JSON.stringify(nextHp));
+        settingsUpdated = true;
+        const updateCreature = this.database.prepare(`
+          UPDATE world_creatures SET hp = ?, max_hp = ? WHERE id = ?
+        `);
+        for (const creature of this.database.prepare(`
+          SELECT id, creature_type, hp, max_hp FROM world_creatures
+          WHERE creature_type IN (${landTypes.map(() => '?').join(', ')})
+          ORDER BY id
+        `).all(...landTypes)) {
+          const scale = scaleByType.get(creature.creature_type);
+          if (!scale) continue;
+          const maxHp = Math.max(1, Math.round(Number(creature.max_hp) * scale));
+          const hp = Number(creature.hp) <= 0 ? 0 : Math.max(1, Math.min(maxHp,
+            Math.round(Number(creature.hp) * scale)));
+          updateCreature.run(hp, maxHp, creature.id);
+          creaturesScaled += 1;
+        }
+      }
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json) VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        factor: WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR,
+        landTypes, settingsUpdated, creaturesScaled
+      }));
+      migrated = true;
+    });
+    return migrated;
+  }
+
   #enforceWorldCreatureRouteScope(now = Date.now()) {
     // Event creatures belong to one region. Retire any legacy gateway sightings
     // before installing persistence guards that reject future inter-region ones.
@@ -10398,6 +10471,71 @@ export class SqliteStore {
       `).run(migrationName, now, JSON.stringify({
         updated, previousRateThree: previousRateThree ?? null,
         rateThree: rules[3] ?? null
+      }));
+    });
+  }
+
+  #migrateVehicleStanceTargets(now = Date.now()) {
+    const migrationName = 'vehicle-stance-targets-v1';
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        name TEXT PRIMARY KEY,
+        applied_at INTEGER NOT NULL,
+        details_json TEXT NOT NULL DEFAULT '{}'
+      )
+    `);
+    if (this.database.prepare(
+      'SELECT 1 FROM schema_migrations WHERE name = ?'
+    ).get(migrationName)) return;
+
+    this.#transaction(() => {
+      const vehicleColumns = new Set(this.database.prepare(
+        'PRAGMA table_info(player_vehicles)'
+      ).all().map((column) => column.name));
+      let playerVehiclesBackfilled = 0;
+      if (!vehicleColumns.has('pvp_enabled')) {
+        this.database.exec(`
+          ALTER TABLE player_vehicles ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0
+            CHECK (pvp_enabled IN (0, 1))
+        `);
+        playerVehiclesBackfilled = this.database.prepare(`
+          UPDATE player_vehicles SET pvp_enabled = 1 WHERE travel_order <> 'peaceful'
+        `).run().changes;
+      }
+      if (!vehicleColumns.has('pve_enabled')) {
+        this.database.exec(`
+          ALTER TABLE player_vehicles ADD COLUMN pve_enabled INTEGER NOT NULL DEFAULT 1
+            CHECK (pve_enabled IN (0, 1))
+        `);
+      }
+
+      const convoyColumns = new Set(this.database.prepare(
+        'PRAGMA table_info(player_vehicle_convoy_members)'
+      ).all().map((column) => column.name));
+      let convoyMembersBackfilled = 0;
+      if (!convoyColumns.has('pvp_enabled')) {
+        this.database.exec(`
+          ALTER TABLE player_vehicle_convoy_members
+            ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0
+              CHECK (pvp_enabled IN (0, 1))
+        `);
+        convoyMembersBackfilled = this.database.prepare(`
+          UPDATE player_vehicle_convoy_members SET pvp_enabled = 1
+          WHERE travel_order <> 'peaceful'
+        `).run().changes;
+      }
+      if (!convoyColumns.has('pve_enabled')) {
+        this.database.exec(`
+          ALTER TABLE player_vehicle_convoy_members
+            ADD COLUMN pve_enabled INTEGER NOT NULL DEFAULT 1
+              CHECK (pve_enabled IN (0, 1))
+        `);
+      }
+
+      this.database.prepare(`
+        INSERT INTO schema_migrations (name, applied_at, details_json) VALUES (?, ?, ?)
+      `).run(migrationName, now, JSON.stringify({
+        playerVehiclesBackfilled, convoyMembersBackfilled
       }));
     });
   }
@@ -12650,6 +12788,7 @@ export class SqliteStore {
         player_vehicles.departed_at, player_vehicles.arrives_at,
         player_vehicles.speed, player_vehicles.travel_order,
         player_vehicles.aggressive_mask, player_vehicles.aggressive_vs_sentry,
+        player_vehicles.pvp_enabled, player_vehicles.pve_enabled,
         player_vehicles.damaged, player_vehicles.aircraft_destroyed,
         ghost_vehicles.id AS ghost_id, ghost_vehicles.ghost_kind,
         world_creature_pursuits.creature_id,
@@ -12691,6 +12830,7 @@ export class SqliteStore {
         speed: Number(row.speed), travelOrder: row.travel_order,
         aggressiveMask: row.aggressive_mask,
         aggressiveVsSentry: Boolean(row.aggressive_vs_sentry),
+        pvpEnabled: Boolean(row.pvp_enabled), pveEnabled: Boolean(row.pve_enabled),
         damaged: Boolean(row.damaged), aircraftDestroyed: Boolean(row.aircraft_destroyed),
         ghostId: row.ghost_id, ghostKind: row.ghost_kind,
         creatureId: row.creature_id, creatureType: row.creature_type,
@@ -15902,6 +16042,27 @@ Compliance is compulsory. Enjoy your new life.
     const generatedAt = Number(snapshotAt);
     if (!Number.isFinite(generatedAt)) throw new Error('Invalid map snapshot time.');
     const vehicles = this.vehiclesForPlayer(playerId, generatedAt, { settle: false });
+    const mines = this.database.prepare(`
+      SELECT mines.id, mines.city_id, mines.mine_type_id, mines.active,
+        mines.mine_things, mines.crypto_type_id, catalog_mine_types.name AS mine_type_name,
+        catalog_mine_types.has_ore, catalog_cities.name AS city_name
+      FROM mines
+      JOIN catalog_mine_types ON catalog_mine_types.id = mines.mine_type_id
+      JOIN catalog_cities ON catalog_cities.id = mines.city_id
+      WHERE mines.player_id = ?
+      ORDER BY catalog_cities.name COLLATE NOCASE,
+        catalog_mine_types.name COLLATE NOCASE, mines.id
+    `).all(Number(playerId)).map((mine) => ({
+      id: Number(mine.id),
+      cityId: Number(mine.city_id),
+      cityName: mine.city_name,
+      mineTypeId: Number(mine.mine_type_id),
+      mineTypeName: mine.mine_type_name,
+      active: Boolean(mine.active),
+      mineThings: Boolean(mine.mine_things),
+      cryptoTypeId: mine.crypto_type_id === null ? null : Number(mine.crypto_type_id),
+      hasOre: Boolean(mine.has_ore)
+    }));
     const automations = this.database.prepare(`
       SELECT gadget_automations.*, catalog_gadgets.behavior_key,
         catalog_gadgets.display_name, player_gadgets.expires_at
@@ -15936,7 +16097,8 @@ Compliance is compulsory. Enjoy your new life.
         ...vehicle.shuttle
       })),
       vehicleNamesById: Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle.name])),
-      automations
+      automations,
+      mines
     };
   }
 
@@ -20414,7 +20576,7 @@ Compliance is compulsory. Enjoy your new life.
 
     const spinId = this.#transaction(() => {
       const player = this.database.prepare(`
-        SELECT players.gold_units, catalog_cities.map_id
+        SELECT players.name, players.gold_units, catalog_cities.map_id
         FROM players JOIN catalog_cities ON catalog_cities.id = players.city_id
         WHERE players.id = ?
       `).get(playerId);
@@ -20491,7 +20653,7 @@ Compliance is compulsory. Enjoy your new life.
         baseMultiplier: Number(outcome.baseMultiplier ?? outcome.multiplier),
         bonusWinMultiplier: Number(outcome.bonusWinMultiplier ?? 1)
       };
-      return Number(this.database.prepare(`
+      const spinId = Number(this.database.prepare(`
         INSERT INTO casino_spins
           (player_id, machine_key, currency_kind, crypto_type_id, wager_units, payout_units,
            multiplier, grid_json, wins_json, bonus_json, jackpot, created_at)
@@ -20499,6 +20661,19 @@ Compliance is compulsory. Enjoy your new life.
       `).run(playerId, rules.machine.key, currencyKind, cryptoTypeId, wagerUnits, payoutUnits,
         outcome.multiplier, JSON.stringify(grid), JSON.stringify(wins), JSON.stringify(bonus),
         outcome.jackpot ? 1 : 0, now).lastInsertRowid);
+      if (outcome.jackpot) {
+        const payout = payoutUnits / (currencyKind === 'gold' ? GOLD_SCALE : 1);
+        const payoutAmount = payout.toLocaleString('en-GB', { maximumFractionDigits: 4 });
+        const payoutSummary = currencyKind === 'gold'
+          ? `${payoutAmount}g` : `${payoutAmount} ${currency.symbol}`;
+        const path = rules.machine.key === THING_O_MATIC_KEY
+          ? '/casino' : `/casino?machine=${encodeURIComponent(rules.machine.key)}`;
+        this.#announceWorldChat(`casino-jackpot:${spinId}`, 'casino-jackpot', {
+          playerName: player.name, machineName: rules.machine.name,
+          payoutSummary, multiplier: outcome.multiplier
+        }, now, path);
+      }
+      return spinId;
     });
     const spin = this.casinoState(playerId, spinId, rules.machine.key).selectedSpin;
     this.awardStone(playerId, 'Gambled', now);
@@ -20509,6 +20684,9 @@ Compliance is compulsory. Enjoy your new life.
       this.awardStone(playerId, 'Unlocked', now);
     }
     if (spin.jackpot) this.awardStone(playerId, 'Jackpotted', now);
+    this.advanceCouncilMissions(playerId, 'casino_pull', {
+      machineKey: rules.machine.key, currencyKind, quantity: 1
+    }, now);
     return spin;
   }
 
@@ -20608,7 +20786,7 @@ Compliance is compulsory. Enjoy your new life.
     if (side === 'sell' && priceUnits < minimumUnits) {
       throw new Error(`Listings for ${currency.symbol} must be at least ${Math.ceil(currency.goldPrice)} gold.`);
     }
-    return this.#transaction(() => {
+    const order = this.#transaction(() => {
       const player = this.#assertCryptoAvailable(playerId, currency);
       if (side === 'buy') {
         const totalUnits = priceUnits * quantity;
@@ -20639,6 +20817,10 @@ Compliance is compulsory. Enjoy your new life.
         VALUES (?, ?, ?, ?, ?, ?)`).run(playerId, currency.id, side, priceUnits, quantity, now);
       return { id: Number(result.lastInsertRowid), currency, side, quantity, price };
     });
+    this.advanceCouncilMissions(playerId, 'crypto_order', {
+      side: order.side, cryptoTypeId: order.currency.id, quantity: 1
+    }, now);
+    return order;
   }
 
   cancelCryptoOrder(playerId, orderId) {
@@ -24319,6 +24501,7 @@ Compliance is compulsory. Enjoy your new life.
       WHERE player_vehicles.status = 'traveling'
         AND player_vehicles.route_id IS NOT NULL
         AND players.is_npc = 0
+        AND player_vehicles.pve_enabled = 1
         AND COALESCE(player_ship_state.sunk, 0) = 0
         ${vehicleFilter}
       ORDER BY player_vehicles.id
@@ -25068,6 +25251,11 @@ Compliance is compulsory. Enjoy your new life.
   #ghostsVisibleTo(playerId, now, includeHistory = true, includeAttackOptions = true) {
     const retention = Number(this.#setting('world_event_outcome_retention_days'))
       * 24 * 60 * 60 * 1000;
+    const classRules = this.#setting('combat_class_by_rarity');
+    const knownRarities = this.#worldCreatureRarities();
+    const combatBonus = Number(this.#setting('ghost_combat_bonus'));
+    const attackForceRatio = Number(this.#setting('ghost_attack_force_ratio'));
+    const speedMultiplier = Number(this.#setting('ghost_speed_multiplier'));
     return this.database.prepare(`
       SELECT ghost_vehicles.*, player_vehicles.name, player_vehicles.speed,
         player_vehicles.origin_city_id, player_vehicles.destination_city_id,
@@ -25127,6 +25315,53 @@ Compliance is compulsory. Enjoy your new life.
         ? this.#worldCreatureName(row.source_creature_type, row.rarity) : null;
       const sourceIcon = row.source_creature_type
         ? this.#worldCreatureIcon(row.source_creature_type) : row.source_item_icon;
+      let recordVehicleId = row.vehicle_id === null ? null : Number(row.vehicle_id);
+      if (recordVehicleId === null && row.defeated_battle_id !== null) {
+        recordVehicleId = this.database.prepare(`
+          SELECT vehicle_battle_sides.vehicle_id
+          FROM vehicle_battle_sides
+          JOIN players ON players.id = vehicle_battle_sides.player_id
+          WHERE vehicle_battle_sides.battle_id = ? AND players.is_npc = 1
+            AND vehicle_battle_sides.vehicle_item_id = ?
+          ORDER BY vehicle_battle_sides.vehicle_id LIMIT 1
+        `).get(row.defeated_battle_id, row.source_item_id)?.vehicle_id ?? null;
+      }
+      const activeVehicle = row.vehicle_id === null
+        ? null : this.#vehicleRecord(Number(row.vehicle_id));
+      const loadout = activeVehicle ? this.#vehicleLoadout(activeVehicle) : null;
+      const ghostClass = combatClass(row.rarity, classRules);
+      const latestBattle = recordVehicleId === null ? null : this.database.prepare(`
+        SELECT vehicle_battle_sides.rating_after, vehicle_battles.created_at
+        FROM vehicle_battle_sides
+        JOIN vehicle_battles ON vehicle_battles.id = vehicle_battle_sides.battle_id
+        WHERE vehicle_battle_sides.vehicle_id = ?
+        ORDER BY vehicle_battles.created_at DESC, vehicle_battles.id DESC LIMIT 1
+      `).get(recordVehicleId);
+      const battleTotals = recordVehicleId === null ? null : this.database.prepare(`
+        SELECT COUNT(*) AS battles,
+          COALESCE(SUM(vehicle_battle_sides.won), 0) AS wins,
+          COALESCE(SUM(vehicle_battles.is_tie), 0) AS ties
+        FROM vehicle_battle_sides
+        JOIN vehicle_battles ON vehicle_battles.id = vehicle_battle_sides.battle_id
+        WHERE vehicle_battle_sides.vehicle_id = ?
+      `).get(recordVehicleId);
+      const plannedEncounter = row.vehicle_id === null ? null : this.database.prepare(`
+        SELECT encounter_at, encounter_location
+        FROM vehicle_encounters
+        WHERE status = 'planned' AND (vehicle1_id = ? OR vehicle2_id = ?)
+        ORDER BY encounter_at, id LIMIT 1
+      `).get(row.vehicle_id, row.vehicle_id);
+      const ammunitionFields = loadout?.ship
+        ? [...new Set(Object.values(this.#ammunitionRules()).map((rule) => rule.storageField))]
+        : [];
+      const shipStats = loadout?.ship ? {
+        hull: Number(loadout.ship.hull), maxHull: Number(loadout.ship.max_hull),
+        crew: Number(loadout.ship.crew), maxCrew: Number(activeVehicle.max_crew),
+        cannonCount: loadout.cannons.length,
+        ammunition: ammunitionFields.reduce(
+          (total, field) => total + Number(loadout.ship[field] ?? 0), 0
+        )
+      } : null;
       return {
         id: row.id, vehicleId: row.vehicle_id, name, baseName,
         kind: row.ghost_kind, routeId: row.route_id, routeType: row.route_type,
@@ -25155,6 +25390,23 @@ Compliance is compulsory. Enjoy your new life.
             ? row.city2_name : null,
         risenAt: row.risen_at, defeatedAt: row.defeated_at,
         defeatedByName: row.defeated_by_name, defeatedBattleId: row.defeated_battle_id,
+        combatClass: ghostClass,
+        hunterRarities: knownRarities
+          .filter((rarity) => combatClass(rarity.id, classRules) === ghostClass)
+          .map((rarity) => rarity.id),
+        combatBonus, attackForceRatio, speedMultiplier,
+        rating: Number(activeVehicle?.rating ?? latestBattle?.rating_after
+          ?? this.#setting('vehicle_starting_rating')),
+        landStats: loadout?.combatStats ? { ...loadout.combatStats } : null,
+        shipStats,
+        battleCount: Number(battleTotals?.battles ?? 0),
+        battleWins: Number(battleTotals?.wins ?? 0),
+        battleTies: Number(battleTotals?.ties ?? 0),
+        lastBattleAt: latestBattle?.created_at ?? null,
+        plannedEncounter: plannedEncounter ? {
+          encounterAt: Number(plannedEncounter.encounter_at),
+          encounterLocation: Number(plannedEncounter.encounter_location)
+        } : null,
         bounty: parsedArray(row.bounty_json),
         attackOptions: includeAttackOptions && row.defeated_at === null
           ? this.#ghostAttackOptions(playerId, row, now) : []
@@ -26432,7 +26684,7 @@ Compliance is compulsory. Enjoy your new life.
     }
     const planned = option;
     this.sendVehicle(playerId, vehicle.id, creature.route_id, now, {
-      travelOrder: 'peaceful', skipCreatureEncounterPlanning: true
+      skipCreatureEncounterPlanning: true
     });
     const traveling = this.#vehicleRecord(vehicle.id, playerId);
     const intercept = this.#worldCreatureIntercept(
@@ -26487,7 +26739,7 @@ Compliance is compulsory. Enjoy your new life.
       if (!option) throw new Error('That vehicle cannot join this ghost hunt.');
       const journey = this.#beginVehicleJourney(
         playerId, option.vehicleId, ghost.route_id, now,
-        { travelOrder: 'peaceful', skipVehicleEncounterPlanning: true }
+        { skipVehicleEncounterPlanning: true }
       );
       const route = this.database.prepare(`
         SELECT id, city1_id, city2_id, length FROM catalog_routes WHERE id = ?
@@ -27288,6 +27540,8 @@ Compliance is compulsory. Enjoy your new life.
         player_vehicle_convoy_members.scheduled_departure_at,
         player_vehicle_convoy_members.travel_order,
         player_vehicle_convoy_members.aggressive_vs_sentry,
+        player_vehicle_convoy_members.pvp_enabled,
+        player_vehicle_convoy_members.pve_enabled,
         player_vehicle_convoy_members.status AS member_status,
         player_vehicle_convoy_members.departed_at,
         player_vehicle_convoy_members.arrived_at,
@@ -27316,6 +27570,8 @@ Compliance is compulsory. Enjoy your new life.
         player_vehicle_convoy_members.scheduled_departure_at,
         player_vehicle_convoy_members.travel_order,
         player_vehicle_convoy_members.aggressive_vs_sentry,
+        player_vehicle_convoy_members.pvp_enabled,
+        player_vehicle_convoy_members.pve_enabled,
         player_vehicle_convoy_members.status,
         player_vehicle_convoy_members.departed_at,
         player_vehicle_convoy_members.arrived_at,
@@ -27331,6 +27587,8 @@ Compliance is compulsory. Enjoy your new life.
       scheduledDepartureAt: member.scheduled_departure_at,
       travelOrder: member.travel_order,
       aggressiveVsSentry: Boolean(member.aggressive_vs_sentry),
+      pvpEnabled: Boolean(member.pvp_enabled),
+      pveEnabled: Boolean(member.pve_enabled),
       status: member.status,
       departedAt: member.departed_at,
       arrivedAt: member.arrived_at,
@@ -27358,6 +27616,8 @@ Compliance is compulsory. Enjoy your new life.
       scheduledDepartureAt: convoy.scheduled_departure_at,
       travelOrder: convoy.travel_order,
       aggressiveVsSentry: Boolean(convoy.aggressive_vs_sentry),
+      pvpEnabled: Boolean(convoy.pvp_enabled),
+      pveEnabled: Boolean(convoy.pve_enabled),
       memberStatus: convoy.member_status,
       departedAt: convoy.departed_at,
       arrivedAt: convoy.arrived_at,
@@ -27422,6 +27682,8 @@ Compliance is compulsory. Enjoy your new life.
         this.#beginVehicleJourney(playerId, member.vehicle_id, member.route_id, departedAt, {
           travelOrder: member.travel_order,
           aggressiveVsSentry: Boolean(member.aggressive_vs_sentry),
+          pvpEnabled: Boolean(member.pvp_enabled),
+          pveEnabled: Boolean(member.pve_enabled),
           convoyMemberId: member.id
         });
         this.database.prepare(`
@@ -27525,6 +27787,8 @@ Compliance is compulsory. Enjoy your new life.
       destinationCityName: shuttle.destination_city_name,
       mineTypeIds: this.#vehicleShuttleMineTypeIds(shuttle),
       travelOrder: vehicle.travel_order,
+      pvpEnabled: Boolean(vehicle.pvp_enabled),
+      pveEnabled: Boolean(vehicle.pve_enabled),
       phase,
       deliveries: Number(shuttle.deliveries),
       deliveredThings: Number(shuttle.delivered_things),
@@ -27744,7 +28008,7 @@ Compliance is compulsory. Enjoy your new life.
       }
       const journey = this.#beginVehicleJourney(
         vehicle.player_id, vehicle.id, shuttle.route_id, now,
-        { travelOrder: vehicle.travel_order, shuttle: true, skipStowaway: true }
+        { shuttle: true, skipStowaway: true }
       );
       this.database.prepare(`
         UPDATE player_vehicle_shuttles
@@ -27812,7 +28076,10 @@ Compliance is compulsory. Enjoy your new life.
       oiledTrips: vehicle.oiled_trips, tripsStolen: vehicle.trips_stolen,
       aggressive: Boolean(vehicle.aggressive), aggressiveMask: vehicle.aggressive_mask,
       aggressiveVsSentry: Boolean(vehicle.aggressive_vs_sentry),
-      travelOrder: vehicle.travel_order, profession: vehicle.profession,
+      travelOrder: vehicle.travel_order,
+      pvpEnabled: Boolean(vehicle.pvp_enabled),
+      pveEnabled: Boolean(vehicle.pve_enabled),
+      profession: vehicle.profession,
       turbo: vehicle.status === 'traveling' && Boolean(vehicle.turbo),
       offenseBonusFactor: vehicle.status === 'traveling' ? vehicle.offense_bonus_factor : 0,
       defenseBonusFactor: vehicle.status === 'traveling' ? vehicle.defense_bonus_factor : 0,
@@ -28124,6 +28391,32 @@ Compliance is compulsory. Enjoy your new life.
     if (result.changes !== 1) throw new Error('That vehicle cannot be renamed now.');
   }
 
+  setVehicleStance(playerId, vehicleId, travelOrder, pvpEnabled, pveEnabled) {
+    this.#assertVehicleNotShuttling(vehicleId, 'change its stance');
+    const order = String(travelOrder ?? '').trim().toLowerCase();
+    if (!['peaceful', 'pillage', 'patrol'].includes(order)) {
+      throw new Error('Choose peaceful, pillage, or patrol orders.');
+    }
+    const vehicle = this.#vehicleRecord(vehicleId, playerId);
+    if (!vehicle || vehicle.status !== 'idle') {
+      throw new Error('That vehicle cannot change stance now.');
+    }
+    if (Number(vehicle.route_type) === Number(this.#routeTypeId('air'))
+      && order !== 'peaceful') {
+      throw new Error('Aircraft missions use peaceful travel orders.');
+    }
+    this.database.prepare(`
+      UPDATE player_vehicles
+      SET travel_order = ?, pvp_enabled = ?, pve_enabled = ?, aggressive_vs_sentry = 0
+      WHERE id = ? AND player_id = ? AND status = 'idle'
+    `).run(order, pvpEnabled ? 1 : 0, pveEnabled ? 1 : 0, vehicleId, playerId);
+    return {
+      travelOrder: order,
+      pvpEnabled: Boolean(pvpEnabled),
+      pveEnabled: Boolean(pveEnabled)
+    };
+  }
+
   #vehicleCargoPlan(playerId, vehicleId, requested = {}) {
     const compatibilityRules = this.#settings();
     const vehicle = this.#vehicleRecord(vehicleId, playerId);
@@ -28320,18 +28613,18 @@ Compliance is compulsory. Enjoy your new life.
     });
   }
 
-  fitVehicleMods(playerId, vehicleId, modIds = []) {
+  fitVehicleMods(playerId, vehicleId, modIds = [], now = Date.now()) {
     const vehicle = this.#vehicleRecord(vehicleId, playerId);
     if (!vehicle) throw new Error('Vehicle not found.');
     const weaponIds = this.#vehicleLoadout(vehicle).weapons.map((entry) => entry.id);
-    return this.fitVehicleLoadout(playerId, vehicleId, modIds, weaponIds).mods;
+    return this.fitVehicleLoadout(playerId, vehicleId, modIds, weaponIds, now).mods;
   }
 
-  fitVehicleWeapons(playerId, vehicleId, weaponIds = []) {
+  fitVehicleWeapons(playerId, vehicleId, weaponIds = [], now = Date.now()) {
     const vehicle = this.#vehicleRecord(vehicleId, playerId);
     if (!vehicle) throw new Error('Vehicle not found.');
     const modIds = this.#vehicleLoadout(vehicle).mods.map((entry) => entry.id);
-    return this.fitVehicleLoadout(playerId, vehicleId, modIds, weaponIds).weapons;
+    return this.fitVehicleLoadout(playerId, vehicleId, modIds, weaponIds, now).weapons;
   }
 
   #vehicleFittingBoltCost(itemId, rarity) {
@@ -28501,7 +28794,7 @@ Compliance is compulsory. Enjoy your new life.
     };
   }
 
-  fitVehicleLoadout(playerId, vehicleId, modIds = [], weaponIds = []) {
+  fitVehicleLoadout(playerId, vehicleId, modIds = [], weaponIds = [], now = Date.now()) {
     return this.#transaction(() => {
       const plan = this.#vehicleFittingPlan(playerId, vehicleId, modIds, weaponIds);
       if (!plan.valid) throw new Error(`Cannot commit this loadout. ${plan.reasons.join(' ')}`);
@@ -28525,6 +28818,16 @@ Compliance is compulsory. Enjoy your new life.
       );
       for (const id of plan.desiredModIds) insertMod.run(plan.vehicle.id, id);
       for (const id of plan.desiredWeaponIds) insertWeapon.run(plan.vehicle.id, id);
+      if (plan.modChanges.additions.length) {
+        this.#advanceCouncilMissionsInTransaction(playerId, 'vehicle_mod_attach', {
+          cityId: Number(plan.vehicle.city_id), quantity: plan.modChanges.additions.length
+        }, now);
+      }
+      if (plan.weaponChanges.additions.length) {
+        this.#advanceCouncilMissionsInTransaction(playerId, 'vehicle_weapon_attach', {
+          cityId: Number(plan.vehicle.city_id), quantity: plan.weaponChanges.additions.length
+        }, now);
+      }
       return this.#vehicleLoadout(plan.vehicle);
     });
   }
@@ -28952,7 +29255,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
     };
   }
 
-  fitShipLoadout(playerId, vehicleId, cannonIds = [], modIds = null) {
+  fitShipLoadout(playerId, vehicleId, cannonIds = [], modIds = null, now = Date.now()) {
     return this.#transaction(() => {
       const plan = this.#shipLoadoutPlan(playerId, vehicleId, cannonIds, modIds);
       if (!plan.valid) throw new Error(`Cannot commit this ship loadout. ${plan.reasons.join(' ')}`);
@@ -28991,6 +29294,11 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         'INSERT INTO player_vehicle_mods (vehicle_id, mod_id) VALUES (?, ?)'
       );
       for (const id of plan.desiredModIds) insertMod.run(plan.vehicle.id, id);
+      if (plan.modAdditions.length) {
+        this.#advanceCouncilMissionsInTransaction(playerId, 'vehicle_mod_attach', {
+          cityId: Number(plan.vehicle.city_id), quantity: plan.modAdditions.length
+        }, now);
+      }
       return this.#vehicleLoadout(plan.vehicle);
     });
   }
@@ -29206,7 +29514,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       const destinationCityId = Number(route.city1_id) === Number(vehicle.city_id)
         ? Number(route.city2_id) : Number(route.city1_id);
       const travelOrder = String(
-        options?.travelOrder ?? this.#setting('default_travel_order')
+        options?.travelOrder ?? vehicle.travel_order ?? this.#setting('default_travel_order')
       ).toLowerCase();
       if (!['peaceful', 'pillage', 'patrol'].includes(travelOrder)) {
         throw new Error('Choose a valid travel order.');
@@ -29242,12 +29550,23 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(vehicle.id, playerId, route.id, vehicle.city_id, destinationCityId,
         normalizedMineTypeIds === null ? null : JSON.stringify(normalizedMineTypeIds), now, now);
-      this.database.prepare(
-        'UPDATE player_vehicles SET travel_order = ? WHERE id = ?'
-      ).run(travelOrder, vehicle.id);
+      this.database.prepare(`
+        UPDATE player_vehicles SET travel_order = ?, pvp_enabled = ?, pve_enabled = ?
+        WHERE id = ?
+      `).run(travelOrder,
+        options.pvpEnabled === undefined
+          ? (options.travelOrder === undefined
+            ? (vehicle.pvp_enabled ? 1 : 0) : (travelOrder === 'peaceful' ? 0 : 1))
+          : (options.pvpEnabled ? 1 : 0),
+        options.pveEnabled === undefined ? (vehicle.pve_enabled ? 1 : 0)
+          : (options.pveEnabled ? 1 : 0),
+        vehicle.id);
       const advance = this.#advanceVehicleShuttle(vehicle.id, now);
       const current = this.#vehicleRecord(vehicle.id, playerId);
       this.awardStone(playerId, 'Shuttled', now);
+      this.#advanceCouncilMissionsInTransaction(playerId, 'vehicle_shuttle', {
+        cityId: Number(vehicle.city_id)
+      }, now);
       return {
         ...(advance ?? {}),
         shuttle: this.#publicVehicleShuttle(current)
@@ -29376,13 +29695,14 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       const insertMember = this.database.prepare(`
         INSERT INTO player_vehicle_convoy_members
           (convoy_id, vehicle_id, position, scheduled_departure_at, travel_order,
-           aggressive_vs_sentry, vehicle_name, item_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           aggressive_vs_sentry, pvp_enabled, pve_enabled, vehicle_name, item_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const members = vehicles.map((vehicle, index) => {
         const scheduledDepartureAt = now + index * interval;
         const member = insertMember.run(convoyId, vehicle.id, index + 1,
           scheduledDepartureAt, vehicle.travel_order, vehicle.aggressive_vs_sentry ? 1 : 0,
+          vehicle.pvp_enabled ? 1 : 0, vehicle.pve_enabled ? 1 : 0,
           this.#vehicleName(vehicle), vehicle.item_id);
         return { id: Number(member.lastInsertRowid), vehicle, scheduledDepartureAt };
       });
@@ -29391,6 +29711,8 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
           member.scheduledDepartureAt, {
             travelOrder: member.vehicle.travel_order,
             aggressiveVsSentry: Boolean(member.vehicle.aggressive_vs_sentry),
+            pvpEnabled: Boolean(member.vehicle.pvp_enabled),
+            pveEnabled: Boolean(member.vehicle.pve_enabled),
             convoyMemberId: member.id
           });
         this.database.prepare(`
@@ -29398,6 +29720,9 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
           SET status = 'traveling', departed_at = ?, last_attempt_at = ? WHERE id = ?
         `).run(member.scheduledDepartureAt, now, member.id);
       }
+      this.#advanceCouncilMissionsInTransaction(playerId, 'vehicle_convoy', {
+        cityId: Number(player.city_id)
+      }, now);
       return this.#publicVehicleConvoy(this.#vehicleRecord(vehicles[0].id, playerId));
     });
   }
@@ -29467,10 +29792,20 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         player.profession, 'seaPatrolDefense') > 0;
       const legacyOrder = Number(options.aggressiveMask ?? 0)
         ? (patrolSpecialisation ? 'patrol' : 'pillage') : this.#setting('default_travel_order');
-      const travelOrder = String(options.travelOrder ?? legacyOrder).toLowerCase();
+      const explicitTravelOrder = options.travelOrder !== undefined
+        || options.aggressiveMask !== undefined;
+      const travelOrder = String(
+        options.travelOrder ?? (options.aggressiveMask !== undefined
+          ? legacyOrder : vehicle.travel_order ?? legacyOrder)
+      ).toLowerCase();
       if (!['peaceful', 'pillage', 'patrol'].includes(travelOrder)) {
         throw new Error('Choose peaceful, pillage, or patrol orders.');
       }
+      const pvpEnabled = options.pvpEnabled === undefined
+        ? (explicitTravelOrder ? travelOrder !== 'peaceful' : Boolean(vehicle.pvp_enabled))
+        : Boolean(options.pvpEnabled);
+      const pveEnabled = options.pveEnabled === undefined
+        ? Boolean(vehicle.pve_enabled) : Boolean(options.pveEnabled);
       const aggressiveMask = travelOrder === 'peaceful' ? 0
         : combatRarities(vehicle.rarity, this.#setting('combat_class_by_rarity'))
           .reduce((mask, rarity) => mask | (1 << rarity), 0);
@@ -29612,7 +29947,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
           origin_city_id = ?, destination_city_id = ?, departed_at = ?, arrives_at = ?,
           segment_started_at = ?, segment_start_location = ?, journey_disarmed = 0,
           speed = ?, profession = ?, aggressive = ?, aggressive_mask = ?, aggressive_vs_sentry = ?,
-          travel_order = ?,
+          travel_order = ?, pvp_enabled = ?, pve_enabled = ?,
           turbo = ?, offense_bonus_factor = ?, defense_bonus_factor = ?, binoculars = ?,
           aircraft_event_at = ?, aircraft_event_resolved = 0
         WHERE id = ?
@@ -29621,6 +29956,7 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         player.profession, travelOrder !== 'peaceful' ? 1 : 0,
         aggressiveMask,
         travelOrder !== 'peaceful' && options.aggressiveVsSentry ? 1 : 0, travelOrder,
+        pvpEnabled ? 1 : 0, pveEnabled ? 1 : 0,
         turbo ? 1 : 0, offenseFactor, defenseFactor,
         binoculars ? 1 : 0, aircraftEventAt, vehicle.id);
       if (vehicle.route_type === this.#routeTypeId('sea')) {
@@ -29662,7 +29998,8 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
       return {
         destinationCityId, finalDestinationCityId: itinerary.at(-1).destinationCityId,
         arrivesAt, duration, battleId: null, mission, stowawayId,
-        itineraryLegCount: itinerary.length
+        itineraryLegCount: itinerary.length, originCityId: Number(vehicle.city_id),
+        travelOrder, pvpEnabled, pveEnabled
       };
   }
 
@@ -29672,6 +30009,11 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
     // is enforced by the planner, so a ghost attacks every living craft in its
     // class regardless of the craft's orders or exact rarity.
     if (vehicle.is_ghost) return true;
+    if (!vehicle.is_npc) {
+      const targetEnabled = other.is_npc
+        ? Boolean(vehicle.pve_enabled) : Boolean(vehicle.pvp_enabled);
+      if (!targetEnabled) return false;
+    }
     const order = vehicle.travel_order;
     if (order === 'peaceful') return false;
     const classRules = this.#setting('combat_class_by_rarity');
@@ -32250,10 +32592,129 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
     const localMines = exists(
       'SELECT 1 FROM mines WHERE player_id = ? AND city_id = ? LIMIT 1', playerId, cityId
     );
+    const localMineModes = this.database.prepare(`
+      SELECT mines.mine_things, mines.crypto_type_id, catalog_mine_types.has_ore
+      FROM mines JOIN catalog_mine_types ON catalog_mine_types.id = mines.mine_type_id
+      WHERE mines.player_id = ? AND mines.city_id = ?
+    `).all(playerId, cityId);
     const scraps = this.database.prepare(`
       SELECT COALESCE(quantity, 0) AS quantity FROM recycling_scraps
       WHERE player_id = ? AND city_id = ?
     `).get(playerId, cityId)?.quantity ?? 0;
+    const funds = this.database.prepare(`
+      SELECT players.gold_units, catalog_cities.map_id
+      FROM players JOIN catalog_cities ON catalog_cities.id = players.city_id
+      WHERE players.id = ?
+    `).get(playerId);
+    const availableCryptoIds = new Set(cryptoTypesForMap(funds?.map_id)
+      .map((currency) => Number(currency.id)));
+    const canMineGold = localMineModes.some((mine) => !mine.has_ore
+      && (mine.mine_things || mine.crypto_type_id !== null));
+    const canMineOre = localMineModes.some((mine) => Boolean(mine.has_ore)
+      && (mine.mine_things || mine.crypto_type_id !== null));
+    const canMineCrypto = availableCryptoIds.size > 0
+      && localMineModes.some((mine) => mine.crypto_type_id === null);
+    const cryptoBalances = this.database.prepare(`
+      SELECT crypto_type_id, quantity FROM player_crypto_balances
+      WHERE player_id = ? AND quantity > 0
+    `).all(playerId);
+    const hasCryptoSellMeans = cryptoBalances.some((balance) =>
+      availableCryptoIds.has(Number(balance.crypto_type_id)));
+    const casinoCrypto = Number(this.database.prepare(`
+      SELECT COALESCE(SUM(quantity), 0) AS quantity FROM (
+        SELECT quantity FROM player_crypto_balances WHERE player_id = ?
+        UNION ALL
+        SELECT quantity FROM casino_vouchers WHERE player_id = ?
+      )
+    `).get(playerId, playerId)?.quantity ?? 0);
+    const hasCryptoBuyMeans = Number(funds?.gold_units ?? 0) >= MIN_MARKET_PRICE_UNITS;
+    const thingOMaticRules = this.#casinoRules(THING_O_MATIC_KEY);
+    const hasCasinoStake = Number(funds?.gold_units ?? 0)
+      >= Number(thingOMaticRules.minimumGoldWager) * GOLD_SCALE
+      || casinoCrypto >= Number(thingOMaticRules.minimumCryptoWager);
+    const readyVehicles = this.database.prepare(`
+      SELECT player_vehicles.id
+      FROM player_vehicles
+      WHERE player_vehicles.player_id = ? AND player_vehicles.city_id = ?
+        AND player_vehicles.status = 'idle' AND player_vehicles.damaged = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM player_vehicle_shuttles
+          WHERE player_vehicle_shuttles.vehicle_id = player_vehicles.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM player_vehicle_convoy_members
+          WHERE player_vehicle_convoy_members.vehicle_id = player_vehicles.id
+            AND player_vehicle_convoy_members.status = 'queued'
+        )
+      ORDER BY player_vehicles.id
+    `).all(playerId, cityId).map((row) => this.#vehicleRecord(row.id, playerId));
+    const directRouteAvailable = (vehicle) => exists(`
+      SELECT 1 FROM catalog_routes
+      WHERE is_open = 1 AND type = ? AND length > 0 AND city1_id <> city2_id
+        AND (city1_id = ? OR city2_id = ?)
+      LIMIT 1
+    `, vehicle.route_type, cityId, cityId);
+    const canStartShuttle = readyVehicles.some((vehicle) => {
+      const loadout = this.#vehicleLoadout(vehicle);
+      return loadout.cargoSize === 0 && loadout.capacity > 0
+        && directRouteAvailable(vehicle);
+    });
+    const convoyGroups = new Map();
+    for (const vehicle of readyVehicles.filter((entry) =>
+      [this.#routeTypeId('land'), this.#routeTypeId('sea')].includes(Number(entry.route_type))
+      && directRouteAvailable(entry))) {
+      const key = Number(vehicle.vehicle_type_id);
+      convoyGroups.set(key, (convoyGroups.get(key) ?? 0) + 1);
+    }
+    const canLaunchConvoy = [...convoyGroups.values()].some((quantity) =>
+      quantity >= VEHICLE_CONVOY_MIN_SIZE);
+    const availableWeapons = this.database.prepare(`
+      SELECT catalog_weapons.id
+      FROM inventory JOIN catalog_weapons ON catalog_weapons.item_id = inventory.item_id
+      WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
+      ORDER BY catalog_weapons.id
+    `).all(playerId, cityId);
+    const availableMods = this.database.prepare(`
+      SELECT catalog_mods.id
+      FROM inventory JOIN catalog_mods ON catalog_mods.item_id = inventory.item_id
+      WHERE inventory.player_id = ? AND inventory.city_id = ? AND inventory.quantity > 0
+      ORDER BY catalog_mods.id
+    `).all(playerId, cityId);
+    const landVehicles = readyVehicles.filter((vehicle) =>
+      Number(vehicle.route_type) === Number(this.#routeTypeId('land')));
+    const canFitVehicleWeapon = landVehicles.some((vehicle) => {
+      const loadout = this.#vehicleLoadout(vehicle);
+      return availableWeapons.some((weapon) => {
+        try {
+          return this.#vehicleFittingPlan(playerId, vehicle.id,
+            loadout.mods.map((entry) => entry.id),
+            [...loadout.weapons.map((entry) => entry.id), weapon.id]).valid;
+        } catch {
+          return false;
+        }
+      });
+    });
+    const canFitVehicleMod = readyVehicles.some((vehicle) => {
+      const loadout = this.#vehicleLoadout(vehicle);
+      return availableMods.some((mod) => {
+        if (loadout.mods.some((entry) => Number(entry.id) === Number(mod.id))) return false;
+        try {
+          if (Number(vehicle.route_type) === Number(this.#routeTypeId('land'))) {
+            return this.#vehicleFittingPlan(playerId, vehicle.id,
+              [...loadout.mods.map((entry) => entry.id), mod.id],
+              loadout.weapons.map((entry) => entry.id)).valid;
+          }
+          if (Number(vehicle.route_type) === Number(this.#routeTypeId('sea'))) {
+            return this.#shipLoadoutPlan(playerId, vehicle.id,
+              loadout.cannons.map((entry) => entry.id),
+              [...loadout.mods.map((entry) => entry.id), mod.id]).valid;
+          }
+          return false;
+        } catch {
+          return false;
+        }
+      });
+    });
     return {
       localInventory,
       flags: new Set([
@@ -32263,6 +32724,9 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         ...(Number(scraps) >= this.#positiveIntegerSetting('recycling_scraps_per_ore')
           ? ['hasRefinableScraps'] : []),
         ...(localMines ? ['hasMine'] : []),
+        ...(canMineGold ? ['canMineGold'] : []),
+        ...(canMineCrypto ? ['canMineCrypto'] : []),
+        ...(canMineOre ? ['canMineOre'] : []),
         ...(localMines && localInventory.some((item) => item.itemId === oilItemId)
           ? ['hasMineOil'] : []),
         ...(localMines && exists(`
@@ -32308,7 +32772,21 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         ...(exists(`
           SELECT 1 FROM player_vehicles
           WHERE player_id = ? AND city_id = ? AND status = 'idle' LIMIT 1
-        `, playerId, cityId) ? ['hasVehicle'] : [])
+        `, playerId, cityId) ? ['hasVehicle'] : []),
+        ...(exists(`
+          SELECT 1 FROM player_vehicles
+          JOIN catalog_vehicles ON catalog_vehicles.id = player_vehicles.vehicle_type_id
+          WHERE player_vehicles.player_id = ? AND player_vehicles.city_id = ?
+            AND player_vehicles.status = 'idle' AND catalog_vehicles.route_type <> ? LIMIT 1
+        `, playerId, cityId, this.#routeTypeId('air')) ? ['hasPatrolVehicle'] : []),
+        ...(canStartShuttle ? ['canStartShuttle'] : []),
+        ...(canLaunchConvoy ? ['canLaunchConvoy'] : []),
+        ...(canFitVehicleWeapon ? ['canFitVehicleWeapon'] : []),
+        ...(canFitVehicleMod ? ['canFitVehicleMod'] : []),
+        ...(hasCasinoStake ? ['hasCasinoStake'] : []),
+        ...(hasCryptoBuyMeans ? ['hasCryptoBuyMeans'] : []),
+        ...(hasCryptoSellMeans ? ['hasCryptoSellMeans'] : []),
+        ...(hasCryptoBuyMeans || hasCryptoSellMeans ? ['hasCryptoOrderMeans'] : [])
       ])
     };
   }
@@ -33063,13 +33541,17 @@ Peaceful means your vehicle starts no fights against living traffic. Pillagers, 
         .run(purchase.credits, purchase.player_id);
       const balance = this.database.prepare('SELECT credits FROM players WHERE id = ?')
         .get(purchase.player_id).credits;
+      const sellerContact = [purchase.seller_name, purchase.seller_address,
+        purchase.seller_email].map((value) => String(value ?? '').trim()).filter(Boolean);
+      const privateSellerDetails = sellerContact.length
+        ? ` Private seller contact for this purchase: ${sellerContact.join('; ')}.` : '';
       this.database.prepare(`
         INSERT INTO credit_ledger (player_id, purchase_id, kind, delta, balance_after, created_at)
         VALUES (?, ?, 'purchase', ?, ?, ?)
       `).run(purchase.player_id, purchase.id, purchase.credits, balance, now);
       this.#insertSystemMessage(purchase.player_id, 'Admin',
         `${purchase.credits} credits added`,
-        `PayPal purchase MT-${purchase.id} completed. ${purchase.credits} credits were added to your account; your balance is now ${balance}.`,
+        `PayPal purchase MT-${purchase.id} completed. ${purchase.credits} credits were added to your account; your balance is now ${balance}.${privateSellerDetails}`,
         now, `credit-purchase:${purchase.id}:completed`, {
           event: 'credit-purchase-completed', purchaseId: purchase.id,
           credits: purchase.credits, balance,

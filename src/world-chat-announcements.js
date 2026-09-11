@@ -231,6 +231,15 @@ const FRONTIER_EXPEDITION_TEMPLATES = freeze([
   ({ player, place, map, reward }) => `Gateway records name ${player} as ${place} into ${map}, with an expedition award of ${reward}.`
 ]);
 
+const CASINO_JACKPOT_TEMPLATES = freeze([
+  ({ player, machine, payout, multiplier }) => `${player} hit the jackpot on ${machine}: ${payout} returned at ${multiplier}\u00d7.`,
+  ({ player, machine, payout, multiplier }) => `Casino jackpot: ${machine} paid ${player} ${payout}, a ${multiplier}\u00d7 return.`,
+  ({ player, machine, payout, multiplier }) => `${machine} has sounded its jackpot alarm for ${player}: ${payout} at ${multiplier}\u00d7.`,
+  ({ player, machine, payout, multiplier }) => `The house regrets to announce ${possessive(player)} ${multiplier}\u00d7 jackpot on ${machine}, returning ${payout}.`,
+  ({ player, machine, payout, multiplier }) => `${player} broke the quiet at ${machine} with a ${multiplier}\u00d7 jackpot worth ${payout}.`,
+  ({ player, machine, payout, multiplier }) => `Jackpot confirmed on ${machine}: ${player} leaves the lever with ${payout} from a ${multiplier}\u00d7 result.`
+]);
+
 function ordinal(value) {
   const number = Number(value);
   const finalTwo = number % 100;
@@ -251,7 +260,7 @@ export const WORLD_CHAT_ANNOUNCEMENT_FAMILIES = freeze([
   'ghost-risen', 'ghost-defeated',
   'weather-observation', 'storm-warning', 'snow-warning', 'hurricane-warning',
   'creature-sighting', 'creature-escaped', 'moon-phase', 'creature-defeated',
-  'route-closed', 'route-reopened', 'frontier-expedition'
+  'route-closed', 'route-reopened', 'frontier-expedition', 'casino-jackpot'
 ]);
 
 const FAMILY_SET = new Set(WORLD_CHAT_ANNOUNCEMENT_FAMILIES);
@@ -393,6 +402,18 @@ export function generateWorldChatAnnouncement(familyValue, seedValue, context = 
       map: requiredText(context, 'mapName'),
       place: ordinal(position),
       reward: `${credits.toLocaleString('en-GB')} credits${item ? ` and ${item}` : ''}`
+    });
+  }
+  if (family === 'casino-jackpot') {
+    const multiplier = requiredNumber(context, 'multiplier');
+    if (!(multiplier > 0)) {
+      throw new Error('World chat announcement requires a positive jackpot multiplier.');
+    }
+    return renderTemplate(seed, family, CASINO_JACKPOT_TEMPLATES, {
+      player: requiredText(context, 'playerName'),
+      machine: requiredText(context, 'machineName'),
+      payout: requiredText(context, 'payoutSummary'),
+      multiplier: multiplier.toLocaleString('en-GB')
     });
   }
   const values = {

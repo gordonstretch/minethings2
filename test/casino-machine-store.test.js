@@ -143,6 +143,30 @@ function settlementSnapshot(store, playerId) {
   };
 }
 
+test('publishes every settled casino jackpot to global Worldwire exactly once', (context) => {
+  const fixture = storeFixture(context, 'minethings-casino-jackpot-chat-');
+  const player = addCasinoPlayer(fixture.store, 'Jackpot Witness');
+  const wager = Number(fixture.store.casinoState(player.id).rules.minimumGoldWager);
+  const spin = fixture.store.spinCasino(player.id, 'gold', wager, () => 0, 2_000);
+  assert.equal(spin.jackpot, true);
+
+  const announcement = fixture.store.database.prepare(`
+    SELECT id, body, path FROM world_chat_announcements WHERE event_key = ?
+  `).get(`casino-jackpot:${spin.id}`);
+  assert.ok(announcement);
+  assert.match(announcement.body, /Jackpot Witness/u);
+  assert.match(announcement.body, /Thing-O-Matic/u);
+  assert.match(announcement.body, new RegExp(`${spin.multiplier.toLocaleString('en-GB')}\u00d7`, 'u'));
+  assert.match(announcement.body, new RegExp(`${spin.payout.toLocaleString('en-GB')}g`, 'u'));
+  assert.equal(announcement.path, '/casino');
+  assert.equal(fixture.store.database.prepare(`
+    SELECT COUNT(*) AS count FROM world_chat_announcement_regions
+    WHERE announcement_id = ?
+  `).get(announcement.id).count, 0, 'jackpots are global rather than region-gated');
+  assert.equal(fixture.store.recentChats().filter((chat) =>
+    chat.eventKey === `casino-jackpot:${spin.id}`).length, 1);
+});
+
 test('fresh and migrated casino schemas default legacy spins to Thing-O-Matic', (context) => {
   const fixture = storeFixture(context, 'minethings-casino-machine-schema-');
   const player = addCasinoPlayer(fixture.store, 'Machine Schema');

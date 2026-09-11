@@ -100,8 +100,8 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.byId.get(340).icon, '/legacy/img/equipment/src/MR3.png');
   assert.equal(catalog.byId.get(358).icon, '/legacy/img/icons/I4.png');
   assert.deepEqual(catalog.settings.world_creature_hp, {
-    kraken: 90, land_whale: 70, white_whale: 85,
-    orca_pod: 62.5, elephant_herd: 82.5, t_rex: 110
+    kraken: 90, land_whale: 56, white_whale: 85,
+    orca_pod: 62.5, elephant_herd: 66, t_rex: 88
   });
   assert.equal(catalog.items.find((item) => item.name === 'Search Plane').icon,
     '/node/vehicles/vehicle-737.svg');

@@ -77,6 +77,13 @@ const CASES = Object.freeze({
     },
     required: ['Ada', 'Bromo', '1st', '500', 'Legendary Saffron']
   },
+  'casino-jackpot': {
+    context: {
+      playerName: 'Ada', machineName: 'Thing-O-Matic',
+      payoutSummary: '2,040g', multiplier: 2040
+    },
+    required: ['Ada', 'Thing-O-Matic', '2,040g', '2,040']
+  },
   'creature-defeated': {
     context: {
       playerName: 'Ada', vehicleName: 'Patrol Boat', creatureName: 'Common Orca Pod',

@@ -710,7 +710,7 @@ function layout(title, content, player, flash) {
   const playerMeldCount = Number(player?.meldCount ?? player?.meldIds?.length ?? 0);
   const playerChatColor = /^[0-9a-f]{6}$/i.test(String(player?.effectiveChatColor ?? ''))
     ? String(player.effectiveChatColor).toLowerCase() : '55666b';
-  const login = player ? `<div id="login" class="player-status"><a class="player-identity" href="/miners/${encodeURIComponent(player.name)}"><span>Miner</span><strong>${escapeHtml(player.name)}</strong></a><dl class="player-vitals"><div class="player-meld-vital" style="--miner-chat-color:#${playerChatColor}"><dt>Melds</dt><dd>${playerMeldCount.toLocaleString('en-GB')}</dd></div><div><dt>Gold</dt><dd>${formatGold(player.gold)}g</dd></div><div><dt>Credits</dt><dd>${player.credits}c</dd></div><div><dt>Battery</dt><dd>${formatDuration(player.batteryRemaining ?? 0)}</dd></div></dl><form method="post" action="/logout"><button class="logout-button">Log out <span aria-hidden="true">↗</span></button></form></div>`
+  const login = player ? `<div id="login" class="player-status"><a class="player-identity" href="/miners/${encodeURIComponent(player.name)}"><span>Miner</span><strong>${escapeHtml(player.name)}</strong></a><dl class="player-vitals"><div class="player-online-vital" title="Unique signed-in miners seen in the last five minutes"><dt>Online</dt><dd><span data-active-users>${Number(player.onlineMinerCount ?? 0).toLocaleString('en-GB')}</span></dd></div><div class="player-meld-vital" style="--miner-chat-color:#${playerChatColor}"><dt>Melds</dt><dd>${playerMeldCount.toLocaleString('en-GB')}</dd></div><div><dt>Gold</dt><dd>${formatGold(player.gold)}g</dd></div><div><dt>Credits</dt><dd>${player.credits}c</dd></div><div><dt>Battery</dt><dd>${formatDuration(player.batteryRemaining ?? 0)}</dd></div></dl><form method="post" action="/logout"><button class="logout-button">Log out <span aria-hidden="true">↗</span></button></form></div>`
     : '<div id="login" class="guest-actions"><a class="text-link" href="/#returning-miner">Log in</a><a class="button" href="/#join">Stake your claim</a></div>';
   const sideLink = (href, label, prefixes = [href], exact = false) => {
     const active = isCurrent(prefixes, exact);
@@ -732,7 +732,7 @@ function layout(title, content, player, flash) {
     ${sideGroup('Extraction', [sideLink('/', countedSideLabel('Mines', 'mines'), ['/'], true), sideLink('/inventory', countedSideLabel('Things', 'things'), ['/inventory', '/items']), sideLink('/dwarves', countedSideLabel('Dwarves', 'dwarves')), sideLink('/gadgets', countedSideLabel('Gadgets', 'gadgets')), sideLink('/melds', countedSideLabel('Melds', 'melds'))])}
     ${sideGroup('Industry', [sideLink('/vehicles', countedSideLabel('Fleet', 'fleet')), sideLink('/factories', countedSideLabel('Factories', 'factories')), sideLink('/mills', countedSideLabel('Mills', 'mills')), sideLink('/oil-field', countedSideLabel('Oil Field', 'oilFields')), sideLink('/containers', 'Containers'), sideLink('/market', 'Mine shop', ['/market'], true)])}
     ${sideGroup('World', [sideLink('/explore', 'Explore city'), sideLink('/exchange', 'Markets', ['/exchange', '/market/items', '/market/factories']), sideLink('/crypto', 'Crypto Exchange'), sideLink('/map', 'World map', ['/map', '/cities']), sideLink('/events', 'World events'), sideLink('/council', `Council orders (${Number(player.council?.availableMissions ?? 0).toLocaleString('en-GB')})`)])}
-    ${sideGroup('Network', [sideLink('/chat', unseenLabel('Chat', player.unseenChatMessages)), sideLink('/casino', 'Casino'), sideLink('/guilds', unseenLabel('Guilds', player.unseenGuildChatMessages)), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', `Miners (${Number(player.minerCount).toLocaleString('en-GB')})`, ['/miners'], true), sideLink('/ratings', 'Ratings')])}
+    ${sideGroup('Network', [sideLink('/chat', unseenLabel('Chat', player.unseenChatMessages)), sideLink('/casino', 'Casino'), sideLink('/guilds', unseenLabel('Guilds', player.unseenGuildChatMessages)), sideLink('/messages', `Messages${player.unreadMessages ? ` (${player.unreadMessages})` : ''}`), sideLink('/miners', `Miners (${Number(player.minerCount ?? 0).toLocaleString('en-GB')})`, ['/miners'], true), sideLink('/ratings', 'Ratings')])}
     ${sideGroup('Miner', [sideLink('/professions', 'Specialisation'), sideLink(`/miners/${encodeURIComponent(player.name)}`, 'Profile', [`/miners/${encodeURIComponent(player.name)}`], true), sideLink('/account', 'Account'), sideLink('/stats', 'Server stats'), sideLink('/guide', 'Field guide'), sideLink('/credits', 'Buy credits')])}
     ${player.authority > 0 ? sideGroup('Command', [sideLink('/admin', 'Administration')]) : ''}
   </nav></div></aside>` : '';
@@ -768,7 +768,7 @@ function layout(title, content, player, flash) {
   const liveRevision = typeof player?.liveUpdateRevision === 'function'
     ? player.liveUpdateRevision() : Number(player?.liveUpdateRevision ?? 0);
   const liveUpdates = player
-    ? `<script src="/node/live-updates.js?v=20260904a" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
+    ? `<script src="/node/live-updates.js?v=20260911a" data-live-revision="${Number(liveRevision)}" defer></script>` : '';
   const maintenanceNotice = player?.maintenanceNotice ?? null;
   const maintenanceBanner = player
     ? `<aside id="maintenance-banner" class="maintenance-banner" role="status" aria-live="assertive" data-shutdown-at="${Number(maintenanceNotice?.shutdownAt ?? 0)}"${maintenanceNotice ? '' : ' hidden'}><span class="maintenance-banner-mark" aria-hidden="true">!</span><div><strong>Maintenance shutdown <span data-maintenance-countdown>${escapeHtml(maintenanceNotice?.countdownLabel ?? '')}</span></strong><p data-maintenance-message>${escapeHtml(maintenanceNotice?.message ?? '')}</p></div></aside>`
@@ -4316,6 +4316,15 @@ function selectableShuttleCategories(catalog) {
       || Number(first.id) - Number(second.id));
 }
 
+function vehicleStanceLabel(catalog, stance) {
+  const order = catalog.settings.travel_order_names?.[stance.travelOrder];
+  if (typeof order !== 'string' || !order) {
+    throw new Error(`Missing travel-order name: ${stance.travelOrder}.`);
+  }
+  return `${order} · PvP ${stance.pvpEnabled ? 'on' : 'off'} · PvE ${
+    stance.pveEnabled ? 'on' : 'off'}`;
+}
+
 function vehicleShuttleSummary(player, catalog, vehicle) {
   if (!vehicle.shuttle) return null;
   const shuttle = vehicle.shuttle;
@@ -4352,6 +4361,8 @@ function vehicleShuttleSummary(player, catalog, vehicle) {
   return {
     originLabel, destinationLabel, phase, phaseDetail, loadedThings,
     cargoCategories, travelOrder,
+    pvpEnabled: Boolean(shuttle.pvpEnabled),
+    pveEnabled: Boolean(shuttle.pveEnabled),
     deliveries: Number(shuttle.deliveries ?? 0),
     deliveredThings: Number(shuttle.deliveredThings ?? 0),
     lastLoadedThings: Number(shuttle.lastLoadedThings ?? 0)
@@ -4373,7 +4384,7 @@ function vehicleShuttlePanel(player, catalog, vehicle) {
   return `<section class="vehicle-itinerary-status vehicle-shuttle-status" aria-labelledby="vehicle-shuttle-heading">
     <header><p class="eyebrow">SHUTTLE · ${escapeHtml(summary.phase)}</p><h2 id="vehicle-shuttle-heading">${escapeHtml(summary.originLabel)} ⇄ ${escapeHtml(summary.destinationLabel)}</h2></header>
     <p><strong>${escapeHtml(summary.phaseDetail)}</strong></p>
-    <dl><div><dt>Order</dt><dd>${escapeHtml(summary.travelOrder)}</dd></div><div><dt>Deliveries</dt><dd>${summary.deliveries}</dd></div><div><dt>Things delivered</dt><dd>${summary.deliveredThings}</dd></div><div><dt>Last load</dt><dd>${summary.lastLoadedThings} thing${summary.lastLoadedThings === 1 ? '' : 's'}</dd></div><div><dt>Cargo categories</dt><dd>${escapeHtml(summary.cargoCategories)}</dd></div></dl>
+    <dl><div><dt>Order</dt><dd>${escapeHtml(summary.travelOrder)}</dd></div><div><dt>PvP</dt><dd>${summary.pvpEnabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>PvE</dt><dd>${summary.pveEnabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>Deliveries</dt><dd>${summary.deliveries}</dd></div><div><dt>Things delivered</dt><dd>${summary.deliveredThings}</dd></div><div><dt>Last load</dt><dd>${summary.lastLoadedThings} thing${summary.lastLoadedThings === 1 ? '' : 's'}</dd></div><div><dt>Cargo categories</dt><dd>${escapeHtml(summary.cargoCategories)}</dd></div></dl>
     ${stopNotice}${vehicleShuttleCancelForm(vehicle)}
   </section>`;
 }
@@ -4412,11 +4423,6 @@ function vehicleCanDeactivate(vehicle, catalog) {
 function vehicleConvoyPanel(catalog, vehicle, now) {
   const convoy = vehicle.convoy;
   if (!convoy) return '';
-  const orderName = (order) => {
-    const name = catalog.settings.travel_order_names?.[order];
-    if (!name) throw new Error(`Missing travel-order name: ${order}.`);
-    return name;
-  };
   const memberState = (member) => {
     if (member.status === 'queued') {
       return member.blockedReason
@@ -4429,10 +4435,10 @@ function vehicleConvoyPanel(catalog, vehicle, now) {
     return 'Cancelled';
   };
   const rows = convoy.members.map((member) => `<tr${Number(member.id) === Number(convoy.memberId)
-    ? ' class="current-convoy-member"' : ''}><td>${member.position}</td><td>${escapeHtml(member.vehicleName)}</td><td>${escapeHtml(orderName(member.travelOrder))}</td><td>${escapeHtml(memberState(member))}</td></tr>`).join('');
+    ? ' class="current-convoy-member"' : ''}><td>${member.position}</td><td>${escapeHtml(member.vehicleName)}</td><td>${escapeHtml(vehicleStanceLabel(catalog, member))}</td><td>${escapeHtml(memberState(member))}</td></tr>`).join('');
   const queued = convoy.status === 'active'
     && convoy.members.some((member) => member.status === 'queued');
-  return `<section class="vehicle-convoy-panel" aria-labelledby="vehicle-convoy-heading"><p class="eyebrow vehicle-convoy-badge">CONVOY ${convoy.position}/${convoy.size}</p><h2 id="vehicle-convoy-heading">${escapeHtml(convoy.originCityName)} &rarr; ${escapeHtml(convoy.destinationCityName)}</h2><p>This transport keeps its recorded <strong>${escapeHtml(orderName(convoy.travelOrder))}</strong> stance. Departures are staggered by ${formatDuration(convoy.staggerMs)}.</p><div class="table-scroll"><table><thead><tr><th>Departure</th><th>Transport</th><th>Stance</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>${queued ? `<form method="post" action="/vehicle-convoys/${convoy.id}/cancel"><p>Cancellation releases transports that have not departed. Those underway finish their current journey.</p><button class="secondary">Cancel remaining convoy departures</button></form>` : ''}</section>`;
+  return `<section class="vehicle-convoy-panel" aria-labelledby="vehicle-convoy-heading"><p class="eyebrow vehicle-convoy-badge">CONVOY ${convoy.position}/${convoy.size}</p><h2 id="vehicle-convoy-heading">${escapeHtml(convoy.originCityName)} &rarr; ${escapeHtml(convoy.destinationCityName)}</h2><p>This transport keeps its recorded <strong>${escapeHtml(vehicleStanceLabel(catalog, convoy))}</strong> stance. Departures are staggered by ${formatDuration(convoy.staggerMs)}.</p><div class="table-scroll"><table><thead><tr><th>Departure</th><th>Transport</th><th>Stance</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>${queued ? `<form method="post" action="/vehicle-convoys/${convoy.id}/cancel"><p>Cancellation releases transports that have not departed. Those underway finish their current journey.</p><button class="secondary">Cancel remaining convoy departures</button></form>` : ''}</section>`;
 }
 
 function vehicleConvoySetupPage(player, catalog, leader, vehicles) {
@@ -4443,11 +4449,7 @@ function vehicleConvoySetupPage(player, catalog, leader, vehicles) {
     && Number(vehicle.vehicleTypeId) === Number(leader.vehicleTypeId)
     && !vehicle.damaged && !vehicle.aircraftDestroyed && !vehicle.shuttle
     && vehicle.convoy?.memberStatus !== 'queued');
-  const stance = (vehicle) => {
-    const name = catalog.settings.travel_order_names?.[vehicle.travelOrder];
-    if (!name) throw new Error(`Missing travel-order name: ${vehicle.travelOrder}.`);
-    return name;
-  };
+  const stance = (vehicle) => vehicleStanceLabel(catalog, vehicle);
   const routeOptions = routes.map((route) => `<option value="${route.id}">${escapeHtml(
     vehicleRouteDestinationLabel(player, catalog, leader.cityId, route.destinationCityId)
   )} &middot; ${Number(route.length).toLocaleString('en-GB')} km</option>`).join('');
@@ -4964,7 +4966,8 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     const onwardJourney = vehicle.queuedJourneyLegs.length
       ? `<section class="vehicle-itinerary-status"><h2>Onward itinerary</h2><p>Each leg departs immediately when the previous one arrives.</p><ol>${vehicle.queuedJourneyLegs.map((leg) => `<li>${escapeHtml(vehicleRouteDestinationLabel(player, catalog, leg.originCityId, leg.destinationCityId))} <small>${Number(leg.length).toLocaleString('en-GB')} km</small></li>`).join('')}</ol></section>`
       : '';
-    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></div></section>${vehicleShuttlePanel(player, catalog, vehicle)}${vehicleConvoyPanel(catalog, vehicle, now)}${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
+    const underwayStance = `<section class="vehicle-stance-panel is-locked"><p class="eyebrow">Journey setting</p><h2>Stance</h2><p><strong>${escapeHtml(vehicleStanceLabel(catalog, vehicle))}</strong></p><p class="field-help">Stance is locked until this journey ends.</p></section>`;
+    return `<section class="page-title"><div><p class="eyebrow">Vehicle status</p><h1>${rankBadge(vehicle.rank, 1, catalog)}${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>${journeyStatus}${journeyGadgets.length ? ` Journey gadgets: ${escapeHtml(journeyGadgets.join(', '))}.` : ''} Loadout is read-only while underway.</p></div></section>${underwayStance}${vehicleShuttlePanel(player, catalog, vehicle)}${vehicleConvoyPanel(catalog, vehicle, now)}${onwardJourney}${underwayLoadout}<table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events}</tbody></table>`;
   }
   const oilItem = catalogItemForSetting(catalog, 'oil_item_id');
   const boltItem = catalogItemForSetting(catalog, 'bolt_item_id');
@@ -5207,6 +5210,13 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
     if (typeof label !== 'string' || !label) throw new Error(`Missing travel-order name: ${order}.`);
     return `<option value="${order}"${vehicle.travelOrder === order ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   }).join('');
+  const savedStance = vehicleStanceLabel(catalog, vehicle);
+  const stanceLocked = Boolean(vehicle.shuttle || convoyQueued);
+  const stanceSection = vehicle.routeType === airRouteType
+    ? `<section class="vehicle-stance-panel"><p class="eyebrow">Saved vehicle setting</p><h2>Stance</h2><p><strong>Peaceful</strong> · Aircraft cannot take combat orders or engage route traffic.</p></section>`
+    : `<section class="vehicle-stance-panel${stanceLocked ? ' is-locked' : ''}"><p class="eyebrow">Saved vehicle setting</p><h2>Stance</h2>${stanceLocked
+      ? `<p><strong>${escapeHtml(savedStance)}</strong></p><p class="field-help">Cancel the shuttle or queued convoy departure before changing this stance.</p>`
+      : `<form class="vehicle-stance-form" method="post" action="/vehicles/${vehicle.id}/stance"><label>Order<select name="travelOrder">${travelOrderOptions}</select></label><fieldset><legend>Targets</legend><label><input type="checkbox" name="pvp" value="on"${vehicle.pvpEnabled ? ' checked' : ''}> <span><strong>PvP</strong> · Attack player vehicles allowed by this order</span></label><label><input type="checkbox" name="pve" value="on"${vehicle.pveEnabled ? ' checked' : ''}> <span><strong>PvE</strong> · Engage event creatures encountered on routes</span></label></fieldset><p class="field-help">This saved stance is used by manual journeys, shuttles, and new convoy departures.</p><button>Save stance</button></form>`}</section>`;
   if (vehicle.aircraftDestroyed) {
     return `<section class="page-title"><div><p class="eyebrow">Aircraft lost</p><h1>${escapeHtml(vehicle.name)}</h1></div><a class="text-link" href="/vehicles">Back to vehicles</a></section><section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<p class="capacity-warning">This aircraft was shot down by the ore thieves. Its cargo was lost.</p></section>${loadoutOverview}<table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No mission history.</td></tr>'}</tbody></table>`;
   }
@@ -5244,10 +5254,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
         <p class="field-help" data-journey-summary>Additional legs leave immediately after arrival. Cargo stays aboard until the final stop.</p>
         <script type="application/json" data-journey-routes>${journeyRouteData}</script>
       </div>
-      ${vehicle.routeType === airRouteType
-        ? '<input type="hidden" name="travelOrder" value="peaceful">'
-        : `<label>Order<select name="travelOrder"${vehicle.damaged ? ' disabled' : ''}>${travelOrderOptions}</select></label>
-          <div class="vehicle-tier-targeting"><p>Combat targets are limited automatically to this vehicle's tier.</p><label><input type="checkbox" name="attackSentry"${vehicle.aggressiveVsSentry ? ' checked' : ''}${vehicle.damaged ? ' disabled' : ''}>Also engage patrols in this tier</label></div>`}
+      <p class="field-help vehicle-saved-stance"><strong>Saved stance:</strong> ${escapeHtml(savedStance)}</p>
       <button${vehicle.damaged ? ' disabled' : ''}>Send itinerary</button>
     </form><script src="/node/vehicle-journey.js?v=20260825b" defer></script>` : '<p>No compatible routes from this city.</p>'}</section>`;
   const convoySetupSection = ['land', 'sea'].includes(vehicle.type) && routeOptions
@@ -5255,9 +5262,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
   const shuttleSetupControls = Number(vehicle.capacity) <= 0
     ? `<p class="capacity-warning"><strong>No cargo space is available.</strong> Fittings or ammunition use every capacity slot. <a class="text-link" href="/vehicles/${vehicle.id}/customize">Free at least one slot</a> before setting up a shuttle.</p>`
     : shuttleRouteOptions
-      ? `<form class="vehicle-shuttle-form" method="post" action="/vehicles/${vehicle.id}/shuttle"><label>Destination<select name="routeId" required${vehicle.damaged ? ' disabled' : ''}>${shuttleRouteOptions}</select></label>${vehicle.routeType === airRouteType
-        ? '<input type="hidden" name="travelOrder" value="peaceful"><p class="field-help"><strong>Order:</strong> Peaceful. Aircraft cannot take combat orders.</p>'
-        : `<label>Order<select name="travelOrder"${vehicle.damaged ? ' disabled' : ''}>${travelOrderOptions}</select></label><p class="field-help">The chosen order applies on both the loaded outbound leg and the empty return leg.</p>`}<fieldset${vehicle.damaged ? ' disabled' : ''}><legend>Cargo categories</legend><p>Every category is selected. Untick anything this shuttle must leave behind; the rarest eligible things among the remaining categories load first.</p><div class="button-row vehicle-shuttle-category-actions"><button class="secondary" type="button" data-shuttle-deselect-all aria-controls="shuttle-categories-${vehicle.id}">Deselect all</button></div><div id="shuttle-categories-${vehicle.id}" class="vehicle-shuttle-categories">${shuttleCategoryOptions}</div></fieldset><button${vehicle.damaged ? ' disabled' : ''}>Start shuttle</button></form><script src="/node/vehicle-shuttle.js?v=20260901a" defer></script>`
+      ? `<form class="vehicle-shuttle-form" method="post" action="/vehicles/${vehicle.id}/shuttle"><label>Destination<select name="routeId" required${vehicle.damaged ? ' disabled' : ''}>${shuttleRouteOptions}</select></label><p class="field-help"><strong>Saved stance:</strong> ${escapeHtml(savedStance)}. It applies on both the loaded outbound leg and the empty return leg.</p><fieldset${vehicle.damaged ? ' disabled' : ''}><legend>Cargo categories</legend><p>Every category is selected. Untick anything this shuttle must leave behind; the rarest eligible things among the remaining categories load first.</p><div class="button-row vehicle-shuttle-category-actions"><button class="secondary" type="button" data-shuttle-deselect-all aria-controls="shuttle-categories-${vehicle.id}">Deselect all</button></div><div id="shuttle-categories-${vehicle.id}" class="vehicle-shuttle-categories">${shuttleCategoryOptions}</div></fieldset><button${vehicle.damaged ? ' disabled' : ''}>Start shuttle</button></form><script src="/node/vehicle-shuttle.js?v=20260901a" defer></script>`
       : '<p>No compatible shuttle destination from this city.</p>';
   const shuttleSetupSection = vehicle.cargoSize === 0 ? `<section class="vehicle-send-panel vehicle-shuttle-setup"><p class="eyebrow">Automatic transport</p><h2>Set up a shuttle</h2><p>Each outbound trip loads as many eligible things as will fit, rarest first, unloads them at the destination, then returns empty and repeats until cancelled. Protected factory output is never loaded. Deactivated transports can travel as ordinary cargo when Vehicles or Ships are selected. Oil Field machine parts stay in their Oil Field home city.</p>${shuttleSetupControls}</section>` : '';
   const sendSection = vehicle.shuttle
@@ -5277,7 +5282,7 @@ function vehicleDetailPage(player, catalog, vehicle, routes, now, view = 'status
       ? '<section class="vehicle-manage-actions"><h2>Reserved for convoy</h2><p>Cargo, fittings, Oil, name, and stance remain read-only until this transport departs or its convoy departure is cancelled.</p></section>'
     : `<section class="vehicle-manage-actions"><h2>Manage vehicle</h2><p>${vehicle.type === 'air' ? 'Cargo has its own focused screen.' : 'Cargo and customization are separate so you can focus on one job at a time.'}</p><div class="button-row"><a class="button" href="/vehicles/${vehicle.id}/cargo">Manage cargo</a>${vehicle.type === 'air' ? '' : `<a class="button" href="/vehicles/${vehicle.id}/customize${vehicle.type === 'sea' ? '#ammunition' : ''}">${vehicle.type === 'sea' ? 'Load ammunition or change cannons' : 'Customize mods and weapons'}</a>`}</div></section>`;
   return `${pageTitle}
-    <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p>${vehicle.shuttle || convoyQueued ? '' : `<form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form>`}</div></section>${sendSection}${loadoutOverview}
+    <section class="vehicle-hero">${itemCard(vehicleItem, { featured: true, meta: vehicle.name })}<div>${transportPolicy}<p>Speed ${vehicle.speed} · cargo ${vehicle.cargoSize}/${vehicle.capacity} · ${vehicle.capacityBreakdown?.free ?? freeCapacity} total capacity free${vehicle.rank ? ` · tier ${vehicle.rank}` : ''}${vehicle.damaged ? ' · DAMAGED' : ''}</p>${vehicle.shuttle || convoyQueued ? '' : `<form class="inline-order" method="post" action="/vehicles/${vehicle.id}/rename"><input name="name" maxlength="${Number(catalog.settings.vehicle_name_max_length)}" value="${escapeHtml(vehicle.customName)}" placeholder="Custom name"><button>Rename</button></form>`}</div></section>${stanceSection}${sendSection}${loadoutOverview}
     ${manageSection}
     ${vehicle.shuttle || convoyQueued ? '' : `<section><h2>Oil</h2>${oilItem ? itemCard(oilItem, { count: local[oilItem.id] ?? 0, compact: true, meta: [`${vehicle.oiledTrips} boosted trips loaded`, `${vehicle.tripsStolen} stolen trips`], action: `<form method="post" action="/vehicles/${vehicle.id}/oil"><button ${vehicle.routeType === airRouteType || !(local[oilItem.id] ?? 0) ? 'disabled' : ''}>Load one barrel</button></form>${vehicle.tripsStolen ? `<form method="post" action="/vehicles/${vehicle.id}/oil/unload"><button class="secondary">Reclaim a barrel</button></form>` : ''}` }) : ''}</section>`}
     <section><h2>History</h2><table><thead><tr><th>When</th><th>Event</th><th>Details</th><th></th></tr></thead><tbody>${events || '<tr><td colspan="4">No journeys yet.</td></tr>'}</tbody></table></section>
@@ -5848,7 +5853,7 @@ function cityTransportFacilityPage(player, catalog, vehicles, facilityKey, thief
 
 function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldCityIds = [],
   operationsSnapshot = { generatedAt: Date.now(), shuttles: [],
-    vehicleNamesById: {}, automations: [] }) {
+    vehicleNamesById: {}, automations: [], mines: [] }) {
   const currentCity = catalogCityForId(catalog, player.cityId);
   const playerMap = catalog.maps.find((map) => map.id === currentCity.mapId)
     ?? { id: currentCity.mapId, name: 'Gallego', slug: 'gallego' };
@@ -5913,6 +5918,21 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
       tasks: Array.isArray(automation.tasks)
         ? automation.tasks.filter((task) => mapCityIds.has(Number(task.cityId))) : []
     })).filter((automation) => automation.tasks.length > 0) : [];
+  const snapshotMines = Array.isArray(operationsSnapshot.mines)
+    ? operationsSnapshot.mines.filter((mine) => mapCityIds.has(Number(mine.cityId))) : [];
+  const snapshotMinesByCity = new Map();
+  for (const mine of snapshotMines) {
+    const cityId = Number(mine.cityId);
+    if (!snapshotMinesByCity.has(cityId)) snapshotMinesByCity.set(cityId, []);
+    snapshotMinesByCity.get(cityId).push(mine);
+  }
+  const mineOutputLabel = (mine) => {
+    if (mine.cryptoTypeId !== null && mine.cryptoTypeId !== undefined) {
+      return `${cryptoType(Number(mine.cryptoTypeId)).name} crypto`;
+    }
+    if (mine.mineThings) return 'Things';
+    return mine.hasOre ? 'Ore' : 'Gold';
+  };
   const taskSummary = (automation, task) => {
     if (automation.behaviorKey === 'autoloader') {
       const vehicleName = operationsSnapshot.vehicleNamesById?.[task.vehicleId]
@@ -5946,6 +5966,29 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
     if (!cityOperations.has(operation.cityId)) cityOperations.set(operation.cityId, []);
     cityOperations.get(operation.cityId).push(operation);
   };
+  for (const city of mapCities) {
+    const mines = snapshotMinesByCity.get(city.id) ?? [];
+    if (!mines.length) continue;
+    for (const state of [
+      { active: true, kind: 'mine-active', label: 'Active mines',
+        titleLabel: 'active mines', marker: '✓' },
+      { active: false, kind: 'mine-inactive', label: 'Not mining',
+        titleLabel: 'mines not mining', marker: '×' }
+    ]) {
+      const matchingMines = mines.filter((mine) => mine.active === state.active);
+      if (!matchingMines.length) continue;
+      const summary = `${matchingMines.length.toLocaleString('en-GB')} mine${matchingMines.length === 1 ? '' : 's'} ${state.active ? 'active' : 'not mining'}`;
+      const mineDetails = matchingMines.map((mine) =>
+        `${mine.mineTypeName} Mine, ${state.active ? 'mining' : 'configured for'} ${mineOutputLabel(mine)}`
+      ).join('; ');
+      addCityOperation({
+        kind: state.kind, cityId: city.id, label: state.label, summary,
+        href: city.id === player.cityId ? '/' : `#city-${city.id}`, marker: state.marker,
+        markerCount: matchingMines.length,
+        title: `Your ${state.titleLabel} in ${city.name}: ${summary}. ${mineDetails}.`
+      });
+    }
+  }
   for (const automation of snapshotAutomations) {
     for (const task of automation.tasks ?? []) {
       const cityId = Number(task.cityId);
@@ -5977,8 +6020,8 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
     if (!entries.length) return '';
     const groups = new Map();
     for (const entry of entries) {
-      const groupKey = entry.kind === 'shuttle'
-        ? 'shuttle' : `${entry.kind}:${entry.behaviorKey}`;
+      const groupKey = entry.kind === 'shuttle' || entry.kind.startsWith('mine-')
+        ? entry.kind : `${entry.kind}:${entry.behaviorKey}`;
       if (!groups.has(groupKey)) groups.set(groupKey, []);
       groups.get(groupKey).push(entry);
     }
@@ -5989,9 +6032,10 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
       const y = Math.max(20, Math.min(580,
         Number(position.y) + (index - (all.length - 1) / 2) * 22));
       const title = group.length === 1 ? first.title
-        : `${group.length} ${first.kind === 'shuttle' ? 'shuttles' : first.label + ' tasks'} in ${city.name}: ${group.map((entry) => entry.summary).join('; ')}`;
+        : `${group.length} ${first.kind === 'shuttle' ? 'shuttles' : first.kind.startsWith('mine-') ? 'mine groups' : first.label + ' tasks'} in ${city.name}: ${group.map((entry) => entry.summary).join('; ')}`;
       const href = first.kind === 'shuttle' && group.length > 1 ? '/vehicles' : first.href;
-      return `<a class="map-operation-link map-${first.kind}-marker" href="${escapeHtml(href)}" aria-label="${escapeHtml(title)}"><g class="map-operation-marker" transform="translate(${x} ${y})"><title>${escapeHtml(title)}</title><circle class="map-operation-marker-halo" r="11" /><circle class="map-operation-marker-token" r="8" /><text text-anchor="middle" y="3">${escapeHtml(first.marker)}</text>${group.length > 1 ? `<text class="map-operation-marker-count" x="8" y="-7">${group.length}</text>` : ''}</g></a>`;
+      const markerCount = Number(first.markerCount ?? (group.length > 1 ? group.length : 0));
+      return `<a class="map-operation-link map-${first.kind}-marker" href="${escapeHtml(href)}" aria-label="${escapeHtml(title)}"><g class="map-operation-marker" transform="translate(${x} ${y})"><title>${escapeHtml(title)}</title><circle class="map-operation-marker-halo" r="11" /><circle class="map-operation-marker-token" r="8" /><text text-anchor="middle" y="3">${escapeHtml(first.marker)}</text>${markerCount > 0 ? `<text class="map-operation-marker-count" x="8" y="-7">${markerCount.toLocaleString('en-GB')}</text>` : ''}</g></a>`;
     }).join('');
   }).join('');
   const mapBackgroundFilename = `${currentMap.slug}.png`;
@@ -6020,7 +6064,9 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
       ? `<g class="map-resource-icon map-oil-field-icon" data-oil-field="true" transform="translate(${iconStart + availableMines.length * 29} 31)"><title>${escapeHtml(`Oil Field in ${city.name}`)}</title><circle class="map-resource-token" cx="13" cy="13" r="12" /><image href="${OIL_FIELD_MAP_ICON_PATH}" x="1" y="1" width="24" height="24" preserveAspectRatio="xMidYMid meet" /></g>`
       : '';
     const mineNames = availableMines.map((mineType) => `${mineType.name} Mine`).join(', ');
-    const label = escapeHtml(`${city.name}: ${cityState} ${cityRole}. Mines available: ${mineNames || 'none'}${hasOilField ? '. Oil Field regional operation' : ''}`);
+    const ownedMines = snapshotMinesByCity.get(city.id) ?? [];
+    const activeOwnedMines = ownedMines.filter((mine) => mine.active).length;
+    const label = escapeHtml(`${city.name}: ${cityState} ${cityRole}. Your mines: ${ownedMines.length}, ${activeOwnedMines} active, ${ownedMines.length - activeOwnedMines} not mining. Mines available: ${mineNames || 'none'}${hasOilField ? '. Oil Field regional operation' : ''}`);
     const gateway = gatewayRoutes.some((route) =>
       route.city1Id === city.id || route.city2Id === city.id);
     const cityNameplateWidth = Math.max(88, Math.ceil([...city.name].length * 7.8 + 32));
@@ -6076,10 +6122,20 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
     const cityAction = city.id === player.cityId
       ? '<p class="city-walk-link"><a class="text-link" href="/explore">Explore this city on foot →</a></p>'
       : known.has(city.id) ? `<form method="post" action="/cities/${city.id}/select"><button>View this city</button></form>` : '';
+    const ownedMines = snapshotMinesByCity.get(city.id) ?? [];
+    const activeOwnedMines = ownedMines.filter((mine) => mine.active).length;
+    const pausedOwnedMines = ownedMines.length - activeOwnedMines;
+    const ownedMineRows = ownedMines.map((mine) =>
+      `<li class="city-owned-mine ${mine.active ? 'is-active' : 'is-paused'}"><span class="city-owned-mine-state">${mine.active ? 'Active' : 'Not mining'}</span><strong>${escapeHtml(mine.mineTypeName)} Mine</strong><small>${mine.active ? 'Mining' : 'Configured for'} ${escapeHtml(mineOutputLabel(mine))}</small></li>`
+    ).join('');
+    const ownedMineList = ownedMines.length
+      ? `<p><strong>${activeOwnedMines.toLocaleString('en-GB')}</strong> active · <strong>${pausedOwnedMines.toLocaleString('en-GB')}</strong> not mining</p><ul>${ownedMineRows}</ul>`
+      : '<p class="city-owned-mines-empty">No mines based here.</p>';
+    const ownedMineSection = `<section class="city-owned-mines"><h4>Your mines <span>${ownedMines.length.toLocaleString('en-GB')}</span></h4>${ownedMineList}</section>`;
     const operations = cityOperations.get(city.id) ?? [];
     const operationList = operations.length
-      ? `<section class="city-map-operations"><h4>Your operations</h4><ul>${operations.map((operation) => `<li class="city-map-operation city-map-operation-${operation.kind}"><a class="city-map-operation-link" href="${escapeHtml(operation.href)}" title="${escapeHtml(operation.title)}"><span>${operation.kind === 'shuttle' ? 'Shuttle' : escapeHtml(operation.label)}</span><strong>${escapeHtml(operation.summary)}</strong><small>Manage →</small></a></li>`).join('')}</ul></section>` : '';
-    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"${hasOilField ? ' data-oil-field="true"' : ''}><header class="city-card-heading">${capitalBadge}<h3>${escapeHtml(city.name)}</h3></header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p><h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${oilFieldOperation}${operationList}${cityAction}</article>`;
+      ? `<section class="city-map-operations"><h4>Your operations</h4><ul>${operations.map((operation) => `<li class="city-map-operation city-map-operation-${operation.kind}"><a class="city-map-operation-link" href="${escapeHtml(operation.href)}" title="${escapeHtml(operation.title)}"><span>${operation.kind === 'shuttle' ? 'Shuttle' : escapeHtml(operation.label)}</span><strong>${escapeHtml(operation.summary)}</strong><small>${operation.kind.startsWith('mine-') ? 'Inspect' : 'Manage'} →</small></a></li>`).join('')}</ul></section>` : '';
+    return `<article id="city-${city.id}" class="city-card ${known.has(city.id) ? 'known' : 'unknown'}${city.id === player.cityId ? ' current' : ''}${isCapital ? ' capital' : ''}" data-city-id="${city.id}"${hasOilField ? ' data-oil-field="true"' : ''}><header class="city-card-heading">${capitalBadge}<h3>${escapeHtml(city.name)}</h3></header><p class="city-status">${status}</p><p class="city-routes"><strong>Routes</strong>${offers}</p>${ownedMineSection}<h4>Mines available</h4><ul class="city-mines">${mineList || '<li>None</li>'}</ul>${oilFieldOperation}${operationList}${cityAction}</article>`;
   }).join('');
   const mapTabs = catalog.maps.filter((map) => visibleMapIds.has(map.id))
     .map((map) => {
@@ -6110,12 +6166,14 @@ function mapPage(player, catalog, knownCityIds, requestedMapSlug = '', oilFieldC
     ? ` · <strong>Oil Field</strong> at ${escapeHtml(currentMapOilField.name)}` : '';
   const automationTaskCount = snapshotAutomations.reduce((sum, automation) =>
     sum + Number(automation.tasks?.length ?? 0), 0);
+  const activeMineCount = snapshotMines.filter((mine) => mine.active).length;
+  const pausedMineCount = snapshotMines.length - activeMineCount;
   const snapshotDate = new Date(snapshotAt);
   const snapshotIso = snapshotDate.toISOString();
   const snapshotLabel = snapshotDate.toLocaleString('en-GB');
-  const operationsSummary = `<section class="map-operations-snapshot" data-map-snapshot-at="${snapshotAt}" aria-labelledby="map-operations-heading"><div><p class="eyebrow">${escapeHtml(currentMap.name)} operations · Snapshot</p><h2 id="map-operations-heading">${automationTaskCount.toLocaleString('en-GB')} automation task${automationTaskCount === 1 ? '' : 's'} · ${snapshotShuttles.length.toLocaleString('en-GB')} shuttle${snapshotShuttles.length === 1 ? '' : 's'}</h2></div><p>Captured <time datetime="${snapshotIso}">${escapeHtml(snapshotLabel)}</time>. Hover or focus a marker for details; select it to manage that operation. Refresh this page for a new snapshot.</p></section>`;
+  const operationsSummary = `<section class="map-operations-snapshot" data-map-snapshot-at="${snapshotAt}" aria-labelledby="map-operations-heading"><div><p class="eyebrow">${escapeHtml(currentMap.name)} operations · Snapshot</p><h2 id="map-operations-heading">${snapshotMines.length.toLocaleString('en-GB')} mine${snapshotMines.length === 1 ? '' : 's'} · ${activeMineCount.toLocaleString('en-GB')} active · ${pausedMineCount.toLocaleString('en-GB')} not mining · ${automationTaskCount.toLocaleString('en-GB')} automation task${automationTaskCount === 1 ? '' : 's'} · ${snapshotShuttles.length.toLocaleString('en-GB')} shuttle${snapshotShuttles.length === 1 ? '' : 's'}</h2></div><p>Captured <time datetime="${snapshotIso}">${escapeHtml(snapshotLabel)}</time>. Mine status and counts are shown directly on the map; hover or focus any marker for details. Refresh this page for a new snapshot.</p></section>`;
   return `<nav class="world-map-tabs" aria-label="World maps">${mapTabs}</nav><section class="page-title"><div><p class="eyebrow">${escapeHtml(currentMap.name)} region</p><h1>Cities</h1></div><p>Vehicles reveal cities and regions when they complete a route.</p></section><section class="map-opportunities" aria-labelledby="regional-capital-heading"><p class="eyebrow">${escapeHtml(currentMap.name)} opportunities · Shared regional base</p><h2 id="regional-capital-heading"><span class="city-capital-icon" title="Regional capital" aria-label="Regional capital">${CAPITAL_CITY_ICON}</span>${escapeHtml(capitalCity.name)} · Regional capital</h2><p>Every miner in ${escapeHtml(currentMap.name)} shares ${escapeHtml(capitalCity.name)} as their capital and home city in this region. Bring things here to Meld, build factories, hire workers, and trade with other miners gathering in the region’s central market. Other cities remain independent outposts with their own mines, routes, and local markets.</p><p class="map-region-facts"><strong>${mapCities.length} cities</strong> · <strong>${mapMineTypes.size} mine types</strong> · ${[...mapMineTypes.values()].map((mineType) => escapeHtml(mineType.name)).join(' · ')}${oilFieldFact}</p></section>
-    ${operationsSummary}<figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital, gateways and your operations</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types${currentMapOilField ? `, the Oil Field at ${escapeHtml(currentMapOilField.name)}` : ''}, gateway cities, live gadget automation and shuttle origins. This is a snapshot captured at ${escapeHtml(snapshotLabel)}. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g><g class="city-operation-layer" aria-label="City operations">${operationMarkers}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="oil-field-key"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt="">Oil Field</span><span class="gateway-key">Gateway to another region</span><span class="automation-key"><i aria-hidden="true">A</i>Live automation</span><span class="shuttle-key"><i aria-hidden="true">S</i>Shuttle origin</span></figcaption></figure>
+    ${operationsSummary}<figure class="route-map"><svg viewBox="0 0 900 600" role="img" aria-labelledby="route-map-title route-map-description"><title id="route-map-title">${escapeHtml(currentMap.name)} cities, capital, gateways and your operations</title><desc id="route-map-description">An illustrated regional map showing ${escapeHtml(capitalCity.name)} as the capital, other cities as outposts, available mine types${currentMapOilField ? `, the Oil Field at ${escapeHtml(currentMapOilField.name)}` : ''}, gateway cities, active and not-mining owned mine counts, live gadget automation and shuttle origins. This is a snapshot captured at ${escapeHtml(snapshotLabel)}. Route details are listed below the map.</desc>${terrain}<g class="city-layer">${cityNodes}</g><g class="city-operation-layer" aria-label="City operations">${operationMarkers}</g></svg><figcaption aria-label="Map legend"><span class="city-key city-key-capital">Regional capital</span><span class="city-key city-key-current">Current city</span><span class="city-key city-key-unknown">Undiscovered</span><span class="mine-key">Mine types available</span><span class="oil-field-key"><img src="${OIL_FIELD_MAP_ICON_PATH}" alt="">Oil Field</span><span class="gateway-key">Gateway to another region</span><span class="active-mine-key"><i aria-hidden="true">✓</i>Active mines</span><span class="inactive-mine-key"><i aria-hidden="true">×</i>Not mining</span><span class="mine-count-key"><i aria-hidden="true">3</i>Small number = mine count</span><span class="automation-key"><i aria-hidden="true">L</i>Autoloader</span><span class="automation-key"><i aria-hidden="true">$</i>Autolister</span><span class="automation-key"><i aria-hidden="true">F</i>Automaker</span><span class="automation-key"><i aria-hidden="true">M</i>Automelder</span><span class="shuttle-key"><i aria-hidden="true">S</i>Shuttle origin</span></figcaption></figure>
     <section><h2>Local route network</h2><ul class="route-list">${routeRows || '<li>No routes are currently available.</li>'}</ul></section>${exitsSection}
     <section><h2>City operations</h2><div class="city-grid">${cities}</div></section><script src="/node/map.js?v=20260821a" defer></script>`;
 }
@@ -6231,6 +6289,25 @@ function ghostEventDetailPage(ghost, catalog, currentTime) {
   const outcome = ghost.defeatedAt
     ? `<p class="ghost-record-outcome"><strong>Final disposition:</strong> ${ghost.defeatedByName ? `Banished by ${escapeHtml(ghost.defeatedByName)}` : 'Banished'}${ghost.defeatedBattleId ? ` in <a class="text-link" href="/battles/${ghost.defeatedBattleId}">the recorded battle</a>` : ''}.</p>`
     : '';
+  const eligibleTiers = (ghost.hunterRarities ?? []).map((rarityId) =>
+    catalog.rarities.find((rarity) => Number(rarity.id) === Number(rarityId))?.name
+  ).filter(Boolean).join(', ');
+  const routeActivity = ghost.defeatedAt ? 'Apparition no longer active'
+    : ghost.plannedEncounter
+      ? `One compatible transport is projected to meet it in ${formatDuration(
+        Number(ghost.plannedEncounter.encounterAt) - Number(currentTime)
+      )}`
+      : 'No vehicle encounter is currently projected';
+  const losses = Math.max(0, Number(ghost.battleCount)
+    - Number(ghost.battleWins) - Number(ghost.battleTies));
+  const battleRecord = `${Number(ghost.battleCount).toLocaleString('en-GB')} (${
+    Number(ghost.battleWins).toLocaleString('en-GB')} won, ${losses.toLocaleString('en-GB')} lost${
+    Number(ghost.battleTies) ? `, ${Number(ghost.battleTies).toLocaleString('en-GB')} tied` : ''})`;
+  const structure = ghost.defeatedAt ? 'Destroyed in its final encounter'
+    : ghost.shipStats
+      ? `${Number(ghost.shipStats.hull).toLocaleString('en-GB')} / ${
+        Number(ghost.shipStats.maxHull).toLocaleString('en-GB')} hull`
+      : condition.label;
   const origin = ghost.sourcePlayerName
     ? `<div><dt>Former keeper</dt><dd>${escapeHtml(ghost.sourcePlayerName)}</dd></div>` : '';
   const creatureOrigin = Boolean(ghost.sourceCreatureId);
@@ -6250,12 +6327,18 @@ function ghostEventDetailPage(ghost, catalog, currentTime) {
     ? `The haunting rose from the remains of <a class="text-link" href="/events/creatures/${ghost.sourceCreatureId}">${escapeHtml(ghost.sourceCreatureName)}</a>.`
     : `The haunting retains the form of <a class="thing-link rarity-${ghost.rarity}" href="/items/${ghost.sourceItemId}">${escapeHtml(ghost.sourceItemName)}</a>, once recorded as ${escapeHtml(ghost.sourceVehicleName)}.`;
   const sourceAlt = creatureOrigin ? ghost.sourceCreatureName : ghost.sourceItemName;
+  const combatProfile = ghost.landStats
+    ? `<p><strong>Recorded fighting strength:</strong> ${Number(ghost.landStats.attack).toLocaleString('en-GB')} attack, ${Number(ghost.landStats.armor).toLocaleString('en-GB')} armour, ${Number(ghost.landStats.offense).toLocaleString('en-GB')} offence, ${Number(ghost.landStats.defense).toLocaleString('en-GB')} defence, and ${Number(ghost.landStats.dodge).toLocaleString('en-GB')} dodge.</p>`
+    : ghost.shipStats
+      ? `<p><strong>Recorded fighting strength:</strong> ${Number(ghost.shipStats.hull).toLocaleString('en-GB')} / ${Number(ghost.shipStats.maxHull).toLocaleString('en-GB')} hull, ${Number(ghost.shipStats.crew).toLocaleString('en-GB')} / ${Number(ghost.shipStats.maxCrew).toLocaleString('en-GB')} crew, ${Number(ghost.shipStats.cannonCount).toLocaleString('en-GB')} fitted cannon${Number(ghost.shipStats.cannonCount) === 1 ? '' : 's'}, and ${Number(ghost.shipStats.ammunition).toLocaleString('en-GB')} shots remaining.</p>`
+      : '<p>Its surviving combat figures ended with the apparition; the final battle report remains the authoritative record.</p>';
   return `<section class="page-title"><div><p class="eyebrow">Restless-dead record #${ghost.id}</p><h1>${escapeHtml(ghost.name)}</h1></div><a class="text-link" href="/events">Back to world events</a></section>
     <article class="ghost-record rarity-${ghost.rarity}">
       <div class="ghost-record-hero"><div class="ghost-record-spectre spectral-transport spectral-${ghost.kind}"><img src="${escapeHtml(ghost.icon)}" alt="${escapeHtml(kindName)}"></div><div><p class="eyebrow">${escapeHtml(ghost.rarityName)} ${escapeHtml(kindName)} &middot; ${escapeHtml(ghost.regionName)} region</p><h2>${escapeHtml(ghost.baseName)}</h2><p>${escapeHtml(description)}</p>${outcome}</div></div>
-      <dl class="ghost-record-facts"><div><dt>Rarity</dt><dd>${escapeHtml(ghost.rarityName)}</dd></div><div><dt>Region</dt><dd>${escapeHtml(ghost.regionName)}</dd></div><div><dt>State</dt><dd>${escapeHtml(state)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)} &middot; ${escapeHtml(routeType)} &middot; ${Number(ghost.length).toLocaleString('en-GB')} km</dd></div><div><dt>Heading</dt><dd>${heading}</dd></div><div><dt>Position</dt><dd>${position}</dd></div><div><dt>Speed</dt><dd>${ghost.speed === null || ghost.speed === undefined ? 'No longer moving' : `${Number(ghost.speed).toFixed(1)} km/h`}</dd></div><div><dt>Timing</dt><dd>${escapeHtml(timing)}</dd></div><div><dt>Risen</dt><dd>${new Date(ghost.risenAt).toLocaleString('en-GB')}</dd></div></dl>
+      <dl class="ghost-record-facts"><div><dt>Rarity</dt><dd>${escapeHtml(ghost.rarityName)}</dd></div><div><dt>Region</dt><dd>${escapeHtml(ghost.regionName)}</dd></div><div><dt>State</dt><dd>${escapeHtml(state)}</dd></div><div><dt>Route</dt><dd>${escapeHtml(ghost.routeName)} &middot; ${escapeHtml(routeType)} &middot; ${Number(ghost.length).toLocaleString('en-GB')} km</dd></div><div><dt>Heading</dt><dd>${heading}</dd></div><div><dt>Position</dt><dd>${position}</dd></div><div><dt>Condition</dt><dd>${escapeHtml(structure)}</dd></div><div><dt>Speed</dt><dd>${ghost.speed === null || ghost.speed === undefined ? 'No longer moving' : `${Number(ghost.speed).toFixed(1)} km/h`}</dd></div><div><dt>Timing</dt><dd>${escapeHtml(timing)}</dd></div><div><dt>Risen</dt><dd>${new Date(ghost.risenAt).toLocaleString('en-GB')}</dd></div><div><dt>Route activity</dt><dd>${escapeHtml(routeActivity)}</dd></div><div><dt>Battle record</dt><dd>${escapeHtml(battleRecord)}</dd></div><div><dt>Combat rating</dt><dd>${Number(ghost.rating).toLocaleString('en-GB')}</dd></div></dl>
       <section class="ghost-origin"><div><p class="eyebrow">${creatureOrigin ? 'Remains record' : 'Wreck record'}</p><h2>What came back</h2><p>${sourceRecord}</p>${sourceDescription}</div><img src="${escapeHtml(ghost.sourceIcon)}" alt="${escapeHtml(sourceAlt)}">${origin ? `<dl>${origin}</dl>` : ''}</section>
-      <section class="ghost-bounty"><p class="eyebrow">Spectral manifest</p><h2>${ghost.defeatedAt ? 'Recovered bounty' : 'Reported bounty'}</h2><p>A compatible vehicle must physically meet this apparition while travelling on its route.</p><ul>${bounty || '<li>No recoverable cargo is recorded.</li>'}</ul></section>
+      <section class="ghost-origin creature-observations"><div><p class="eyebrow">Field observations</p><h2>Observed behaviour</h2><p>It turns at each end of its recorded route and attacks living ${ghost.kind === 'ship' ? 'ships' : 'land vehicles'} in the same combat class. Its spectral form travels at ${Math.round(Number(ghost.speedMultiplier) * 100)}% of its original type's base speed.</p><p>Its attacks deliver ${Math.round(Number(ghost.attackForceRatio) * 100)}% of fitted force, while its defensive structure received ${Math.round(Number(ghost.combatBonus) * 100)}% spectral reinforcement when it rose.</p>${combatProfile}</div><img src="${escapeHtml(ghost.icon)}" alt=""></section>
+      <section class="ghost-bounty"><p class="eyebrow">Encounter record</p><h2>${ghost.defeatedAt ? 'Recovered bounty' : 'Reported bounty'}</h2><p><strong>Compatible vehicle tiers:</strong> ${escapeHtml(eligibleTiers)}. A matching ${ghost.kind === 'ship' ? 'ship' : 'land vehicle'} must physically meet this apparition while travelling on its route.</p><ul>${bounty || '<li>No recoverable cargo is recorded.</li>'}</ul></section>
     </article>`;
 }
 
@@ -6341,25 +6424,23 @@ function legalPage(seller, paymentConfig, emailVerificationEnabled = false) {
   const accountEmailData = emailVerificationEnabled
     ? 'mandatory verified email'
     : 'an email address if you later provide one';
-  const sellerDetails = seller.legalName && seller.legalAddress && seller.legalEmail
-    ? `<dl class="legal-identity"><dt>Legal seller</dt><dd>${escapeHtml(seller.legalName)}</dd><dt>Geographic address</dt><dd>${escapeHtml(seller.legalAddress)}</dd><dt>Contact</dt><dd><a class="text-link" href="mailto:${escapeHtml(seller.legalEmail)}">${escapeHtml(seller.legalEmail)}</a></dd></dl>`
-    : `<p class="legal-notice"><strong>Real-money checkout is not available.</strong> The operator's legal name, geographic address and contact email have not been configured for publication.</p>`;
   return `<article class="editorial-page legal-page"><nav class="editorial-switcher" aria-label="Public records"><a class="text-link" href="/history">History</a><a class="text-link" href="/legal" aria-current="page">Legal</a></nav>
     <section class="page-title"><div><p class="eyebrow">MineThings archive · Record 02</p><h1>Legal</h1></div><p>${escapeHtml(version.title)}. The rules, rights and responsibilities governing this independent restoration. Version ${LEGAL_VERSION}, England and Wales.</p></section>
     <div class="editorial-facts" aria-label="Legal document status"><div><span>Effective</span><strong>${escapeHtml(version.effectiveDate)}</strong></div><div><span>Jurisdiction</span><strong>England and Wales</strong></div><div><span>Payment mode</span><strong>${escapeHtml(paymentConfig.environment)}</strong></div></div>
     <p class="legal-summary" role="note"><strong>Mandatory rights remain.</strong> These terms allocate risk as far as the law permits. They do not remove consumer rights or liabilities that cannot lawfully be excluded.</p>
     <div class="editorial-layout"><nav class="article-index" aria-label="Legal sections"><strong>On this page</strong><a class="text-link" href="#operator">Operator</a><a class="text-link" href="#accounts">Accounts</a><a class="text-link" href="#service">Service</a><a class="text-link" href="#payments">Payments</a><a class="text-link" href="#privacy">Privacy</a><a class="text-link" href="#rights">Rights and content</a><a class="text-link" href="#liability">Liability</a><a class="text-link" href="#changes">Changes</a></nav><div class="editorial-copy legal-clauses">
-    <section id="operator"><h2>1. Operator and status</h2><p>MineThings is an unofficial, independently operated restoration presented by <strong>${escapeHtml(seller.operatorName)}</strong>. The original game was created by <strong>Japhet Stevens</strong>. This restoration is not endorsed by or affiliated with Japhet Stevens, previous operators, PayPal or any owner of third-party names, code or artwork. No transfer of those third-party rights is claimed.</p>${sellerDetails}</section>
+    <section id="operator"><h2>1. Operator and status</h2><p>MineThings is an unofficial, independently operated restoration presented by <strong>${escapeHtml(seller.operatorName)}</strong>. The original game was created by <strong>Japhet Stevens</strong>. This restoration is not endorsed by or affiliated with Japhet Stevens, previous operators, PayPal or any owner of third-party names, code or artwork. No transfer of those third-party rights is claimed.</p></section>
     <section id="accounts"><h2>2. Accounts and acceptable use</h2><p>You must provide accurate registration information, protect your password and use only accounts you are authorised to control. Do not exploit vulnerabilities, automate abusive traffic, interfere with other miners, launder value, harass people, or transmit unlawful material. Accounts may be restricted or closed where reasonably necessary for security, abuse prevention or operation of the service.</p></section>
     <section id="service"><h2>3. Experimental service</h2><p>The restoration is provided on an experimental, as-available basis. Game rules, balancing and availability may change. No promise is made that the service will be uninterrupted, error-free, permanently available, or that game data can always be preserved.</p></section>
-    <section id="payments"><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Contact the seller before initiating a dispute where practical.</p></section>
+    <section id="payments"><h2>4. Credits and payments</h2><p>Credits are a limited, revocable licence to use designated features inside MineThings. They are not money, stored value, an investment, property transferable outside the game, or redeemable for cash. Prices are shown in GBP inclusive of applicable taxes unless stated otherwise. PayPal processes payment details; MineThings does not receive or store your card number.</p><p>Credits are supplied immediately after PayPal reports a completed capture. Checkout asks for express consent to immediate digital supply and acknowledgement of the effect on the statutory cancellation period. This does not remove rights arising from faulty, misdescribed or undelivered digital content. Refunds and charge reversals remove the corresponding credits; the balance may become negative and credit spending is then disabled until restored.</p><p>Receipts and the accepted terms version remain available in purchase history. Seller contact information is delivered privately in the buyer's completion message.</p></section>
     <section id="privacy"><h2>5. Privacy</h2><p><strong>Controller, purposes and bases.</strong> The operator identified above controls the personal data used by MineThings. Account and gameplay data are processed to create and perform your account and provide features you request; payment records are processed to perform purchases and meet legal, accounting and dispute obligations; and security, moderation, fraud prevention and service-integrity records are processed for the operator's legitimate interests in running a safe, reliable game. ${emailPolicy} MineThings does not use account data for advertising or automated decisions with legal or similarly significant effects.</p><p><strong>Data collected.</strong> MineThings stores your miner name, ${accountEmailData}, a one-way password hash, verification-token hashes and delivery audit data; game possessions, actions, settings and communications; and essential security and session information. An essential HttpOnly session cookie keeps you signed in. To identify possible multi-account market abuse, a successful sign-in can create a keyed pseudonymous token derived from the network address, together with the sign-in method and first, latest and total sign-in observations. The raw network address is not stored in the game database or displayed to administrators. If Google sign-in is enabled, MineThings stores the Google account identifier and email returned during sign-in. If payments are enabled, it stores PayPal order and capture identifiers, amount, currency, status, consent and audit entries, but not card numbers.</p><p><strong>Who can see it.</strong> Miner names, profile details you choose to show, market activity, guild membership, public chat and public world or battle records can be visible to other miners. Private messages are addressed to their participants and guild chat to current guild members. The operator may access records where necessary to administer, secure or moderate the service. Administrators can see whether two accounts have a recent pseudonymous network match and a scored summary of relevant market activity, but not the network address or token. The score only prioritises human review and never automatically suspends, restricts or otherwise penalises an account.</p><p><strong>Sharing and retention.</strong> Data is shared only with service infrastructure and, when you choose them, Google for sign-in and PayPal for payment. Those providers process data under their own notices and may process it internationally. Account and gameplay records are kept while the account remains active or the persistent world requires them. Pseudonymous network observations are retained for no more than 30 days. Other security, moderation and payment records are kept for as long as reasonably needed to prevent abuse, resolve disputes and meet legal or accounting duties, then deleted or anonymised where practical.</p><p><strong>Your rights.</strong> Depending on the processing and its legal basis, you may ask for access, correction, deletion, restriction or portability. <strong>You may object at any time to processing based on legitimate interests.</strong> Contact the published seller address above. You may also complain to the <a class="text-link" href="https://ico.org.uk/make-a-complaint/data-protection-complaints/data-protection-complaints/" rel="external noreferrer">Information Commissioner's Office</a>. Some requests may be limited by other people's rights or legal, security and fraud-prevention retention duties.</p></section>
     <section id="rights"><h2>6. Rights and submitted content</h2><p>Names, code, artwork and other historical MineThings material remain the property of their respective rights holders. Identification of Japhet Stevens as the original creator is attribution, not a claim of endorsement or ownership by him of this restoration.</p><p>You retain any rights you hold in content you submit. You grant the operator a worldwide, non-exclusive, royalty-free licence to store, reproduce, transmit, display and moderate that content only as reasonably necessary to operate, secure and preserve MineThings. You must not submit content you have no right to use.</p></section>
     <section id="liability"><h2>7. Liability</h2><p>To the fullest extent permitted by law, the operator is not liable for indirect or consequential loss, lost game progress, lost opportunities, loss caused by user equipment or third-party services, or events outside reasonable control. For loss that may lawfully be limited, aggregate liability is capped at the greater of £100 and the amount you paid to MineThings in the preceding 12 months.</p><p>Nothing excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of rights that cannot be excluded under consumer law, or any other liability the law does not permit to be excluded.</p></section>
     <section id="changes"><h2>8. Changes and disputes</h2><p>New terms apply when accepted at registration or checkout; a receipt records the applicable version. Material changes will be identified by a new version and effective date. Courts in England and Wales have jurisdiction, without depriving consumers of any mandatory right to bring proceedings elsewhere.</p></section>
     <p class="editorial-document-note">Payment mode: ${escapeHtml(paymentConfig.environment)}. This page is operational information, not legal advice to the operator.</p>
     </div></div>
-  </article>`;
+  </article>`.replace('Contact the published seller address above.',
+    'Buyers can use the private seller contact supplied with their completed purchase.');
 }
 
 function formatMoneyMinor(amountMinor, currency = 'GBP') {
@@ -6379,13 +6460,13 @@ function receiptPage(purchase) {
   const incomplete = purchase.status === 'created' && purchase.providerOrderId
     ? `<aside class="legal-notice"><p><strong>No payment has been captured.</strong> PayPal created the order, but checkout has not been approved. You can continue this order while PayPal still makes it available.</p><form method="post" action="/credits/receipts/${purchase.id}/continue" data-native-navigation><button>Continue with PayPal</button></form></aside>`
     : '';
-  return `<article class="receipt"><header class="page-title"><div><p class="eyebrow">${completed ? 'Permanent purchase record' : 'Incomplete checkout record'}</p><h1>${recordName} MT-${purchase.id}</h1></div><a class="button secondary" href="/credits/receipts/${purchase.id}.txt">Download ${completed ? 'receipt' : 'record'}</a></header>${incomplete}<dl class="receipt-grid"><dt>Miner</dt><dd>${escapeHtml(purchase.playerName)}</dd><dt>Created</dt><dd>${new Date(purchase.createdAt).toLocaleString('en-GB')}</dd><dt>Status</dt><dd>${escapeHtml(purchase.status)}</dd><dt>Bundle</dt><dd>${escapeHtml(purchase.bundleName)}</dd><dt>Credits</dt><dd>${purchase.credits.toLocaleString('en-GB')}</dd><dt>Amount</dt><dd>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</dd><dt>PayPal order</dt><dd>${escapeHtml(purchase.providerOrderId || 'Not assigned')}</dd><dt>PayPal capture</dt><dd>${escapeHtml(purchase.providerCaptureId || 'Not captured')}</dd><dt>Terms accepted</dt><dd>Version ${escapeHtml(purchase.termsVersion)} at ${new Date(purchase.consentedAt).toLocaleString('en-GB')}</dd><dt>Seller</dt><dd>${escapeHtml(purchase.sellerName || 'Not configured')}<br>${escapeHtml(purchase.sellerAddress)}<br>${escapeHtml(purchase.sellerEmail)}</dd></dl><p><a class="text-link" href="/legal">Read the current Legal page</a> · <a class="text-link" href="/credits">Back to credit purchases</a></p></article>`;
+  return `<article class="receipt"><header class="page-title"><div><p class="eyebrow">${completed ? 'Permanent purchase record' : 'Incomplete checkout record'}</p><h1>${recordName} MT-${purchase.id}</h1></div><a class="button secondary" href="/credits/receipts/${purchase.id}.txt">Download ${completed ? 'receipt' : 'record'}</a></header>${incomplete}<dl class="receipt-grid"><dt>Miner</dt><dd>${escapeHtml(purchase.playerName)}</dd><dt>Created</dt><dd>${new Date(purchase.createdAt).toLocaleString('en-GB')}</dd><dt>Status</dt><dd>${escapeHtml(purchase.status)}</dd><dt>Bundle</dt><dd>${escapeHtml(purchase.bundleName)}</dd><dt>Credits</dt><dd>${purchase.credits.toLocaleString('en-GB')}</dd><dt>Amount</dt><dd>${escapeHtml(formatMoneyMinor(purchase.amountMinor, purchase.currency))}</dd><dt>PayPal order</dt><dd>${escapeHtml(purchase.providerOrderId || 'Not assigned')}</dd><dt>PayPal capture</dt><dd>${escapeHtml(purchase.providerCaptureId || 'Not captured')}</dd><dt>Terms accepted</dt><dd>Version ${escapeHtml(purchase.termsVersion)} at ${new Date(purchase.consentedAt).toLocaleString('en-GB')}</dd></dl><p><a class="text-link" href="/legal">Read the current Legal page</a> · <a class="text-link" href="/credits">Back to credit purchases</a></p></article>`;
 }
 
 function receiptText(purchase) {
   const recordName = ['completed', 'refunded', 'reversed'].includes(purchase.status)
     ? 'receipt' : 'checkout record';
-  return `MineThings ${recordName} MT-${purchase.id}\n\nMiner: ${purchase.playerName}\nCreated: ${new Date(purchase.createdAt).toISOString()}\nStatus: ${purchase.status}\nBundle: ${purchase.bundleName}\nCredits: ${purchase.credits}\nAmount: ${(purchase.amountMinor / 100).toFixed(2)} ${purchase.currency}\nPayPal order: ${purchase.providerOrderId || 'Not assigned'}\nPayPal capture: ${purchase.providerCaptureId || 'Not captured'}\nTerms version: ${purchase.termsVersion}\nImmediate delivery consent: ${new Date(purchase.consentedAt).toISOString()}\nSeller: ${purchase.sellerName}\nAddress: ${purchase.sellerAddress}\nContact: ${purchase.sellerEmail}\n`;
+  return `MineThings ${recordName} MT-${purchase.id}\n\nMiner: ${purchase.playerName}\nCreated: ${new Date(purchase.createdAt).toISOString()}\nStatus: ${purchase.status}\nBundle: ${purchase.bundleName}\nCredits: ${purchase.credits}\nAmount: ${(purchase.amountMinor / 100).toFixed(2)} ${purchase.currency}\nPayPal order: ${purchase.providerOrderId || 'Not assigned'}\nPayPal capture: ${purchase.providerCaptureId || 'Not captured'}\nTerms version: ${purchase.termsVersion}\nImmediate delivery consent: ${new Date(purchase.consentedAt).toISOString()}\n`;
 }
 
 function verifyCapturedOrder(order, purchase) {
@@ -6694,11 +6775,12 @@ function fieldGuideSystems(catalog, player = null) {
       anchor: 'guide-transport-orders', label: 'Peaceful, Patrol, and Pillage',
       eyebrow: 'Transport orders',
       art: '<span class="guide-system-glyph guide-system-glyph-letter" aria-hidden="true">P</span>',
-      description: 'Every land or sea departure takes one order. The order controls which living traffic the transport tries to engage and how its land-combat powers are used. Automatic targets always remain within the transport\'s configured combat class; aircraft are always Peaceful.',
+      description: 'Each land or sea transport keeps a saved stance for every departure. Its order controls player-traffic targets and land-combat powers; separate PvP and PvE choices enable player attacks and route-creature encounters. Automatic targets remain within the transport\'s combat class; aircraft are always Peaceful.',
       facts: facts([
-        ['Peaceful', 'Starts no combat against living player traffic, but Pillagers, route creatures, and the restless dead may still attack it. Optimise for cargo space and speed first: a faster Peaceful craft eludes a lone living aggressor before battle. Armour or hull, Wood reinforcement, dodge, and armed crew are the fallback when escape fails. Loaded-travel specialisations, Oil, and travel gadgets improve the run.'],
-        ['Patrol', 'Seeks Pillagers in the same combat class; “Also engage patrols” also allows Patrol-versus-Patrol challenges. Optimise land patrols for defensive power, base attack, armour, dodge, and reinforcement. At sea, favour hull, speed, crew, a complete cannon battery, and a balanced ammunition supply. Guard and Bounty Hunter specialisations strengthen their matching patrol defence, while Shields reinforce defence globally.'],
-        ['Pillage', 'Seeks Peaceful traffic in the same combat class; “Also engage patrols” permits challenges against Patrols too. An aggressive winner may take compatible cargo first, then Oil trips, or one eligible weapon, mod, or cannon. Keep free capacity for stolen cargo and fittings. Prioritise speed so prey cannot elude you, then aggressive power, base attack, dodge, and survivability; ships also need cannons, ammunition, and strong crew weapons. Highwayman and Pirate specialisations, plus Sharpeners, strengthen matching pillage offence.'],
+        ['Peaceful', 'Starts no combat against living player traffic. Pillagers and the restless dead may still attack it, while route creatures are encountered only when PvE is enabled. Optimise for cargo space and speed first: a faster Peaceful craft eludes a lone living aggressor before battle. Armour or hull, Wood reinforcement, dodge, and armed crew are the fallback when escape fails. Loaded-travel specialisations, Oil, and travel gadgets improve the run.'],
+        ['Patrol', 'With PvP enabled, seeks Pillagers in the same combat class. Optimise land patrols for defensive power, base attack, armour, dodge, and reinforcement. At sea, favour hull, speed, crew, a complete cannon battery, and a balanced ammunition supply. Guard and Bounty Hunter specialisations strengthen their matching patrol defence, while Shields reinforce defence globally.'],
+        ['Pillage', 'With PvP enabled, seeks Peaceful traffic in the same combat class. An aggressive winner may take compatible cargo first, then Oil trips, or one eligible weapon, mod, or cannon. Keep free capacity for stolen cargo and fittings. Prioritise speed so prey cannot elude you, then aggressive power, base attack, dodge, and survivability; ships also need cannons, ammunition, and strong crew weapons. Highwayman and Pirate specialisations, plus Sharpeners, strengthen matching pillage offence.'],
+        ['PvE', 'When enabled, the transport automatically engages compatible event creatures it meets on a route, even under Peaceful orders. Turning PvE off lets it pass those creatures; an explicit hunt still works.'],
         ['Loadout rule', 'Land weapons contribute aggressive power under Pillage and defensive power under Patrol; mods can add base attack, armour, aggressive power, defensive power, dodge, or capacity. Ship cannons fire regardless of order when combat begins: cannonballs attack hull, chain shot attacks speed, and grape shot attacks crew. Every fitting consumes capacity, so tune for the job instead of filling every slot automatically.']
       ]),
       href: '/vehicles', action: 'Prepare a transport'
@@ -6706,9 +6788,9 @@ function fieldGuideSystems(catalog, player = null) {
     {
       anchor: 'guide-shuttles', label: 'Automatic shuttles', eyebrow: 'Repeated cargo',
       art: '<span class="guide-system-glyph" aria-hidden="true">&#8644;</span>',
-      description: 'An empty compatible transport can shuttle between two cities continuously. It loads at one end, unloads at the other, returns empty, and repeats until you cancel the contract. Land vehicles and ships can keep a Peaceful, Pillage, or Patrol order throughout the circuit.',
+        description: 'An empty compatible transport can shuttle between two cities continuously. It loads at one end, unloads at the other, returns empty, and repeats until you cancel the contract. Every leg uses the transport\'s saved order and PvP/PvE targeting choices.',
       facts: facts([
-        ['Selection', 'Choose the travel order and any cargo categories, including Oil and Ore. All categories begin selected; eligible stock loads rarest first.'],
+          ['Selection', 'Save the vehicle stance first, then choose cargo categories, including Oil and Ore. All categories begin selected; eligible stock loads rarest first.'],
         ['Packed transports', 'Deactivate an empty, unfitted vehicle or ship to turn it back into a movable Thing. A compatible carrier or shuttle can take it to another city; activating it there still requires a valid route.'],
         ['Exclusions', 'Protected factory output is never auto-loaded. Oil Field machine parts remain in their field city unless that city has no Oil Field.'],
         ['Interruptions', 'Snow, closed routes, inventory overage, or missing eligible stock pause the next leg without losing delivered cargo.']
@@ -7155,7 +7237,7 @@ export function createApp(options = {}) {
       ? { active: true, shutdownAt: maintenanceNotice.shutdownAt, message: maintenanceNotice.message }
       : { active: false });
   const sendPresenceEvent = (client, currentTime = now()) => {
-    if (client.all) sendLiveEvent(client, 'presence', {
+    sendLiveEvent(client, 'presence', {
       activeUsers: activeUserCount(currentTime),
       windowMinutes: Math.round(activeUserWindowMs / 60000)
     });
@@ -7869,6 +7951,7 @@ export function createApp(options = {}) {
         player.mapId = activeMap.id;
         player.mapName = activeMap.name;
         player.mapSlug = activeMap.slug;
+        player.onlineMinerCount = activeUserCount(now());
         player.minerCount = store.countPlayers();
         player.cityOperationCounts = store.cityOperationCounts(player.id, now());
         const unseenChats = store.chatUnseenCounts(player.id, now());
@@ -8221,7 +8304,8 @@ export function createApp(options = {}) {
             botBuildNotice: player.botBuildNotice,
             findingNotice: player.findingNotice,
             registrationWelcomeMail: player.registrationWelcomeMail,
-            maintenanceNotice: player.maintenanceNotice
+            maintenanceNotice: player.maintenanceNotice,
+            onlineMinerCount: player.onlineMinerCount
           };
           let battery = { expiresAt: player.batteryExpiresAt };
           if (!liveFragment) {
@@ -8237,6 +8321,7 @@ export function createApp(options = {}) {
           player.mapId = activeMap.id;
           player.mapName = activeMap.name;
           player.mapSlug = activeMap.slug;
+          player.minerCount = store.countPlayers();
           player.cityOperationCounts = store.cityOperationCounts(player.id, now());
           player.weather = store.currentWeatherForMap(activeMap.id, now());
           player.batteryRemaining = Math.max(0, battery.expiresAt - now());
@@ -8847,8 +8932,7 @@ export function createApp(options = {}) {
             && Number(entry.destinationCityId) !== Number(vehicle.cityId));
         if (!route) throw new Error('Choose a compatible shuttle destination from this city.');
         const started = store.startVehicleShuttle(
-          player.id, vehicleId, routeId, actionTime, categoryIds,
-          { travelOrder: form.travelOrder }
+          player.id, vehicleId, routeId, actionTime, categoryIds
         );
         const originLabel = cityChoiceLabel(catalog, vehicle.cityId);
         const destinationLabel = vehicleRouteDestinationLabel(
@@ -8880,13 +8964,12 @@ export function createApp(options = {}) {
         const departureTime = now();
         const departureVehicle = store.vehicleDetails(player.id, vehicleId, departureTime);
         const journey = store.sendVehicle(player.id, vehicleId, Number(form.routeId), departureTime, {
-          travelOrder: form.travelOrder,
-          aggressiveVsSentry: form.attackSentry === 'on', additionalRouteIds
+          additionalRouteIds
         });
-        const councilTravelOrder = String(form.travelOrder ?? 'peaceful');
+        const councilTravelOrder = journey.travelOrder;
         store.advanceCouncilMissions(player.id,
           councilTravelOrder === 'patrol' ? 'vehicle_patrol' : 'vehicle_send', {
-            cityId: player.cityId, travelOrder: councilTravelOrder
+            cityId: journey.originCityId, travelOrder: councilTravelOrder
           }, departureTime);
         store.awardStone(player.id, 'Travelled', departureTime);
         const destinationName = journey.mission
@@ -8896,6 +8979,16 @@ export function createApp(options = {}) {
           );
         setFlash(`Vehicle sent to ${destinationName}; travel time ${formatDuration(journey.duration)}.${journey.itineraryLegCount > 1 ? ` ${journey.itineraryLegCount - 1} onward leg${journey.itineraryLegCount === 2 ? '' : 's'} queued.` : ''}${journey.battleId ? ' An encounter occurred.' : ''}`);
         redirect(response, journey.battleId ? `/battles/${journey.battleId}` : `/vehicles/${vehicleId}`);
+      } else if (request.method === 'POST' && /^\/vehicles\/\d+\/stance$/.test(url.pathname)) {
+        if (!requirePlayer()) return;
+        const vehicleId = Number(url.pathname.split('/')[2]);
+        const form = await readForm(request);
+        const stance = store.setVehicleStance(
+          player.id, vehicleId, form.travelOrder,
+          form.pvp === 'on', form.pve === 'on'
+        );
+        setFlash(`Vehicle stance saved: ${vehicleStanceLabel(catalog, stance)}.`);
+        redirect(response, `/vehicles/${vehicleId}`);
       } else if (request.method === 'POST' && /^\/vehicles\/\d+\/rename$/.test(url.pathname)) {
         if (!requirePlayer()) return;
         const vehicleId = Number(url.pathname.split('/')[2]);
@@ -8945,7 +9038,8 @@ export function createApp(options = {}) {
         if (!requirePlayer()) return;
         const vehicleId = Number(url.pathname.split('/')[2]);
         const form = await readForm(request);
-        const vehicle = store.vehicleDetails(player.id, vehicleId, now());
+        const actionTime = now();
+        const vehicle = store.vehicleDetails(player.id, vehicleId, actionTime);
         if (vehicle.status !== 'idle' || vehicle.cityId !== player.cityId || vehicle.shuttle
           || vehicle.convoy?.memberStatus === 'queued') {
           throw new Error('Only an idle vehicle in your selected city can be customized.');
@@ -8991,11 +9085,13 @@ export function createApp(options = {}) {
           consumePreview(sessionId, session, player.id, vehicleId, kind, selections,
             form.previewToken);
           if (vehicle.type === 'land') {
-            store.fitVehicleLoadout(player.id, vehicleId, selections.modIds, selections.weaponIds);
+            store.fitVehicleLoadout(
+              player.id, vehicleId, selections.modIds, selections.weaponIds, actionTime
+            );
             setFlash('Mod and weapon loadout committed together.');
           } else if (vehicle.type === 'sea') {
             store.fitShipLoadout(
-              player.id, vehicleId, selections.cannonIds, selections.modIds
+              player.id, vehicleId, selections.cannonIds, selections.modIds, actionTime
             );
             setFlash('Ship fitting and cannon loadout committed.');
           } else {
@@ -10236,10 +10332,24 @@ export function createApp(options = {}) {
         if (cryptoId && !cryptoTypesForMap(city?.mapId).some((entry) => entry.id === cryptoId)) {
           throw new Error('That currency is not available in this region.');
         }
+        const currentType = currentMine
+          ? catalogMineTypeForId(catalog, currentMine.mineTypeId) : null;
+        const previousMode = currentMine?.cryptoTypeId ? 'crypto'
+          : currentMine?.mineThings ? 'things' : currentType?.hasOre ? 'ore' : 'gold';
+        const changedAt = now();
         const { result: mine } = store.mutatePlayer(player.id, (current) =>
-          setMineMode(current, mineId, cryptoId ? 'crypto' : mode === 'things' ? 'things' : 'resource', cryptoId), null, now());
+          setMineMode(current, mineId,
+            cryptoId ? 'crypto' : mode === 'things' ? 'things' : 'resource', cryptoId),
+        null, changedAt);
         const type = catalogMineTypeForId(catalog, mine.mineTypeId);
         const selectedCrypto = mine.cryptoTypeId ? cryptoType(mine.cryptoTypeId) : null;
+        const selectedMode = selectedCrypto ? 'crypto'
+          : mine.mineThings ? 'things' : type.hasOre ? 'ore' : 'gold';
+        if (selectedMode !== previousMode && ['gold', 'crypto', 'ore'].includes(selectedMode)) {
+          store.advanceCouncilMissions(player.id, 'mine_mode', {
+            cityId: mine.cityId, mode: selectedMode
+          }, changedAt);
+        }
         setFlash(selectedCrypto ? `This mine will now produce ${selectedCrypto.name}.` : mine.mineThings ? 'This mine will now uncover things.' : `This mine will now extract ${type.hasOre ? 'ore' : 'gold'}.`);
         redirect(response, '/');
       } else if (request.method === 'POST' && /^\/market\/factories\/(sale|rental)\/(listings|bids)$/.test(url.pathname)) {

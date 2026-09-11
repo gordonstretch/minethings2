@@ -949,6 +949,7 @@ export const WORLD_CREATURE_TYPES = Object.freeze([
   'kraken', 'land_whale', 'white_whale', 'orca_pod', 'elephant_herd', 't_rex'
 ]);
 export const WORLD_CREATURE_HP_REBALANCE_FACTOR = 0.5;
+export const WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR = 0.8;
 export const LEGACY_CASINO_SLOT_RULES = Object.freeze({
   version: 5,
   symbolItemIds: [2, 1434, 1464, 1494, 1524, 1554, 277, 278, 279, 280, 281, 282],
@@ -1193,11 +1194,14 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_creature_roll_max_interval_ms: 10 * 60 * 1000,
   world_creature_hp: {
     kraken: 180 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
-    land_whale: 140 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    land_whale: 140 * WORLD_CREATURE_HP_REBALANCE_FACTOR
+      * WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR,
     white_whale: 170 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
     orca_pod: 125 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
-    elephant_herd: 165 * WORLD_CREATURE_HP_REBALANCE_FACTOR,
+    elephant_herd: 165 * WORLD_CREATURE_HP_REBALANCE_FACTOR
+      * WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR,
     t_rex: 220 * WORLD_CREATURE_HP_REBALANCE_FACTOR
+      * WORLD_CREATURE_LAND_HP_REBALANCE_FACTOR
   },
   world_creature_speed_kph: {
     kraken: 18, land_whale: 12, white_whale: 22,

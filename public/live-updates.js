@@ -361,10 +361,11 @@
   stream.addEventListener('presence', (event) => {
     try {
       const payload = JSON.parse(event.data);
-      const activeUsers = document.querySelector('[data-active-users]');
-      if (activeUsers) activeUsers.textContent = String(Number(payload.activeUsers) || 0);
+      for (const activeUsers of document.querySelectorAll('[data-active-users]')) {
+        activeUsers.textContent = String(Number(payload.activeUsers) || 0);
+      }
     } catch {
-      // The dashboard will retain its server-rendered presence count.
+      // Presence counters retain their server-rendered values.
     }
   });
   stream.addEventListener('change', (event) => {

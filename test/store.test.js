@@ -4296,6 +4296,20 @@ test('builds a read-only operations snapshot without travelling vehicles', (cont
   assert.equal(snapshot.shuttles[0].vehicleId, shuttleVehicleId);
   assert.equal(snapshot.shuttles[0].originCityId, route.city1Id);
   assert.equal(snapshot.shuttles[0].destinationCityId, route.city2Id);
+  const mineType = liveCatalog.mineTypes.find((entry) =>
+    entry.id === draft.mines[0].mineTypeId);
+  const mineCity = liveCatalog.cities.find((entry) => entry.id === route.city1Id);
+  assert.deepEqual(snapshot.mines, [{
+    id: draft.mines[0].id,
+    cityId: route.city1Id,
+    cityName: mineCity.name,
+    mineTypeId: mineType.id,
+    mineTypeName: mineType.name,
+    active: true,
+    mineThings: true,
+    cryptoTypeId: null,
+    hasOre: mineType.hasOre
+  }]);
   assert.equal(snapshot.automations.length, 1);
   assert.equal(snapshot.automations[0].behaviorKey, 'autolister');
   assert.deepEqual(snapshot.automations[0].tasks, [{
@@ -6510,10 +6524,11 @@ test('persists staggered convoy departures with each transport\'s recorded stanc
   const vehicleIds = Array.from({ length: 3 }, () =>
     store.activateVehicle(player.id, vehicleType.itemId));
   const stances = ['patrol', 'peaceful', 'pillage'];
+  const targetFlags = [[true, true], [false, true], [true, false]];
   for (const [index, vehicleId] of vehicleIds.entries()) {
-    store.database.prepare(`
-      UPDATE player_vehicles SET travel_order = ?, aggressive_vs_sentry = ? WHERE id = ?
-    `).run(stances[index], index === 2 ? 1 : 0, vehicleId);
+    store.setVehicleStance(
+      player.id, vehicleId, stances[index], ...targetFlags[index]
+    );
   }
   const route = store.routesForVehicle(player.id, vehicleIds[0], 2000)[0];
   assert.ok(route);
@@ -6523,6 +6538,8 @@ test('persists staggered convoy departures with each transport\'s recorded stanc
   );
   assert.equal(convoy.size, 3);
   assert.deepEqual(convoy.members.map((member) => member.travelOrder), stances);
+  assert.deepEqual(convoy.members.map((member) => [member.pvpEnabled, member.pveEnabled]),
+    targetFlags);
   assert.deepEqual(convoy.members.map((member) => member.scheduledDepartureAt),
     [2000, 62000, 122000]);
   let vehicles = store.vehiclesForPlayer(player.id, 2001);
@@ -6536,25 +6553,31 @@ test('persists staggered convoy departures with each transport\'s recorded stanc
     /queued convoy departure/i);
   assert.throws(() => store.renameVehicle(player.id, vehicleIds[1], 'Drifted'),
     /queued convoy departure/i);
+  assert.throws(() => store.setVehicleStance(
+    player.id, vehicleIds[1], 'patrol', true, true
+  ), /queued convoy departure/i);
 
   store.close();
   store = new SqliteStore(databaseFile);
   assert.deepEqual(store.database.prepare(`
-    SELECT vehicle_id, position, scheduled_departure_at, travel_order, status
+    SELECT vehicle_id, position, scheduled_departure_at, travel_order,
+      pvp_enabled, pve_enabled, status
     FROM player_vehicle_convoy_members WHERE convoy_id = ? ORDER BY position
   `).all(convoy.id).map((member) => ({ ...member })), [
     { vehicle_id: vehicleIds[0], position: 1, scheduled_departure_at: 2000,
-      travel_order: 'patrol', status: 'traveling' },
+      travel_order: 'patrol', pvp_enabled: 1, pve_enabled: 1, status: 'traveling' },
     { vehicle_id: vehicleIds[1], position: 2, scheduled_departure_at: 62000,
-      travel_order: 'peaceful', status: 'queued' },
+      travel_order: 'peaceful', pvp_enabled: 0, pve_enabled: 1, status: 'queued' },
     { vehicle_id: vehicleIds[2], position: 3, scheduled_departure_at: 122000,
-      travel_order: 'pillage', status: 'queued' }
+      travel_order: 'pillage', pvp_enabled: 1, pve_enabled: 0, status: 'queued' }
   ], 'membership, sending order, stagger, stances, and progress survive restart');
 
   store.settleVehicles(62000);
   vehicles = store.vehiclesForPlayer(player.id, 62000);
   assert.equal(vehicles.find((vehicle) => vehicle.id === vehicleIds[1]).status, 'traveling');
   assert.equal(vehicles.find((vehicle) => vehicle.id === vehicleIds[1]).travelOrder, 'peaceful');
+  assert.equal(vehicles.find((vehicle) => vehicle.id === vehicleIds[1]).pvpEnabled, false);
+  assert.equal(vehicles.find((vehicle) => vehicle.id === vehicleIds[1]).pveEnabled, true);
   const savedSecond = store.database.prepare(`
     SELECT departed_at, travel_order FROM player_vehicle_convoy_members WHERE vehicle_id = ?
   `).get(vehicleIds[1]);
@@ -8005,6 +8028,7 @@ test('a Common Land Whale awards Common treasure only', (context) => {
   player.inventory[vehicleType.itemId] = 1;
   const saved = store.addPlayer(player);
   const vehicleId = store.activateVehicle(saved.id, vehicleType.itemId, 2000);
+  store.setVehicleStance(saved.id, vehicleId, 'peaceful', false, false);
   const mapId = store.database.prepare(
     'SELECT map_id FROM catalog_cities WHERE id = ?'
   ).get(saved.cityId).map_id;
@@ -8016,6 +8040,8 @@ test('a Common Land Whale awards Common treasure only', (context) => {
   `).run(mapId, route.id, route.city1Id).lastInsertRowid);
 
   const pursuit = store.attackWorldCreature(saved.id, creatureId, vehicleId, 2000);
+  assert.equal(store.vehicleDetails(saved.id, vehicleId, 2001).pveEnabled, false,
+    'an explicit hunt works without replacing the saved PvE preference');
   store.settleWorldEvents(pursuit.encounterAt);
   const rewards = JSON.parse(store.database.prepare(`
     SELECT reward_json FROM world_creature_attacks WHERE creature_id = ? AND defeated = 1
@@ -8037,9 +8063,11 @@ test('living route creatures ambush compatible peaceful traffic without a hunt a
     && catalog.byId.get(entry.itemId)?.rarity === 1);
   assert.ok(route && vehicleType);
   const player = createPlayer('Ambushed Courier', '', 'hash', catalog, 1000, () => 0.5);
-  player.inventory[vehicleType.itemId] = 1;
+  player.inventory[vehicleType.itemId] = 2;
   const saved = store.addPlayer(player);
   const vehicleId = store.activateVehicle(saved.id, vehicleType.itemId);
+  const avoidingVehicleId = store.activateVehicle(saved.id, vehicleType.itemId);
+  store.setVehicleStance(saved.id, avoidingVehicleId, 'peaceful', false, false);
   const originCityId = store.database.prepare(
     'SELECT city_id FROM player_vehicles WHERE id = ?'
   ).get(vehicleId).city_id;
@@ -8063,9 +8091,17 @@ test('living route creatures ambush compatible peaceful traffic without a hunt a
   `).run(mapId, route.id, location, location, destinationCityId,
     awakenedAt, awakenedAt, arrivesAt, speed).lastInsertRowid);
 
-  store.sendVehicle(saved.id, vehicleId, route.id, awakenedAt, {
-    travelOrder: 'peaceful'
-  });
+  const avoidingJourney = store.sendVehicle(
+    saved.id, avoidingVehicleId, route.id, awakenedAt
+  );
+  assert.equal(avoidingJourney.pveEnabled, false);
+  assert.equal(store.database.prepare(`
+    SELECT 1 FROM world_creature_pursuits
+    WHERE creature_id = ? AND vehicle_id = ? AND status = 'pursuing'
+  `).get(creatureId, avoidingVehicleId), undefined,
+  'a vehicle with PvE disabled should pass the event creature without auto-engaging');
+
+  store.sendVehicle(saved.id, vehicleId, route.id, awakenedAt);
   const pursuit = store.database.prepare(`
     SELECT * FROM world_creature_pursuits
     WHERE creature_id = ? AND vehicle_id = ? AND status = 'pursuing'
@@ -8567,11 +8603,11 @@ test('halves existing creature health once and prevents creatures from healing',
   `).get().value_json), catalog.settings.world_creature_hp);
   assert.deepEqual({ ...store.database.prepare(`
     SELECT hp, max_hp FROM world_creatures WHERE id = ?
-  `).get(creatureId) }, { hp: 40, max_hp: 70 });
+  `).get(creatureId) }, { hp: 32, max_hp: 56 });
   assert.throws(() => store.database.prepare(`
     UPDATE world_creatures SET hp = 41 WHERE id = ?
   `).run(creatureId), /World creatures cannot heal/);
-  store.database.prepare('UPDATE world_creatures SET hp = 39 WHERE id = ?').run(creatureId);
+  store.database.prepare('UPDATE world_creatures SET hp = 31 WHERE id = ?').run(creatureId);
   const migration = store.database.prepare(`
     SELECT details_json FROM schema_migrations
     WHERE name = 'world-creature-health-half-v1'
@@ -8579,16 +8615,30 @@ test('halves existing creature health once and prevents creatures from healing',
   assert.deepEqual(JSON.parse(migration.details_json), {
     factor: 0.5, settingsUpdated: true, creaturesScaled: 1, healingPrevented: true
   });
+  const landMigration = store.database.prepare(`
+    SELECT details_json FROM schema_migrations
+    WHERE name = 'world-creature-land-health-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(landMigration.details_json), {
+    factor: 0.8,
+    landTypes: ['land_whale', 'elephant_herd', 't_rex'],
+    settingsUpdated: true,
+    creaturesScaled: 1
+  });
   store.close();
 
   store = new SqliteStore(databaseFile);
   assert.deepEqual({ ...store.database.prepare(`
     SELECT hp, max_hp FROM world_creatures WHERE id = ?
-  `).get(creatureId) }, { hp: 39, max_hp: 70 },
+  `).get(creatureId) }, { hp: 31, max_hp: 56 },
   'reopening the database must neither rebalance twice nor restore lost health');
   assert.equal(store.database.prepare(`
     SELECT COUNT(*) AS count FROM schema_migrations
     WHERE name = 'world-creature-health-half-v1'
+  `).get().count, 1);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM schema_migrations
+    WHERE name = 'world-creature-land-health-v1'
   `).get().count, 1);
 });
 
@@ -8864,6 +8914,16 @@ test('ghost patrols ambush peaceful traffic across their combat class at reduced
   const visibleGhost = store.worldEventStatus(hunter.id, 3001).ghosts.find(
     (entry) => entry.id === ghost.id && !entry.defeatedAt);
   assert.ok(visibleGhost);
+  assert.deepEqual(visibleGhost.landStats, unscaledGhostStats);
+  assert.equal(visibleGhost.combatBonus, JSON.parse(store.database.prepare(`
+    SELECT value_json FROM catalog_settings WHERE key = 'ghost_combat_bonus'
+  `).get().value_json));
+  assert.equal(visibleGhost.attackForceRatio, catalog.settings.ghost_attack_force_ratio);
+  assert.equal(visibleGhost.speedMultiplier, JSON.parse(store.database.prepare(`
+    SELECT value_json FROM catalog_settings WHERE key = 'ghost_speed_multiplier'
+  `).get().value_json));
+  assert.ok(visibleGhost.hunterRarities.includes(2));
+  assert.equal(visibleGhost.battleCount, 0);
   const attackOption = visibleGhost.attackOptions.find(
     (option) => option.vehicleId === grant.vehicle_id && option.encounterAt > 3001);
   assert.ok(attackOption);
@@ -8903,6 +8963,10 @@ test('ghost patrols ambush peaceful traffic across their combat class at reduced
   assert.equal(journey.ghostId, ghost.id);
   assert.equal(journey.vehicleId, grant.vehicle_id);
   assert.ok(journey.encounterAt > 3002);
+  const approachingGhost = store.ghostEventDetails(hunter.id, ghost.id, 3002);
+  assert.equal(approachingGhost.plannedEncounter.encounterAt, journey.encounterAt);
+  assert.equal(approachingGhost.plannedEncounter.encounterLocation,
+    journey.encounterLocation);
   assert.equal(store.database.prepare(
     'SELECT status FROM vehicle_encounters WHERE id = ?'
   ).get(staleEncounterId).status, 'cancelled');
@@ -8930,12 +8994,18 @@ test('ghost patrols ambush peaceful traffic across their combat class at reduced
     WHERE battle_id = ? AND player_id = (SELECT id FROM players WHERE is_npc = 1)
   `).get(journey.battleId).count, 1);
   const ratingSides = store.database.prepare(`
-    SELECT player_id, rating_before, rating_after FROM vehicle_battle_sides
+    SELECT player_id, won, rating_before, rating_after FROM vehicle_battle_sides
     WHERE battle_id = ? ORDER BY player_id
   `).all(journey.battleId);
   assert.equal(ratingSides.length, 2);
   assert.ok(ratingSides.every((side) => side.rating_after !== side.rating_before),
     'both the player and NPC remain part of the shared combat rating exchange');
+  const recordedGhost = store.ghostEventDetails(hunter.id, ghost.id, journey.encounterAt);
+  const recordedGhostSide = ratingSides.find((side) => side.player_id !== hunter.id);
+  assert.equal(recordedGhost.battleCount, 1);
+  assert.equal(recordedGhost.battleWins, Number(recordedGhostSide.won));
+  assert.equal(recordedGhost.rating, recordedGhostSide.rating_after);
+  assert.equal(recordedGhost.lastBattleAt, journey.encounterAt);
   const battleDetails = JSON.parse(store.database.prepare(
     'SELECT details_json FROM vehicle_battles WHERE id = ?'
   ).get(journey.battleId).details_json);
@@ -9408,6 +9478,40 @@ test('floors legacy aggregate vehicle combat stats at zero', (context) => {
   for (const name of ['offense', 'defense', 'dodge']) {
     if (Number(negativeMod[name]) < 0) assert.equal(stats[name], 0);
   }
+});
+
+test('saved PvP targeting prevents an aggressive vehicle from attacking players', (context) => {
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType === 0
+    && catalog.routes.some((route) => route.open && route.type === 0
+      && route.city1Id !== route.city2Id && (route.city1Id === 1 || route.city2Id === 1)));
+  assert.ok(vehicleType);
+  const trader = store.addPlayer(createPlayer(
+    'PvP Opt-out Trader', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  const raider = store.addPlayer(createPlayer(
+    'PvP Opt-out Raider', '', 'hash', catalog, 1000, () => 0.5
+  ));
+  trader.inventory[vehicleType.itemId] = 1;
+  raider.inventory[vehicleType.itemId] = 1;
+  store.savePlayer(trader);
+  store.savePlayer(raider);
+  const traderVehicle = store.activateVehicle(trader.id, vehicleType.itemId);
+  const raiderVehicle = store.activateVehicle(raider.id, vehicleType.itemId);
+  store.setVehicleStance(raider.id, raiderVehicle, 'pillage', false, true);
+  const route = store.routesForVehicle(trader.id, traderVehicle, 2000)[0];
+
+  store.sendVehicle(trader.id, traderVehicle, route.id, 2000);
+  const journey = store.sendVehicle(raider.id, raiderVehicle, route.id, 2000);
+
+  assert.equal(journey.travelOrder, 'pillage');
+  assert.equal(journey.pvpEnabled, false);
+  assert.equal(journey.pveEnabled, true);
+  assert.equal(store.database.prepare(`
+    SELECT COUNT(*) AS count FROM vehicle_encounters WHERE status = 'planned'
+  `).get().count, 0);
 });
 
 test('resolves aggressive land encounters and records ratings and battle reports', (context) => {
@@ -13568,6 +13672,10 @@ test('records credit purchases idempotently and reverses the granted bundle once
       'credit-purchase-status', 'credit-purchase-status']);
   assert.equal(creditMessages.filter((message) =>
     message.details.purchaseId === delayed.id && message.details.status === 'pending').length, 1);
+  const completedMessage = creditMessages.find((message) =>
+    message.details.event === 'credit-purchase-completed');
+  assert.match(completedMessage.body,
+    /Private seller contact for this purchase: Seller; 1 Test Street; seller@example\.test\./u);
   assert.ok(creditMessages.every((message) => message.actionLinks.some((action) =>
     action.href === `/credits/receipts/${message.details.purchaseId}`)));
 });
