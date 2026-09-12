@@ -2302,7 +2302,8 @@ test('renders moving creatures without direct hunt shortcuts', async (context) =
   ));
   assert.doesNotMatch(html,
     /Launch hunt|class="threat-action"|\/events\/creatures\/\d+\/(?:attack|hunt)/u);
-  assert.match(html, /Encounters occur only when their journeys physically meet/u);
+  assert.match(html, /There are no hunt controls here/u);
+  assert.match(html, /Enable PvE in a compatible vehicle's Stance/u);
   assert.match(html, new RegExp(`id="creature-${remoteCreatureId}"`),
     'a threat announced within a known region must not be hidden by unknown route endpoints');
   assert.match(html, new RegExp(
@@ -2329,7 +2330,8 @@ test('renders moving creatures without direct hunt shortcuts', async (context) =
   assert.match(detailsHtml, /Possible recovery/);
   assert.match(detailsHtml, /<dt>Health<\/dt><dd>140 \/ 140<\/dd>/);
   assert.match(detailsHtml, /Compatible vehicle tiers:/);
-  assert.match(detailsHtml, /must physically meet the threat while travelling on this route/u);
+  assert.match(detailsHtml, /Enable PvE on a matching land vehicle or ship/u);
+  assert.match(detailsHtml, /Its departure launches the hunt/u);
   assert.doesNotMatch(detailsHtml,
     /Launch hunt|class="threat-action"|\/events\/creatures\/\d+\/(?:attack|hunt)/u);
 
@@ -2482,7 +2484,8 @@ test('renders restless-dead records without direct hunt shortcuts', async (conte
   assert.match(detailsHtml, /Recorded fighting strength:/);
   assert.match(detailsHtml, /Reported bounty/);
   assert.match(detailsHtml, /Compatible vehicle tiers:/);
-  assert.match(detailsHtml, /must physically meet this apparition while travelling on its route/u);
+  assert.match(detailsHtml, /Enable PvE on a matching land vehicle/u);
+  assert.match(detailsHtml, /Its departure launches the hunt/u);
   assert.doesNotMatch(detailsHtml,
     /Launch hunt|class="threat-action"|\/events\/ghosts\/\d+\/(?:attack|hunt)/u);
   assert.match(detailsHtml, new RegExp(
@@ -3193,11 +3196,15 @@ test('keeps vehicle management city-scoped while Things shows every stored city'
     /data-city-id="1"[\s\S]*?<p class="eyebrow">Regional capital<\/p><h3><span class="capital-city-icon"[^>]*>★<\/span>Tzolk&#39;in<\/h3>/u);
   assert.match(kemetThings,
     /data-city-id="3"[\s\S]*?<p class="eyebrow">City<\/p><h3>Kemet<\/h3>/u);
+  assert.match(kemetThings,
+    /action="\/cities\/1\/select\?top=1"[\s\S]*?Switch to manage/u);
+  assert.match(kemetThings, /<html lang="en" id="page-top">/u);
   assert.ok(kemetThings.indexOf('data-city-id="3"') < kemetThings.indexOf('data-city-id="1"'),
     'the current city is first');
-  await fetch(`${base}/cities/1/select`, {
+  const selectTzolkin = await fetch(`${base}/cities/1/select?top=1`, {
     method: 'POST', redirect: 'manual', headers: { cookie, referer: `${base}/inventory` }
   });
+  assert.equal(selectTzolkin.headers.get('location'), '/inventory#page-top');
   const tzolkinThings = await (await fetch(`${base}/inventory`, { headers: { cookie } })).text();
   assert.match(tzolkinThings, new RegExp(`data-item-id="${squid.id}"`));
   assert.match(tzolkinThings, new RegExp(`data-item-id="${kemetThing.id}"`));
@@ -3772,6 +3779,12 @@ test('opens the original local order book from Your Things and preserves listed 
   assert.equal(buyNow.status, 303);
   assert.equal(buyNow.headers.get('location'), '/exchange');
   assert.equal(store.playerById(saved.id).inventory[item.id], 4);
+  assert.equal(store.playerById(buyer.id).inventory[item.id], 1);
+  const boughtHtml = await (await fetch(`${base}/exchange`, {
+    headers: { cookie: buyerCookie }
+  })).text();
+  assert.match(boughtHtml, /Bought 1 [^<]+Delivered to Your Things in/);
+  assert.match(boughtHtml, /you now have 1 there/);
   assert.equal(store.marketForItem(item.id, player.cityId).listings
     .reduce((sum, entry) => sum + entry.quantity, 0), 4);
 
@@ -5226,7 +5239,8 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(health.headers.get('content-security-policy'), /object-src 'none'/);
 
   for (const asset of [
-    '/app.css', '/node/navigation.js', '/node/messages.js', '/node/casino.js', '/node/favicon.svg',
+    '/app.css', '/node/navigation.js', '/node/messages.js', '/node/casino.js',
+    '/node/mine-roster.js', '/node/favicon.svg',
     '/node/landing-rebirth.jpg', '/img/home_bg.jpg', '/node/map-background.png',
     '/node/maps/aso.png', '/node/shrooms/mine.svg', '/node/wood/mine.svg',
     '/node/wisdom/mine.svg', '/node/electronics/mine.svg', '/node/relics/mine.svg',
@@ -5286,6 +5300,8 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(visualContractCss, /\.chat-world-message \{[^}]*font-weight:\s*400/su);
   assert.match(visualContractCss,
     /\.chat-dwarf-item img \{[^}]*background:\s*transparent;[^}]*border:\s*0;/su);
+  assert.match(visualContractCss,
+    /\.chat-entity-link:any-link \{[^}]*color:\s*var\(--rarity-link-color/su);
   assert.match(visualContractCss, /\.chat-ignore-action \{[^}]*border:\s*0/su);
   assert.match(visualContractCss,
     /\.spectral-transport img \{[^}]*mix-blend-mode:\s*screen;[^}]*filter:\s*var\(--spectral-filter\)/su);
@@ -5508,6 +5524,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.doesNotMatch(dashboardHtml, /class="rebirth-landing"/u);
   assert.match(dashboardHtml, /Ada’s mines/);
   assert.match(dashboardHtml, /discovered regions currently support 3 active mines/);
+  assert.match(dashboardHtml, /href="\/mines\/manage">Manage all mines<\/a>/u);
   assert.match(dashboardHtml, /<body class="game-body authenticated-body">/u);
   assert.match(dashboardHtml, /id="logo" class="site-wordmark"/u);
   assert.match(dashboardHtml, /<strong>Mine Things<\/strong><small>The world digs back<\/small>/u);
@@ -5526,6 +5543,7 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(dashboardHtml, /href="\/dwarves">Dwarves \(\d+\)<\/a>/u);
   assert.match(dashboardHtml, /href="\/gadgets">Gadgets \(\d+\)<\/a>/u);
   assert.match(dashboardHtml, /href="\/melds">Melds \(\d+\)<\/a>/u);
+  assert.match(dashboardHtml, /href="\/mines\/manage">Mine roster<\/a>/u);
   assert.match(dashboardHtml, /href="\/vehicles">Fleet \(1\)<\/a>/u);
   assert.match(dashboardHtml, /href="\/factories">Factories \(0\)<\/a>/u);
   assert.match(dashboardHtml, /href="\/mills">Mills \(0\)<\/a>/u);
@@ -5535,6 +5553,79 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.match(dashboardHtml, /\/node\/navigation\.js/u);
   assert.match(dashboardHtml, /href="\/node\/favicon\.svg" type="image\/svg\+xml"/u);
   assert.doesNotMatch(dashboardHtml, /styles10\.css|button_logout\.jpg|home_h\.gif|id="preloader"|image-button/u);
+
+  const rosterEquipment = catalog.equipment.find((entry) =>
+    catalog.byId.get(entry.itemId)?.rarity === 3);
+  assert.ok(rosterEquipment);
+  const rosterEquipmentDatabase = new DatabaseSync(databaseFile);
+  const rosterMine = rosterEquipmentDatabase.prepare(`
+    SELECT mines.id, mines.player_id FROM mines
+    JOIN players ON players.id = mines.player_id
+    WHERE players.name = 'Ada' ORDER BY mines.priority, mines.id LIMIT 1
+  `).get();
+  rosterEquipmentDatabase.prepare(`
+    INSERT INTO mine_equipment (player_id, mine_id, type_id, item_id)
+    VALUES (?, ?, ?, ?)
+  `).run(rosterMine.player_id, rosterMine.id,
+    rosterEquipment.typeId, rosterEquipment.itemId);
+  rosterEquipmentDatabase.close();
+
+  const rosterPage = await fetch(`${base}/mines/manage`, { headers: { cookie } });
+  assert.equal(rosterPage.status, 200);
+  const rosterHtml = await rosterPage.text();
+  const rosterEquipmentCleanup = new DatabaseSync(databaseFile);
+  rosterEquipmentCleanup.prepare(`
+    DELETE FROM mine_equipment WHERE player_id = ? AND mine_id = ? AND type_id = ?
+  `).run(rosterMine.player_id, rosterMine.id, rosterEquipment.typeId);
+  rosterEquipmentCleanup.close();
+  assert.match(rosterHtml, /<h1>Robot shift roster<\/h1>/u);
+  assert.match(rosterHtml, /Global allowance<\/dt><dd>3<\/dd>/u);
+  assert.match(rosterHtml, /00:00–08:00 UTC/u);
+  assert.match(rosterHtml, /08:00–16:00 UTC/u);
+  assert.match(rosterHtml, /16:00–24:00 UTC/u);
+  assert.match(rosterHtml, /Every mine includes one dedicated robot/u);
+  assert.match(rosterHtml, /one mine at a time/u);
+  assert.match(rosterHtml, /data-mine-roster data-active-limit="3"/u);
+  const rosterMineIds = [...rosterHtml.matchAll(/data-mine-id="(\d+)"/gu)]
+    .map((match) => Number(match[1]));
+  assert.equal(new Set(rosterMineIds).size, 3);
+  assert.equal((rosterHtml.match(/class="mine-roster-equipment-squares"/gu) ?? []).length,
+    rosterMineIds.length);
+  assert.equal((rosterHtml.match(/class="mine-roster-equipment-square /gu) ?? []).length,
+    rosterMineIds.length * catalog.equipmentTypes.length);
+  const rosterEquipmentItem = catalog.byId.get(rosterEquipment.itemId);
+  assert.match(rosterHtml, new RegExp(
+    `class="mine-roster-equipment-square rarity-${rosterEquipmentItem.rarity}" href="/items/${rosterEquipmentItem.id}"`,
+    'u'
+  ));
+  assert.match(rosterHtml, new RegExp(
+    `aria-label="${catalog.equipmentTypeNames[rosterEquipment.typeId]}: ${rosterEquipmentItem.rarityName} ${rosterEquipmentItem.name}"`,
+    'u'
+  ));
+  assert.equal((rosterHtml.match(/class="mine-shift-choice/gu) ?? []).length, 9);
+  const rosterForm = new URLSearchParams({ mineOrder: rosterMineIds.join(',') });
+  for (const mineId of rosterMineIds) {
+    for (let shiftIndex = 0; shiftIndex < 3; shiftIndex += 1) {
+      rosterForm.set(`mine_${mineId}_shift_${shiftIndex}`, 'on');
+    }
+  }
+  const rosterSave = await fetch(`${base}/mines/manage`, {
+    method: 'POST', redirect: 'manual', headers: {
+      cookie, 'content-type': 'application/x-www-form-urlencoded'
+    }, body: rosterForm
+  });
+  assert.equal(rosterSave.status, 303);
+  assert.equal(rosterSave.headers.get('location'), '/mines/manage');
+  const rosterDatabase = new DatabaseSync(databaseFile);
+  assert.deepEqual(rosterDatabase.prepare(`
+    SELECT shift_mask FROM mines
+    WHERE player_id = (SELECT id FROM players WHERE name = 'Ada') ORDER BY priority
+  `).all().map((row) => Number(row.shift_mask)), [7, 7, 7]);
+  assert.ok(Number(rosterDatabase.prepare(`
+    SELECT COUNT(*) AS count FROM mines
+    WHERE player_id = (SELECT id FROM players WHERE name = 'Ada') AND active = 1
+  `).get().count) <= 3);
+  rosterDatabase.close();
   assert.match(dashboardHtml, /class="skip-link" href="#content"/);
   assert.match(dashboardHtml, /equipment\/src\/Bot\.png/);
   assert.match(dashboardHtml, /top mine in every regional home city/u);
@@ -5884,13 +5975,19 @@ test('supports registration and authenticated play pages', async (context) => {
       (event_key, announcement_type, body, path, created_at)
     VALUES ('test-rare-chat', 'rare-orange', 'Ada found a Legendary thing.', ?, 2001)
   `).run(`/items/${rareChatItem.id}`);
-  const yellowDwarf = catalog.byId.get(catalog.dwarfByRarity.get(1).itemId);
+  const blueDwarf = catalog.byId.get(catalog.dwarfByRarity.get(3).itemId);
   liveDatabase.prepare(`
     INSERT INTO world_chat_announcements
       (event_key, announcement_type, body, path, created_at)
     VALUES ('test-dwarf-chat', 'dwarf-capture',
-      'Ada captured a Yellow Dwarf while mining in Tzolk''in.', ?, 2002)
-  `).run(`/items/${yellowDwarf.id}`);
+      'Ada captured a Blue Dwarf while mining in Tzolk''in.', ?, 2002)
+  `).run(`/items/${blueDwarf.id}`);
+  liveDatabase.prepare(`
+    INSERT INTO world_chat_announcements (event_key, body, path, created_at)
+    VALUES ('world-creature:47:awakened',
+      'A Common White Whale was sighted between Kemet and Belfort.',
+      '/events#creature-47', 2003)
+  `).run();
   liveDatabase.close();
   const chat = await fetch(`${base}/chat`, { headers: { cookie } });
   assert.equal(chat.status, 200);
@@ -5933,23 +6030,28 @@ test('supports registration and authenticated play pages', async (context) => {
   assert.doesNotMatch(chatHtml, /chat-world-badge|chat-world-link/u);
   assert.doesNotMatch(chatHtml, /chat-row-rare|chat-rare-item/);
   assert.doesNotMatch(chatHtml, /Ada found a Legendary thing\./);
-  assert.match(chatHtml, /class="chat-row chat-row-world chat-row-dwarf rarity-1"/);
+  assert.match(chatHtml, /class="chat-row chat-row-world chat-row-dwarf rarity-3"/);
   assert.match(chatHtml, /class="chat-world-kind">Dwarf found<\/span>/);
   assert.match(chatHtml, new RegExp(
-    `class="chat-world-message chat-dwarf-item rarity-1" href="/items/${yellowDwarf.id}"`
+    `class="chat-entity-link rarity-3" href="/items/${blueDwarf.id}">Blue Dwarf<\\/a>`
   ));
-  assert.ok(chatHtml.includes(`src="${yellowDwarf.icon}"`));
-  assert.match(chatHtml, /Ada captured a Yellow Dwarf while mining/);
+  assert.ok(chatHtml.includes(`src="${blueDwarf.icon}"`));
+  assert.match(chatHtml, /Ada captured a <a class="chat-entity-link rarity-3"/u);
+  assert.match(chatHtml,
+    /class="chat-entity-link rarity-1" href="\/events\/creatures\/47">Common White Whale<\/a>/u);
   const renderedWorldRows = [...chatHtml.matchAll(
     /<article id="chat-entry-world-\d+"[\s\S]*?<\/article>/gu
   )].map((match) => match[0]);
   const krakenRow = renderedWorldRows.find((row) => row.includes('Kraken sighted near Kemet.'));
-  const dwarfRow = renderedWorldRows.find((row) => row.includes('Ada captured a Yellow Dwarf'));
-  assert.ok(krakenRow && dwarfRow);
+  const dwarfRow = renderedWorldRows.find((row) => row.includes('Blue Dwarf'));
+  const whaleRow = renderedWorldRows.find((row) => row.includes('Common White Whale'));
+  assert.ok(krakenRow && dwarfRow && whaleRow);
   assert.equal([...krakenRow.matchAll(/<a\b/gu)].length, 1,
     'a world announcement should expose one details link');
   assert.equal([...dwarfRow.matchAll(/<a\b/gu)].length, 1,
     'a Dwarf announcement should expose one item link');
+  assert.equal([...whaleRow.matchAll(/<a\b/gu)].length, 1,
+    'a creature announcement should expose one record link');
   assert.doesNotMatch(chatHtml, /This announcement is more than a day old/);
   assert.doesNotMatch(chatHtml, /chat-color-abcdef/);
   const chatFiltersClient = await fetch(`${base}/node/chat-filters.js`);
@@ -6546,7 +6648,12 @@ test('configures and disables the new gadget machinery through its web page', as
   store.ensureWorldMaps(1000);
   const catalog = store.loadCatalog();
   const password = 'automation gadget password';
-  const stock = catalog.items.find((item) => item.marketableId && item.rarity === 1);
+  const factoryStockAction = catalog.factoryActions.find((action) => {
+    const output = catalog.byId.get(action.outputItemId);
+    return action.actionKind === 'item' && output?.marketableId === null
+      && output.repairedItemId === null;
+  });
+  const stock = catalog.byId.get(factoryStockAction?.outputItemId);
   const autolister = catalog.gadgetByName.get('autolister');
   const autoloader = catalog.gadgetByName.get('autoloader');
   const shipDefinition = catalog.ships.find((ship) => ship.cannonPortals > 0);
@@ -6595,6 +6702,7 @@ test('configures and disables the new gadget machinery through its web page', as
   assert.equal(page.status, 200);
   const html = await page.text();
   assert.match(html, /<h1>Autolister<\/h1>/u);
+  assert.match(html, /every unlisted found or factory-made Thing/u);
   assert.match(html, /Markup over each Thing's local reference price/u);
   assert.match(html, /0 of 10 tasks/u);
   assert.match(html, new RegExp(`value="${saved.cityId}:${stock.mineTypeId}"`));

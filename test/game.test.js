@@ -3,7 +3,8 @@ import test from 'node:test';
 import {
   activeMineLimit, assignRobot, claimMine, createPlayer, detonateExplosive, equipMine,
   expireRentalMines, findItem, mineBucketsPerHour, mineIntervalMs, oilMineBot, prioritizeMine, rentMine,
-  mineRentalOffers, sellItem, setMineMode, synchronizeMineSchedules,
+  mineRentalOffers, mineShiftAt, refreshMineActivity, sellItem, setMineMode,
+  synchronizeMineSchedules, updateMineShiftRoster,
   unassignRobot, unequipMine
 } from '../src/game.js';
 import { loadLegacyCatalog } from '../src/legacy-catalog.js';
@@ -189,6 +190,44 @@ test('allows three active mines per discovered region and four with Remote Contr
   const ninth = rentMine(player, regionalCatalog, mineType.id, 3002, predictableRandom);
   assert.equal(player.mines.filter((mine) => mine.active).length, 8);
   assert.equal(ninth.active, false);
+});
+
+test('runs a global three-shift mine roster without exceeding the active allowance', () => {
+  const player = createPlayer('Shift Foreman', '', 'hash', catalog,
+    Date.parse('2026-09-12T00:00:00.000Z'), predictableRandom);
+  const mineType = catalog.mineTypes.find(
+    (entry) => entry.rentCost > 0 && catalog.byMineType.has(entry.id)
+  );
+  player.credits = mineType.rentCost * 10;
+  for (let index = 0; index < 4; index += 1) {
+    rentMine(player, catalog, mineType.id,
+      Date.parse('2026-09-12T00:01:00.000Z') + index, predictableRandom);
+  }
+  const [first, second, third, fourth, fifth] = player.mines;
+  const order = player.mines.map((mine) => mine.id);
+  const masks = new Map([
+    [first.id, 0b001], [second.id, 0b111], [third.id, 0b111],
+    [fourth.id, 0b111], [fifth.id, 0b111]
+  ]);
+  const night = Date.parse('2026-09-12T01:00:00.000Z');
+  const day = Date.parse('2026-09-12T09:00:00.000Z');
+  assert.equal(mineShiftAt(night).index, 0);
+  assert.equal(mineShiftAt(day).index, 1);
+  updateMineShiftRoster(player, catalog, order, masks, night);
+  assert.deepEqual(player.mines.filter((mine) => mine.active).map((mine) => mine.id),
+    [first.id, second.id, third.id]);
+  assert.equal(player.mines.filter((mine) => mine.active).length, 3);
+
+  refreshMineActivity(player, catalog, day);
+  assert.deepEqual(player.mines.filter((mine) => mine.active).map((mine) => mine.id),
+    [second.id, third.id, fourth.id]);
+  assert.equal(player.mines.filter((mine) => mine.active).length, 3);
+
+  updateMineShiftRoster(player, catalog,
+    [fifth.id, first.id, second.id, third.id, fourth.id], masks, day);
+  assert.deepEqual(player.mines.filter((mine) => mine.active).map((mine) => mine.id),
+    [fifth.id, second.id, third.id]);
+  assert.equal(player.mines.filter((mine) => mine.active).length, 3);
 });
 
 test('adds each cleared-stone bonus to the top mine in every regional home city', () => {

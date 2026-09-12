@@ -99,7 +99,11 @@ test('catalog validates snow and hurricane climate rules', () => {
     { hurricane_ship_damage_min_ratio: -0.01 },
     { hurricane_ship_damage_min_ratio: 0.5, hurricane_ship_damage_max_ratio: 0.49 },
     { hurricane_ship_damage_max_ratio: 1.01 },
-    { hurricane_vehicle_damage_chance: 1.01 }
+    { hurricane_vehicle_damage_chance: 1.01 },
+    { wraith_base_armor_factor: 0 },
+    { wraith_base_armor_factor: 1 },
+    { world_creature_health_factor: 0 },
+    { world_creature_health_factor: 1 }
   ];
   for (const replacement of invalidSettings) {
     const input = structuredClone(catalog);

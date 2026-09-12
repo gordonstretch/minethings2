@@ -13,7 +13,7 @@ export const GADGET_AUTOMATION_REPLACEMENTS = Object.freeze([
     legacyDisplayName: 'Calculator',
     behaviorKey: 'autolister',
     displayName: 'Autolister',
-    description: 'Lists every unlisted Thing of up to ten selected types in their cities at configured markups over each Thing\'s local reference price, taking one task per interval in round-robin order.'
+    description: 'Lists every unlisted found or factory-made Thing of up to ten selected types in their cities at configured markups over each Thing\'s local reference price, taking one task per interval in round-robin order.'
   }),
   Object.freeze({
     gadgetId: 11,

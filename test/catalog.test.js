@@ -201,9 +201,9 @@ test('loads the playable catalog from the legacy dump', () => {
   assert.equal(catalog.avatarElements.length, 156);
   assert.equal(catalog.avatarElementByItemId.get(avatar.itemId).id, avatar.id);
   assert.equal(catalog.avatarElementTypeById.get(avatar.typeId).name, 'Borders');
-  assert.equal(catalog.stones.length, 81);
+  assert.equal(catalog.stones.length, 82);
   assert.equal(catalog.stones[0].name, 'Chatted');
-  assert.equal(catalog.stones.at(-1).name, 'Magnetised');
+  assert.equal(catalog.stones.at(-1).name, 'Fridge Magnate');
   assert.equal(catalog.stones.find((stone) => stone.name === 'Jackpotted').rarity, 6);
   assert.equal(catalog.settings.starter_item_limit, INVENTORY_CAPACITY_RULES.base);
   assert.equal(catalog.containers.reduce((sum, container) => sum + container.capacity, 0),

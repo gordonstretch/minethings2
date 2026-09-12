@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { createPlayer } from '../src/game.js';
 import {
   ADDITIONAL_STONE_CATALOG, ASO_DISCOVERY_STONE, CITY_COMPLETION_STONE,
-  EXPANDED_STONE_CATALOG, HOME_DISPLAY_STONE, HOME_STONE, loadLegacyCatalog,
-  STARTER_BOT_STONE
+  EXPANDED_STONE_CATALOG, FRIDGE_MAGNATE_STONE, HOME_DISPLAY_STONE, HOME_STONE,
+  loadLegacyCatalog, REFRIGERATOR_ITEM_ID, STARTER_BOT_STONE
 } from '../src/legacy-catalog.js';
 import { SqliteStore } from '../src/store.js';
 
@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 test('adds 27 varied Stones for the expanded game systems', () => {
   const catalog = loadLegacyCatalog();
   assert.equal(EXPANDED_STONE_CATALOG.length, 27);
-  assert.equal(catalog.stones.length, 81);
+  assert.equal(catalog.stones.length, 82);
   assert.deepEqual(new Set(EXPANDED_STONE_CATALOG.map((stone) => stone.id)).size, 27);
   assert.deepEqual(new Set(EXPANDED_STONE_CATALOG.map((stone) => stone.rank)).size, 27);
   assert.deepEqual(new Set(EXPANDED_STONE_CATALOG.map((stone) => stone.behaviorKey)).size, 27);
@@ -37,13 +37,13 @@ test('adds 27 varied Stones for the expanded game systems', () => {
   }
 });
 
-test('adds 12 attainable Stones for ordinary play', () => {
+test('adds 13 attainable Stones for ordinary play', () => {
   const catalog = loadLegacyCatalog();
-  assert.equal(ADDITIONAL_STONE_CATALOG.length, 12);
-  assert.equal(catalog.stones.length, 81);
-  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.id)).size, 12);
-  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.rank)).size, 12);
-  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.behaviorKey)).size, 12);
+  assert.equal(ADDITIONAL_STONE_CATALOG.length, 13);
+  assert.equal(catalog.stones.length, 82);
+  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.id)).size, 13);
+  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.rank)).size, 13);
+  assert.equal(new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.behaviorKey)).size, 13);
   assert.deepEqual([...new Set(ADDITIONAL_STONE_CATALOG.map((stone) => stone.rarity))].sort(),
     [1, 2, 3, 4]);
 
@@ -69,7 +69,7 @@ test('all additional Stones can be cleared once and retain their catalog rarity'
     assert.equal(awarded.rarity, definition.rarity);
     assert.equal(store.awardStone(player.id, definition.behaviorKey, 3000 + index), null);
   }
-  assert.equal(store.stonesForPlayer(player.id).earned.length, 12);
+  assert.equal(store.stonesForPlayer(player.id).earned.length, 13);
 });
 
 test('all expanded Stones can be cleared once and retain their catalog rarity', (context) => {
@@ -112,7 +112,7 @@ test('existing worlds gain expanded Stones without losing original progress', (c
   store = null;
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 81);
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 82);
   assert.deepEqual(store.stonesForPlayer(player.id).earned.map((stone) => stone.behaviorKey),
     ['Chatted']);
   const migration = store.database.prepare(`
@@ -141,17 +141,81 @@ test('existing worlds gain additional Stones without losing original progress', 
   store = null;
 
   store = new SqliteStore(databaseFile);
-  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 81);
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS count FROM catalog_stones').get().count, 82);
   assert.deepEqual(store.stonesForPlayer(player.id).earned.map((stone) => stone.behaviorKey),
     ['Chatted']);
   const migration = store.database.prepare(`
     SELECT details_json FROM schema_migrations WHERE name = 'additional-stones-v1'
   `).get();
   assert.deepEqual(JSON.parse(migration.details_json), {
-    stones: 12,
-    changes: 12,
+    stones: 13,
+    changes: 13,
     retroactiveAwards: { Scavenged: 0, Informed: 0, Sightseen: 0 }
   });
+});
+
+test('existing worlds gain the Fridge Magnate Stone after ordinary Stone migration', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minethings-fridge-magnate-'));
+  const databaseFile = path.join(directory, 'game.sqlite');
+  let store = new SqliteStore(databaseFile);
+  context.after(() => {
+    if (store) store.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  store.seedCatalog(loadLegacyCatalog());
+  store.close();
+  store = new SqliteStore(databaseFile);
+  store.database.prepare('DELETE FROM catalog_stones WHERE id = ?')
+    .run(FRIDGE_MAGNATE_STONE.id);
+  store.database.prepare(
+    "DELETE FROM schema_migrations WHERE name = 'fridge-magnate-stone-v1'"
+  ).run();
+  store.close();
+  store = new SqliteStore(databaseFile);
+
+  assert.deepEqual({ ...store.database.prepare(`
+    SELECT name, behavior_key AS behaviorKey, rank, rarity
+    FROM catalog_stones WHERE id = ?
+  `).get(FRIDGE_MAGNATE_STONE.id) }, {
+    name: 'Fridge Magnate', behaviorKey: 'Fridge Magnate', rank: 82, rarity: 3
+  });
+  const migration = store.database.prepare(`
+    SELECT details_json FROM schema_migrations WHERE name = 'fridge-magnate-stone-v1'
+  `).get();
+  assert.deepEqual(JSON.parse(migration.details_json), { stoneInserted: 1 });
+});
+
+test('selling a Refrigerator awards its seller the Fridge Magnate Stone once', (context) => {
+  const catalog = loadLegacyCatalog();
+  const store = new SqliteStore(':memory:');
+  context.after(() => store.close());
+  store.seedCatalog(catalog);
+  const sellerData = createPlayer('Fridge Vendor', '', 'hash', catalog, 1000, () => 0.5);
+  sellerData.inventory[REFRIGERATOR_ITEM_ID] = 2;
+  sellerData.inventoryByCity[1] = sellerData.inventory;
+  const seller = store.addPlayer(sellerData);
+  const buyerData = createPlayer('Cold Customer', '', 'hash', catalog, 1000, () => 0.5);
+  buyerData.gold = 1000;
+  const buyer = store.addPlayer(buyerData);
+  const price = store.marketForItem(REFRIGERATOR_ITEM_ID, 1).minimumPrice;
+
+  store.placeSellOrder(seller.id, REFRIGERATOR_ITEM_ID, price, 1, 2000);
+  assert.equal(store.stonesForPlayer(seller.id).earned.some(
+    (stone) => stone.behaviorKey === FRIDGE_MAGNATE_STONE.behaviorKey
+  ), false, 'listing a Refrigerator is not a sale');
+  store.buyItemNow(buyer.id, REFRIGERATOR_ITEM_ID, price, 1, 3000);
+  assert.equal(store.stonesForPlayer(seller.id).earned.filter(
+    (stone) => stone.behaviorKey === FRIDGE_MAGNATE_STONE.behaviorKey
+  ).length, 1);
+  assert.equal(store.stonesForPlayer(buyer.id).earned.some(
+    (stone) => stone.behaviorKey === FRIDGE_MAGNATE_STONE.behaviorKey
+  ), false, 'the buyer is not the Fridge Magnate');
+
+  store.placeSellOrder(seller.id, REFRIGERATOR_ITEM_ID, price, 1, 4000);
+  store.buyItemNow(buyer.id, REFRIGERATOR_ITEM_ID, price, 1, 5000);
+  assert.equal(store.stonesForPlayer(seller.id).earned.filter(
+    (stone) => stone.behaviorKey === FRIDGE_MAGNATE_STONE.behaviorKey
+  ).length, 1, 'the Stone can only be earned once');
 });
 
 test('existing city exploration earns the three durable everyday Stones on upgrade', (context) => {

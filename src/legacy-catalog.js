@@ -149,6 +149,13 @@ export const CITY_COMPLETION_STONE = Object.freeze({
   rank: 69, rarity: 5
 });
 
+export const REFRIGERATOR_ITEM_ID = 35;
+
+export const FRIDGE_MAGNATE_STONE = Object.freeze({
+  id: 82, name: 'Fridge Magnate', behaviorKey: 'Fridge Magnate',
+  description: 'sold a Refrigerator to another miner', rank: 82, rarity: 3
+});
+
 export const EXPANDED_STONE_CATALOG = Object.freeze([
   { id: 43, name: 'Specialised', behaviorKey: 'Specialised',
     description: 'changed to a different mining specialisation', rank: 43, rarity: 2 },
@@ -225,7 +232,8 @@ export const ADDITIONAL_STONE_CATALOG = Object.freeze([
   { id: 80, name: 'Unboxed', behaviorKey: 'Unboxed',
     description: 'broke a Bolt box into individual Bolts', rank: 80, rarity: 1 },
   { id: 81, name: 'Magnetised', behaviorKey: 'Magnetised',
-    description: 'recovered wreckage using a carried Magnet', rank: 81, rarity: 4 }
+    description: 'recovered wreckage using a carried Magnet', rank: 81, rarity: 4 },
+  FRIDGE_MAGNATE_STONE
 ]);
 export const SHROOM_CATALOG = Object.freeze({
   mapId: 2,
@@ -1211,6 +1219,16 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
     kraken: 0.16, land_whale: 0.3, white_whale: 0.18,
     orca_pod: 0.14, elephant_herd: 0.25, t_rex: 0.38
   },
+  // Number of ordinary, unfitted same-tier attacks a healthy creature is
+  // intended to withstand. The transport catalog supplies the actual force,
+  // so a creature cannot drift out of balance when vehicle stats change.
+  world_creature_endurance: {
+    kraken: 7, land_whale: 5, white_whale: 6,
+    orca_pod: 4, elephant_herd: 5, t_rex: 7
+  },
+  // Living threats retain one third of the former health allowance after the
+  // species, tier, and ordinary-transport ceilings have been calculated.
+  world_creature_health_factor: 1 / 3,
   // Indexes are rarity IDs. Common is deliberately the dominant natural form;
   // every species can still appear at any tier through Orange.
   world_creature_tier_weights: [0, 32, 16, 8, 4, 2, 1],
@@ -1218,8 +1236,10 @@ export const LEGACY_WORLD_EVENT_SETTINGS = Object.freeze({
   world_creature_tier_speed_multipliers: [0, 0.85, 0.95, 1, 1.1, 1.2, 1.35],
   world_creature_tier_damage_multipliers: [0, 0.75, 0.9, 1, 1.25, 1.55, 1.9],
   world_creature_tier_ore_drops: [0, 8, 16, 32, 64, 128, 256],
-  // Spectral attackers keep their durability, but their outgoing force is
-  // deliberately lower than the physical craft from which they rose.
+  // Wraith Riders retain only one third of their vehicle type's base armour.
+  // Recovered fittings still contribute normally. Spectral attackers also
+  // deliver less force than the physical craft from which they rose.
+  wraith_base_armor_factor: 1 / 3,
   ghost_attack_force_ratio: 0.85,
   world_creature_reward_min_rarity: 4,
   world_creature_reward_items: 2,
@@ -2836,7 +2856,9 @@ export function indexCatalog({
       || !Number.isFinite(Number(settings.world_creature_speed_kph?.[type]))
       || Number(settings.world_creature_speed_kph[type]) <= 0
       || !Number.isFinite(Number(settings.world_creature_counter_damage_ratio?.[type]))
-      || Number(settings.world_creature_counter_damage_ratio[type]) < 0)
+      || Number(settings.world_creature_counter_damage_ratio[type]) < 0
+      || !Number.isFinite(Number(settings.world_creature_endurance?.[type]))
+      || Number(settings.world_creature_endurance[type]) <= 0)
     || !Array.isArray(settings.world_creature_tier_weights)
     || settings.world_creature_tier_weights.length < 7
     || settings.world_creature_tier_weights.slice(1, 7).some((weight) =>
@@ -2855,6 +2877,12 @@ export function indexCatalog({
     || !Number.isFinite(Number(settings.ghost_attack_force_ratio))
     || Number(settings.ghost_attack_force_ratio) <= 0
     || Number(settings.ghost_attack_force_ratio) >= 1
+    || !Number.isFinite(Number(settings.wraith_base_armor_factor))
+    || Number(settings.wraith_base_armor_factor) <= 0
+    || Number(settings.wraith_base_armor_factor) >= 1
+    || !Number.isFinite(Number(settings.world_creature_health_factor))
+    || Number(settings.world_creature_health_factor) <= 0
+    || Number(settings.world_creature_health_factor) >= 1
     || !Number.isSafeInteger(Number(settings.world_event_catchup_periods))
     || Number(settings.world_event_catchup_periods) < 1
     || !Number.isSafeInteger(Number(settings.world_event_weather_retention_days))

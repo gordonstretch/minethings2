@@ -1,5 +1,9 @@
 import { specialisationBonus } from './specialisations.js';
 
+export const MINE_SHIFT_DURATION_MS = 8 * 60 * 60 * 1000;
+export const MINE_SHIFT_COUNT = 3;
+export const ALL_MINE_SHIFTS_MASK = (1 << MINE_SHIFT_COUNT) - 1;
+
 function setting(catalog, key) {
   if (!Object.hasOwn(catalog?.settings ?? {}, key)) {
     throw new Error(`Missing catalog setting: ${key}.`);
@@ -133,7 +137,7 @@ export function createPlayer(name, email, passwordHash, catalog, now = Date.now(
     ?? setting(catalog, 'starter_city_id'));
   const mine = {
     id: 1, mineTypeId: Number(setting(catalog, 'starter_mine_type_id')), cityId,
-    active: true, mineThings: true,
+    active: true, mineThings: true, shiftMask: ALL_MINE_SHIFTS_MASK,
     priority: 1, oilExpiresAt: 0,
     rentalUntil: now + Number(setting(catalog, 'mine_rental_duration_ms')), nextFindAt: now,
     cycleIntervalMs: 0, equipment: {}, robotItemId: null
@@ -177,9 +181,74 @@ export function activeMineLimit(player, catalog, now = Date.now()) {
   return regionCount * perRegion;
 }
 
+export function mineShiftAt(now = Date.now()) {
+  const time = Number(now);
+  if (!Number.isFinite(time)) throw new Error('Mine shift time must be valid.');
+  const dayDuration = MINE_SHIFT_DURATION_MS * MINE_SHIFT_COUNT;
+  const dayPosition = ((time % dayDuration) + dayDuration) % dayDuration;
+  const index = Math.floor(dayPosition / MINE_SHIFT_DURATION_MS);
+  const startsAt = time - dayPosition + index * MINE_SHIFT_DURATION_MS;
+  return { index, startsAt, endsAt: startsAt + MINE_SHIFT_DURATION_MS };
+}
+
+function normalizedMineShiftMask(value) {
+  const mask = value === null || value === undefined
+    ? ALL_MINE_SHIFTS_MASK : Number(value);
+  if (!Number.isSafeInteger(mask) || mask < 0 || mask > ALL_MINE_SHIFTS_MASK) {
+    throw new Error('A mine has an invalid shift roster.');
+  }
+  return mask;
+}
+
+export function refreshMineActivity(player, catalog, now = Date.now()) {
+  const limit = activeMineLimit(player, catalog, now);
+  const shift = mineShiftAt(now);
+  const shiftBit = 1 << shift.index;
+  const ordered = [...(player.mines ?? [])].sort((first, second) =>
+    (first.priority ?? first.id) - (second.priority ?? second.id) || first.id - second.id);
+  let activeCount = 0;
+  for (const mine of ordered) {
+    mine.shiftMask = normalizedMineShiftMask(mine.shiftMask);
+    const wasActive = Boolean(mine.active);
+    const rostered = Boolean(mine.shiftMask & shiftBit);
+    mine.active = rostered && activeCount < limit;
+    if (mine.active) activeCount += 1;
+    if (!wasActive && mine.active) {
+      mine.cycleIntervalMs = mineIntervalMs(catalog, mine, player, now);
+      mine.nextFindAt = now + mine.cycleIntervalMs;
+    }
+  }
+  player.mines = ordered;
+  return { activeCount, limit, shift };
+}
+
+export function updateMineShiftRoster(player, catalog, mineOrder, shiftMasks, now = Date.now()) {
+  const order = Array.isArray(mineOrder) ? mineOrder.map(Number) : [];
+  const mines = player.mines ?? [];
+  const expectedIds = new Set(mines.map((mine) => Number(mine.id)));
+  if (order.length !== mines.length || new Set(order).size !== order.length
+    || order.some((mineId) => !expectedIds.has(mineId))) {
+    throw new Error('The mine priority order is incomplete. Reload the roster and try again.');
+  }
+  const masks = shiftMasks instanceof Map
+    ? shiftMasks : new Map(Object.entries(shiftMasks ?? {})
+      .map(([key, value]) => [Number(key), value]));
+  const byId = new Map(mines.map((mine) => [Number(mine.id), mine]));
+  for (const [index, mineId] of order.entries()) {
+    const mine = byId.get(mineId);
+    if (!masks.has(mineId)) throw new Error('The mine shift roster is incomplete.');
+    mine.priority = index + 1;
+    mine.shiftMask = normalizedMineShiftMask(masks.get(mineId));
+  }
+  player.mines = order.map((mineId) => byId.get(mineId));
+  const activity = refreshMineActivity(player, catalog, now);
+  synchronizeMineSchedules(player, catalog, now);
+  return activity;
+}
+
 export function mineBucketsPerHour(catalog, mine, player = null, now = Date.now()) {
   const activeLimit = activeMineLimit(player, catalog, now);
-  if (mine.priority > activeLimit) {
+  if (mine.active === false || mine.priority > activeLimit) {
     return Number(setting(catalog, 'inactive_mine_buckets_per_hour'))
       + (mine.oilExpiresAt > now ? Number(setting(catalog, 'mine_oil_buckets_per_hour')) : 0);
   }
@@ -298,17 +367,11 @@ export function prioritizeMine(player, catalog, mineId, now = Date.now()) {
   const target = mineInCurrentCity(player, mineId, false);
   const ordered = [target, ...player.mines.filter((mine) => mine.id !== mineId)
     .sort((a, b) => (a.priority ?? a.id) - (b.priority ?? b.id) || a.id - b.id)];
-  const activeLimit = activeMineLimit(player, catalog, now);
   ordered.forEach((mine, index) => {
-    const wasActive = mine.active;
     mine.priority = index + 1;
-    mine.active = index < activeLimit;
-    if (!wasActive && mine.active) {
-      mine.cycleIntervalMs = mineIntervalMs(catalog, mine, player, now);
-      mine.nextFindAt = now + mine.cycleIntervalMs;
-    }
   });
   player.mines = ordered;
+  refreshMineActivity(player, catalog, now);
   synchronizeMineSchedules(player, catalog, now);
   return target;
 }
@@ -343,7 +406,8 @@ export function buyMine(player, catalog, mineTypeId, now = Date.now(), random = 
     id: player.nextMineId++, mineTypeId, cityId: player.cityId,
     active: player.mines.filter((candidate) => candidate.active).length
       < activeMineLimit(player, catalog, now),
-    mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0, rentalUntil: 0,
+    mineThings: true, shiftMask: ALL_MINE_SHIFTS_MASK,
+    priority: player.mines.length + 1, oilExpiresAt: 0, rentalUntil: 0,
     nextFindAt: now, cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };
   player.mines.push(mine);
@@ -395,7 +459,8 @@ export function rentMine(player, catalog, mineTypeId, now = Date.now(), random =
     id: player.nextMineId++, mineTypeId, cityId: player.cityId,
     active: player.mines.filter((candidate) => candidate.active).length
       < activeMineLimit(player, catalog, now),
-    mineThings: true, priority: player.mines.length + 1, oilExpiresAt: 0,
+    mineThings: true, shiftMask: ALL_MINE_SHIFTS_MASK,
+    priority: player.mines.length + 1, oilExpiresAt: 0,
     rentalUntil: now + offer.durationMs,
     nextFindAt: now, cycleIntervalMs: 0, equipment: {}, robotItemId: null
   };

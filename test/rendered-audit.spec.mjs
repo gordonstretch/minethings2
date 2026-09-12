@@ -1394,15 +1394,19 @@ test('keeps core journeys clean, responsive, and keyboard navigable', async ({ p
   await expect(page.getByText(/ResponsiveAudit found a Fabled/)).toHaveCount(0);
   await expect(page.locator('.chat-row-dwarf')).toHaveCount(1);
   await expect(page.getByText(/ResponsiveAudit captured a Yellow Dwarf/)).toBeVisible();
-  await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
+  await expect(page.locator('.chat-row-dwarf .chat-entity-link'))
     .toHaveAttribute('href', `/items/${catalog.dwarfByRarity.get(1).itemId}`);
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img')).toBeVisible();
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img'))
     .toHaveCSS('border-top-width', '0px');
   await expect(page.locator('.chat-row-dwarf .chat-dwarf-item img'))
     .toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  await expect(page.locator('.chat-row-dwarf .chat-dwarf-item'))
-    .toHaveCSS('color', 'rgb(51, 54, 47)');
+  await expect(page.locator('.chat-row-dwarf .chat-entity-link'))
+    .toHaveCSS('color', 'rgb(129, 121, 0)');
+  const creatureMention = page.locator('.chat-row-world .chat-entity-link[href^="/events/creatures/"]')
+    .first();
+  await expect(creatureMention).toBeVisible();
+  await expect(creatureMention).toContainText(/(?:Common T-Rex|Legendary White Whale)/u);
   await expect(page.locator('.chat-row-world:not(.chat-row-dwarf) .chat-world-message').first())
     .toHaveCSS('font-weight', '400');
   await expect(page.locator('.chat-row-dwarf .chat-world-message'))

@@ -154,6 +154,47 @@ test('establishing a shuttle and launching a convoy complete matching Council or
     assert.equal(completedIds.has(convoyMission.id), true);
   });
 
+test('convoy patrols advance route reassurance orders as each vehicle departs', (context) => {
+  const { store, player } = councilFixture('Council Convoy Patroller');
+  context.after(() => store.close());
+  const vehicleType = catalog.vehicles.find((vehicle) => vehicle.routeType !== 2
+    && catalog.byId.has(vehicle.itemId)
+    && catalog.routes.some((route) => route.open && route.type === vehicle.routeType
+      && route.city1Id !== route.city2Id
+      && [route.city1Id, route.city2Id].includes(player.cityId)));
+  assert.ok(vehicleType);
+  player.inventory[vehicleType.itemId] = 3;
+  store.savePlayer(player);
+  const vehicleIds = Array.from({ length: 3 }, () =>
+    store.activateVehicle(player.id, vehicleType.itemId));
+  for (const [index, vehicleId] of vehicleIds.entries()) {
+    store.setVehicleStance(player.id, vehicleId,
+      index === 1 ? 'peaceful' : 'patrol', true, true);
+  }
+  const now = Date.UTC(2026, 8, 19, 12);
+  const route = store.routesForVehicle(player.id, vehicleIds[0], now)[0];
+  assert.ok(route);
+  const mission = store.councilMissionBoard(player.id, now).offered[0];
+  store.database.prepare(`
+    UPDATE council_missions SET objective_key = 'vehicle_patrol', target_quantity = 2,
+      details_json = ?, progress = 0 WHERE id = ?
+  `).run(JSON.stringify({ filter: { cityId: player.cityId } }), mission.id);
+  store.acceptCouncilMission(player.id, mission.id, now + 1);
+
+  store.startVehicleConvoy(player.id, vehicleIds, route.id, 60 * 1000, now + 2);
+  assert.equal(store.councilMissionBoard(player.id, now + 3).active
+    .find((entry) => entry.id === mission.id)?.progress, 1);
+
+  store.settleVehicles(now + 60 * 1000 + 2);
+  assert.equal(store.councilMissionBoard(player.id, now + 60 * 1000 + 3).active
+    .find((entry) => entry.id === mission.id)?.progress, 1,
+  'a peaceful convoy member is not a patrol');
+
+  store.settleVehicles(now + 120 * 1000 + 2);
+  assert.equal(store.councilMissionBoard(player.id, now + 120 * 1000 + 3).history
+    .find((entry) => entry.id === mission.id)?.status, 'completed');
+});
+
 test('changing a mine output completes the matching order but resubmitting it does not',
   async (context) => {
     const { store, player } = councilFixture('Council Mine Reclassifier');
